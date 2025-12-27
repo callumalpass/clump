@@ -75,7 +75,7 @@ export function IssueCreateView({ repoId, onCancel, onCreated }: IssueCreateView
         <h2 className="text-xl font-semibold text-white">Create New Issue</h2>
         <button
           onClick={onCancel}
-          className="p-1 text-gray-400 hover:text-white transition-colors"
+          className="p-1 text-gray-400 hover:text-white transition-colors rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
           title="Cancel"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -123,7 +123,7 @@ export function IssueCreateView({ repoId, onCancel, onCreated }: IssueCreateView
               {labelName}
               <button
                 onClick={() => toggleLabel(labelName)}
-                className="hover:opacity-70"
+                className="hover:opacity-70 rounded-full focus:outline-none focus:ring-1 focus:ring-white/50"
               >
                 ×
               </button>
@@ -132,7 +132,7 @@ export function IssueCreateView({ repoId, onCancel, onCreated }: IssueCreateView
           <div className="relative">
             <button
               onClick={() => setShowLabelDropdown(!showLabelDropdown)}
-              className="px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 hover:bg-gray-600"
+              className="px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900"
             >
               + Add label
             </button>
@@ -153,7 +153,7 @@ export function IssueCreateView({ repoId, onCancel, onCreated }: IssueCreateView
                             toggleLabel(label.name);
                             setShowLabelDropdown(false);
                           }}
-                          className="w-full flex items-center gap-2 px-2 py-1 text-xs text-left hover:bg-gray-700 rounded"
+                          className="w-full flex items-center gap-2 px-2 py-1 text-xs text-left hover:bg-gray-700 rounded focus:outline-none focus:bg-gray-700"
                         >
                           <span
                             className="w-3 h-3 rounded-full"
@@ -182,7 +182,7 @@ export function IssueCreateView({ repoId, onCancel, onCreated }: IssueCreateView
               @{assignee}
               <button
                 onClick={() => toggleAssignee(assignee)}
-                className="hover:opacity-70"
+                className="hover:opacity-70 rounded-full focus:outline-none focus:ring-1 focus:ring-white/50"
               >
                 ×
               </button>
@@ -191,7 +191,7 @@ export function IssueCreateView({ repoId, onCancel, onCreated }: IssueCreateView
           <div className="relative">
             <button
               onClick={() => setShowAssigneeDropdown(!showAssigneeDropdown)}
-              className="px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 hover:bg-gray-600"
+              className="px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900"
             >
               + Add assignee
             </button>
@@ -212,7 +212,7 @@ export function IssueCreateView({ repoId, onCancel, onCreated }: IssueCreateView
                             toggleAssignee(assignee);
                             setShowAssigneeDropdown(false);
                           }}
-                          className="w-full px-2 py-1 text-xs text-left hover:bg-gray-700 rounded"
+                          className="w-full px-2 py-1 text-xs text-left hover:bg-gray-700 rounded focus:outline-none focus:bg-gray-700"
                         >
                           @{assignee}
                         </button>
@@ -237,14 +237,14 @@ export function IssueCreateView({ repoId, onCancel, onCreated }: IssueCreateView
         <button
           onClick={onCancel}
           disabled={submitting}
-          className="px-4 py-2 text-gray-300 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-2 text-gray-300 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
         >
           Cancel
         </button>
         <button
           onClick={handleSubmit}
           disabled={submitting || !title.trim()}
-          className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+          className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-1 focus:ring-offset-gray-900"
         >
           {submitting ? 'Creating...' : 'Create Issue'}
         </button>

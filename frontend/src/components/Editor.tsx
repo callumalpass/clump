@@ -278,7 +278,7 @@ export function Editor({
           <button
             type="button"
             onClick={toggleVimMode}
-            className={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors ${
+            className={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
               vimEnabled
                 ? 'bg-green-900/50 text-green-400 hover:bg-green-900/70'
                 : 'bg-gray-800 text-gray-500 hover:bg-gray-700 hover:text-gray-400'

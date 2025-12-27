@@ -251,7 +251,7 @@ export function IssueList({
               {onCreateIssue && (
                 <button
                   onClick={onCreateIssue}
-                  className="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 active:scale-95 text-white rounded transition-all"
+                  className="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 active:scale-95 text-white rounded transition-all focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-1 focus:ring-offset-gray-900"
                   title="Create new issue"
                 >
                   + New
