@@ -163,13 +163,24 @@ def get_repo_db_path(local_path: str) -> Path:
 # Session Discovery
 # ==========================================
 
-def discover_sessions(repo_path: Optional[str] = None) -> list[DiscoveredSession]:
+def is_subsession(session_id: str) -> bool:
+    """Check if a session ID represents a subsession (spawned by Task tool)."""
+    # Agent subsessions have IDs like "agent-a1b2c3d" instead of full UUIDs
+    return session_id.startswith("agent-")
+
+
+def discover_sessions(
+    repo_path: Optional[str] = None,
+    include_subsessions: bool = False,
+) -> list[DiscoveredSession]:
     """
     Discover all Claude sessions from ~/.claude/projects/.
 
     Args:
         repo_path: Optional path to filter sessions by repo.
                    If None, returns all sessions.
+        include_subsessions: Whether to include agent subsessions spawned by
+                            the Task tool. Defaults to False.
 
     Returns:
         List of DiscoveredSession objects, sorted by modification time (newest first).
@@ -194,6 +205,10 @@ def discover_sessions(repo_path: Optional[str] = None) -> list[DiscoveredSession
         # Find all JSONL files in this project directory
         for jsonl_file in project_dir.glob("*.jsonl"):
             session_id = jsonl_file.stem  # filename without extension
+
+            # Skip subsessions unless explicitly requested
+            if not include_subsessions and is_subsession(session_id):
+                continue
 
             try:
                 stat = jsonl_file.stat()
