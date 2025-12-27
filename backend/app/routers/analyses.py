@@ -10,6 +10,7 @@ from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.db_helpers import get_analysis_or_404
 from app.models import Analysis, AnalysisStatus, Repo
 from app.services.session_manager import session_manager
 from app.services.transcript_parser import parse_transcript, transcript_to_dict
@@ -126,10 +127,7 @@ async def get_analysis(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a single analysis."""
-    result = await db.execute(select(Analysis).where(Analysis.id == analysis_id))
-    analysis = result.scalar_one_or_none()
-    if not analysis:
-        raise HTTPException(status_code=404, detail="Analysis not found")
+    analysis = await get_analysis_or_404(db, analysis_id)
 
     # Get repo name
     repo_result = await db.execute(select(Repo).where(Repo.id == analysis.repo_id))
@@ -145,10 +143,7 @@ async def update_analysis(
     db: AsyncSession = Depends(get_db),
 ):
     """Update an analysis (summary, status)."""
-    result = await db.execute(select(Analysis).where(Analysis.id == analysis_id))
-    analysis = result.scalar_one_or_none()
-    if not analysis:
-        raise HTTPException(status_code=404, detail="Analysis not found")
+    analysis = await get_analysis_or_404(db, analysis_id)
 
     if data.summary is not None:
         analysis.summary = data.summary
@@ -187,10 +182,7 @@ async def continue_analysis(
     This creates a new PTY session that resumes the Claude conversation,
     but keeps the same analysis record (no duplicates).
     """
-    result = await db.execute(select(Analysis).where(Analysis.id == analysis_id))
-    analysis = result.scalar_one_or_none()
-    if not analysis:
-        raise HTTPException(status_code=404, detail="Analysis not found")
+    analysis = await get_analysis_or_404(db, analysis_id)
 
     if not analysis.claude_session_id:
         raise HTTPException(
@@ -234,10 +226,7 @@ async def delete_analysis(
     db: AsyncSession = Depends(get_db),
 ):
     """Delete an analysis."""
-    result = await db.execute(select(Analysis).where(Analysis.id == analysis_id))
-    analysis = result.scalar_one_or_none()
-    if not analysis:
-        raise HTTPException(status_code=404, detail="Analysis not found")
+    analysis = await get_analysis_or_404(db, analysis_id)
 
     await db.delete(analysis)
     await db.commit()
@@ -273,10 +262,7 @@ async def get_analysis_transcript(
     Reads Claude Code's JSONL transcript file and returns structured messages.
     Falls back to raw transcript if JSONL not available.
     """
-    result = await db.execute(select(Analysis).where(Analysis.id == analysis_id))
-    analysis = result.scalar_one_or_none()
-    if not analysis:
-        raise HTTPException(status_code=404, detail="Analysis not found")
+    analysis = await get_analysis_or_404(db, analysis_id)
 
     # Get the repo for working directory
     repo_result = await db.execute(select(Repo).where(Repo.id == analysis.repo_id))
