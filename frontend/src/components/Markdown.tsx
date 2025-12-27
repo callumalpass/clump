@@ -1,5 +1,6 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 
 interface MarkdownProps {
   children: string;
@@ -11,6 +12,7 @@ export function Markdown({ children, className = '' }: MarkdownProps) {
     <ReactMarkdown
       className={`prose prose-invert prose-sm max-w-none ${className}`}
       remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeRaw]}
       components={{
         // Render images with proper styling
         img: ({ src, alt }) => (
