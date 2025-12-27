@@ -201,7 +201,9 @@ def _quick_scan_transcript(transcript_path: Path) -> dict:
             if not result["title"] and first_user_message:
                 result["title"] = first_user_message
 
-    except Exception:
+    except OSError:
+        # File access issues (permissions, file doesn't exist, etc.)
+        # Return defaults - the session will show with minimal info
         pass
 
     return result
