@@ -46,6 +46,24 @@ def _entities_to_response(entities: list[EntityLink]) -> list[EntityLinkResponse
     return [EntityLinkResponse(kind=e.kind, number=e.number) for e in entities]
 
 
+def _build_metadata_response(
+    session_id: str, metadata: Optional[SessionMetadata]
+) -> SessionMetadataResponse:
+    """Build a SessionMetadataResponse from SessionMetadata, handling None case."""
+    if metadata:
+        return SessionMetadataResponse(
+            session_id=session_id,
+            title=metadata.title,
+            summary=metadata.summary,
+            repo_path=metadata.repo_path,
+            entities=_entities_to_response(metadata.entities),
+            tags=metadata.tags,
+            starred=metadata.starred,
+            created_at=metadata.created_at,
+        )
+    return SessionMetadataResponse(session_id=session_id)
+
+
 def _get_pending_sessions(
     active_session_ids: set[str],
     discovered_session_ids: set[str],
@@ -298,21 +316,6 @@ def _parsed_to_detail(
             usage=usage,
         ))
 
-    # Build metadata response
-    if metadata:
-        meta_response = SessionMetadataResponse(
-            session_id=session_id,
-            title=metadata.title,
-            summary=metadata.summary,
-            repo_path=metadata.repo_path,
-            entities=_entities_to_response(metadata.entities),
-            tags=metadata.tags,
-            starred=metadata.starred,
-            created_at=metadata.created_at,
-        )
-    else:
-        meta_response = SessionMetadataResponse(session_id=session_id)
-
     return SessionDetailResponse(
         session_id=session_id,
         encoded_path=encoded_path,
@@ -329,7 +332,7 @@ def _parsed_to_detail(
         end_time=parsed.end_time,
         claude_code_version=parsed.claude_code_version,
         git_branch=parsed.git_branch,
-        metadata=meta_response,
+        metadata=_build_metadata_response(session_id, metadata),
         is_active=is_active,
     )
 
@@ -438,20 +441,6 @@ async def get_session(session_id: str):
         encoded_path = encode_path(active_process.working_dir)
         metadata = get_session_metadata(encoded_path, session_id)
 
-        # Build minimal response for pending session
-        meta_response = SessionMetadataResponse(session_id=session_id)
-        if metadata:
-            meta_response = SessionMetadataResponse(
-                session_id=session_id,
-                title=metadata.title,
-                summary=metadata.summary,
-                repo_path=metadata.repo_path,
-                entities=_entities_to_response(metadata.entities),
-                tags=metadata.tags,
-                starred=metadata.starred,
-                created_at=metadata.created_at,
-            )
-
         repo_name = _get_repo_name(encoded_path)
 
         return SessionDetailResponse(
@@ -470,7 +459,7 @@ async def get_session(session_id: str):
             end_time=None,
             claude_code_version=None,
             git_branch=None,
-            metadata=meta_response,
+            metadata=_build_metadata_response(session_id, metadata),
             is_active=True,
         )
 
@@ -606,16 +595,7 @@ async def update_session_metadata(session_id: str, data: SessionMetadataUpdate):
     # Save
     save_session_metadata(session.encoded_path, session_id, metadata)
 
-    return SessionMetadataResponse(
-        session_id=session_id,
-        title=metadata.title,
-        summary=metadata.summary,
-        repo_path=metadata.repo_path,
-        entities=_entities_to_response(metadata.entities),
-        tags=metadata.tags,
-        starred=metadata.starred,
-        created_at=metadata.created_at,
-    )
+    return _build_metadata_response(session_id, metadata)
 
 
 # ==========================================
