@@ -1,19 +1,22 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
-import { useRepos, useIssues, useSessions, useAnalyses, useTags, useIssueTags } from './hooks/useApi';
+import { useRepos, useIssues, usePRs, useSessions, useAnalyses, useTags, useIssueTags } from './hooks/useApi';
 import type { IssueFilters, AnalysisStatusFilter } from './hooks/useApi';
 import { RepoSelector } from './components/RepoSelector';
 import { IssueList } from './components/IssueList';
 import { IssueDetail } from './components/IssueDetail';
+import { PRList } from './components/PRList';
 import { Terminal } from './components/Terminal';
 import { TranscriptPanel } from './components/TranscriptPanel';
 import { SessionTabs } from './components/SessionTabs';
 import { AnalysisList } from './components/AnalysisList';
 import { Settings } from './components/Settings';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
-import type { Repo, Issue, Analysis } from './types';
+import type { Repo, Issue, PR, Analysis } from './types';
 import type { AnalysisTypeConfig } from './constants/analysisTypes';
 import { DEFAULT_ANALYSIS_TYPE } from './constants/analysisTypes';
+import type { PRAnalysisTypeConfig } from './constants/prAnalysisTypes';
+import { DEFAULT_PR_ANALYSIS_TYPE } from './constants/prAnalysisTypes';
 
 function ResizeHandle() {
   return (
@@ -47,6 +50,8 @@ export default function App() {
   const [expandedAnalysisId, setExpandedAnalysisId] = useState<number | null>(null);
   const [analysisStatusFilter, setAnalysisStatusFilter] = useState<AnalysisStatusFilter>('all');
   const [viewingAnalysisId, setViewingAnalysisId] = useState<number | null>(null);
+  const [selectedPR, setSelectedPR] = useState<number | null>(null);
+  const [prStateFilter, setPRStateFilter] = useState<'open' | 'closed' | 'all'>('open');
 
   // Track pending issue context to show side-by-side view immediately
   const pendingIssueContextRef = useRef<PendingIssueContext | null>(null);
@@ -70,6 +75,7 @@ export default function App() {
   );
   const { tags, createTag } = useTags(selectedRepo?.id ?? null);
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
+  const { prs, loading: prsLoading } = usePRs(selectedRepo?.id ?? null, prStateFilter);
 
   // Clear filters when repo changes
   useEffect(() => {
@@ -113,6 +119,34 @@ export default function App() {
         sessionId: session.id,
         issueNumber: issue.number,
       };
+
+      setActiveSessionId(session.id);
+
+      // Trigger immediate refresh to get analysis data sooner
+      setTimeout(refreshAnalyses, 500);
+    },
+    [selectedRepo, createSession, refreshAnalyses]
+  );
+
+  const handleAnalyzePR = useCallback(
+    async (pr: PR, analysisType: PRAnalysisTypeConfig = DEFAULT_PR_ANALYSIS_TYPE) => {
+      if (!selectedRepo) return;
+
+      const prompt = analysisType.buildPrompt({
+        number: pr.number,
+        title: pr.title,
+        body: pr.body,
+        head_ref: pr.head_ref,
+        base_ref: pr.base_ref,
+      });
+
+      const session = await createSession(
+        selectedRepo.id,
+        prompt,
+        'pr',
+        pr.number.toString(),
+        `${analysisType.name}: PR #${pr.number}`
+      );
 
       setActiveSessionId(session.id);
 
@@ -325,7 +359,7 @@ export default function App() {
 
       <Group orientation="horizontal" className="flex-1 min-h-0">
         {/* Left sidebar */}
-        <Panel defaultSize={20} minSize={15} maxSize={35} className="border-r border-gray-700 flex flex-col bg-[#0d1117]">
+        <Panel defaultSize="320px" minSize="200px" maxSize="500px" className="border-r border-gray-700 flex flex-col bg-[#0d1117]">
           <RepoSelector
             repos={repos}
             selectedRepo={selectedRepo}
@@ -399,8 +433,18 @@ export default function App() {
                 total={analysesTotal}
               />
             )}
-            {activeTab === 'prs' && (
-              <div className="p-4 text-gray-400">PR view coming soon</div>
+            {activeTab === 'prs' && selectedRepo && (
+              <PRList
+                prs={prs}
+                selectedPR={selectedPR}
+                onSelectPR={setSelectedPR}
+                onAnalyzePR={handleAnalyzePR}
+                loading={prsLoading}
+                stateFilter={prStateFilter}
+                onStateFilterChange={setPRStateFilter}
+                analyses={analyses}
+                sessions={sessions}
+              />
             )}
             {!selectedRepo && activeTab !== 'analyses' && (
               <div className="p-4 text-gray-400">Select a repository to view {activeTab}</div>
@@ -411,7 +455,7 @@ export default function App() {
         <ResizeHandle />
 
         {/* Main content */}
-        <Panel defaultSize={80} minSize={40} className="flex flex-col min-w-0">
+        <Panel minSize="400px" className="flex flex-col min-w-0">
           {/* Session tabs */}
           {sessions.length > 0 && (
             <SessionTabs
@@ -431,11 +475,11 @@ export default function App() {
               <Group orientation="horizontal" className="flex-1">
                 {/* Collapsible issue panel */}
                 <Panel
-                  defaultSize={issuePanelCollapsed ? 3 : 40}
-                  minSize={3}
-                  maxSize={60}
+                  defaultSize="400px"
+                  minSize="40px"
+                  maxSize="70%"
                   collapsible
-                  collapsedSize={3}
+                  collapsedSize="40px"
                   className="flex flex-col border-r border-gray-700"
                 >
                   {issuePanelCollapsed ? (
@@ -490,7 +534,7 @@ export default function App() {
                   )}
                 </Panel>
                 <ResizeHandle />
-                <Panel defaultSize={60} minSize={30} className="p-2">
+                <Panel minSize="300px" className="p-2">
                   {activeSessionId ? (
                     <Terminal
                       sessionId={activeSessionId}
