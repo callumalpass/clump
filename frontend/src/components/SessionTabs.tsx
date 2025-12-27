@@ -86,6 +86,7 @@ export function SessionTabs({
         onClick={onNewSession}
         className="px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
         title="New session"
+        aria-label="Create new session"
       >
         +
       </button>

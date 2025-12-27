@@ -59,6 +59,9 @@ export function PRAnalyzeButton({ pr, onAnalyze, size = 'md', className = '' }: 
           setShowDropdown(!showDropdown);
         }}
         className={`px-2 ${sizeClasses} bg-purple-600 hover:bg-purple-700 text-white rounded-r-lg focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-1 focus:ring-offset-gray-900`}
+        aria-label="Select PR analysis type"
+        aria-expanded={showDropdown}
+        aria-haspopup="listbox"
       >
         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
