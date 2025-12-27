@@ -1,23 +1,26 @@
 """
 PTY process routes with WebSocket support.
+
+Processes are ephemeral and stored in memory.
+Sessions (the persistent records) are stored in per-repo databases.
 """
 
 import asyncio
 
 # Default terminal dimensions (standard VT100 size)
-# Used as fallback when client doesn't send resize dimensions
 DEFAULT_TERMINAL_ROWS = 24
 DEFAULT_TERMINAL_COLS = 80
+
 from datetime import datetime
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.database import get_repo_db
 from app.db_helpers import get_repo_or_404
 from app.models import Session, SessionStatus, SessionEntity
 from app.services.session_manager import process_manager
+from app.storage import load_repos, get_repo_by_id
 
 router = APIRouter()
 
@@ -35,20 +38,20 @@ class ProcessCreate(BaseModel):
     title: str = "New Session"
 
     # Claude Code configuration overrides
-    permission_mode: str | None = None  # "default", "plan", "acceptEdits", "bypassPermissions"
+    permission_mode: str | None = None
     allowed_tools: list[str] | None = None
     disallowed_tools: list[str] | None = None
     max_turns: int | None = None
-    model: str | None = None  # "sonnet", "opus", "haiku"
-    resume_session: str | None = None  # Claude Code session ID to resume
+    model: str | None = None
+    resume_session: str | None = None
 
 
 class ProcessResponse(BaseModel):
     id: str
     working_dir: str
     created_at: str
-    session_id: int | None  # Links to Session (formerly Analysis) record
-    claude_session_id: str | None = None  # Claude Code's internal session ID
+    session_id: int | None
+    claude_session_id: str | None = None
 
 
 class ProcessListResponse(BaseModel):
@@ -56,83 +59,89 @@ class ProcessListResponse(BaseModel):
 
 
 @router.post("/processes", response_model=ProcessResponse)
-async def create_process(
-    data: ProcessCreate,
-    db: AsyncSession = Depends(get_db),
-):
+async def create_process(data: ProcessCreate):
     """Create a new PTY process running Claude Code."""
-    repo = await get_repo_or_404(db, data.repo_id)
+    repo = get_repo_or_404(data.repo_id)
 
-    # Create session record
-    session = Session(
-        repo_id=repo.id,
-        kind=data.kind,
-        title=data.title,
-        prompt=data.prompt or "",
-        status=SessionStatus.RUNNING.value,
-    )
-    db.add(session)
-    await db.commit()
-    await db.refresh(session)
-
-    # Create entity links
-    for entity in data.entities:
-        session_entity = SessionEntity(
-            session_id=session.id,
-            repo_id=repo.id,
-            entity_kind=entity.kind,
-            entity_number=entity.number,
+    async with get_repo_db(repo["local_path"]) as db:
+        # Create session record
+        session = Session(
+            repo_id=repo["id"],
+            kind=data.kind,
+            title=data.title,
+            prompt=data.prompt or "",
+            status=SessionStatus.RUNNING.value,
         )
-        db.add(session_entity)
+        db.add(session)
+        await db.commit()
+        await db.refresh(session)
 
-    if data.entities:
+        # Create entity links
+        for entity in data.entities:
+            session_entity = SessionEntity(
+                session_id=session.id,
+                repo_id=repo["id"],
+                entity_kind=entity.kind,
+                entity_number=entity.number,
+            )
+            db.add(session_entity)
+
+        if data.entities:
+            await db.commit()
+
+        # Create PTY process with Claude Code configuration
+        process = await process_manager.create_process(
+            working_dir=repo["local_path"],
+            initial_prompt=data.prompt,
+            session_id=session.id,
+            allowed_tools=data.allowed_tools,
+            disallowed_tools=data.disallowed_tools,
+            permission_mode=data.permission_mode,
+            max_turns=data.max_turns,
+            model=data.model,
+            resume_session=data.resume_session,
+        )
+
+        # Link process to session
+        session.process_id = process.id
         await db.commit()
 
-    # Create PTY process with Claude Code configuration
-    process = await process_manager.create_process(
-        working_dir=repo.local_path,
-        initial_prompt=data.prompt,
-        session_id=session.id,
-        allowed_tools=data.allowed_tools,
-        disallowed_tools=data.disallowed_tools,
-        permission_mode=data.permission_mode,
-        max_turns=data.max_turns,
-        model=data.model,
-        resume_session=data.resume_session,
-    )
-
-    # Link process to session
-    session.process_id = process.id
-    await db.commit()
-
-    return ProcessResponse(
-        id=process.id,
-        working_dir=process.working_dir,
-        created_at=process.created_at.isoformat(),
-        session_id=session.id,
-        claude_session_id=process.claude_session_id,
-    )
+        return ProcessResponse(
+            id=process.id,
+            working_dir=process.working_dir,
+            created_at=process.created_at.isoformat(),
+            session_id=session.id,
+            claude_session_id=process.claude_session_id,
+        )
 
 
 @router.get("/processes", response_model=ProcessListResponse)
-async def list_processes(db: AsyncSession = Depends(get_db)):
+async def list_processes():
     """List all active PTY processes."""
     # First, check for dead processes and update their session status
     dead_process_info = await process_manager.get_dead_process_info()
-    for session_id, transcript, claude_session_id in dead_process_info:
-        result = await db.execute(
-            select(Session).where(Session.id == session_id)
-        )
-        session = result.scalar_one_or_none()
-        if session and session.status == SessionStatus.RUNNING.value:
-            session.status = SessionStatus.COMPLETED.value
-            session.transcript = transcript
-            session.completed_at = datetime.utcnow()
-            if claude_session_id:
-                session.claude_session_id = claude_session_id
 
-    if dead_process_info:
-        await db.commit()
+    for session_id, transcript, claude_session_id, working_dir in dead_process_info:
+        # Find the repo by working_dir
+        repo = None
+        for r in load_repos():
+            if r["local_path"] == working_dir:
+                repo = r
+                break
+
+        if repo and session_id:
+            async with get_repo_db(repo["local_path"]) as db:
+                result = await db.execute(
+                    select(Session).where(Session.id == session_id)
+                )
+                session = result.scalar_one_or_none()
+                if session and session.status == SessionStatus.RUNNING.value:
+                    session.status = SessionStatus.COMPLETED.value
+                    session.transcript = transcript
+                    session.completed_at = datetime.utcnow()
+                    if claude_session_id:
+                        session.claude_session_id = claude_session_id
+                    await db.commit()
 
     # Now list only actually running processes
     processes = await process_manager.list_processes()
@@ -151,28 +160,33 @@ async def list_processes(db: AsyncSession = Depends(get_db)):
 
 
 @router.delete("/processes/{process_id}")
-async def kill_process(
-    process_id: str,
-    db: AsyncSession = Depends(get_db),
-):
+async def kill_process(process_id: str):
     """Kill a PTY process."""
     process = await process_manager.get_process(process_id)
     if not process:
         raise HTTPException(status_code=404, detail="Process not found")
 
     # Update session status if linked
-    if process.session_id:
-        result = await db.execute(
-            select(Session).where(Session.id == process.session_id)
-        )
-        session = result.scalar_one_or_none()
-        if session:
-            session.status = SessionStatus.COMPLETED.value
-            session.transcript = process.transcript
-            # Save Claude Code session ID for resume support
-            if process.claude_session_id:
-                session.claude_session_id = process.claude_session_id
-            await db.commit()
+    if process.session_id and process.working_dir:
+        # Find the repo by working_dir
+        repo = None
+        for r in load_repos():
+            if r["local_path"] == process.working_dir:
+                repo = r
+                break
+
+        if repo:
+            async with get_repo_db(repo["local_path"]) as db:
+                result = await db.execute(
+                    select(Session).where(Session.id == process.session_id)
+                )
+                session = result.scalar_one_or_none()
+                if session:
+                    session.status = SessionStatus.COMPLETED.value
+                    session.transcript = process.transcript
+                    if process.claude_session_id:
+                        session.claude_session_id = process.claude_session_id
+                    await db.commit()
 
     await process_manager.kill(process_id)
     return {"status": "killed"}

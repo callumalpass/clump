@@ -1,12 +1,19 @@
-from pydantic_settings import BaseSettings
-from pydantic import Field
+"""
+Application settings.
+
+Settings can be configured via:
+1. Environment variables (highest priority)
+2. ~/.clump/config.json
+3. Backend .env file
+4. Default values
+
+The ~/.clump/config.json is the recommended place for persistent settings.
+"""
+
+import json
+import os
 from pathlib import Path
 from typing import Literal
-
-
-# Compute absolute path for database
-_BASE_DIR = Path(__file__).parent.parent
-_DB_PATH = _BASE_DIR / "claude_code_hub.db"
 
 
 # Default tools to auto-approve for issue analysis
@@ -21,60 +28,183 @@ DEFAULT_ALLOWED_TOOLS = [
 ]
 
 
-class Settings(BaseSettings):
-    """Application settings loaded from environment variables."""
+def _get_clump_config_path() -> Path:
+    """Get the path to ~/.clump/config.json."""
+    return Path.home() / ".clump" / "config.json"
 
-    # GitHub
-    github_token: str = ""
 
-    # Database - use absolute path
-    database_url: str = f"sqlite+aiosqlite:///{_DB_PATH}"
+def _load_clump_config() -> dict:
+    """Load config from ~/.clump/config.json."""
+    path = _get_clump_config_path()
+    if not path.exists():
+        return {}
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return {}
 
-    # Server
-    host: str = "127.0.0.1"
-    port: int = 8000
 
-    # Claude Code - Basic
-    claude_command: str = "claude"
+def _save_clump_config(config: dict) -> None:
+    """Save config to ~/.clump/config.json."""
+    path = _get_clump_config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(config, f, indent=2)
 
-    # Claude Code - Permission Control
-    # Permission mode: "default", "plan" (read-only), "acceptEdits", "bypassPermissions"
-    claude_permission_mode: Literal["default", "plan", "acceptEdits", "bypassPermissions"] = "acceptEdits"
 
-    # Comma-separated list of tools to auto-approve (e.g., "Read,Glob,Grep,Bash(git:*)")
-    # If empty, uses DEFAULT_ALLOWED_TOOLS
-    claude_allowed_tools: str = ""
+def _get_env_file_path() -> Path:
+    """Get the backend .env file path."""
+    return Path(__file__).parent.parent / ".env"
 
-    # Tools to explicitly disable
-    claude_disallowed_tools: str = ""
 
-    # Maximum agentic turns (0 = unlimited)
-    claude_max_turns: int = 10
+def _load_env_file() -> dict[str, str]:
+    """Load settings from .env file."""
+    env_path = _get_env_file_path()
+    env_vars = {}
 
-    # Model to use (sonnet, opus, haiku)
-    claude_model: str = "sonnet"
+    if env_path.exists():
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    env_vars[key.strip()] = value.strip()
 
-    # Claude Code - Session Management
-    # Whether to use headless mode (-p flag) for programmatic execution
-    claude_headless_mode: bool = False
+    return env_vars
 
-    # Output format for headless mode: "text", "json", "stream-json"
-    claude_output_format: Literal["text", "json", "stream-json"] = "stream-json"
 
-    # Claude Code - MCP Servers
-    # Enable GitHub MCP server for direct GitHub integration
-    claude_mcp_github: bool = False
+class Settings:
+    """
+    Application settings with layered configuration.
 
-    # Additional MCP servers (JSON string)
-    # Example: '{"sentry": {"type": "sse", "url": "https://mcp.sentry.dev/mcp"}}'
-    claude_mcp_servers: str = ""
+    Priority (highest to lowest):
+    1. Environment variables
+    2. ~/.clump/config.json
+    3. .env file
+    4. Default values
+    """
 
+    def __init__(self):
+        # Load config sources
+        self._clump_config = _load_clump_config()
+        self._env_file = _load_env_file()
+
+    def _get(self, key: str, default=None, env_key: str | None = None):
+        """Get a config value from the layered config sources."""
+        # Check environment variable first
+        env_key = env_key or key.upper()
+        if env_key in os.environ:
+            return os.environ[env_key]
+
+        # Check clump config
+        if key in self._clump_config:
+            return self._clump_config[key]
+
+        # Check .env file
+        if env_key in self._env_file:
+            return self._env_file[env_key]
+
+        return default
+
+    def _get_bool(self, key: str, default: bool = False, env_key: str | None = None) -> bool:
+        """Get a boolean config value."""
+        value = self._get(key, default, env_key)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.lower() in ("true", "1", "yes")
+        return bool(value)
+
+    def _get_int(self, key: str, default: int = 0, env_key: str | None = None) -> int:
+        """Get an integer config value."""
+        value = self._get(key, default, env_key)
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    # ==========================================
+    # GitHub Settings
+    # ==========================================
+
+    @property
+    def github_token(self) -> str:
+        return self._get("github_token", "", "GITHUB_TOKEN") or ""
+
+    # ==========================================
+    # Server Settings
+    # ==========================================
+
+    @property
+    def host(self) -> str:
+        return self._get("host", "127.0.0.1", "HOST") or "127.0.0.1"
+
+    @property
+    def port(self) -> int:
+        return self._get_int("port", 8000, "PORT")
+
+    # ==========================================
+    # Claude Code Settings
+    # ==========================================
+
+    @property
+    def claude_command(self) -> str:
+        return self._get("claude_command", "claude", "CLAUDE_COMMAND") or "claude"
+
+    @property
+    def claude_permission_mode(self) -> Literal["default", "plan", "acceptEdits", "bypassPermissions"]:
+        mode = self._get("claude_permission_mode", "acceptEdits", "CLAUDE_PERMISSION_MODE")
+        if mode in ("default", "plan", "acceptEdits", "bypassPermissions"):
+            return mode  # type: ignore
+        return "acceptEdits"
+
+    @property
+    def claude_allowed_tools(self) -> str:
+        return self._get("claude_allowed_tools", "", "CLAUDE_ALLOWED_TOOLS") or ""
+
+    @property
+    def claude_disallowed_tools(self) -> str:
+        return self._get("claude_disallowed_tools", "", "CLAUDE_DISALLOWED_TOOLS") or ""
+
+    @property
+    def claude_max_turns(self) -> int:
+        return self._get_int("claude_max_turns", 10, "CLAUDE_MAX_TURNS")
+
+    @property
+    def claude_model(self) -> str:
+        return self._get("claude_model", "sonnet", "CLAUDE_MODEL") or "sonnet"
+
+    @property
+    def claude_headless_mode(self) -> bool:
+        return self._get_bool("claude_headless_mode", False, "CLAUDE_HEADLESS_MODE")
+
+    @property
+    def claude_output_format(self) -> Literal["text", "json", "stream-json"]:
+        fmt = self._get("claude_output_format", "stream-json", "CLAUDE_OUTPUT_FORMAT")
+        if fmt in ("text", "json", "stream-json"):
+            return fmt  # type: ignore
+        return "stream-json"
+
+    @property
+    def claude_mcp_github(self) -> bool:
+        return self._get_bool("claude_mcp_github", False, "CLAUDE_MCP_GITHUB")
+
+    @property
+    def claude_mcp_servers(self) -> str:
+        return self._get("claude_mcp_servers", "", "CLAUDE_MCP_SERVERS") or ""
+
+    # ==========================================
     # Paths
-    base_dir: Path = Path(__file__).parent.parent.parent
+    # ==========================================
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    @property
+    def base_dir(self) -> Path:
+        return Path(__file__).parent.parent.parent
+
+    # ==========================================
+    # Helper Methods
+    # ==========================================
 
     def get_allowed_tools(self) -> list[str]:
         """Get list of allowed tools, using defaults if not specified."""
@@ -89,13 +219,7 @@ class Settings(BaseSettings):
         return []
 
     def get_mcp_config(self) -> dict | None:
-        """
-        Get MCP server configuration for Claude Code.
-
-        Returns a dict suitable for --mcp-config flag or None if no MCP configured.
-        """
-        import json
-
+        """Get MCP server configuration for Claude Code."""
         servers = {}
 
         # Add GitHub MCP if enabled
@@ -118,5 +242,11 @@ class Settings(BaseSettings):
 
         return servers if servers else None
 
+    def reload(self) -> None:
+        """Reload config from files."""
+        self._clump_config = _load_clump_config()
+        self._env_file = _load_env_file()
 
+
+# Singleton instance
 settings = Settings()

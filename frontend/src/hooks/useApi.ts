@@ -1,5 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Repo, Issue, IssueDetail, PR, Process, Session, SessionEntity, ClaudeCodeSettings, ProcessCreateOptions, Tag, IssueTagsMap, TranscriptResponse, GitHubLabel } from '../types';
+import type {
+  Repo, Issue, IssueDetail, PR, Process,
+  SessionSummary, SessionDetail, SessionListResponse, EntityLink,
+  ClaudeCodeSettings, ProcessCreateOptions, Tag, IssueTagsMap, GitHubLabel
+} from '../types';
 
 export interface EntityInput {
   kind: string;  // "issue" or "pr"
@@ -260,23 +264,32 @@ export function useProcesses() {
   return { processes, loading, refresh, createProcess, resumeProcess, killProcess, addProcess };
 }
 
-// Sessions
-export type SessionStatusFilter = 'all' | 'running' | 'completed' | 'failed';
+// Sessions (transcript-first model)
+export interface SessionFilters {
+  repoPath?: string;
+  starred?: boolean;
+  hasEntities?: boolean;
+  search?: string;
+}
 
-export function useSessions(repoId?: number, search?: string, statusFilter?: SessionStatusFilter) {
-  const [sessions, setSessions] = useState<Session[]>([]);
+export function useSessions(filters: SessionFilters = {}) {
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      if (repoId) params.set('repo_id', repoId.toString());
-      if (search) params.set('search', search);
-      if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter);
+  const { repoPath, starred, hasEntities, search } = filters;
 
-      const data = await fetchJson<{ sessions: Session[]; total: number }>(
+  // Internal fetch that optionally shows loading state
+  const fetchSessions = useCallback(async (showLoading: boolean) => {
+    try {
+      if (showLoading) setLoading(true);
+      const params = new URLSearchParams();
+      if (repoPath) params.set('repo_path', repoPath);
+      if (starred !== undefined) params.set('starred', starred.toString());
+      if (hasEntities !== undefined) params.set('has_entities', hasEntities.toString());
+      if (search) params.set('search', search);
+
+      const data = await fetchJson<SessionListResponse>(
         `${API_BASE}/sessions?${params}`
       );
       setSessions(data.sessions);
@@ -284,35 +297,51 @@ export function useSessions(repoId?: number, search?: string, statusFilter?: Ses
     } catch (e) {
       console.error('Failed to fetch sessions:', e);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
-  }, [repoId, search, statusFilter]);
+  }, [repoPath, starred, hasEntities, search]);
 
+  // Public refresh - silent by default for polling
+  const refresh = useCallback(() => fetchSessions(false), [fetchSessions]);
+
+  // Initial load and when filters change - show loading
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    fetchSessions(true);
+  }, [fetchSessions]);
 
-  const deleteSession = async (sessionId: number) => {
-    await fetchJson(`${API_BASE}/sessions/${sessionId}`, { method: 'DELETE' });
-    setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-    setTotal((prev) => prev - 1);
-  };
-
-  const continueSession = async (sessionId: number): Promise<Process> => {
+  const continueSession = async (sessionId: string): Promise<Process> => {
     const result = await fetchJson<Process>(
       `${API_BASE}/sessions/${sessionId}/continue`,
       { method: 'POST' }
     );
-    // Update the session status to running in local state
+    // Update the session to show as active in local state
     setSessions((prev) =>
       prev.map((s) =>
-        s.id === sessionId ? { ...s, status: 'running', process_id: result.id } : s
+        s.session_id === sessionId ? { ...s, is_active: true } : s
       )
     );
     return result;
   };
 
-  return { sessions, total, loading, refresh, deleteSession, continueSession };
+  const updateSessionMetadata = async (
+    sessionId: string,
+    updates: { title?: string; summary?: string; tags?: string[]; starred?: boolean }
+  ) => {
+    const result = await fetchJson<SessionSummary>(
+      `${API_BASE}/sessions/${sessionId}`,
+      { method: 'PATCH', body: JSON.stringify(updates) }
+    );
+    // Refresh to get updated data
+    await refresh();
+    return result;
+  };
+
+  return { sessions, total, loading, refresh, continueSession, updateSessionMetadata };
+}
+
+// Fetch full session detail with transcript
+export async function fetchSessionDetail(sessionId: string): Promise<SessionDetail> {
+  return fetchJson<SessionDetail>(`${API_BASE}/sessions/${sessionId}`);
 }
 
 // Claude Code Settings
@@ -489,28 +518,23 @@ export function useIssueTags(repoId: number | null) {
   return { issueTagsMap, loading, refresh, addTagToIssue, removeTagFromIssue };
 }
 
-// Transcripts
-export async function fetchTranscript(sessionId: number): Promise<TranscriptResponse> {
-  return fetchJson<TranscriptResponse>(`${API_BASE}/sessions/${sessionId}/transcript`);
-}
-
 // Session Entity Management
 export async function addEntityToSession(
-  sessionId: number,
+  sessionId: string,
   kind: string,
   number: number
-): Promise<SessionEntity> {
-  return fetchJson<SessionEntity>(`${API_BASE}/sessions/${sessionId}/entities`, {
+): Promise<EntityLink> {
+  return fetchJson<EntityLink>(`${API_BASE}/sessions/${sessionId}/entities`, {
     method: 'POST',
     body: JSON.stringify({ kind, number }),
   });
 }
 
 export async function removeEntityFromSession(
-  sessionId: number,
-  entityId: number
+  sessionId: string,
+  entityIdx: number
 ): Promise<void> {
-  await fetchJson(`${API_BASE}/sessions/${sessionId}/entities/${entityId}`, {
+  await fetchJson(`${API_BASE}/sessions/${sessionId}/entities/${entityIdx}`, {
     method: 'DELETE',
   });
 }

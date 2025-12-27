@@ -1,15 +1,22 @@
 """
 GitHub API routes for repos, issues, and PRs.
+
+Repo information is stored in ~/.clump/repos.json.
+Per-repo data is stored in ~/.clump/projects/{hash}/data.db.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
 from app.db_helpers import get_repo_or_404
-from app.models import Repo
+from app.storage import (
+    load_repos,
+    add_repo as storage_add_repo,
+    delete_repo as storage_delete_repo,
+    delete_repo_data,
+    RepoInfo,
+)
+from app.database import clear_engine_cache
 from app.services.github_client import github_client, IssueData, PRData
 
 router = APIRouter()
@@ -28,8 +35,14 @@ class RepoResponse(BaseModel):
     name: str
     local_path: str
 
-    class Config:
-        from_attributes = True
+    @classmethod
+    def from_repo_info(cls, repo: RepoInfo) -> "RepoResponse":
+        return cls(
+            id=repo["id"],
+            owner=repo["owner"],
+            name=repo["name"],
+            local_path=repo["local_path"],
+        )
 
 
 class IssueResponse(BaseModel):
@@ -75,14 +88,14 @@ class PRResponse(BaseModel):
 
 # Repo endpoints
 @router.get("/repos", response_model=list[RepoResponse])
-async def list_repos(db: AsyncSession = Depends(get_db)):
+async def list_repos():
     """List all configured repositories."""
-    result = await db.execute(select(Repo))
-    return result.scalars().all()
+    repos = load_repos()
+    return [RepoResponse.from_repo_info(r) for r in repos]
 
 
 @router.post("/repos", response_model=RepoResponse)
-async def create_repo(repo: RepoCreate, db: AsyncSession = Depends(get_db)):
+async def create_repo(repo: RepoCreate):
     """Add a repository to track."""
     # Verify it exists on GitHub
     try:
@@ -90,19 +103,33 @@ async def create_repo(repo: RepoCreate, db: AsyncSession = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Repository not found: {e}")
 
-    db_repo = Repo(owner=repo.owner, name=repo.name, local_path=repo.local_path)
-    db.add(db_repo)
-    await db.commit()
-    await db.refresh(db_repo)
-    return db_repo
+    try:
+        repo_info = storage_add_repo(repo.owner, repo.name, repo.local_path)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return RepoResponse.from_repo_info(repo_info)
 
 
 @router.delete("/repos/{repo_id}")
-async def delete_repo(repo_id: int, db: AsyncSession = Depends(get_db)):
-    """Remove a repository."""
-    repo = await get_repo_or_404(db, repo_id)
-    await db.delete(repo)
-    await db.commit()
+async def delete_repo(repo_id: int, delete_data: bool = True):
+    """
+    Remove a repository.
+
+    Args:
+        repo_id: The repository ID
+        delete_data: If True (default), also deletes the repo's data.db
+    """
+    repo = get_repo_or_404(repo_id)
+
+    # Delete from registry
+    storage_delete_repo(repo_id)
+
+    # Optionally delete the repo's data
+    if delete_data:
+        delete_repo_data(repo["local_path"])
+        clear_engine_cache(repo["local_path"])
+
     return {"status": "deleted"}
 
 
@@ -117,7 +144,6 @@ async def list_issues(
     order: str = "desc",
     page: int = 1,
     per_page: int = 30,
-    db: AsyncSession = Depends(get_db),
 ):
     """List issues for a repository with pagination and filtering.
 
@@ -128,10 +154,10 @@ async def list_issues(
         sort: Sort field - "created", "updated", or "comments"
         order: Sort order - "asc" or "desc"
     """
-    repo = await get_repo_or_404(db, repo_id)
+    repo = get_repo_or_404(repo_id)
     issues, total = github_client.list_issues(
-        repo.owner,
-        repo.name,
+        repo["owner"],
+        repo["name"],
         state=state,
         labels=labels if labels else None,
         search_query=search,
@@ -152,11 +178,10 @@ async def list_issues(
 async def get_issue(
     repo_id: int,
     issue_number: int,
-    db: AsyncSession = Depends(get_db),
 ):
     """Get a single issue with comments."""
-    repo = await get_repo_or_404(db, repo_id)
-    issue = github_client.get_issue(repo.owner, repo.name, issue_number)
+    repo = get_repo_or_404(repo_id)
+    issue = github_client.get_issue(repo["owner"], repo["name"], issue_number)
     response = _issue_to_response(issue)
     response_dict = response.model_dump()
     response_dict["comments"] = [
@@ -181,12 +206,11 @@ async def create_comment(
     repo_id: int,
     issue_number: int,
     comment: CommentCreate,
-    db: AsyncSession = Depends(get_db),
 ):
     """Add a comment to an issue."""
-    repo = await get_repo_or_404(db, repo_id)
+    repo = get_repo_or_404(repo_id)
     try:
-        comment_id = github_client.add_comment(repo.owner, repo.name, issue_number, comment.body)
+        comment_id = github_client.add_comment(repo["owner"], repo["name"], issue_number, comment.body)
         return {"id": comment_id, "status": "created"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -197,12 +221,11 @@ async def create_comment(
 async def close_issue(
     repo_id: int,
     issue_number: int,
-    db: AsyncSession = Depends(get_db),
 ):
     """Close an issue."""
-    repo = await get_repo_or_404(db, repo_id)
+    repo = get_repo_or_404(repo_id)
     try:
-        github_client.close_issue(repo.owner, repo.name, issue_number)
+        github_client.close_issue(repo["owner"], repo["name"], issue_number)
         return {"status": "closed"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -212,12 +235,11 @@ async def close_issue(
 async def reopen_issue(
     repo_id: int,
     issue_number: int,
-    db: AsyncSession = Depends(get_db),
 ):
     """Reopen a closed issue."""
-    repo = await get_repo_or_404(db, repo_id)
+    repo = get_repo_or_404(repo_id)
     try:
-        github_client.reopen_issue(repo.owner, repo.name, issue_number)
+        github_client.reopen_issue(repo["owner"], repo["name"], issue_number)
         return {"status": "opened"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -234,14 +256,13 @@ class IssueCreate(BaseModel):
 async def create_issue(
     repo_id: int,
     issue: IssueCreate,
-    db: AsyncSession = Depends(get_db),
 ):
     """Create a new issue."""
-    repo = await get_repo_or_404(db, repo_id)
+    repo = get_repo_or_404(repo_id)
     try:
         created = github_client.create_issue(
-            repo.owner,
-            repo.name,
+            repo["owner"],
+            repo["name"],
             issue.title,
             issue.body,
             issue.labels,
@@ -255,12 +276,11 @@ async def create_issue(
 @router.get("/repos/{repo_id}/labels")
 async def get_labels(
     repo_id: int,
-    db: AsyncSession = Depends(get_db),
 ):
     """Get available labels for a repository."""
-    repo = await get_repo_or_404(db, repo_id)
+    repo = get_repo_or_404(repo_id)
     try:
-        labels = github_client.get_available_labels(repo.owner, repo.name)
+        labels = github_client.get_available_labels(repo["owner"], repo["name"])
         return {"labels": labels}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -269,12 +289,11 @@ async def get_labels(
 @router.get("/repos/{repo_id}/assignees")
 async def get_assignees(
     repo_id: int,
-    db: AsyncSession = Depends(get_db),
 ):
     """Get users who can be assigned to issues."""
-    repo = await get_repo_or_404(db, repo_id)
+    repo = get_repo_or_404(repo_id)
     try:
-        assignees = github_client.get_assignable_users(repo.owner, repo.name)
+        assignees = github_client.get_assignable_users(repo["owner"], repo["name"])
         return {"assignees": assignees}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -286,11 +305,10 @@ async def list_prs(
     repo_id: int,
     state: str = "open",
     limit: int = 100,
-    db: AsyncSession = Depends(get_db),
 ):
     """List pull requests for a repository."""
-    repo = await get_repo_or_404(db, repo_id)
-    prs = github_client.list_prs(repo.owner, repo.name, state=state, limit=limit)
+    repo = get_repo_or_404(repo_id)
+    prs = github_client.list_prs(repo["owner"], repo["name"], state=state, limit=limit)
     return [_pr_to_response(p) for p in prs]
 
 

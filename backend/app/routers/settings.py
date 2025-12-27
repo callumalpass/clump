@@ -1,14 +1,16 @@
 """
 Settings routes for managing configuration like GitHub PAT and Claude Code settings.
+
+Settings are stored in ~/.clump/config.json for persistence.
 """
 
 import os
-from pathlib import Path
 from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.config import settings, DEFAULT_ALLOWED_TOOLS
+from app.storage import load_config, save_config
 
 router = APIRouter()
 
@@ -49,38 +51,6 @@ class ClaudeCodeSettingsResponse(BaseModel):
     default_allowed_tools: list[str]  # For UI to show defaults
 
 
-def get_env_path() -> Path:
-    """Get the .env file path."""
-    # settings.py is at backend/app/routers/settings.py
-    # .env is at backend/.env
-    return Path(__file__).parent.parent.parent / ".env"
-
-
-def read_env_file() -> dict[str, str]:
-    """Read existing .env file."""
-    env_path = get_env_path()
-    env_vars = {}
-
-    if env_path.exists():
-        with open(env_path) as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    key, value = line.split("=", 1)
-                    env_vars[key.strip()] = value.strip()
-
-    return env_vars
-
-
-def write_env_file(env_vars: dict[str, str]):
-    """Write .env file."""
-    env_path = get_env_path()
-
-    with open(env_path, "w") as f:
-        for key, value in env_vars.items():
-            f.write(f"{key}={value}\n")
-
-
 @router.get("/settings/github-token", response_model=GitHubTokenStatus)
 async def get_github_token_status():
     """Check if GitHub token is configured."""
@@ -95,7 +65,7 @@ async def get_github_token_status():
 
 @router.post("/settings/github-token", response_model=GitHubTokenStatus)
 async def set_github_token(request: GitHubTokenRequest):
-    """Set GitHub token (saves to .env file)."""
+    """Set GitHub token (saves to ~/.clump/config.json)."""
     token = request.token.strip()
 
     if not token:
@@ -108,25 +78,24 @@ async def set_github_token(request: GitHubTokenRequest):
             detail="Invalid token format. Should start with 'ghp_' or 'github_pat_'"
         )
 
-    # Read existing env vars
-    env_vars = read_env_file()
+    # Save to config.json
+    config = load_config()
+    config["github_token"] = token
+    save_config(config)
 
-    # Update token
-    env_vars["GITHUB_TOKEN"] = token
-
-    # Write back
-    write_env_file(env_vars)
-
-    # Update runtime settings
+    # Update runtime environment
     os.environ["GITHUB_TOKEN"] = token
 
-    # Reload the GitHub client with new token (deferred to avoid blocking)
+    # Reload the GitHub client with new token
     try:
         from app.services.github_client import GitHubClient
         import app.services.github_client as gh_module
         gh_module.github_client = GitHubClient(token)
     except Exception as e:
         print(f"Warning: Failed to reload GitHub client: {e}")
+
+    # Reload settings
+    settings.reload()
 
     masked = f"{token[:4]}...{token[-4:]}"
     return GitHubTokenStatus(configured=True, masked_token=masked)
@@ -135,15 +104,14 @@ async def set_github_token(request: GitHubTokenRequest):
 @router.delete("/settings/github-token")
 async def remove_github_token():
     """Remove GitHub token."""
-    env_vars = read_env_file()
-
-    if "GITHUB_TOKEN" in env_vars:
-        del env_vars["GITHUB_TOKEN"]
-        write_env_file(env_vars)
+    config = load_config()
+    config.pop("github_token", None)
+    save_config(config)
 
     if "GITHUB_TOKEN" in os.environ:
         del os.environ["GITHUB_TOKEN"]
 
+    settings.reload()
     return {"status": "removed"}
 
 
@@ -170,51 +138,32 @@ async def get_claude_settings():
 
 @router.put("/settings/claude", response_model=ClaudeCodeSettingsResponse)
 async def update_claude_settings(new_settings: ClaudeCodeSettings):
-    """Update Claude Code settings (saves to .env file)."""
-    env_vars = read_env_file()
+    """Update Claude Code settings (saves to ~/.clump/config.json)."""
+    config = load_config()
 
     # Update settings
-    env_vars["CLAUDE_PERMISSION_MODE"] = new_settings.permission_mode
-    env_vars["CLAUDE_MAX_TURNS"] = str(new_settings.max_turns)
-    env_vars["CLAUDE_MODEL"] = new_settings.model
-    env_vars["CLAUDE_HEADLESS_MODE"] = str(new_settings.headless_mode).lower()
-    env_vars["CLAUDE_OUTPUT_FORMAT"] = new_settings.output_format
-    env_vars["CLAUDE_MCP_GITHUB"] = str(new_settings.mcp_github).lower()
+    config["claude_permission_mode"] = new_settings.permission_mode
+    config["claude_max_turns"] = new_settings.max_turns
+    config["claude_model"] = new_settings.model
+    config["claude_headless_mode"] = new_settings.headless_mode
+    config["claude_output_format"] = new_settings.output_format
+    config["claude_mcp_github"] = new_settings.mcp_github
 
     # Handle tools lists
     if new_settings.allowed_tools:
-        env_vars["CLAUDE_ALLOWED_TOOLS"] = ",".join(new_settings.allowed_tools)
-    elif "CLAUDE_ALLOWED_TOOLS" in env_vars:
-        del env_vars["CLAUDE_ALLOWED_TOOLS"]
+        config["claude_allowed_tools"] = ",".join(new_settings.allowed_tools)
+    else:
+        config.pop("claude_allowed_tools", None)
 
     if new_settings.disallowed_tools:
-        env_vars["CLAUDE_DISALLOWED_TOOLS"] = ",".join(new_settings.disallowed_tools)
-    elif "CLAUDE_DISALLOWED_TOOLS" in env_vars:
-        del env_vars["CLAUDE_DISALLOWED_TOOLS"]
+        config["claude_disallowed_tools"] = ",".join(new_settings.disallowed_tools)
+    else:
+        config.pop("claude_disallowed_tools", None)
 
-    write_env_file(env_vars)
+    save_config(config)
 
-    # Update runtime environment
-    os.environ["CLAUDE_PERMISSION_MODE"] = new_settings.permission_mode
-    os.environ["CLAUDE_MAX_TURNS"] = str(new_settings.max_turns)
-    os.environ["CLAUDE_MODEL"] = new_settings.model
-    os.environ["CLAUDE_HEADLESS_MODE"] = str(new_settings.headless_mode).lower()
-    os.environ["CLAUDE_OUTPUT_FORMAT"] = new_settings.output_format
-    os.environ["CLAUDE_MCP_GITHUB"] = str(new_settings.mcp_github).lower()
-
-    if new_settings.allowed_tools:
-        os.environ["CLAUDE_ALLOWED_TOOLS"] = ",".join(new_settings.allowed_tools)
-    elif "CLAUDE_ALLOWED_TOOLS" in os.environ:
-        del os.environ["CLAUDE_ALLOWED_TOOLS"]
-
-    if new_settings.disallowed_tools:
-        os.environ["CLAUDE_DISALLOWED_TOOLS"] = ",".join(new_settings.disallowed_tools)
-    elif "CLAUDE_DISALLOWED_TOOLS" in os.environ:
-        del os.environ["CLAUDE_DISALLOWED_TOOLS"]
-
-    # Note: Settings object uses pydantic-settings which reads from env on init
-    # To pick up changes, we'd need to reinitialize the settings object
-    # For now, the env vars are updated and will be used on next session creation
+    # Reload settings to pick up changes
+    settings.reload()
 
     return ClaudeCodeSettingsResponse(
         permission_mode=new_settings.permission_mode,
@@ -232,10 +181,27 @@ async def update_claude_settings(new_settings: ClaudeCodeSettings):
 @router.post("/settings/claude/reset")
 async def reset_claude_settings():
     """Reset Claude Code settings to defaults."""
-    env_vars = read_env_file()
+    config = load_config()
 
     # Remove all Claude settings
     keys_to_remove = [
+        "claude_permission_mode",
+        "claude_allowed_tools",
+        "claude_disallowed_tools",
+        "claude_max_turns",
+        "claude_model",
+        "claude_headless_mode",
+        "claude_output_format",
+        "claude_mcp_github",
+    ]
+
+    for key in keys_to_remove:
+        config.pop(key, None)
+
+    save_config(config)
+
+    # Also clear environment variables if set
+    env_keys = [
         "CLAUDE_PERMISSION_MODE",
         "CLAUDE_ALLOWED_TOOLS",
         "CLAUDE_DISALLOWED_TOOLS",
@@ -245,11 +211,8 @@ async def reset_claude_settings():
         "CLAUDE_OUTPUT_FORMAT",
         "CLAUDE_MCP_GITHUB",
     ]
-
-    for key in keys_to_remove:
-        env_vars.pop(key, None)
+    for key in env_keys:
         os.environ.pop(key, None)
 
-    write_env_file(env_vars)
-
+    settings.reload()
     return {"status": "reset"}

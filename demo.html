@@ -487,23 +487,33 @@
     <div class="logo-item" style="min-width: 140px;">
       <svg viewBox="0 0 64 64" style="width: 80px; height: 80px;">
         <style>
-          .left-arm { transform-origin: 18px 26px; animation: wave-left 0.6s ease-in-out infinite alternate; }
-          .right-arm { transform-origin: 46px 26px; animation: wave-right 0.6s ease-in-out infinite alternate; }
-          @keyframes wave-left { from { transform: rotate(-10deg); } to { transform: rotate(10deg); } }
-          @keyframes wave-right { from { transform: rotate(10deg); } to { transform: rotate(-10deg); } }
+          .left-arm { transform-origin: 19px 28px; animation: wave-left 0.8s ease-in-out infinite alternate; }
+          .right-arm { transform-origin: 45px 28px; animation: wave-right 0.8s ease-in-out infinite alternate 0.2s; }
+          .body { transform-origin: 32px 50px; animation: bounce 0.8s ease-in-out infinite alternate; }
+          @keyframes wave-left { from { transform: rotate(-15deg); } to { transform: rotate(15deg); } }
+          @keyframes wave-right { from { transform: rotate(15deg); } to { transform: rotate(-15deg); } }
+          @keyframes bounce { from { transform: scaleY(1) translateY(0); } to { transform: scaleY(0.97) translateY(1px); } }
         </style>
-        <!-- Wavy arms -->
-        <path class="left-arm" d="M18 26 Q10 20 12 12 Q14 6 8 2" stroke="#6B4423" stroke-width="5" fill="none" stroke-linecap="round"/>
-        <path class="right-arm" d="M46 26 Q54 20 52 12 Q50 6 56 2" stroke="#6B4423" stroke-width="5" fill="none" stroke-linecap="round"/>
+        <!-- Wavy arms with hands -->
+        <g class="left-arm">
+          <path d="M19 28 Q8 22 10 12 Q11 6 6 4" stroke="#6B4423" stroke-width="4" fill="none" stroke-linecap="round"/>
+          <circle cx="6" cy="4" r="3" fill="#6B4423"/>
+        </g>
+        <g class="right-arm">
+          <path d="M45 28 Q56 22 54 12 Q53 6 58 4" stroke="#6B4423" stroke-width="4" fill="none" stroke-linecap="round"/>
+          <circle cx="58" cy="4" r="3" fill="#6B4423"/>
+        </g>
         <!-- Three soft overlapping circles - dirt clump -->
-        <circle cx="24" cy="38" r="12" fill="#6B4423"/>
-        <circle cx="40" cy="38" r="12" fill="#6B4423"/>
-        <circle cx="32" cy="26" r="14" fill="#6B4423"/>
-        <!-- Simple eyes -->
-        <circle cx="27" cy="24" r="3" fill="#1a1a1a"/>
-        <circle cx="37" cy="24" r="3" fill="#1a1a1a"/>
-        <!-- Happy mouth -->
-        <path d="M29 32 Q32 36 35 32" stroke="#1a1a1a" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <g class="body">
+          <circle cx="24" cy="40" r="11" fill="#6B4423"/>
+          <circle cx="40" cy="40" r="11" fill="#6B4423"/>
+          <circle cx="32" cy="28" r="13" fill="#6B4423"/>
+          <!-- Simple eyes -->
+          <circle cx="27" cy="26" r="2.5" fill="#1a1a1a"/>
+          <circle cx="37" cy="26" r="2.5" fill="#1a1a1a"/>
+          <!-- Happy mouth -->
+          <path d="M29 33 Q32 37 35 33" stroke="#1a1a1a" stroke-width="2" fill="none" stroke-linecap="round"/>
+        </g>
       </svg>
       <span class="name">Dirt Clump</span>
     </div>

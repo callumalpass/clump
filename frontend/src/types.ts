@@ -66,22 +66,100 @@ export interface Process {
   id: string;
   working_dir: string;
   created_at: string;
-  session_id: number | null;  // Links to Session (formerly Analysis) record
+  session_id: number | null;  // Legacy - may be null in new model
   claude_session_id: string | null;
 }
 
-export interface SessionEntity {
-  id: number;
+// ==========================================
+// Session types (transcript-first model)
+// ==========================================
+
+export interface EntityLink {
   kind: string;  // "issue" or "pr"
   number: number;
 }
 
+export interface SessionMetadata {
+  session_id: string;
+  title?: string | null;
+  summary?: string | null;
+  repo_path?: string | null;
+  entities: EntityLink[];
+  tags: string[];
+  starred: boolean;
+  created_at?: string | null;
+}
+
+export interface SessionSummary {
+  session_id: string;  // UUID from filename
+  encoded_path: string;  // Directory name (encoded working directory)
+  repo_path: string;  // Decoded working directory path
+  repo_name?: string | null;  // owner/name if matched to known repo
+
+  // From transcript parsing
+  title?: string | null;
+  model?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  message_count: number;
+
+  // File info
+  modified_at: string;
+  file_size: number;
+
+  // From sidecar metadata
+  entities: EntityLink[];
+  tags: string[];
+  starred: boolean;
+
+  // Status
+  is_active: boolean;
+}
+
+export interface SessionDetail {
+  session_id: string;
+  encoded_path: string;
+  repo_path: string;
+  repo_name?: string | null;
+
+  // Transcript data
+  messages: TranscriptMessage[];
+  summary?: string | null;
+  model?: string | null;
+
+  // Token totals
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_cache_read_tokens: number;
+  total_cache_creation_tokens: number;
+
+  // Timestamps
+  start_time?: string | null;
+  end_time?: string | null;
+
+  // Version info
+  claude_code_version?: string | null;
+  git_branch?: string | null;
+
+  // Sidecar metadata
+  metadata: SessionMetadata;
+
+  // Status
+  is_active: boolean;
+}
+
+export interface SessionListResponse {
+  sessions: SessionSummary[];
+  total: number;
+}
+
+// Legacy Session type for backwards compatibility
 export interface Session {
   id: number;
   repo_id: number;
   repo_name: string | null;
   kind: string;
-  entities: SessionEntity[];
+  entities: EntityLink[];
   title: string;
   prompt: string;
   transcript: string;

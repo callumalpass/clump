@@ -1,45 +1,56 @@
-import type { Session, Process } from '../types';
-import type { SessionStatusFilter } from '../hooks/useApi';
+import type { SessionSummary, Process } from '../types';
 import { calculateDuration } from '../hooks/useElapsedTime';
 import { ElapsedTimer } from './ElapsedTimer';
 
+export type SessionFilter = 'all' | 'active' | 'starred' | 'with-entities';
+
 interface SessionListProps {
-  sessions: Session[];
+  sessions: SessionSummary[];
   processes?: Process[];
-  onSelectSession: (session: Session) => void;
-  onContinueSession?: (session: Session) => void;
-  onDeleteSession?: (session: Session) => void;
+  onSelectSession: (session: SessionSummary) => void;
+  onContinueSession?: (session: SessionSummary) => void;
+  onToggleStar?: (session: SessionSummary) => void;
   loading: boolean;
-  statusFilter: SessionStatusFilter;
-  onStatusFilterChange: (filter: SessionStatusFilter) => void;
+  filter: SessionFilter;
+  onFilterChange: (filter: SessionFilter) => void;
   total: number;
 }
 
-const STATUS_FILTERS: { value: SessionStatusFilter; label: string }[] = [
+const FILTERS: { value: SessionFilter; label: string }[] = [
   { value: 'all', label: 'All' },
-  { value: 'running', label: 'Running' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'failed', label: 'Failed' },
+  { value: 'active', label: 'Active' },
+  { value: 'starred', label: 'Starred' },
+  { value: 'with-entities', label: 'Linked' },
 ];
 
-export function SessionList({ sessions, processes = [], onSelectSession, onContinueSession, onDeleteSession, loading, statusFilter, onStatusFilterChange, total }: SessionListProps) {
+export function SessionList({
+  sessions,
+  processes: _processes = [],
+  onSelectSession,
+  onContinueSession,
+  onToggleStar,
+  loading,
+  filter,
+  onFilterChange,
+  total
+}: SessionListProps) {
   const filterTabs = (
     <div className="flex gap-1 p-2 border-b border-gray-700 bg-gray-800/30">
-      {STATUS_FILTERS.map((filter) => (
+      {FILTERS.map((f) => (
         <button
-          key={filter.value}
-          onClick={() => onStatusFilterChange(filter.value)}
+          key={f.value}
+          onClick={() => onFilterChange(f.value)}
           className={`px-2.5 py-1 text-xs rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-            statusFilter === filter.value
+            filter === f.value
               ? 'bg-blue-600 text-white'
               : 'text-gray-400 hover:text-white hover:bg-gray-700'
           }`}
         >
-          {filter.label}
+          {f.label}
         </button>
       ))}
       <span className="ml-auto text-xs text-gray-500 self-center pr-1">
-        {total} result{total !== 1 ? 's' : ''}
+        {total} session{total !== 1 ? 's' : ''}
       </span>
     </div>
   );
@@ -79,11 +90,11 @@ export function SessionList({ sessions, processes = [], onSelectSession, onConti
               </svg>
             </div>
             <p className="text-gray-300 font-medium mb-1">
-              {statusFilter === 'all' ? 'No sessions yet' : `No ${statusFilter} sessions`}
+              {filter === 'all' ? 'No Claude sessions found' : `No ${filter} sessions`}
             </p>
             <p className="text-gray-500 text-sm">
-              {statusFilter === 'all'
-                ? 'Click "Start" on an issue to start a session'
+              {filter === 'all'
+                ? 'Sessions from Claude Code will appear here'
                 : 'Try selecting a different filter'}
             </p>
           </div>
@@ -92,48 +103,67 @@ export function SessionList({ sessions, processes = [], onSelectSession, onConti
     );
   }
 
-  const handleContinue = (e: React.MouseEvent, session: Session) => {
+  const handleContinue = (e: React.MouseEvent, session: SessionSummary) => {
     e.stopPropagation();
     onContinueSession?.(session);
   };
 
-  const handleDelete = (e: React.MouseEvent, session: Session) => {
+  const handleToggleStar = (e: React.MouseEvent, session: SessionSummary) => {
     e.stopPropagation();
-    if (confirm(`Delete "${session.title}"?`)) {
-      onDeleteSession?.(session);
-    }
+    onToggleStar?.(session);
+  };
+
+  // Format repo path for display - show last 2-3 segments
+  const formatRepoPath = (session: SessionSummary) => {
+    if (session.repo_name) return session.repo_name;
+    const segments = session.repo_path.split('/').filter(Boolean);
+    return segments.slice(-2).join('/');
   };
 
   return (
     <div className="flex flex-col flex-1">
       {filterTabs}
       <div className="divide-y divide-gray-700 overflow-auto flex-1">
-        {sessions.map((session) => {
-        // Check if this session has an actually running process
-        const hasActiveProcess = processes.some(p => p.id === session.process_id);
-        const isActuallyRunning = session.status === 'running' && hasActiveProcess;
-
-        return (
+        {sessions.map((session) => (
           <div
-            key={session.id}
+            key={session.session_id}
             className="group p-3 cursor-pointer border-l-2 border-transparent hover:bg-gray-800/60 hover:border-blue-500/50 transition-all duration-150"
             onClick={() => onSelectSession(session)}
           >
             <div className="flex items-center gap-2 mb-1">
+              {/* Status indicator */}
               <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                isActuallyRunning ? 'bg-yellow-500 animate-pulse' :
-                (session.status === 'completed' || session.status === 'running') ? 'bg-green-500' : 'bg-red-500'
+                session.is_active ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'
               }`} />
+
+              {/* Title */}
               <span className="text-sm font-medium text-white truncate flex-1">
-                {session.title}
+                {session.title || 'Untitled session'}
               </span>
-              {/* Continue button - show if not actively running and has claude session */}
-              {!isActuallyRunning && session.claude_session_id && onContinueSession && (
+
+              {/* Star button */}
+              {onToggleStar && (
+                <button
+                  onClick={(e) => handleToggleStar(e, session)}
+                  className={`flex-shrink-0 p-1 transition-colors rounded focus:outline-none focus:ring-2 focus:ring-yellow-400 ${
+                    session.starred
+                      ? 'text-yellow-400'
+                      : 'text-gray-500 opacity-0 group-hover:opacity-70 hover:!opacity-100 hover:text-yellow-400'
+                  }`}
+                  title={session.starred ? 'Unstar' : 'Star'}
+                >
+                  <svg className="w-4 h-4" fill={session.starred ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                  </svg>
+                </button>
+              )}
+
+              {/* Continue button - show if not actively running */}
+              {!session.is_active && onContinueSession && (
                 <button
                   onClick={(e) => handleContinue(e, session)}
                   className="flex-shrink-0 px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 rounded flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
                   title="Continue this conversation"
-                  aria-label={`Continue session: ${session.title}`}
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
@@ -141,27 +171,18 @@ export function SessionList({ sessions, processes = [], onSelectSession, onConti
                   Continue
                 </button>
               )}
-              {/* Delete button - show if not actively running */}
-              {onDeleteSession && !isActuallyRunning && (
-                <button
-                  onClick={(e) => handleDelete(e, session)}
-                  className="flex-shrink-0 p-1 text-gray-500 opacity-0 group-hover:opacity-70 hover:!opacity-100 hover:text-red-400 hover:bg-red-500/10 transition-opacity duration-150 rounded focus:outline-none focus:opacity-100 focus:text-red-400 focus:ring-2 focus:ring-red-400/50"
-                  title="Delete session"
-                  aria-label={`Delete session: ${session.title}`}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
-              )}
             </div>
+
             <div className="flex items-center gap-2 text-xs text-gray-500">
-              <span className="px-1.5 py-0.5 bg-gray-700 rounded">
-                {session.kind}
+              {/* Repo path */}
+              <span className="px-1.5 py-0.5 bg-gray-700 rounded truncate max-w-[120px]" title={session.repo_path}>
+                {formatRepoPath(session)}
               </span>
-              {session.entities?.map((entity) => (
+
+              {/* Entity links */}
+              {session.entities?.map((entity, idx) => (
                 <span
-                  key={entity.id}
+                  key={idx}
                   className={`px-1 py-0.5 rounded ${
                     entity.kind === 'issue'
                       ? 'bg-green-900/30 text-green-400'
@@ -171,26 +192,32 @@ export function SessionList({ sessions, processes = [], onSelectSession, onConti
                   #{entity.number}
                 </span>
               ))}
-              <span>{new Date(session.created_at).toLocaleDateString()}</span>
-              {/* Duration display */}
-              {isActuallyRunning ? (
-                <span className="text-yellow-500" title="Time elapsed">
-                  <ElapsedTimer startTime={session.created_at} />
-                </span>
-              ) : session.completed_at ? (
-                <span className="text-gray-600" title="Total duration">
-                  {calculateDuration(session.created_at, session.completed_at)}
-                </span>
-              ) : null}
-              {session.claude_session_id && !isActuallyRunning && (
-                <span className="text-gray-600" title={`Session: ${session.claude_session_id}`}>
-                  (resumable)
+
+              {/* Model */}
+              {session.model && (
+                <span className="text-gray-600">
+                  {session.model.includes('opus') ? 'opus' : session.model.includes('haiku') ? 'haiku' : 'sonnet'}
                 </span>
               )}
+
+              {/* Message count */}
+              <span className="text-gray-600">
+                {session.message_count} msg{session.message_count !== 1 ? 's' : ''}
+              </span>
+
+              {/* Duration */}
+              {session.is_active && session.start_time ? (
+                <span className="text-yellow-500" title="Time elapsed">
+                  <ElapsedTimer startTime={session.start_time} />
+                </span>
+              ) : session.start_time && session.end_time ? (
+                <span className="text-gray-600" title="Total duration">
+                  {calculateDuration(session.start_time, session.end_time)}
+                </span>
+              ) : null}
             </div>
           </div>
-        );
-      })}
+        ))}
       </div>
     </div>
   );

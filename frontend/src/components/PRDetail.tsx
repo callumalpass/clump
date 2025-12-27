@@ -1,4 +1,4 @@
-import type { PR, Session, Process } from '../types';
+import type { PR, SessionSummary, Process } from '../types';
 import type { PRSessionTypeConfig } from '../constants/prSessionTypes';
 import { Markdown } from './Markdown';
 import { PRStartSessionButton } from './PRStartSessionButton';
@@ -6,10 +6,9 @@ import { PRStartSessionButton } from './PRStartSessionButton';
 interface PRDetailProps {
   pr: PR;
   onStartSession: (sessionType: PRSessionTypeConfig) => void;
-  sessions?: Session[];
+  sessions?: SessionSummary[];
   processes?: Process[];
-  onSelectSession?: (session: Session) => void;
-  onDeleteSession?: (session: Session) => void;
+  onSelectSession?: (session: SessionSummary) => void;
 }
 
 export function PRDetail({
@@ -18,12 +17,11 @@ export function PRDetail({
   sessions = [],
   processes = [],
   onSelectSession,
-  onDeleteSession,
 }: PRDetailProps) {
   // Filter sessions that have this PR linked
   const prSessions = sessions.filter(
     s => s.entities?.some(e => e.kind === 'pr' && e.number === pr.number)
-  ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  ).sort((a, b) => new Date(b.modified_at).getTime() - new Date(a.modified_at).getTime());
 
   return (
     <div className="p-4 overflow-auto h-full">
@@ -109,26 +107,24 @@ export function PRDetail({
           <div className="space-y-2">
             {prSessions.map((session) => {
               // Check if this session has an actually running process
-              const hasActiveProcess = processes.some(p => p.id === session.process_id);
-              const isActuallyRunning = session.status === 'running' && hasActiveProcess;
-              // Show as completed if DB says running but process is gone
-              const effectiveStatus = isActuallyRunning ? 'running' :
-                (session.status === 'running' ? 'completed' : session.status);
+              const activeProcess = session.is_active
+                ? processes.find(p => p.claude_session_id === session.session_id)
+                : null;
+              const isActuallyRunning = !!activeProcess;
 
               return (
                 <div
-                  key={session.id}
+                  key={session.session_id}
                   onClick={() => onSelectSession?.(session)}
                   className="group bg-gray-800 rounded-lg border border-gray-700 hover:border-gray-600 p-3 cursor-pointer hover:bg-gray-750 transition-colors"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className={`w-2 h-2 rounded-full shrink-0 ${
-                        isActuallyRunning ? 'bg-yellow-500 animate-pulse' :
-                        effectiveStatus === 'completed' ? 'bg-green-500' : 'bg-red-500'
+                        isActuallyRunning ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'
                       }`} />
                       <span className="text-sm font-medium text-white truncate">
-                        {session.title}
+                        {session.title || 'Untitled session'}
                       </span>
                       {/* Arrow to indicate opens in panel */}
                       <svg
@@ -141,32 +137,11 @@ export function PRDetail({
                       </svg>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      {/* Delete button - show if not actively running */}
-                      {!isActuallyRunning && onDeleteSession && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm('Delete this session?')) {
-                              onDeleteSession(session);
-                            }
-                          }}
-                          className="p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                          title="Delete session"
-                          aria-label={`Delete session: ${session.title}`}
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      )}
                       <span className="text-xs text-gray-400 hidden sm:inline">
-                        {new Date(session.created_at).toLocaleDateString()}
+                        {new Date(session.modified_at).toLocaleDateString()}
                       </span>
                     </div>
                   </div>
-                  {session.summary && (
-                    <p className="text-sm text-gray-400 mt-2 line-clamp-2">{session.summary}</p>
-                  )}
                   {isActuallyRunning && (
                     <p className="text-xs text-yellow-400 mt-2">Process running - click to view</p>
                   )}

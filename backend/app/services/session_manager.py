@@ -422,22 +422,22 @@ class ProcessManager:
         except OSError:
             pass
 
-    async def get_dead_process_info(self) -> list[tuple[int, str, str | None]]:
+    async def get_dead_process_info(self) -> list[tuple[int | None, str, str | None, str]]:
         """
         Check for and return info about dead processes for database cleanup.
-        Returns list of (session_id, transcript, claude_session_id) for dead processes.
+        Returns list of (session_id, transcript, claude_session_id, working_dir) for dead processes.
         """
         dead_info = []
         dead_processes = []
 
         for process_id, process in self._processes.items():
             if not self._is_process_alive(process.pid):
-                if process.session_id:
-                    dead_info.append((
-                        process.session_id,
-                        process.transcript,
-                        process.claude_session_id
-                    ))
+                dead_info.append((
+                    process.session_id,
+                    process.transcript,
+                    process.claude_session_id,
+                    process.working_dir,
+                ))
                 dead_processes.append(process_id)
 
         # Clean up dead processes

@@ -1,34 +1,37 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Terminal } from './Terminal';
-import { ConversationView, RawTranscriptView } from './ConversationView';
+import { ConversationView } from './ConversationView';
 import { EntityPicker } from './EntityPicker';
-import type { Session, SessionEntity, Issue, PR, TranscriptResponse, ParsedTranscript } from '../types';
-import { fetchTranscript, addEntityToSession, removeEntityFromSession } from '../hooks/useApi';
+import type { SessionSummary, SessionDetail, EntityLink, Issue, PR, ParsedTranscript } from '../types';
+import { fetchSessionDetail, addEntityToSession, removeEntityFromSession } from '../hooks/useApi';
 import { useWebSocket } from '../hooks/useWebSocket';
 
 // Format transcript as markdown for export
-function formatTranscriptAsMarkdown(transcript: ParsedTranscript, session: Session): string {
+function formatTranscriptAsMarkdown(detail: SessionDetail): string {
   const lines: string[] = [];
+  const title = detail.metadata?.title || 'Session';
 
-  lines.push(`# ${session.title}`);
+  lines.push(`# ${title}`);
   lines.push('');
-  lines.push(`**Session Type:** ${session.kind}`);
-  lines.push(`**Date:** ${new Date(session.created_at).toLocaleString()}`);
-  if (transcript.model) {
-    lines.push(`**Model:** ${transcript.model}`);
+  lines.push(`**Path:** ${detail.repo_path}`);
+  if (detail.start_time) {
+    lines.push(`**Date:** ${new Date(detail.start_time).toLocaleString()}`);
   }
-  if (transcript.total_input_tokens || transcript.total_output_tokens) {
-    const total = (transcript.total_input_tokens || 0) + (transcript.total_output_tokens || 0);
+  if (detail.model) {
+    lines.push(`**Model:** ${detail.model}`);
+  }
+  if (detail.total_input_tokens || detail.total_output_tokens) {
+    const total = detail.total_input_tokens + detail.total_output_tokens;
     lines.push(`**Tokens:** ${total.toLocaleString()}`);
   }
-  if (transcript.git_branch) {
-    lines.push(`**Branch:** ${transcript.git_branch}`);
+  if (detail.git_branch) {
+    lines.push(`**Branch:** ${detail.git_branch}`);
   }
   lines.push('');
   lines.push('---');
   lines.push('');
 
-  for (const message of transcript.messages) {
+  for (const message of detail.messages) {
     const role = message.role === 'user' ? 'User' : 'Claude';
     const timestamp = message.timestamp ? new Date(message.timestamp).toLocaleTimeString() : '';
 
@@ -63,22 +66,25 @@ function formatTranscriptAsMarkdown(transcript: ParsedTranscript, session: Sessi
 }
 
 // Format transcript as plain text
-function formatTranscriptAsText(transcript: ParsedTranscript, session: Session): string {
+function formatTranscriptAsText(detail: SessionDetail): string {
   const lines: string[] = [];
+  const title = detail.metadata?.title || 'Session';
 
-  lines.push(session.title);
-  lines.push('='.repeat(session.title.length));
+  lines.push(title);
+  lines.push('='.repeat(title.length));
   lines.push('');
-  lines.push(`Session Type: ${session.kind}`);
-  lines.push(`Date: ${new Date(session.created_at).toLocaleString()}`);
-  if (transcript.model) {
-    lines.push(`Model: ${transcript.model}`);
+  lines.push(`Path: ${detail.repo_path}`);
+  if (detail.start_time) {
+    lines.push(`Date: ${new Date(detail.start_time).toLocaleString()}`);
+  }
+  if (detail.model) {
+    lines.push(`Model: ${detail.model}`);
   }
   lines.push('');
   lines.push('-'.repeat(50));
   lines.push('');
 
-  for (const message of transcript.messages) {
+  for (const message of detail.messages) {
     const role = message.role === 'user' ? 'USER' : 'CLAUDE';
     const timestamp = message.timestamp ? new Date(message.timestamp).toLocaleTimeString() : '';
 
@@ -103,8 +109,8 @@ function formatTranscriptAsText(transcript: ParsedTranscript, session: Session):
 type ViewMode = 'transcript' | 'terminal';
 
 interface SessionViewProps {
-  /** The session record (required for transcript view) */
-  session: Session;
+  /** The session summary (from list) */
+  session: SessionSummary;
   /** Active process ID (if PTY process is still running) */
   processId?: string | null;
   /** Callback when session is closed */
@@ -135,7 +141,7 @@ export function SessionView({
   onEntitiesChange,
 }: SessionViewProps) {
   // Determine if process is active (has a running PTY)
-  const isActiveProcess = !!processId;
+  const isActiveProcess = !!processId || session.is_active;
 
   // WebSocket for sending input to active sessions
   const { sendInput } = useWebSocket(processId ?? null);
@@ -153,8 +159,8 @@ export function SessionView({
   // Terminal connection status (updated via callback from Terminal component)
   const [isConnected, setIsConnected] = useState(false);
 
-  // Transcript state
-  const [transcript, setTranscript] = useState<TranscriptResponse | null>(null);
+  // Session detail state (includes full transcript)
+  const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -171,7 +177,7 @@ export function SessionView({
   // Entity management state
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [entityPickerType, setEntityPickerType] = useState<'issue' | 'pr' | null>(null);
-  const [entities, setEntities] = useState<SessionEntity[]>(session.entities || []);
+  const [entities, setEntities] = useState<EntityLink[]>(session.entities || []);
 
   // Sync entities when session changes
   useEffect(() => {
@@ -180,17 +186,17 @@ export function SessionView({
 
   // Handle adding entity
   const handleAddEntity = useCallback(async (kind: string, number: number) => {
-    const newEntity = await addEntityToSession(session.id, kind, number);
+    const newEntity = await addEntityToSession(session.session_id, kind, number);
     setEntities(prev => [...prev, newEntity]);
     onEntitiesChange?.();
-  }, [session.id, onEntitiesChange]);
+  }, [session.session_id, onEntitiesChange]);
 
   // Handle removing entity
-  const handleRemoveEntity = useCallback(async (entityId: number) => {
-    await removeEntityFromSession(session.id, entityId);
-    setEntities(prev => prev.filter(e => e.id !== entityId));
+  const handleRemoveEntity = useCallback(async (entityIdx: number) => {
+    await removeEntityFromSession(session.session_id, entityIdx);
+    setEntities(prev => prev.filter((_, i) => i !== entityIdx));
     onEntitiesChange?.();
-  }, [session.id, onEntitiesChange]);
+  }, [session.session_id, onEntitiesChange]);
 
   // Close actions menu when clicking outside
   useEffect(() => {
@@ -207,22 +213,22 @@ export function SessionView({
     return () => document.removeEventListener('click', handleClick);
   }, [showActionsMenu]);
 
-  // Fetch transcript (with polling for active sessions)
+  // Fetch session detail (with polling for active sessions)
   useEffect(() => {
     let isMounted = true;
     let pollTimeout: NodeJS.Timeout | null = null;
 
     const fetchData = () => {
-      fetchTranscript(session.id)
+      fetchSessionDetail(session.session_id)
         .then((data) => {
           if (isMounted) {
-            setTranscript(data);
+            setDetail(data);
             setLoading(false);
           }
         })
         .catch((err) => {
           if (isMounted) {
-            setError(err.message || 'Failed to load transcript');
+            setError(err.message || 'Failed to load session');
             setLoading(false);
           }
         })
@@ -242,35 +248,30 @@ export function SessionView({
       isMounted = false;
       if (pollTimeout) clearTimeout(pollTimeout);
     };
-  }, [session.id, isActiveProcess, viewMode]);
+  }, [session.session_id, isActiveProcess, viewMode]);
 
   // Reset search when session changes
   useEffect(() => {
     setSearchQuery('');
     setCurrentMatchIndex(0);
     setTotalMatches(0);
-  }, [session.id]);
+  }, [session.session_id]);
 
   // Get formatted content for export
   const getExportContent = useCallback((format: 'markdown' | 'text' | 'json'): string | null => {
-    if (!transcript) return null;
+    if (!detail) return null;
 
-    if (transcript.type === 'raw') {
-      return transcript.transcript;
-    }
-
-    const parsed = transcript.transcript;
     switch (format) {
       case 'markdown':
-        return formatTranscriptAsMarkdown(parsed, session);
+        return formatTranscriptAsMarkdown(detail);
       case 'text':
-        return formatTranscriptAsText(parsed, session);
+        return formatTranscriptAsText(detail);
       case 'json':
-        return JSON.stringify(parsed, null, 2);
+        return JSON.stringify(detail, null, 2);
       default:
         return null;
     }
-  }, [transcript, session]);
+  }, [detail]);
 
   // Copy to clipboard
   const handleCopy = useCallback(async (format: 'markdown' | 'text' | 'json' = 'markdown') => {
@@ -294,18 +295,19 @@ export function SessionView({
 
     const extensions = { markdown: 'md', text: 'txt', json: 'json' };
     const mimeTypes = { markdown: 'text/markdown', text: 'text/plain', json: 'application/json' };
+    const title = detail?.metadata?.title || session.title || 'session';
 
     const blob = new Blob([content], { type: mimeTypes[format] });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${session.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.${extensions[format]}`;
+    a.download = `${title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.${extensions[format]}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     setShowExportMenu(false);
-  }, [getExportContent, session.title]);
+  }, [getExportContent, detail, session.title]);
 
   const handleMatchesFound = useCallback((count: number) => {
     setTotalMatches(count);
@@ -381,8 +383,10 @@ export function SessionView({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [viewMode, searchVisible, goToNextMatch, goToPrevMatch]);
 
+  const title = detail?.metadata?.title || session.title || 'Untitled session';
+
   // If viewing terminal mode for an active session, render Terminal component
-  if (isActiveProcess && viewMode === 'terminal') {
+  if (isActiveProcess && processId && viewMode === 'terminal') {
     return (
       <div className="h-full flex flex-col bg-[#0d1117] rounded-lg border border-gray-700 overflow-hidden">
         {/* Header with toggle */}
@@ -408,9 +412,9 @@ export function SessionView({
               <>
                 <span className="text-sm text-gray-500">|</span>
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  {entities.map((entity) => (
+                  {entities.map((entity, idx) => (
                     <button
-                      key={entity.id}
+                      key={idx}
                       onClick={() => entity.kind === 'issue' ? onShowIssue?.(entity.number) : onShowPR?.(entity.number)}
                       className={`text-xs px-1.5 py-0.5 rounded transition-colors ${
                         entity.kind === 'issue'
@@ -467,6 +471,22 @@ export function SessionView({
     );
   }
 
+  // Build a ParsedTranscript-compatible object for ConversationView
+  const transcriptForView: ParsedTranscript | null = detail ? {
+    session_id: detail.session_id,
+    messages: detail.messages,
+    summary: detail.summary || undefined,
+    model: detail.model || undefined,
+    total_input_tokens: detail.total_input_tokens,
+    total_output_tokens: detail.total_output_tokens,
+    total_cache_read_tokens: detail.total_cache_read_tokens,
+    total_cache_creation_tokens: detail.total_cache_creation_tokens,
+    start_time: detail.start_time || undefined,
+    end_time: detail.end_time || undefined,
+    claude_code_version: detail.claude_code_version || undefined,
+    git_branch: detail.git_branch || undefined,
+  } : null;
+
   // Transcript view (default, or only option for completed sessions)
   return (
     <div className="h-full flex flex-col bg-[#0d1117] rounded-lg border border-gray-700 overflow-hidden">
@@ -477,12 +497,12 @@ export function SessionView({
           {!isActiveProcess && (
             <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
           )}
-          <h3 className="text-sm font-medium text-white truncate">{session.title}</h3>
+          <h3 className="text-sm font-medium text-white truncate">{title}</h3>
           {entities.length > 0 && (
             <div className="flex items-center gap-1 flex-wrap shrink-0">
-              {entities.map((entity) => (
+              {entities.map((entity, idx) => (
                 <span
-                  key={entity.id}
+                  key={idx}
                   className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded ${
                     entity.kind === 'issue'
                       ? 'bg-green-900/30 text-green-400'
@@ -496,7 +516,7 @@ export function SessionView({
                     #{entity.number}
                   </button>
                   <button
-                    onClick={() => handleRemoveEntity(entity.id)}
+                    onClick={() => handleRemoveEntity(idx)}
                     className="opacity-60 hover:opacity-100 transition-opacity"
                     title="Unlink"
                   >
@@ -512,8 +532,8 @@ export function SessionView({
 
         {/* Right: Controls (never truncate) */}
         <div className="flex items-center gap-2 shrink-0">
-          {/* View toggle (only show for active sessions) */}
-          {isActiveProcess && (
+          {/* View toggle (only show for active sessions with processId) */}
+          {isActiveProcess && processId && (
             <div className="flex items-center bg-gray-900 rounded-lg p-0.5 mr-1">
               <button
                 onClick={() => setViewMode('transcript')}
@@ -561,7 +581,7 @@ export function SessionView({
           </button>
 
           {/* Copy button */}
-          {transcript && (
+          {detail && (
             <button
               onClick={() => handleCopy('markdown')}
               className={`p-1.5 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
@@ -585,7 +605,7 @@ export function SessionView({
           )}
 
           {/* Export dropdown */}
-          {transcript && (
+          {detail && (
             <div className="relative" data-export-menu>
               <button
                 onClick={() => setShowExportMenu(!showExportMenu)}
@@ -632,7 +652,7 @@ export function SessionView({
           )}
 
           {/* Continue button (only for completed sessions) */}
-          {!isActiveProcess && session.claude_session_id && onContinue && (
+          {!isActiveProcess && onContinue && (
             <button
               onClick={onContinue}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900"
@@ -816,30 +836,24 @@ export function SessionView({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
               </div>
-              <p className="text-gray-300 font-medium mb-1">Failed to load transcript</p>
+              <p className="text-gray-300 font-medium mb-1">Failed to load session</p>
               <p className="text-gray-500 text-sm">{error}</p>
             </div>
           </div>
         )}
 
-        {!loading && !error && transcript && (
-          transcript.type === 'parsed' ? (
-            <ConversationView
-              transcript={transcript.transcript}
-              searchQuery={searchQuery}
-              currentMatchIndex={currentMatchIndex}
-              onMatchesFound={handleMatchesFound}
-              isActiveSession={isActiveProcess}
-              onSendMessage={handleSendMessage}
-            />
-          ) : (
-            <div className="p-4">
-              <RawTranscriptView transcript={transcript.transcript} />
-            </div>
-          )
+        {!loading && !error && transcriptForView && (
+          <ConversationView
+            transcript={transcriptForView}
+            searchQuery={searchQuery}
+            currentMatchIndex={currentMatchIndex}
+            onMatchesFound={handleMatchesFound}
+            isActiveSession={isActiveProcess}
+            onSendMessage={handleSendMessage}
+          />
         )}
 
-        {!loading && !error && !transcript && (
+        {!loading && !error && !transcriptForView && (
           <div className="flex flex-col items-center justify-center h-full p-8 text-center">
             <svg className="w-12 h-12 text-gray-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -854,13 +868,11 @@ export function SessionView({
       <div className="px-4 py-2 border-t border-gray-700 bg-gray-800/30">
         <div className="flex items-center justify-between text-xs text-gray-500">
           <span>
-            {new Date(session.created_at).toLocaleString()}
+            {detail?.start_time ? new Date(detail.start_time).toLocaleString() : session.modified_at ? new Date(session.modified_at).toLocaleString() : 'Unknown date'}
           </span>
-          {session.claude_session_id && (
-            <span className="text-gray-600" title={session.claude_session_id}>
-              Session: {session.claude_session_id.slice(0, 8)}...
-            </span>
-          )}
+          <span className="text-gray-600" title={session.session_id}>
+            Session: {session.session_id.slice(0, 8)}...
+          </span>
         </div>
       </div>
 

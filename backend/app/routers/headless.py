@@ -2,16 +2,16 @@
 Headless session routes using Claude Code's -p (non-interactive) mode.
 
 Provides structured JSON output and streaming for programmatic sessions.
+Sessions are stored in per-repo databases at ~/.clump/projects/{hash}/data.db.
 """
 
 import asyncio
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 import json
 
-from app.database import get_db
+from app.database import get_repo_db
 from app.db_helpers import get_repo_or_404
 from app.models import Session, SessionStatus
 from app.services.headless_analyzer import headless_analyzer, SessionMessage
@@ -25,7 +25,6 @@ class HeadlessSessionCreate(BaseModel):
     repo_id: int
     prompt: str
     kind: str = "custom"
-    entity_id: str | None = None
     title: str = "Headless Session"
 
     # Claude Code configuration
@@ -53,94 +52,89 @@ class HeadlessSessionResponse(BaseModel):
 
 
 @router.post("/headless/run", response_model=HeadlessSessionResponse)
-async def run_headless_session(
-    data: HeadlessSessionCreate,
-    db: AsyncSession = Depends(get_db),
-):
+async def run_headless_session(data: HeadlessSessionCreate):
     """
     Run a headless Claude Code session and return the complete result.
 
     This is a blocking endpoint that waits for the session to complete.
     For streaming results, use POST /headless/run/stream instead.
     """
-    repo = await get_repo_or_404(db, data.repo_id)
+    repo = get_repo_or_404(data.repo_id)
 
-    # Create session record
-    session = Session(
-        repo_id=repo.id,
-        kind=data.kind,
-        entity_id=data.entity_id,
-        title=data.title,
-        prompt=data.prompt,
-        status=SessionStatus.RUNNING.value,
-    )
-    db.add(session)
-    await db.commit()
-    await db.refresh(session)
-
-    try:
-        # Run headless session
-        result = await headless_analyzer.analyze(
+    async with get_repo_db(repo["local_path"]) as db:
+        # Create session record
+        session = Session(
+            repo_id=repo["id"],
+            kind=data.kind,
+            title=data.title,
             prompt=data.prompt,
-            working_dir=repo.local_path,
-            allowed_tools=data.allowed_tools,
-            disallowed_tools=data.disallowed_tools,
-            permission_mode=data.permission_mode,
-            max_turns=data.max_turns,
-            model=data.model,
-            system_prompt=data.system_prompt,
-            resume_session=data.resume_session,
+            status=SessionStatus.RUNNING.value,
         )
-
-        # Update session record
-        session.status = (
-            SessionStatus.COMPLETED.value if result.success else SessionStatus.FAILED.value
-        )
-        session.transcript = result.result
-        session.claude_session_id = result.session_id
+        db.add(session)
         await db.commit()
+        await db.refresh(session)
 
-        return HeadlessSessionResponse(
-            session_id=session.id,
-            claude_session_id=result.session_id,
-            result=result.result,
-            success=result.success,
-            cost_usd=result.cost_usd,
-            duration_ms=result.duration_ms,
-            error=result.error,
-        )
+        try:
+            # Run headless session
+            result = await headless_analyzer.analyze(
+                prompt=data.prompt,
+                working_dir=repo["local_path"],
+                allowed_tools=data.allowed_tools,
+                disallowed_tools=data.disallowed_tools,
+                permission_mode=data.permission_mode,
+                max_turns=data.max_turns,
+                model=data.model,
+                system_prompt=data.system_prompt,
+                resume_session=data.resume_session,
+            )
 
-    except Exception as e:
-        session.status = SessionStatus.FAILED.value
-        await db.commit()
-        raise HTTPException(status_code=500, detail=str(e))
+            # Update session record
+            session.status = (
+                SessionStatus.COMPLETED.value if result.success else SessionStatus.FAILED.value
+            )
+            session.transcript = result.result
+            session.claude_session_id = result.session_id
+            await db.commit()
+
+            return HeadlessSessionResponse(
+                session_id=session.id,
+                claude_session_id=result.session_id,
+                result=result.result,
+                success=result.success,
+                cost_usd=result.cost_usd,
+                duration_ms=result.duration_ms,
+                error=result.error,
+            )
+
+        except Exception as e:
+            session.status = SessionStatus.FAILED.value
+            await db.commit()
+            raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/headless/run/stream")
-async def run_headless_session_stream(
-    data: HeadlessSessionCreate,
-    db: AsyncSession = Depends(get_db),
-):
+async def run_headless_session_stream(data: HeadlessSessionCreate):
     """
     Run a headless Claude Code session with streaming results.
 
     Returns a stream of newline-delimited JSON messages as the session progresses.
     Each message is a SessionMessage with type, content, and metadata.
     """
-    repo = await get_repo_or_404(db, data.repo_id)
+    repo = get_repo_or_404(data.repo_id)
 
-    # Create session record
-    session = Session(
-        repo_id=repo.id,
-        kind=data.kind,
-        entity_id=data.entity_id,
-        title=data.title,
-        prompt=data.prompt,
-        status=SessionStatus.RUNNING.value,
-    )
-    db.add(session)
-    await db.commit()
-    await db.refresh(session)
+    # Create session record outside the generator
+    async with get_repo_db(repo["local_path"]) as db:
+        session = Session(
+            repo_id=repo["id"],
+            kind=data.kind,
+            title=data.title,
+            prompt=data.prompt,
+            status=SessionStatus.RUNNING.value,
+        )
+        db.add(session)
+        await db.commit()
+        await db.refresh(session)
+        session_id = session.id
 
     async def generate():
         """Generate streaming response."""
@@ -151,7 +145,7 @@ async def run_headless_session_stream(
         try:
             async for msg in headless_analyzer.analyze_stream(
                 prompt=data.prompt,
-                working_dir=repo.local_path,
+                working_dir=repo["local_path"],
                 allowed_tools=data.allowed_tools,
                 disallowed_tools=data.disallowed_tools,
                 permission_mode=data.permission_mode,
@@ -178,12 +172,17 @@ async def run_headless_session_stream(
                 }) + "\n"
 
             # Update session record
-            async with db.begin():
-                session.status = (
-                    SessionStatus.COMPLETED.value if success else SessionStatus.FAILED.value
-                )
-                session.transcript = full_result
-                session.claude_session_id = claude_session_id
+            async with get_repo_db(repo["local_path"]) as db:
+                from sqlalchemy import select
+                result = await db.execute(select(Session).where(Session.id == session_id))
+                session = result.scalar_one_or_none()
+                if session:
+                    session.status = (
+                        SessionStatus.COMPLETED.value if success else SessionStatus.FAILED.value
+                    )
+                    session.transcript = full_result
+                    session.claude_session_id = claude_session_id
+                    await db.commit()
 
         except Exception as e:
             yield json.dumps({
@@ -191,8 +190,13 @@ async def run_headless_session_stream(
                 "content": str(e),
             }) + "\n"
 
-            async with db.begin():
-                session.status = SessionStatus.FAILED.value
+            async with get_repo_db(repo["local_path"]) as db:
+                from sqlalchemy import select
+                result = await db.execute(select(Session).where(Session.id == session_id))
+                session = result.scalar_one_or_none()
+                if session:
+                    session.status = SessionStatus.FAILED.value
+                    await db.commit()
 
     return StreamingResponse(
         generate(),

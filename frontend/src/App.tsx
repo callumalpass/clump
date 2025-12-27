@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
 import { useRepos, useIssues, usePRs, useProcesses, useSessions, useTags, useIssueTags } from './hooks/useApi';
-import type { IssueFilters, SessionStatusFilter } from './hooks/useApi';
+import type { IssueFilters, SessionFilters } from './hooks/useApi';
 import { RepoSelector } from './components/RepoSelector';
 import { IssueList } from './components/IssueList';
 import { IssueDetail } from './components/IssueDetail';
@@ -14,7 +14,8 @@ import { SessionTabs } from './components/SessionTabs';
 import { SessionList } from './components/SessionList';
 import { Settings } from './components/Settings';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
-import type { Repo, Issue, PR, Session } from './types';
+import type { Repo, Issue, PR, SessionSummary } from './types';
+import type { SessionFilter } from './components/SessionList';
 import type { SessionTypeConfig } from './constants/sessionTypes';
 import { DEFAULT_SESSION_TYPE } from './constants/sessionTypes';
 import type { PRSessionTypeConfig } from './constants/prSessionTypes';
@@ -48,19 +49,19 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('issues');
   const [selectedIssue, setSelectedIssue] = useState<number | null>(null);
   const [activeProcessId, setActiveProcessId] = useState<string | null>(null);
-  // Track which sessions are open as tabs (persists after process ends)
-  const [openSessionIds, setOpenSessionIds] = useState<number[]>([]);
+  // Track which sessions are open as tabs (persists after process ends) - now uses UUID strings
+  const [openSessionIds, setOpenSessionIds] = useState<string[]>([]);
   // Track which session tab is currently active
-  const [activeTabSessionId, setActiveTabSessionId] = useState<number | null>(null);
+  const [activeTabSessionId, setActiveTabSessionId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [issuePanelCollapsed, setIssuePanelCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const [issueFilters, setIssueFilters] = useState<IssueFilters>({ state: 'open' });
-  const [expandedSessionId, setExpandedSessionId] = useState<number | null>(null);
-  const [sessionStatusFilter, setSessionStatusFilter] = useState<SessionStatusFilter>('all');
-  const [viewingSessionId, setViewingSessionId] = useState<number | null>(null);
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+  const [sessionFilter, setSessionFilter] = useState<SessionFilter>('all');
+  const [viewingSessionId, setViewingSessionId] = useState<string | null>(null);
   const [selectedPR, setSelectedPR] = useState<number | null>(null);
   const [prStateFilter, setPRStateFilter] = useState<'open' | 'closed' | 'all'>('open');
   const [isCreatingIssue, setIsCreatingIssue] = useState(false);
@@ -83,11 +84,14 @@ export default function App() {
     goToPage: goToIssuesPage,
   } = useIssues(selectedRepo?.id ?? null, issueFilters);
   const { processes, createProcess, killProcess, addProcess } = useProcesses();
-  const { sessions, loading: sessionsLoading, refresh: refreshSessions, deleteSession, continueSession, total: sessionsTotal } = useSessions(
-    selectedRepo?.id,
-    searchQuery || undefined,
-    sessionStatusFilter
-  );
+  // Build session filters based on UI state
+  const sessionFilters: SessionFilters = {
+    repoPath: selectedRepo?.local_path,
+    search: searchQuery || undefined,
+    starred: sessionFilter === 'starred' ? true : undefined,
+    hasEntities: sessionFilter === 'with-entities' ? true : undefined,
+  };
+  const { sessions, loading: sessionsLoading, refresh: refreshSessions, continueSession, updateSessionMetadata, total: sessionsTotal } = useSessions(sessionFilters);
   const { tags, createTag } = useTags(selectedRepo?.id ?? null);
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
   const { prs, loading: prsLoading } = usePRs(selectedRepo?.id ?? null, prStateFilter);
@@ -163,10 +167,10 @@ export default function App() {
 
       setActiveProcessId(process.id);
 
-      // Add session to open tabs if session_id is available
-      if (process.session_id) {
-        setOpenSessionIds(prev => prev.includes(process.session_id!) ? prev : [...prev, process.session_id!]);
-        setActiveTabSessionId(process.session_id);
+      // Add session to open tabs if claude_session_id is available
+      if (process.claude_session_id) {
+        setOpenSessionIds(prev => prev.includes(process.claude_session_id!) ? prev : [...prev, process.claude_session_id!]);
+        setActiveTabSessionId(process.claude_session_id);
       }
 
       // Trigger immediate refresh to get session data sooner
@@ -203,10 +207,10 @@ export default function App() {
 
       setActiveProcessId(process.id);
 
-      // Add session to open tabs if session_id is available
-      if (process.session_id) {
-        setOpenSessionIds(prev => prev.includes(process.session_id!) ? prev : [...prev, process.session_id!]);
-        setActiveTabSessionId(process.session_id);
+      // Add session to open tabs if claude_session_id is available
+      if (process.claude_session_id) {
+        setOpenSessionIds(prev => prev.includes(process.claude_session_id!) ? prev : [...prev, process.claude_session_id!]);
+        setActiveTabSessionId(process.claude_session_id);
       }
 
       // Trigger immediate refresh to get analysis data sooner
@@ -228,10 +232,10 @@ export default function App() {
 
     setActiveProcessId(process.id);
 
-    // Add session to open tabs if session_id is available
-    if (process.session_id) {
-      setOpenSessionIds(prev => prev.includes(process.session_id!) ? prev : [...prev, process.session_id!]);
-      setActiveTabSessionId(process.session_id);
+    // Add session to open tabs if claude_session_id is available
+    if (process.claude_session_id) {
+      setOpenSessionIds(prev => prev.includes(process.claude_session_id!) ? prev : [...prev, process.claude_session_id!]);
+      setActiveTabSessionId(process.claude_session_id);
     }
   }, [selectedRepo, createProcess]);
 
@@ -285,9 +289,9 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [settingsOpen, shortcutsOpen, activeProcessId, selectedIssue, selectedPR]);
 
-  const handleSelectSession = useCallback((session: Session) => {
-    // Check if this session has an active process we can view
-    const activeProcess = processes.find(p => p.id === session.process_id);
+  const handleSelectSession = useCallback((session: SessionSummary) => {
+    // Check if this session is active (has a running process)
+    const activeProcess = session.is_active ? processes.find(p => p.claude_session_id === session.session_id) : null;
 
     // Select the first linked issue or PR for context
     const firstIssue = session.entities?.find(e => e.kind === 'issue');
@@ -302,42 +306,40 @@ export default function App() {
     }
 
     // Add session to open tabs
-    setOpenSessionIds(prev => prev.includes(session.id) ? prev : [...prev, session.id]);
-    setActiveTabSessionId(session.id);
+    setOpenSessionIds(prev => prev.includes(session.session_id) ? prev : [...prev, session.session_id]);
+    setActiveTabSessionId(session.session_id);
 
     if (activeProcess) {
       // Process is still running - open the terminal
-      setActiveProcessId(session.process_id);
+      setActiveProcessId(activeProcess.id);
       setViewingSessionId(null);
       setExpandedSessionId(null);
 
       // Store pending context for immediate side-by-side view
       if (firstIssue) {
         pendingIssueContextRef.current = {
-          processId: session.process_id!,
+          processId: activeProcess.id,
           issueNumber: firstIssue.number,
         };
       }
       if (firstPR) {
         pendingPRContextRef.current = {
-          processId: session.process_id!,
+          processId: activeProcess.id,
           prNumber: firstPR.number,
         };
       }
     } else {
       // Process ended - show transcript in details panel
       setActiveProcessId(null);
-      setViewingSessionId(session.id);
+      setViewingSessionId(session.session_id);
       setExpandedSessionId(null);
     }
   }, [processes]);
 
   const handleContinueSession = useCallback(
-    async (session: Session) => {
-      if (!session.claude_session_id) return;
-
-      // Use the new continue endpoint - this reuses the existing session record
-      const process = await continueSession(session.id);
+    async (session: SessionSummary) => {
+      // Use the continue endpoint - creates a new process resuming the conversation
+      const process = await continueSession(session.session_id);
 
       // Add the new process to state immediately
       addProcess(process);
@@ -361,8 +363,8 @@ export default function App() {
       }
 
       // Ensure session is in open tabs and active
-      setOpenSessionIds(prev => prev.includes(session.id) ? prev : [...prev, session.id]);
-      setActiveTabSessionId(session.id);
+      setOpenSessionIds(prev => prev.includes(session.session_id) ? prev : [...prev, session.session_id]);
+      setActiveTabSessionId(session.session_id);
 
       // Clear viewing state and switch to terminal
       setViewingSessionId(null);
@@ -371,21 +373,21 @@ export default function App() {
     [continueSession, addProcess]
   );
 
-  const handleDeleteSession = useCallback(
-    async (session: Session) => {
-      await deleteSession(session.id);
+  const handleToggleStar = useCallback(
+    async (session: SessionSummary) => {
+      await updateSessionMetadata(session.session_id, { starred: !session.starred });
     },
-    [deleteSession]
+    [updateSessionMetadata]
   );
 
   // Handler for closing a session tab (not deleting the session)
-  const handleCloseSessionTab = useCallback((sessionId: number) => {
+  const handleCloseSessionTab = useCallback((sessionId: string) => {
     // Find the session to check if it has a running process
-    const session = sessions.find(s => s.id === sessionId);
-    if (session?.process_id) {
-      const hasActiveProcess = processes.some(p => p.id === session.process_id);
-      if (hasActiveProcess) {
-        killProcess(session.process_id);
+    const session = sessions.find(s => s.session_id === sessionId);
+    if (session?.is_active) {
+      const activeProcess = processes.find(p => p.claude_session_id === sessionId);
+      if (activeProcess) {
+        killProcess(activeProcess.id);
       }
     }
 
@@ -401,16 +403,16 @@ export default function App() {
   }, [sessions, processes, killProcess, activeTabSessionId]);
 
   // Handler for selecting a session tab
-  const handleSelectSessionTab = useCallback((sessionId: number) => {
-    const session = sessions.find(s => s.id === sessionId);
+  const handleSelectSessionTab = useCallback((sessionId: string) => {
+    const session = sessions.find(s => s.session_id === sessionId);
     if (!session) return;
 
     setActiveTabSessionId(sessionId);
 
-    // Check if session has a running process
-    const activeProcess = processes.find(p => p.id === session.process_id);
+    // Check if session is active
+    const activeProcess = session.is_active ? processes.find(p => p.claude_session_id === sessionId) : null;
     if (activeProcess) {
-      setActiveProcessId(session.process_id);
+      setActiveProcessId(activeProcess.id);
       setViewingSessionId(null);
     } else {
       setActiveProcessId(null);
@@ -430,16 +432,15 @@ export default function App() {
     }
   }, [sessions, processes]);
 
-  // Find the active process's related issue (if any)
-  // First try to find via active process, then fallback to matching session_id in sessions
+  // Find the active process and its related session
   const activeProcess = processes.find(p => p.id === activeProcessId);
-  const activeSession = activeProcess?.session_id
-    ? sessions.find(a => a.id === activeProcess.session_id)
-    : sessions.find(a => a.process_id === activeProcessId);
+  const activeSession = activeProcess?.claude_session_id
+    ? sessions.find(s => s.session_id === activeProcess.claude_session_id)
+    : null;
 
-  // Find the analysis being viewed (for transcript panel)
+  // Find the session being viewed (for transcript panel)
   const viewingSession = viewingSessionId
-    ? sessions.find(a => a.id === viewingSessionId)
+    ? sessions.find(s => s.session_id === viewingSessionId)
     : null;
 
   // Check pending context for newly created processes (before analysis is fetched)
@@ -485,8 +486,8 @@ export default function App() {
 
   // Get the list of open sessions (sessions that have tabs open)
   const openSessions = openSessionIds
-    .map(id => sessions.find(s => s.id === id))
-    .filter((s): s is Session => !!s);
+    .map(id => sessions.find(s => s.session_id === id))
+    .filter((s): s is SessionSummary => !!s);
 
   // Show side-by-side if we have open session tabs and any issue/PR selected
   const showSideBySide = openSessions.length > 0 && (hasIssueContext || hasPRContext);
@@ -568,7 +569,7 @@ export default function App() {
                 : tab === 'prs' ? prs.length
                 : sessionsTotal;
               const hasRunning = tab === 'sessions' && sessions.some(s =>
-                s.status === 'running' && processes.some(p => p.id === s.process_id)
+                s.is_active && processes.some(p => p.claude_session_id === s.session_id)
               );
 
               return (
@@ -645,10 +646,10 @@ export default function App() {
                 processes={processes}
                 onSelectSession={handleSelectSession}
                 onContinueSession={handleContinueSession}
-                onDeleteSession={handleDeleteSession}
+                onToggleStar={handleToggleStar}
                 loading={sessionsLoading}
-                statusFilter={sessionStatusFilter}
-                onStatusFilterChange={setSessionStatusFilter}
+                filter={sessionFilter}
+                onFilterChange={setSessionFilter}
                 total={sessionsTotal}
               />
             )}
@@ -737,7 +738,6 @@ export default function App() {
                             onToggleSession={setExpandedSessionId}
                             onSelectSession={handleSelectSession}
                             onContinueSession={handleContinueSession}
-                            onDeleteSession={handleDeleteSession}
                             tags={tags}
                             issueTags={issueTagsMap[activeIssueNumber] || []}
                             onAddTag={(tagId) => addTagToIssue(activeIssueNumber, tagId)}
@@ -752,7 +752,6 @@ export default function App() {
                             sessions={sessions}
                             processes={processes}
                             onSelectSession={handleSelectSession}
-                            onDeleteSession={handleDeleteSession}
                           />
                         )}
                   </div>
@@ -797,7 +796,7 @@ export default function App() {
                     ) : viewingSession ? (
                       <SessionView
                         session={viewingSession}
-                        onContinue={viewingSession.claude_session_id ? () => handleContinueSession(viewingSession) : undefined}
+                        onContinue={() => handleContinueSession(viewingSession)}
                         onClose={() => setViewingSessionId(null)}
                         onShowIssue={handleShowIssue}
                         onShowPR={handleShowPR}
@@ -849,7 +848,6 @@ export default function App() {
                   onToggleSession={setExpandedSessionId}
                   onSelectSession={handleSelectSession}
                   onContinueSession={handleContinueSession}
-                  onDeleteSession={handleDeleteSession}
                   tags={tags}
                   issueTags={issueTagsMap[selectedIssue] || []}
                   onAddTag={(tagId) => addTagToIssue(selectedIssue, tagId)}
@@ -868,7 +866,6 @@ export default function App() {
                   sessions={sessions}
                   processes={processes}
                   onSelectSession={handleSelectSession}
-                  onDeleteSession={handleDeleteSession}
                 />
               </div>
             )}
@@ -911,7 +908,7 @@ export default function App() {
                   ) : viewingSession ? (
                     <SessionView
                       session={viewingSession}
-                      onContinue={viewingSession.claude_session_id ? () => handleContinueSession(viewingSession) : undefined}
+                      onContinue={() => handleContinueSession(viewingSession)}
                       onClose={() => setViewingSessionId(null)}
                       onShowIssue={handleShowIssue}
                       onShowPR={handleShowPR}

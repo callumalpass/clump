@@ -1,16 +1,34 @@
+"""
+Clump - Local command center for running AI analyses through Claude Code.
+
+Per-repo data is stored in ~/.clump/projects/{hash}/data.db.
+Global configuration is stored in ~/.clump/config.json.
+"""
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database import init_db
+from app.database import close_all_engines
+from app.storage import get_clump_dir
 from app.routers import github, processes, sessions, settings, headless, tags
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize database on startup."""
-    await init_db()
+    """
+    Manage application lifespan.
+
+    - On startup: Ensure ~/.clump/ directory exists
+    - On shutdown: Close all database connections
+    """
+    # Ensure clump directory structure exists
+    get_clump_dir()
+
     yield
+
+    # Cleanup on shutdown
+    await close_all_engines()
 
 
 app = FastAPI(

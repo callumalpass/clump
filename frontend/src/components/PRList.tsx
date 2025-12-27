@@ -1,4 +1,4 @@
-import type { PR, Session, Process } from '../types';
+import type { PR, SessionSummary, Process } from '../types';
 import type { PRSessionTypeConfig } from '../constants/prSessionTypes';
 import { PRStartSessionButton } from './PRStartSessionButton';
 
@@ -10,7 +10,7 @@ interface PRListProps {
   loading: boolean;
   stateFilter: 'open' | 'closed' | 'all';
   onStateFilterChange: (state: 'open' | 'closed' | 'all') => void;
-  sessions?: Session[];
+  sessions?: SessionSummary[];
   processes?: Process[];
 }
 
@@ -29,7 +29,7 @@ export function PRList({
   stateFilter,
   onStateFilterChange,
   sessions = [],
-  processes = [],
+  processes: _processes = [],
 }: PRListProps) {
   // Group sessions by PR number (a session can appear under multiple PRs)
   const sessionsByPR = sessions.reduce((acc, session) => {
@@ -42,7 +42,7 @@ export function PRList({
       }
     }
     return acc;
-  }, {} as Record<string, Session[]>);
+  }, {} as Record<string, SessionSummary[]>);
 
   // Filter tabs
   const filterTabs = (
@@ -125,11 +125,9 @@ export function PRList({
       <div className="flex-1 overflow-auto min-h-0 divide-y divide-gray-700">
         {prs.map((pr) => {
           const prSessions = sessionsByPR[pr.number.toString()] || [];
-          const hasRunning = prSessions.some(s =>
-            s.status === 'running' && processes.some(p => p.id === s.process_id)
-          );
-          const hasCompleted = prSessions.some(s => s.status === 'completed') ||
-            prSessions.some(s => s.status === 'running' && !processes.some(p => p.id === s.process_id));
+          // Check if any session is actively running
+          const hasRunning = prSessions.some(s => s.is_active);
+          const hasCompleted = prSessions.length > 0 && !hasRunning;
 
           return (
             <div

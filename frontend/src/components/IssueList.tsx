@@ -1,4 +1,4 @@
-import type { Issue, Session, Tag, IssueTagsMap, Process } from '../types';
+import type { Issue, SessionSummary, Tag, IssueTagsMap, Process } from '../types';
 import type { IssueFilters as IssueFiltersType } from '../hooks/useApi';
 import type { SessionTypeConfig } from '../constants/sessionTypes';
 import { IssueFilters } from './IssueFilters';
@@ -15,7 +15,7 @@ interface IssueListProps {
   totalPages: number;
   total: number;
   onPageChange: (page: number) => void;
-  sessions?: Session[];
+  sessions?: SessionSummary[];
   processes?: Process[];
   tags?: Tag[];
   issueTagsMap?: IssueTagsMap;
@@ -37,7 +37,7 @@ export function IssueList({
   total,
   onPageChange,
   sessions = [],
-  processes = [],
+  processes: _processes = [],
   tags = [],
   issueTagsMap = {},
   selectedTagId,
@@ -57,7 +57,7 @@ export function IssueList({
       }
     }
     return acc;
-  }, {} as Record<string, Session[]>);
+  }, {} as Record<string, SessionSummary[]>);
 
   // Filter issues by selected tag
   const filteredIssues = selectedTagId
@@ -154,13 +154,9 @@ export function IssueList({
         <div className="flex-1 overflow-auto min-h-0 divide-y divide-gray-700">
           {filteredIssues.map((issue) => {
           const issueSessions = sessionsByIssue[issue.number.toString()] || [];
-          // Check if any session has an actually running process (not just DB status)
-          const hasRunning = issueSessions.some(s =>
-            s.status === 'running' && processes.some(p => p.id === s.process_id)
-          );
-          const hasCompleted = issueSessions.some(s => s.status === 'completed') ||
-            // Also count as completed if DB says running but process is gone
-            issueSessions.some(s => s.status === 'running' && !processes.some(p => p.id === s.process_id));
+          // Check if any session is actively running
+          const hasRunning = issueSessions.some(s => s.is_active);
+          const hasCompleted = issueSessions.length > 0 && !hasRunning;
           const issueTags = issueTagsMap[issue.number] || [];
 
           return (

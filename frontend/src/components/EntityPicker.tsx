@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import type { Issue, PR, SessionEntity } from '../types';
+import type { Issue, PR, EntityLink } from '../types';
 
 type EntityType = 'issue' | 'pr';
 
@@ -9,7 +9,7 @@ interface EntityPickerProps {
   entityType: EntityType;
   issues: Issue[];
   prs: PR[];
-  linkedEntities: SessionEntity[];
+  linkedEntities: EntityLink[];
   onAdd: (kind: string, number: number) => Promise<void>;
 }
 

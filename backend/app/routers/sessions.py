@@ -1,376 +1,513 @@
 """
-Session CRUD and search routes.
+Session routes using transcript-first architecture.
+
+Sessions are discovered from Claude's JSONL files in ~/.claude/projects/
+with optional sidecar metadata stored in ~/.clump/projects/
 """
 
-from datetime import datetime
-from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
-from sqlalchemy import select, or_
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional
+from fastapi import APIRouter, HTTPException, Query
 
-from app.database import get_db
-from app.db_helpers import get_session_or_404
-from app.models import Session, SessionStatus, Repo, SessionEntity
+from app.schemas import (
+    SessionSummaryResponse,
+    SessionDetailResponse,
+    SessionListResponse,
+    SessionMetadataResponse,
+    SessionMetadataUpdate,
+    EntityLinkResponse,
+    AddEntityRequest,
+    TranscriptMessageResponse,
+    ToolUseResponse,
+    TokenUsageResponse,
+)
+from app.storage import (
+    discover_sessions,
+    get_session_metadata,
+    save_session_metadata,
+    decode_path,
+    match_encoded_path_to_repo,
+    SessionMetadata,
+    EntityLink,
+    DiscoveredSession,
+    get_claude_projects_dir,
+)
+from app.services.transcript_parser import parse_transcript, ParsedTranscript
 from app.services.session_manager import process_manager
-from app.services.transcript_parser import parse_transcript, transcript_to_dict
-from sqlalchemy.orm import selectinload
 
 router = APIRouter()
 
 
-class SessionEntityResponse(BaseModel):
-    id: int
-    kind: str
-    number: int
-
-    class Config:
-        from_attributes = True
-
-
-class SessionResponse(BaseModel):
-    id: int
-    repo_id: int
-    repo_name: str | None = None
-    kind: str
-    entities: list[SessionEntityResponse] = []
-    title: str
-    prompt: str
-    transcript: str
-    summary: str | None
-    status: str
-    process_id: str | None
-    claude_session_id: str | None = None  # Claude Code CLI session ID for resume
-    created_at: str
-    completed_at: str | None
-
-    class Config:
-        from_attributes = True
+def _get_repo_name(encoded_path: str) -> Optional[str]:
+    """Try to get repo name (owner/name) from encoded path."""
+    repo = match_encoded_path_to_repo(encoded_path)
+    if repo:
+        return f"{repo['owner']}/{repo['name']}"
+    return None
 
 
-def _session_to_response(session: Session, repo: Repo | None) -> SessionResponse:
-    """Convert a Session model to SessionResponse."""
-    return SessionResponse(
-        id=session.id,
-        repo_id=session.repo_id,
-        repo_name=f"{repo.owner}/{repo.name}" if repo else None,
-        kind=session.kind,
-        entities=[
-            SessionEntityResponse(id=e.id, kind=e.entity_kind, number=e.entity_number)
-            for e in session.entities
-        ],
-        title=session.title,
-        prompt=session.prompt,
-        transcript=session.transcript,
-        summary=session.summary,
-        status=session.status,
-        process_id=session.process_id,
-        claude_session_id=session.claude_session_id,
-        created_at=session.created_at.isoformat(),
-        completed_at=session.completed_at.isoformat() if session.completed_at else None,
+def _quick_scan_transcript(transcript_path) -> dict:
+    """
+    Quickly scan a transcript file for summary info without full parsing.
+
+    Returns dict with: title, model, start_time, end_time, message_count
+    """
+    import json
+
+    result = {
+        "title": None,
+        "model": None,
+        "start_time": None,
+        "end_time": None,
+        "message_count": 0,
+    }
+
+    try:
+        with open(transcript_path, 'r', encoding='utf-8') as f:
+            first_user_message = None
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                entry_type = entry.get('type')
+                timestamp = entry.get('timestamp')
+
+                if entry_type == 'summary':
+                    result["title"] = entry.get('summary')
+
+                if entry_type in ('user', 'assistant'):
+                    result["message_count"] += 1
+
+                    if timestamp:
+                        if not result["start_time"]:
+                            result["start_time"] = timestamp
+                        result["end_time"] = timestamp
+
+                    # Capture first user message for title fallback
+                    if entry_type == 'user' and not first_user_message:
+                        msg = entry.get('message', {})
+                        content = msg.get('content', '')
+                        if isinstance(content, str):
+                            first_user_message = content[:100]
+                        elif isinstance(content, list):
+                            for part in content:
+                                if isinstance(part, dict) and part.get('type') == 'text':
+                                    first_user_message = part.get('text', '')[:100]
+                                    break
+
+                    # Capture model
+                    if entry_type == 'assistant' and not result["model"]:
+                        msg = entry.get('message', {})
+                        result["model"] = msg.get('model')
+
+            # Use first user message as title if no summary
+            if not result["title"] and first_user_message:
+                result["title"] = first_user_message
+
+    except Exception:
+        pass
+
+    return result
+
+
+def _session_to_summary(
+    session: DiscoveredSession,
+    active_session_ids: set[str]
+) -> SessionSummaryResponse:
+    """Convert a DiscoveredSession to SessionSummaryResponse."""
+    repo_path = decode_path(session.encoded_path)
+    repo_name = _get_repo_name(session.encoded_path)
+
+    # Quick scan for transcript info
+    scan = _quick_scan_transcript(session.transcript_path)
+
+    # Check if this session is currently active
+    is_active = session.session_id in active_session_ids
+
+    # Get metadata info
+    entities = []
+    tags = []
+    starred = False
+    if session.metadata:
+        entities = [
+            EntityLinkResponse(kind=e.kind, number=e.number)
+            for e in session.metadata.entities
+        ]
+        tags = session.metadata.tags
+        starred = session.metadata.starred
+        # Use metadata title if available
+        if session.metadata.title:
+            scan["title"] = session.metadata.title
+
+    return SessionSummaryResponse(
+        session_id=session.session_id,
+        encoded_path=session.encoded_path,
+        repo_path=repo_path,
+        repo_name=repo_name,
+        title=scan["title"],
+        model=scan["model"],
+        start_time=scan["start_time"],
+        end_time=scan["end_time"],
+        message_count=scan["message_count"],
+        modified_at=session.modified_at.isoformat(),
+        file_size=session.file_size,
+        entities=entities,
+        tags=tags,
+        starred=starred,
+        is_active=is_active,
     )
 
 
-class SessionUpdate(BaseModel):
-    summary: str | None = None
-    status: str | None = None
+def _parsed_to_detail(
+    session_id: str,
+    encoded_path: str,
+    parsed: ParsedTranscript,
+    metadata: Optional[SessionMetadata],
+    is_active: bool,
+) -> SessionDetailResponse:
+    """Convert ParsedTranscript to SessionDetailResponse."""
+    repo_path = decode_path(encoded_path)
+    repo_name = _get_repo_name(encoded_path)
+
+    # Convert messages
+    messages = []
+    for msg in parsed.messages:
+        tool_uses = [
+            ToolUseResponse(id=t.id, name=t.name, input=t.input)
+            for t in msg.tool_uses
+        ]
+        usage = None
+        if msg.usage:
+            usage = TokenUsageResponse(
+                input_tokens=msg.usage.input_tokens,
+                output_tokens=msg.usage.output_tokens,
+                cache_read_tokens=msg.usage.cache_read_tokens,
+                cache_creation_tokens=msg.usage.cache_creation_tokens,
+            )
+        messages.append(TranscriptMessageResponse(
+            uuid=msg.uuid,
+            role=msg.role,
+            content=msg.content,
+            timestamp=msg.timestamp,
+            thinking=msg.thinking,
+            tool_uses=tool_uses,
+            model=msg.model,
+            usage=usage,
+        ))
+
+    # Build metadata response
+    if metadata:
+        meta_response = SessionMetadataResponse(
+            session_id=session_id,
+            title=metadata.title,
+            summary=metadata.summary,
+            repo_path=metadata.repo_path,
+            entities=[
+                EntityLinkResponse(kind=e.kind, number=e.number)
+                for e in metadata.entities
+            ],
+            tags=metadata.tags,
+            starred=metadata.starred,
+            created_at=metadata.created_at,
+        )
+    else:
+        meta_response = SessionMetadataResponse(session_id=session_id)
+
+    return SessionDetailResponse(
+        session_id=session_id,
+        encoded_path=encoded_path,
+        repo_path=repo_path,
+        repo_name=repo_name,
+        messages=messages,
+        summary=parsed.summary,
+        model=parsed.model,
+        total_input_tokens=parsed.total_input_tokens,
+        total_output_tokens=parsed.total_output_tokens,
+        total_cache_read_tokens=parsed.total_cache_read_tokens,
+        total_cache_creation_tokens=parsed.total_cache_creation_tokens,
+        start_time=parsed.start_time,
+        end_time=parsed.end_time,
+        claude_code_version=parsed.claude_code_version,
+        git_branch=parsed.git_branch,
+        metadata=meta_response,
+        is_active=is_active,
+    )
 
 
-class SessionListResponse(BaseModel):
-    sessions: list[SessionResponse]
-    total: int
-
+# ==========================================
+# List Sessions
+# ==========================================
 
 @router.get("/sessions", response_model=SessionListResponse)
 async def list_sessions(
-    repo_id: int | None = None,
-    kind: str | None = None,
-    status: str | None = None,
-    search: str | None = None,
+    repo_path: Optional[str] = None,
+    starred: Optional[bool] = None,
+    has_entities: Optional[bool] = None,
+    search: Optional[str] = None,
     limit: int = Query(default=50, le=200),
     offset: int = 0,
-    db: AsyncSession = Depends(get_db),
 ):
-    """List sessions with optional filtering and search."""
-    query = select(Session).options(selectinload(Session.entities)).order_by(Session.created_at.desc())
+    """
+    List all discovered sessions.
 
-    if repo_id:
-        query = query.where(Session.repo_id == repo_id)
-    if kind:
-        query = query.where(Session.kind == kind)
-    if status:
-        query = query.where(Session.status == status)
+    Sessions are discovered from Claude's ~/.claude/projects/ directory.
+    Optional filtering by repo path, starred status, or search term.
+    """
+    sessions = discover_sessions(repo_path=repo_path)
+
+    # Get active session IDs from running processes
+    active_processes = await process_manager.list_processes()
+    active_session_ids = {
+        proc.claude_session_id
+        for proc in active_processes
+        if proc.claude_session_id
+    }
+
+    # Convert to summaries
+    summaries = [_session_to_summary(s, active_session_ids) for s in sessions]
+
+    # Apply filters
+    if starred is not None:
+        summaries = [s for s in summaries if s.starred == starred]
+
+    if has_entities is not None:
+        if has_entities:
+            summaries = [s for s in summaries if len(s.entities) > 0]
+        else:
+            summaries = [s for s in summaries if len(s.entities) == 0]
+
     if search:
-        search_term = f"%{search}%"
-        query = query.where(
-            or_(
-                Session.title.ilike(search_term),
-                Session.prompt.ilike(search_term),
-                Session.transcript.ilike(search_term),
-                Session.summary.ilike(search_term),
-            )
-        )
+        search_lower = search.lower()
+        summaries = [
+            s for s in summaries
+            if (s.title and search_lower in s.title.lower()) or
+               (s.repo_path and search_lower in s.repo_path.lower()) or
+               (s.repo_name and search_lower in s.repo_name.lower())
+        ]
 
-    # Get total count
-    count_result = await db.execute(select(Session.id).where(query.whereclause) if query.whereclause is not None else select(Session.id))
-    total = len(count_result.all())
+    total = len(summaries)
 
     # Apply pagination
-    query = query.offset(offset).limit(limit)
-    result = await db.execute(query)
-    sessions = result.scalars().all()
+    summaries = summaries[offset:offset + limit]
 
-    # Get repo names
-    repo_ids = {s.repo_id for s in sessions}
-    repo_result = await db.execute(select(Repo).where(Repo.id.in_(repo_ids)))
-    repos = {r.id: r for r in repo_result.scalars().all()}
+    return SessionListResponse(sessions=summaries, total=total)
 
-    return SessionListResponse(
-        sessions=[
-            _session_to_response(s, repos.get(s.repo_id))
-            for s in sessions
-        ],
-        total=total,
+
+# ==========================================
+# Get Session Detail
+# ==========================================
+
+@router.get("/sessions/{session_id}", response_model=SessionDetailResponse)
+async def get_session(session_id: str):
+    """
+    Get full session detail with transcript.
+
+    The session_id is the UUID from the JSONL filename.
+    """
+    # Find the session by scanning all projects
+    sessions = discover_sessions()
+    session = None
+    for s in sessions:
+        if s.session_id == session_id:
+            session = s
+            break
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Parse the full transcript
+    repo_path = decode_path(session.encoded_path)
+    parsed = parse_transcript(session_id, repo_path)
+
+    if not parsed:
+        raise HTTPException(status_code=500, detail="Failed to parse transcript")
+
+    # Check if active
+    active_processes = await process_manager.list_processes()
+    is_active = any(
+        proc.claude_session_id == session_id
+        for proc in active_processes
+    )
+
+    return _parsed_to_detail(
+        session_id=session_id,
+        encoded_path=session.encoded_path,
+        parsed=parsed,
+        metadata=session.metadata,
+        is_active=is_active,
     )
 
 
-@router.get("/sessions/{session_id}", response_model=SessionResponse)
-async def get_session(
-    session_id: int,
-    db: AsyncSession = Depends(get_db),
-):
-    """Get a single session."""
-    session = await get_session_or_404(db, session_id)
+# ==========================================
+# Update Session Metadata
+# ==========================================
 
-    # Get repo name
-    repo_result = await db.execute(select(Repo).where(Repo.id == session.repo_id))
-    repo = repo_result.scalar_one_or_none()
+@router.patch("/sessions/{session_id}", response_model=SessionMetadataResponse)
+async def update_session_metadata(session_id: str, data: SessionMetadataUpdate):
+    """
+    Update session sidecar metadata.
 
-    return _session_to_response(session, repo)
+    Creates the sidecar file if it doesn't exist.
+    """
+    # Find the session
+    sessions = discover_sessions()
+    session = None
+    for s in sessions:
+        if s.session_id == session_id:
+            session = s
+            break
 
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
 
-@router.patch("/sessions/{session_id}", response_model=SessionResponse)
-async def update_session(
-    session_id: int,
-    data: SessionUpdate,
-    db: AsyncSession = Depends(get_db),
-):
-    """Update a session (summary, status)."""
-    session = await get_session_or_404(db, session_id)
+    # Load or create metadata
+    metadata = session.metadata or SessionMetadata(
+        session_id=session_id,
+        repo_path=decode_path(session.encoded_path),
+    )
 
+    # Update fields
+    if data.title is not None:
+        metadata.title = data.title
     if data.summary is not None:
-        session.summary = data.summary
-    if data.status is not None:
-        session.status = data.status
-        if data.status == SessionStatus.COMPLETED.value:
-            session.completed_at = datetime.utcnow()
+        metadata.summary = data.summary
+    if data.tags is not None:
+        metadata.tags = data.tags
+    if data.starred is not None:
+        metadata.starred = data.starred
 
-    await db.commit()
-    await db.refresh(session)
+    # Save
+    save_session_metadata(session.encoded_path, session_id, metadata)
 
-    # Get repo name
-    repo_result = await db.execute(select(Repo).where(Repo.id == session.repo_id))
-    repo = repo_result.scalar_one_or_none()
+    return SessionMetadataResponse(
+        session_id=session_id,
+        title=metadata.title,
+        summary=metadata.summary,
+        repo_path=metadata.repo_path,
+        entities=[
+            EntityLinkResponse(kind=e.kind, number=e.number)
+            for e in metadata.entities
+        ],
+        tags=metadata.tags,
+        starred=metadata.starred,
+        created_at=metadata.created_at,
+    )
 
-    return _session_to_response(session, repo)
+
+# ==========================================
+# Entity Management
+# ==========================================
+
+@router.post("/sessions/{session_id}/entities", response_model=EntityLinkResponse)
+async def add_entity_to_session(session_id: str, data: AddEntityRequest):
+    """Add an issue or PR link to a session."""
+    # Find the session
+    sessions = discover_sessions()
+    session = None
+    for s in sessions:
+        if s.session_id == session_id:
+            session = s
+            break
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Load or create metadata
+    metadata = session.metadata or SessionMetadata(
+        session_id=session_id,
+        repo_path=decode_path(session.encoded_path),
+    )
+
+    # Check if already linked
+    for e in metadata.entities:
+        if e.kind == data.kind and e.number == data.number:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{data.kind.capitalize()} #{data.number} is already linked"
+            )
+
+    # Add the link
+    metadata.entities.append(EntityLink(kind=data.kind, number=data.number))
+
+    # Save
+    save_session_metadata(session.encoded_path, session_id, metadata)
+
+    return EntityLinkResponse(kind=data.kind, number=data.number)
 
 
-class ContinueResponse(BaseModel):
-    """Response from continuing a session - includes full process data."""
-    id: str
-    working_dir: str
-    created_at: str
-    session_id: int
-    claude_session_id: str | None = None
+@router.delete("/sessions/{session_id}/entities/{entity_idx}")
+async def remove_entity_from_session(session_id: str, entity_idx: int):
+    """
+    Remove an entity link from a session.
+
+    entity_idx is the index in the entities array (0-based).
+    """
+    # Find the session
+    sessions = discover_sessions()
+    session = None
+    for s in sessions:
+        if s.session_id == session_id:
+            session = s
+            break
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if not session.metadata:
+        raise HTTPException(status_code=404, detail="No metadata for session")
+
+    if entity_idx < 0 or entity_idx >= len(session.metadata.entities):
+        raise HTTPException(status_code=404, detail="Entity link not found")
+
+    # Remove the entity
+    session.metadata.entities.pop(entity_idx)
+
+    # Save
+    save_session_metadata(session.encoded_path, session_id, session.metadata)
+
+    return {"status": "deleted"}
 
 
-@router.post("/sessions/{session_id}/continue", response_model=ContinueResponse)
-async def continue_session(
-    session_id: int,
-    db: AsyncSession = Depends(get_db),
-):
+# ==========================================
+# Continue Session
+# ==========================================
+
+@router.post("/sessions/{session_id}/continue")
+async def continue_session(session_id: str):
     """
     Continue an existing session by resuming its Claude conversation.
 
-    This creates a new PTY process that resumes the Claude conversation,
-    but keeps the same session record (no duplicates).
+    Creates a new PTY process that resumes the Claude conversation.
     """
-    session = await get_session_or_404(db, session_id)
+    # Find the session
+    sessions = discover_sessions()
+    session = None
+    for s in sessions:
+        if s.session_id == session_id:
+            session = s
+            break
 
-    if not session.claude_session_id:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot continue: no Claude session ID available"
-        )
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
 
-    # Get the repo for the working directory
-    repo_result = await db.execute(select(Repo).where(Repo.id == session.repo_id))
-    repo = repo_result.scalar_one_or_none()
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repository not found")
+    repo_path = decode_path(session.encoded_path)
 
     # Create new PTY process that resumes the Claude conversation
     process = await process_manager.create_process(
-        working_dir=repo.local_path,
+        working_dir=repo_path,
         initial_prompt=None,  # No new prompt, just resuming
-        session_id=session.id,
-        resume_session=session.claude_session_id,
+        session_id=None,  # No DB session ID in new model
+        resume_session=session_id,
     )
 
-    # Update the session to link to this new process and set status to running
-    session.process_id = process.id
-    session.status = SessionStatus.RUNNING.value
-    session.completed_at = None  # Clear completed time since we're resuming
-    await db.commit()
-
-    # Return full process data so frontend can add it directly to state
-    return ContinueResponse(
-        id=process.id,
-        working_dir=process.working_dir,
-        created_at=process.created_at.isoformat(),
-        session_id=session.id,
-        claude_session_id=process.claude_session_id,
-    )
-
-
-@router.delete("/sessions/{session_id}")
-async def delete_session(
-    session_id: int,
-    db: AsyncSession = Depends(get_db),
-):
-    """Delete a session."""
-    session = await get_session_or_404(db, session_id)
-
-    await db.delete(session)
-    await db.commit()
-    return {"status": "deleted"}
-
-
-class TranscriptMessage(BaseModel):
-    """A message in the parsed transcript."""
-    uuid: str
-    role: str
-    content: str
-    timestamp: str
-    thinking: str | None = None
-    tool_uses: list[dict[str, Any]] = []
-
-
-class ParsedTranscriptResponse(BaseModel):
-    """Parsed Claude Code transcript."""
-    session_id: str
-    messages: list[TranscriptMessage]
-    total_cost_usd: float = 0.0
-    total_duration_ms: int = 0
-
-
-@router.get("/sessions/{session_id}/transcript")
-async def get_session_transcript(
-    session_id: int,
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Get the parsed transcript for a session.
-
-    Reads Claude Code's JSONL transcript file and returns structured messages.
-    Falls back to raw transcript if JSONL not available.
-    """
-    session = await get_session_or_404(db, session_id)
-
-    # Get the repo for working directory
-    repo_result = await db.execute(select(Repo).where(Repo.id == session.repo_id))
-    repo = repo_result.scalar_one_or_none()
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repository not found")
-
-    # Try to get Claude session ID from session or currently running process
-    claude_session_id = session.claude_session_id
-
-    if not claude_session_id and session.process_id:
-        # Check if there's an active process with the claude_session_id
-        active_process = await process_manager.get_process(session.process_id)
-        if active_process:
-            claude_session_id = active_process.claude_session_id
-
-    if not claude_session_id:
-        # No Claude session ID available - return raw transcript
-        return {
-            "type": "raw",
-            "transcript": session.transcript or "",
-        }
-
-    # Try to parse the JSONL transcript
-    parsed = parse_transcript(claude_session_id, repo.local_path)
-
-    if parsed:
-        return {
-            "type": "parsed",
-            "transcript": transcript_to_dict(parsed),
-        }
-    else:
-        # JSONL not found - return raw transcript
-        return {
-            "type": "raw",
-            "transcript": session.transcript or "",
-        }
-
-
-class AddEntityRequest(BaseModel):
-    kind: str  # "issue" or "pr"
-    number: int
-
-
-@router.post("/sessions/{session_id}/entities", response_model=SessionEntityResponse)
-async def add_entity_to_session(
-    session_id: int,
-    data: AddEntityRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    """Add an issue or PR to a session."""
-    session = await get_session_or_404(db, session_id)
-
-    # Check if already linked
-    for entity in session.entities:
-        if entity.entity_kind == data.kind and entity.entity_number == data.number:
-            raise HTTPException(
-                status_code=400,
-                detail=f"{data.kind.capitalize()} #{data.number} is already linked to this session"
-            )
-
-    # Create the link
-    entity = SessionEntity(
-        session_id=session.id,
-        repo_id=session.repo_id,
-        entity_kind=data.kind,
-        entity_number=data.number,
-    )
-    db.add(entity)
-    await db.commit()
-    await db.refresh(entity)
-
-    return SessionEntityResponse(id=entity.id, kind=entity.entity_kind, number=entity.entity_number)
-
-
-@router.delete("/sessions/{session_id}/entities/{entity_id}")
-async def remove_entity_from_session(
-    session_id: int,
-    entity_id: int,
-    db: AsyncSession = Depends(get_db),
-):
-    """Remove an issue or PR link from a session."""
-    session = await get_session_or_404(db, session_id)
-
-    # Find the entity
-    entity = None
-    for e in session.entities:
-        if e.id == entity_id:
-            entity = e
-            break
-
-    if not entity:
-        raise HTTPException(status_code=404, detail="Entity link not found")
-
-    await db.delete(entity)
-    await db.commit()
-
-    return {"status": "deleted"}
+    return {
+        "id": process.id,
+        "working_dir": process.working_dir,
+        "created_at": process.created_at.isoformat(),
+        "claude_session_id": process.claude_session_id,
+    }
