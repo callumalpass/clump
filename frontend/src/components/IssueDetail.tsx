@@ -32,7 +32,10 @@ interface IssueDetailProps {
   onAnalyze: (analysisType: AnalysisTypeConfig) => void;
   analyses?: Analysis[];
   sessions?: Session[];
+  expandedAnalysisId?: number | null;
+  onToggleAnalysis?: (analysisId: number | null) => void;
   onSelectAnalysis?: (analysis: Analysis) => void;
+  onContinueAnalysis?: (analysis: Analysis) => void;
   onDeleteAnalysis?: (analysis: Analysis) => void;
   tags?: Tag[];
   issueTags?: Tag[];
@@ -47,7 +50,10 @@ export function IssueDetail({
   onAnalyze,
   analyses = [],
   sessions = [],
+  expandedAnalysisId: _expandedAnalysisId,
+  onToggleAnalysis: _onToggleAnalysis,
   onSelectAnalysis,
+  onContinueAnalysis: _onContinueAnalysis,
   onDeleteAnalysis,
   tags = [],
   issueTags = [],
