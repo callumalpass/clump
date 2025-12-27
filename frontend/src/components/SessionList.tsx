@@ -63,7 +63,7 @@ export function SessionList({
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="p-3">
               <div className="flex items-center gap-2 mb-1">
-                <div className="w-2 h-2 rounded-full skeleton-shimmer" />
+                <div className="w-10 h-4 rounded-full skeleton-shimmer" />
                 <div className="h-4 w-40 rounded skeleton-shimmer" />
               </div>
               <div className="flex items-center gap-2">
@@ -131,10 +131,23 @@ export function SessionList({
             onClick={() => onSelectSession(session)}
           >
             <div className="flex items-center gap-2 mb-1">
-              {/* Status indicator */}
-              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                session.is_active ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'
-              }`} />
+              {/* Status indicator with text label for accessibility */}
+              {session.is_active ? (
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-yellow-500/20 text-yellow-400 flex-shrink-0"
+                  title="Session is actively running"
+                  aria-label="Active session"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
+                  Active
+                </span>
+              ) : (
+                <span
+                  className="w-2 h-2 rounded-full flex-shrink-0 bg-green-500"
+                  title="Session completed"
+                  aria-label="Completed session"
+                />
+              )}
 
               {/* Title */}
               <span className="text-sm font-medium text-white truncate flex-1">
