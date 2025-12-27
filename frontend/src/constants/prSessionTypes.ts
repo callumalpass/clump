@@ -83,6 +83,25 @@ Please:
 4. Highlight any breaking changes or important considerations
 5. Create a clear explanation suitable for code review`,
   },
+  {
+    id: 'merge',
+    name: 'Merge PR',
+    shortName: 'Merge',
+    description: 'Prepare and merge this pull request',
+    buildPrompt: (pr) => `Please help me merge this pull request:
+
+PR #${pr.number}: ${pr.title}
+Branch: ${pr.head_ref} -> ${pr.base_ref}
+
+${pr.body || 'No description provided.'}
+
+Please:
+1. Check out the PR branch and ensure it's up to date
+2. Check for any merge conflicts with the base branch
+3. If there are conflicts, resolve them appropriately
+4. Verify the build passes and tests succeed
+5. Merge the PR into ${pr.base_ref}`,
+  },
 ];
 
 export const DEFAULT_PR_SESSION_TYPE: PRSessionTypeConfig = PR_SESSION_TYPES[0]!;
