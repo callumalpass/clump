@@ -88,5 +88,35 @@ class Settings(BaseSettings):
             return [t.strip() for t in self.claude_disallowed_tools.split(",")]
         return []
 
+    def get_mcp_config(self) -> dict | None:
+        """
+        Get MCP server configuration for Claude Code.
+
+        Returns a dict suitable for --mcp-config flag or None if no MCP configured.
+        """
+        import json
+
+        servers = {}
+
+        # Add GitHub MCP if enabled
+        if self.claude_mcp_github and self.github_token:
+            servers["github"] = {
+                "type": "http",
+                "url": "https://api.githubcopilot.com/mcp/",
+                "headers": {
+                    "Authorization": f"Bearer {self.github_token}"
+                }
+            }
+
+        # Parse additional MCP servers
+        if self.claude_mcp_servers:
+            try:
+                additional = json.loads(self.claude_mcp_servers)
+                servers.update(additional)
+            except json.JSONDecodeError:
+                pass
+
+        return servers if servers else None
+
 
 settings = Settings()

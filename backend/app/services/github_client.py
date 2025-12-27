@@ -83,24 +83,19 @@ class GitHubClient:
         """List issues for a repository with pagination.
 
         Returns a tuple of (issues, total_count).
-        Uses GitHub's native pagination for efficiency.
+        Note: total_count includes PRs (GitHub API limitation).
         """
-        repo = self.get_repo(owner, name)
+        # Use GitHub search API to get only issues (not PRs)
+        query = f"repo:{owner}/{name} is:issue state:{state}"
+        results = self._github.search_issues(query, sort="created", order="desc")
 
-        # Use GitHub's native pagination (0-indexed pages internally)
-        paginated = repo.get_issues(state=state, sort="created", direction="desc")
+        # Get total count first (triggers the API call)
+        total_count = results.totalCount
 
-        # Get total count (cached by PyGitHub after first access)
-        total_count = paginated.totalCount
-
-        # Fetch only the requested page using get_page (0-indexed)
-        page_data = paginated.get_page(page - 1)
-
+        # Get just the page we need
+        start = (page - 1) * per_page
         issues = []
-        for issue in page_data[:per_page]:
-            # Skip pull requests (GitHub API returns them as issues)
-            if issue.pull_request:
-                continue
+        for issue in results[start:start + per_page]:
             issues.append(self._issue_to_data(issue))
 
         return issues, total_count

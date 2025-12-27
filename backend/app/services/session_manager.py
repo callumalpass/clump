@@ -155,8 +155,11 @@ class SessionManager:
         max_turns: int | None = None,
         model: str | None = None,
         resume_session: str | None = None,
+        mcp_config: dict | None = None,
     ) -> list[str]:
         """Build Claude Code command arguments with proper flags."""
+        import json
+
         args = [settings.claude_command]
 
         # Resume session if specified
@@ -190,6 +193,11 @@ class SessionManager:
         m = model or settings.claude_model
         if m:
             args.extend(["--model", m])
+
+        # MCP configuration
+        mcp = mcp_config or settings.get_mcp_config()
+        if mcp:
+            args.extend(["--mcp-config", json.dumps(mcp)])
 
         return args
 
