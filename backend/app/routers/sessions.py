@@ -128,6 +128,16 @@ def _get_repo_name(encoded_path: str) -> Optional[str]:
     return None
 
 
+def _find_session_by_id(
+    sessions: list[DiscoveredSession], session_id: str
+) -> Optional[DiscoveredSession]:
+    """Find a session by its ID from a list of discovered sessions."""
+    for s in sessions:
+        if s.session_id == session_id:
+            return s
+    return None
+
+
 def _quick_scan_transcript(transcript_path) -> dict:
     """
     Quickly scan a transcript file for summary info without full parsing.
@@ -413,11 +423,7 @@ async def get_session(session_id: str):
     """
     # Find the session by scanning all projects
     sessions = discover_sessions()
-    session = None
-    for s in sessions:
-        if s.session_id == session_id:
-            session = s
-            break
+    session = _find_session_by_id(sessions, session_id)
 
     # Check if this is an active process
     active_processes = await process_manager.list_processes()
@@ -507,11 +513,7 @@ async def get_subsession(session_id: str, agent_id: str):
     """
     # Find the parent session to get the encoded_path
     sessions = discover_sessions(include_subsessions=True)
-    parent_session = None
-    for s in sessions:
-        if s.session_id == session_id:
-            parent_session = s
-            break
+    parent_session = _find_session_by_id(sessions, session_id)
 
     if not parent_session:
         raise HTTPException(status_code=404, detail="Parent session not found")
@@ -587,11 +589,7 @@ async def update_session_metadata(session_id: str, data: SessionMetadataUpdate):
     """
     # Find the session
     sessions = discover_sessions()
-    session = None
-    for s in sessions:
-        if s.session_id == session_id:
-            session = s
-            break
+    session = _find_session_by_id(sessions, session_id)
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -639,11 +637,7 @@ async def add_entity_to_session(session_id: str, data: AddEntityRequest):
     """Add an issue or PR link to a session."""
     # Find the session
     sessions = discover_sessions()
-    session = None
-    for s in sessions:
-        if s.session_id == session_id:
-            session = s
-            break
+    session = _find_session_by_id(sessions, session_id)
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -680,11 +674,7 @@ async def remove_entity_from_session(session_id: str, entity_idx: int):
     """
     # Find the session
     sessions = discover_sessions()
-    session = None
-    for s in sessions:
-        if s.session_id == session_id:
-            session = s
-            break
+    session = _find_session_by_id(sessions, session_id)
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -717,11 +707,7 @@ async def continue_session(session_id: str):
     """
     # Find the session
     sessions = discover_sessions()
-    session = None
-    for s in sessions:
-        if s.session_id == session_id:
-            session = s
-            break
+    session = _find_session_by_id(sessions, session_id)
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
