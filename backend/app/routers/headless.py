@@ -8,12 +8,12 @@ import asyncio
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import json
 
 from app.database import get_db
-from app.models import Repo, Analysis, AnalysisStatus
+from app.db_helpers import get_repo_or_404
+from app.models import Analysis, AnalysisStatus
 from app.services.headless_analyzer import headless_analyzer, AnalysisMessage
 
 router = APIRouter()
@@ -63,11 +63,7 @@ async def run_headless_analysis(
     This is a blocking endpoint that waits for the analysis to complete.
     For streaming results, use POST /headless/analyze/stream instead.
     """
-    # Get repo
-    result = await db.execute(select(Repo).where(Repo.id == data.repo_id))
-    repo = result.scalar_one_or_none()
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repository not found")
+    repo = await get_repo_or_404(db, data.repo_id)
 
     # Create analysis record
     analysis = Analysis(
@@ -131,11 +127,7 @@ async def run_headless_analysis_stream(
     Returns a stream of newline-delimited JSON messages as the analysis progresses.
     Each message is an AnalysisMessage with type, content, and metadata.
     """
-    # Get repo
-    result = await db.execute(select(Repo).where(Repo.id == data.repo_id))
-    repo = result.scalar_one_or_none()
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repository not found")
+    repo = await get_repo_or_404(db, data.repo_id)
 
     # Create analysis record
     analysis = Analysis(

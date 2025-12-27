@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.db_helpers import get_repo_or_404
 from app.models import Repo
 from app.services.github_client import github_client, IssueData, PRData
 
@@ -99,11 +100,7 @@ async def create_repo(repo: RepoCreate, db: AsyncSession = Depends(get_db)):
 @router.delete("/repos/{repo_id}")
 async def delete_repo(repo_id: int, db: AsyncSession = Depends(get_db)):
     """Remove a repository."""
-    result = await db.execute(select(Repo).where(Repo.id == repo_id))
-    repo = result.scalar_one_or_none()
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repository not found")
-
+    repo = await get_repo_or_404(db, repo_id)
     await db.delete(repo)
     await db.commit()
     return {"status": "deleted"}
@@ -131,11 +128,7 @@ async def list_issues(
         sort: Sort field - "created", "updated", or "comments"
         order: Sort order - "asc" or "desc"
     """
-    result = await db.execute(select(Repo).where(Repo.id == repo_id))
-    repo = result.scalar_one_or_none()
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repository not found")
-
+    repo = await get_repo_or_404(db, repo_id)
     issues, total = github_client.list_issues(
         repo.owner,
         repo.name,
@@ -162,11 +155,7 @@ async def get_issue(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a single issue with comments."""
-    result = await db.execute(select(Repo).where(Repo.id == repo_id))
-    repo = result.scalar_one_or_none()
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repository not found")
-
+    repo = await get_repo_or_404(db, repo_id)
     issue = github_client.get_issue(repo.owner, repo.name, issue_number)
     response = _issue_to_response(issue)
     response_dict = response.model_dump()
@@ -195,11 +184,7 @@ async def create_comment(
     db: AsyncSession = Depends(get_db),
 ):
     """Add a comment to an issue."""
-    result = await db.execute(select(Repo).where(Repo.id == repo_id))
-    repo = result.scalar_one_or_none()
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repository not found")
-
+    repo = await get_repo_or_404(db, repo_id)
     try:
         comment_id = github_client.add_comment(repo.owner, repo.name, issue_number, comment.body)
         return {"id": comment_id, "status": "created"}
@@ -216,11 +201,7 @@ async def list_prs(
     db: AsyncSession = Depends(get_db),
 ):
     """List pull requests for a repository."""
-    result = await db.execute(select(Repo).where(Repo.id == repo_id))
-    repo = result.scalar_one_or_none()
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repository not found")
-
+    repo = await get_repo_or_404(db, repo_id)
     prs = github_client.list_prs(repo.owner, repo.name, state=state, limit=limit)
     return [_pr_to_response(p) for p in prs]
 

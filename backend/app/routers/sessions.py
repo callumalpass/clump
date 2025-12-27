@@ -10,7 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Repo, Analysis, AnalysisStatus
+from app.db_helpers import get_repo_or_404
+from app.models import Analysis, AnalysisStatus
 from app.services.session_manager import session_manager
 
 router = APIRouter()
@@ -50,11 +51,7 @@ async def create_session(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new terminal session running Claude Code."""
-    # Get repo
-    result = await db.execute(select(Repo).where(Repo.id == data.repo_id))
-    repo = result.scalar_one_or_none()
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repository not found")
+    repo = await get_repo_or_404(db, data.repo_id)
 
     # Create analysis record
     analysis = Analysis(
