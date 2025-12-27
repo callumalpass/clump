@@ -42,7 +42,7 @@ export function SessionList({
         <button
           key={f.value}
           onClick={() => onFilterChange(f.value)}
-          className={`toggle-btn px-2.5 py-1 text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+          className={`toggle-btn px-2.5 py-1 text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900 ${
             filter === f.value
               ? 'bg-blue-600 text-white'
               : 'text-gray-400 hover:text-white hover:bg-gray-700'
@@ -59,7 +59,7 @@ export function SessionList({
           <button
             onClick={onRefresh}
             disabled={loading}
-            className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900"
             title="Refresh sessions"
           >
             <svg
@@ -199,7 +199,7 @@ export function SessionList({
               {!session.is_active && onContinueSession && (
                 <button
                   onClick={(e) => handleContinue(e, session)}
-                  className="flex-shrink-0 px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 rounded flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  className="flex-shrink-0 px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 active:scale-95 rounded flex items-center gap-1 transition-all focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900"
                   title="Continue this conversation"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
