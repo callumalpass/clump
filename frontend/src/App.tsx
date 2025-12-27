@@ -818,6 +818,9 @@ export default function App() {
                           await deleteSession(viewingSession.session_id);
                           setViewingSessionId(null);
                         }}
+                        onTitleChange={async (title) => {
+                          await updateSessionMetadata(viewingSession.session_id, { title });
+                        }}
                         onShowIssue={handleShowIssue}
                         onShowPR={handleShowPR}
                         issues={issues}
@@ -939,6 +942,9 @@ export default function App() {
                       onDelete={async () => {
                         await deleteSession(viewingSession.session_id);
                         setViewingSessionId(null);
+                      }}
+                      onTitleChange={async (title) => {
+                        await updateSessionMetadata(viewingSession.session_id, { title });
                       }}
                       onShowIssue={handleShowIssue}
                       onShowPR={handleShowPR}

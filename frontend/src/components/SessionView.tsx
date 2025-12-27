@@ -119,6 +119,8 @@ interface SessionViewProps {
   onContinue?: () => void;
   /** Callback when session is deleted */
   onDelete?: () => void;
+  /** Callback when session title is changed */
+  onTitleChange?: (title: string) => Promise<void>;
   /** Navigate to an issue */
   onShowIssue?: (issueNumber: number) => void;
   /** Navigate to a PR */
@@ -141,6 +143,7 @@ export function SessionView({
   onClose,
   onContinue,
   onDelete,
+  onTitleChange,
   onShowIssue,
   onShowPR,
   issues = [],
@@ -198,6 +201,10 @@ export function SessionView({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Title editing state
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
+
   // Sync entities when session changes
   useEffect(() => {
     setEntities(session.entities || []);
@@ -228,6 +235,31 @@ export function SessionView({
       setShowDeleteConfirm(false);
     }
   }, [onDelete]);
+
+  // Handle title editing
+  const handleTitleEdit = useCallback(() => {
+    setEditedTitle(detail?.metadata?.title || session.title || '');
+    setIsEditingTitle(true);
+  }, [detail?.metadata?.title, session.title]);
+
+  const handleTitleSave = useCallback(async () => {
+    if (!onTitleChange || editedTitle.trim() === '') return;
+    try {
+      await onTitleChange(editedTitle.trim());
+      setIsEditingTitle(false);
+    } catch (err) {
+      console.error('Failed to update title:', err);
+    }
+  }, [onTitleChange, editedTitle]);
+
+  const handleTitleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleTitleSave();
+    } else if (e.key === 'Escape') {
+      setIsEditingTitle(false);
+    }
+  }, [handleTitleSave]);
 
   // Close actions menu when clicking outside
   useEffect(() => {
@@ -528,7 +560,25 @@ export function SessionView({
           {!isActiveProcess && (
             <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
           )}
-          <h3 className="text-sm font-medium text-white truncate">{title}</h3>
+          {isEditingTitle ? (
+            <input
+              type="text"
+              value={editedTitle}
+              onChange={(e) => setEditedTitle(e.target.value)}
+              onKeyDown={handleTitleKeyDown}
+              onBlur={handleTitleSave}
+              className="text-sm font-medium text-white bg-gray-700 border border-gray-600 rounded px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-0 flex-1"
+              autoFocus
+            />
+          ) : (
+            <h3
+              className={`text-sm font-medium text-white truncate ${onTitleChange ? 'cursor-pointer hover:text-blue-400 transition-colors' : ''}`}
+              onClick={onTitleChange ? handleTitleEdit : undefined}
+              title={onTitleChange ? 'Click to edit title' : undefined}
+            >
+              {title}
+            </h3>
+          )}
           {entities.length > 0 && (
             <div className="flex items-center gap-1 flex-wrap shrink-0">
               {entities.map((entity, idx) => (
