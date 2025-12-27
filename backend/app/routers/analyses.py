@@ -37,6 +37,26 @@ class AnalysisResponse(BaseModel):
         from_attributes = True
 
 
+def _analysis_to_response(analysis: Analysis, repo: Repo | None) -> AnalysisResponse:
+    """Convert an Analysis model to AnalysisResponse."""
+    return AnalysisResponse(
+        id=analysis.id,
+        repo_id=analysis.repo_id,
+        repo_name=f"{repo.owner}/{repo.name}" if repo else None,
+        type=analysis.type,
+        entity_id=analysis.entity_id,
+        title=analysis.title,
+        prompt=analysis.prompt,
+        transcript=analysis.transcript,
+        summary=analysis.summary,
+        status=analysis.status,
+        session_id=analysis.session_id,
+        claude_session_id=analysis.claude_session_id,
+        created_at=analysis.created_at.isoformat(),
+        completed_at=analysis.completed_at.isoformat() if analysis.completed_at else None,
+    )
+
+
 class AnalysisUpdate(BaseModel):
     summary: str | None = None
     status: str | None = None
@@ -93,22 +113,7 @@ async def list_analyses(
 
     return AnalysisListResponse(
         analyses=[
-            AnalysisResponse(
-                id=a.id,
-                repo_id=a.repo_id,
-                repo_name=f"{repos[a.repo_id].owner}/{repos[a.repo_id].name}" if a.repo_id in repos else None,
-                type=a.type,
-                entity_id=a.entity_id,
-                title=a.title,
-                prompt=a.prompt,
-                transcript=a.transcript,
-                summary=a.summary,
-                status=a.status,
-                session_id=a.session_id,
-                claude_session_id=a.claude_session_id,
-                created_at=a.created_at.isoformat(),
-                completed_at=a.completed_at.isoformat() if a.completed_at else None,
-            )
+            _analysis_to_response(a, repos.get(a.repo_id))
             for a in analyses
         ],
         total=total,
@@ -130,22 +135,7 @@ async def get_analysis(
     repo_result = await db.execute(select(Repo).where(Repo.id == analysis.repo_id))
     repo = repo_result.scalar_one_or_none()
 
-    return AnalysisResponse(
-        id=analysis.id,
-        repo_id=analysis.repo_id,
-        repo_name=f"{repo.owner}/{repo.name}" if repo else None,
-        type=analysis.type,
-        entity_id=analysis.entity_id,
-        title=analysis.title,
-        prompt=analysis.prompt,
-        transcript=analysis.transcript,
-        summary=analysis.summary,
-        status=analysis.status,
-        session_id=analysis.session_id,
-        claude_session_id=analysis.claude_session_id,
-        created_at=analysis.created_at.isoformat(),
-        completed_at=analysis.completed_at.isoformat() if analysis.completed_at else None,
-    )
+    return _analysis_to_response(analysis, repo)
 
 
 @router.patch("/analyses/{analysis_id}", response_model=AnalysisResponse)
@@ -174,22 +164,7 @@ async def update_analysis(
     repo_result = await db.execute(select(Repo).where(Repo.id == analysis.repo_id))
     repo = repo_result.scalar_one_or_none()
 
-    return AnalysisResponse(
-        id=analysis.id,
-        repo_id=analysis.repo_id,
-        repo_name=f"{repo.owner}/{repo.name}" if repo else None,
-        type=analysis.type,
-        entity_id=analysis.entity_id,
-        title=analysis.title,
-        prompt=analysis.prompt,
-        transcript=analysis.transcript,
-        summary=analysis.summary,
-        status=analysis.status,
-        session_id=analysis.session_id,
-        claude_session_id=analysis.claude_session_id,
-        created_at=analysis.created_at.isoformat(),
-        completed_at=analysis.completed_at.isoformat() if analysis.completed_at else None,
-    )
+    return _analysis_to_response(analysis, repo)
 
 
 class ContinueResponse(BaseModel):
