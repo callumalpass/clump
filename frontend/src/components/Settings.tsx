@@ -280,7 +280,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                         <button
                           type="submit"
                           disabled={tokenSaving}
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900"
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900"
                         >
                           {tokenSaving ? 'Saving...' : 'Save Token'}
                         </button>
@@ -374,7 +374,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                   <button
                     onClick={handleAddTool}
                     disabled={saving || !customTool.trim()}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900"
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900"
                   >
                     Add
                   </button>
@@ -490,7 +490,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                 <button
                   onClick={handleReset}
                   disabled={saving}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-1 focus:ring-offset-gray-900"
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-1 focus:ring-offset-gray-900"
                 >
                   Reset to Defaults
                 </button>
