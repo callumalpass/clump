@@ -7,6 +7,7 @@ Each line is a JSON object representing a message or event.
 
 import json
 import os
+import re
 from pathlib import Path
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -19,6 +20,7 @@ class ToolUse:
     id: str
     name: str
     input: dict
+    spawned_agent_id: Optional[str] = None  # Agent ID if this tool spawned a subsession
 
 
 @dataclass
@@ -67,6 +69,23 @@ class ParsedTranscript:
     end_time: Optional[str] = None
     claude_code_version: Optional[str] = None
     git_branch: Optional[str] = None
+
+
+def extract_agent_id(content: list) -> Optional[str]:
+    """
+    Extract agentId from tool_result content blocks.
+
+    When Claude uses Skill/Task tool, the result includes a line like:
+    "agentId: a01393b (for resuming to continue this agent's work if needed)"
+    """
+    for item in content:
+        if isinstance(item, dict) and item.get('type') == 'text':
+            text = item.get('text', '')
+            # Look for pattern: "agentId: XXXXXXX" (7-char hex)
+            match = re.search(r'agentId:\s*([a-f0-9]{7})', text)
+            if match:
+                return match.group(1)
+    return None
 
 
 def find_transcript_file(session_id: str, working_dir: str) -> Optional[Path]:
@@ -181,8 +200,19 @@ def parse_transcript(session_id: str, working_dir: str) -> Optional[ParsedTransc
                                 if part.get('type') == 'text':
                                     text_parts.append(part.get('text', ''))
                                 elif part.get('type') == 'tool_result':
-                                    # Tool results in user messages
-                                    pass
+                                    # Tool results in user messages - check for spawned agent
+                                    tool_use_id = part.get('tool_use_id')
+                                    tool_content = part.get('content', [])
+                                    if isinstance(tool_content, list):
+                                        agent_id = extract_agent_id(tool_content)
+                                        if agent_id and tool_use_id and messages:
+                                            # Find matching tool_use in recent assistant messages
+                                            for msg in reversed(messages):
+                                                if msg.role == 'assistant':
+                                                    for tool_use in msg.tool_uses:
+                                                        if tool_use.id == tool_use_id:
+                                                            tool_use.spawned_agent_id = agent_id
+                                                    break  # Only check most recent assistant message
                             elif isinstance(part, str):
                                 text_parts.append(part)
                         text_content = '\n'.join(text_parts)
@@ -292,7 +322,12 @@ def transcript_to_dict(transcript: ParsedTranscript) -> dict:
                 'timestamp': msg.timestamp,
                 'thinking': msg.thinking,
                 'tool_uses': [
-                    {'id': t.id, 'name': t.name, 'input': t.input}
+                    {
+                        'id': t.id,
+                        'name': t.name,
+                        'input': t.input,
+                        'spawned_agent_id': t.spawned_agent_id,
+                    }
                     for t in msg.tool_uses
                 ],
                 'model': msg.model,

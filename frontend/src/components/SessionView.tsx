@@ -845,6 +845,7 @@ export function SessionView({
         {!loading && !error && transcriptForView && (
           <ConversationView
             transcript={transcriptForView}
+            sessionId={session.session_id}
             searchQuery={searchQuery}
             currentMatchIndex={currentMatchIndex}
             onMatchesFound={handleMatchesFound}

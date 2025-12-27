@@ -301,12 +301,13 @@ def match_encoded_path_to_repo(encoded_path: str) -> Optional[RepoInfo]:
     Returns:
         RepoInfo if a matching repo is found, None otherwise.
     """
-    decoded = decode_path(encoded_path)
     repos = load_repos()
 
+    # Compare encoded versions to handle paths with dashes correctly
+    # (decoding is lossy since dashes and slashes both become dashes when encoded)
     for repo in repos:
-        repo_path = str(Path(repo["local_path"]).resolve())
-        if repo_path == decoded:
+        repo_encoded = encode_path(repo["local_path"])
+        if repo_encoded == encoded_path:
             return repo
 
     return None

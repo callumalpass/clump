@@ -1,11 +1,11 @@
-import type { PR, SessionSummary, Process } from '../types';
-import type { PRSessionTypeConfig } from '../constants/prSessionTypes';
+import type { PR, SessionSummary, Process, CommandMetadata } from '../types';
 import { Markdown } from './Markdown';
 import { PRStartSessionButton } from './PRStartSessionButton';
 
 interface PRDetailProps {
   pr: PR;
-  onStartSession: (sessionType: PRSessionTypeConfig) => void;
+  prCommands: CommandMetadata[];
+  onStartSession: (command: CommandMetadata) => void;
   sessions?: SessionSummary[];
   processes?: Process[];
   onSelectSession?: (session: SessionSummary) => void;
@@ -13,6 +13,7 @@ interface PRDetailProps {
 
 export function PRDetail({
   pr,
+  prCommands,
   onStartSession,
   sessions = [],
   processes = [],
@@ -78,7 +79,8 @@ export function PRDetail({
         </div>
         <PRStartSessionButton
           pr={pr}
-          onStart={(_, type) => onStartSession(type)}
+          commands={prCommands}
+          onStart={(_, command) => onStartSession(command)}
           size="md"
           className="shrink-0"
         />

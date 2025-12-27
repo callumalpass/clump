@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { SESSION_TYPES, DEFAULT_SESSION_TYPE, type SessionTypeConfig } from '../constants/sessionTypes';
+import type { CommandMetadata } from '../types';
 
 // Minimal issue info needed for starting a session
 export interface SessionableIssue {
@@ -10,15 +10,23 @@ export interface SessionableIssue {
 
 interface StartSessionButtonProps {
   issue: SessionableIssue;
-  onStart: (issue: SessionableIssue, sessionType: SessionTypeConfig) => void;
+  commands: CommandMetadata[];
+  onStart: (issue: SessionableIssue, command: CommandMetadata) => void;
   size?: 'sm' | 'md';
   className?: string;
 }
 
-export function StartSessionButton({ issue, onStart, size = 'md', className = '' }: StartSessionButtonProps) {
+export function StartSessionButton({ issue, commands, onStart, size = 'md', className = '' }: StartSessionButtonProps) {
   const [showDropdown, setShowDropdown] = useState(false);
-  const [selectedType, setSelectedType] = useState<SessionTypeConfig>(DEFAULT_SESSION_TYPE);
+  const [selectedCommand, setSelectedCommand] = useState<CommandMetadata | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Set default selected command when commands load
+  useEffect(() => {
+    if (commands.length > 0 && !selectedCommand) {
+      setSelectedCommand(commands[0] ?? null);
+    }
+  }, [commands, selectedCommand]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -32,18 +40,33 @@ export function StartSessionButton({ issue, onStart, size = 'md', className = ''
   }, []);
 
   const handleMainClick = () => {
-    onStart(issue, selectedType);
+    if (selectedCommand) {
+      onStart(issue, selectedCommand);
+    }
   };
 
-  const handleTypeSelect = (type: SessionTypeConfig) => {
-    setSelectedType(type);
+  const handleCommandSelect = (command: CommandMetadata) => {
+    setSelectedCommand(command);
     setShowDropdown(false);
-    onStart(issue, type);
+    onStart(issue, command);
   };
 
   const sizeClasses = size === 'sm'
     ? 'text-xs py-1'
     : 'text-sm py-2';
+
+  if (commands.length === 0) {
+    return (
+      <div className={`inline-flex ${className}`}>
+        <button
+          disabled
+          className={`px-3 ${sizeClasses} bg-gray-600 text-gray-400 rounded-lg font-medium cursor-not-allowed`}
+        >
+          Loading...
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className={`relative inline-flex ${className}`} ref={dropdownRef}>
@@ -52,7 +75,7 @@ export function StartSessionButton({ issue, onStart, size = 'md', className = ''
         onClick={handleMainClick}
         className={`px-3 ${sizeClasses} bg-blue-600 hover:bg-blue-700 text-white rounded-l-lg font-medium border-r border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900 focus:z-10`}
       >
-        {selectedType.shortName}
+        {selectedCommand?.shortName || 'Start'}
       </button>
 
       {/* Dropdown trigger */}
@@ -79,26 +102,26 @@ export function StartSessionButton({ issue, onStart, size = 'md', className = ''
             : 'opacity-0 scale-95 pointer-events-none'
         }`}
       >
-        {SESSION_TYPES.map((type) => (
+        {commands.map((command) => (
             <button
-              key={type.id}
+              key={command.id}
               onClick={(e) => {
                 e.stopPropagation();
-                handleTypeSelect(type);
+                handleCommandSelect(command);
               }}
               className={`w-full px-3 py-2 text-left hover:bg-gray-700 first:rounded-t-lg last:rounded-b-lg focus:outline-none focus:bg-gray-700 ${
-                selectedType.id === type.id ? 'bg-gray-700' : ''
+                selectedCommand?.id === command.id ? 'bg-gray-700' : ''
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-white">{type.name}</span>
-                {selectedType.id === type.id && (
+                <span className="text-sm font-medium text-white">{command.name}</span>
+                {selectedCommand?.id === command.id && (
                   <svg className="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
                 )}
               </div>
-              <p className="text-xs text-gray-400 mt-0.5">{type.description}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{command.description}</p>
             </button>
         ))}
       </div>

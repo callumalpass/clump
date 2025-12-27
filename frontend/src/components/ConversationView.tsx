@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import type { TranscriptMessage, ToolUse, ParsedTranscript } from '../types';
 import { Markdown } from './Markdown';
 import { Editor } from './Editor';
+import { SubsessionView } from './SubsessionView';
 
 // Highlight matching text in a string
 function HighlightedText({
@@ -61,6 +62,7 @@ function HighlightedText({
 
 interface ConversationViewProps {
   transcript: ParsedTranscript;
+  sessionId?: string;  // For loading subsessions
   searchQuery?: string;
   currentMatchIndex?: number;
   onMatchesFound?: (count: number) => void;
@@ -164,10 +166,498 @@ function SessionStats({ transcript }: { transcript: ParsedTranscript }) {
   );
 }
 
-function ToolUseDisplay({ tool }: { tool: ToolUse }) {
-  const [expanded, setExpanded] = useState(false);
+interface ToolDisplayProps {
+  tool: ToolUse;
+  parentSessionId?: string;
+}
 
-  // Truncate input display for brevity
+// Helper to get just the filename from a path
+function getFileName(filePath: string): string {
+  const parts = filePath.split('/');
+  return parts[parts.length - 1] || filePath;
+}
+
+// Helper to truncate long strings
+function truncate(str: string, maxLen: number): string {
+  if (str.length <= maxLen) return str;
+  return str.slice(0, maxLen) + '...';
+}
+
+// Count lines in a string
+function countLines(str: string): number {
+  return str.split('\n').length;
+}
+
+// ============ EDIT TOOL ============
+function EditToolDisplay({ tool }: ToolDisplayProps) {
+  const [expanded, setExpanded] = useState(false);
+  const input = tool.input as {
+    file_path?: string;
+    old_string?: string;
+    new_string?: string;
+    replace_all?: boolean;
+  };
+
+  const filePath = input.file_path || 'unknown';
+  const oldStr = input.old_string || '';
+  const newStr = input.new_string || '';
+  const fileName = getFileName(filePath);
+
+  const oldLines = countLines(oldStr);
+  const newLines = countLines(newStr);
+  const lineDiff = newLines - oldLines;
+
+  return (
+    <div className="mt-2 text-xs border border-emerald-800/50 rounded bg-gray-800 overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-gray-750 text-left transition-colors"
+      >
+        {/* Edit icon */}
+        <svg className="w-3.5 h-3.5 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        </svg>
+        <span className="text-emerald-400 font-medium">Edit</span>
+        <span className="text-gray-300 font-mono truncate flex-1" title={filePath}>
+          {fileName}
+        </span>
+        {/* Line change indicator */}
+        <span className={`text-xs px-1.5 py-0.5 rounded ${
+          lineDiff > 0 ? 'bg-green-900/50 text-green-400' :
+          lineDiff < 0 ? 'bg-red-900/50 text-red-400' :
+          'bg-gray-700 text-gray-400'
+        }`}>
+          {lineDiff > 0 ? `+${lineDiff}` : lineDiff < 0 ? lineDiff : '±0'} lines
+        </span>
+        {input.replace_all && (
+          <span className="text-xs px-1.5 py-0.5 rounded bg-amber-900/50 text-amber-400">
+            all
+          </span>
+        )}
+        <svg
+          className={`w-3 h-3 text-gray-400 transition-transform shrink-0 ${expanded ? 'rotate-180' : ''}`}
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-gray-700">
+          {/* File path */}
+          <div className="px-2 py-1 bg-gray-900/50 text-gray-500 font-mono text-[10px] truncate">
+            {filePath}
+          </div>
+
+          {/* Diff view */}
+          <div className="grid grid-cols-2 divide-x divide-gray-700">
+            {/* Old string */}
+            <div className="min-w-0">
+              <div className="px-2 py-1 bg-red-900/20 text-red-400 text-[10px] font-medium border-b border-gray-700">
+                - Removed
+              </div>
+              <pre className="p-2 text-xs text-red-300/80 whitespace-pre-wrap overflow-auto max-h-60 bg-red-950/10">
+                {oldStr || <span className="text-gray-600 italic">empty</span>}
+              </pre>
+            </div>
+
+            {/* New string */}
+            <div className="min-w-0">
+              <div className="px-2 py-1 bg-green-900/20 text-green-400 text-[10px] font-medium border-b border-gray-700">
+                + Added
+              </div>
+              <pre className="p-2 text-xs text-green-300/80 whitespace-pre-wrap overflow-auto max-h-60 bg-green-950/10">
+                {newStr || <span className="text-gray-600 italic">empty</span>}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============ READ TOOL ============
+function ReadToolDisplay({ tool }: ToolDisplayProps) {
+  const [expanded, setExpanded] = useState(false);
+  const input = tool.input as {
+    file_path?: string;
+    offset?: number;
+    limit?: number;
+  };
+
+  const filePath = input.file_path || 'unknown';
+  const fileName = getFileName(filePath);
+  const hasRange = input.offset !== undefined || input.limit !== undefined;
+
+  return (
+    <div className="mt-2 text-xs border border-blue-800/50 rounded bg-gray-800 overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-gray-750 text-left transition-colors"
+      >
+        {/* Read icon */}
+        <svg className="w-3.5 h-3.5 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <span className="text-blue-400 font-medium">Read</span>
+        <span className="text-gray-300 font-mono truncate flex-1" title={filePath}>
+          {fileName}
+        </span>
+        {hasRange && (
+          <span className="text-xs text-gray-500">
+            {input.offset !== undefined && `from L${input.offset}`}
+            {input.limit !== undefined && ` (${input.limit} lines)`}
+          </span>
+        )}
+        <svg
+          className={`w-3 h-3 text-gray-400 transition-transform shrink-0 ${expanded ? 'rotate-180' : ''}`}
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-gray-700 px-2 py-1.5 bg-gray-900/50">
+          <div className="font-mono text-gray-400 text-[10px] break-all">
+            {filePath}
+          </div>
+          {hasRange && (
+            <div className="mt-1 text-gray-500">
+              {input.offset !== undefined && <span>Offset: {input.offset}</span>}
+              {input.offset !== undefined && input.limit !== undefined && <span> | </span>}
+              {input.limit !== undefined && <span>Limit: {input.limit} lines</span>}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============ BASH TOOL ============
+function BashToolDisplay({ tool }: ToolDisplayProps) {
+  const [expanded, setExpanded] = useState(false);
+  const input = tool.input as {
+    command?: string;
+    description?: string;
+    timeout?: number;
+  };
+
+  const command = input.command || '';
+  const description = input.description;
+
+  // Truncate command for preview
+  const commandPreview = truncate(command.split('\n')[0] ?? '', 60);
+  const isMultiLine = command.includes('\n');
+
+  return (
+    <div className="mt-2 text-xs border border-amber-800/50 rounded bg-gray-800 overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-gray-750 text-left transition-colors"
+      >
+        {/* Terminal icon */}
+        <svg className="w-3.5 h-3.5 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+        <span className="text-amber-400 font-medium">Bash</span>
+        <code className="text-gray-300 font-mono truncate flex-1 bg-gray-900/50 px-1.5 py-0.5 rounded">
+          {commandPreview}
+        </code>
+        {isMultiLine && (
+          <span className="text-xs text-gray-500">
+            {countLines(command)} lines
+          </span>
+        )}
+        <svg
+          className={`w-3 h-3 text-gray-400 transition-transform shrink-0 ${expanded ? 'rotate-180' : ''}`}
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-gray-700">
+          {description && (
+            <div className="px-2 py-1 bg-gray-900/50 text-gray-400 text-[10px] border-b border-gray-700">
+              {description}
+            </div>
+          )}
+          <pre className="p-2 text-xs text-amber-200/80 whitespace-pre-wrap overflow-auto max-h-60 bg-gray-900/30 font-mono">
+            $ {command}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============ WRITE TOOL ============
+function WriteToolDisplay({ tool }: ToolDisplayProps) {
+  const [expanded, setExpanded] = useState(false);
+  const input = tool.input as {
+    file_path?: string;
+    content?: string;
+  };
+
+  const filePath = input.file_path || 'unknown';
+  const content = input.content || '';
+  const fileName = getFileName(filePath);
+  const lineCount = countLines(content);
+
+  return (
+    <div className="mt-2 text-xs border border-cyan-800/50 rounded bg-gray-800 overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-gray-750 text-left transition-colors"
+      >
+        {/* Write icon */}
+        <svg className="w-3.5 h-3.5 text-cyan-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <span className="text-cyan-400 font-medium">Write</span>
+        <span className="text-gray-300 font-mono truncate flex-1" title={filePath}>
+          {fileName}
+        </span>
+        <span className="text-xs text-gray-500">
+          {lineCount} lines
+        </span>
+        <svg
+          className={`w-3 h-3 text-gray-400 transition-transform shrink-0 ${expanded ? 'rotate-180' : ''}`}
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-gray-700">
+          <div className="px-2 py-1 bg-gray-900/50 text-gray-500 font-mono text-[10px] truncate">
+            {filePath}
+          </div>
+          <pre className="p-2 text-xs text-gray-300 whitespace-pre-wrap overflow-auto max-h-60 bg-gray-900/30">
+            {content}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============ GREP TOOL ============
+function GrepToolDisplay({ tool }: ToolDisplayProps) {
+  const [expanded, setExpanded] = useState(false);
+  const input = tool.input as {
+    pattern?: string;
+    path?: string;
+    glob?: string;
+    type?: string;
+    output_mode?: string;
+  };
+
+  const pattern = input.pattern || '';
+  const path = input.path;
+  const glob = input.glob;
+
+  return (
+    <div className="mt-2 text-xs border border-orange-800/50 rounded bg-gray-800 overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-gray-750 text-left transition-colors"
+      >
+        {/* Search icon */}
+        <svg className="w-3.5 h-3.5 text-orange-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <span className="text-orange-400 font-medium">Grep</span>
+        <code className="text-gray-300 font-mono truncate flex-1 bg-gray-900/50 px-1.5 py-0.5 rounded">
+          {truncate(pattern, 40)}
+        </code>
+        {path && (
+          <span className="text-gray-500 truncate max-w-[120px]" title={path}>
+            in {getFileName(path)}
+          </span>
+        )}
+        <svg
+          className={`w-3 h-3 text-gray-400 transition-transform shrink-0 ${expanded ? 'rotate-180' : ''}`}
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-gray-700 p-2 bg-gray-900/30 space-y-1">
+          <div>
+            <span className="text-gray-500">Pattern: </span>
+            <code className="text-orange-300 font-mono">{pattern}</code>
+          </div>
+          {path && (
+            <div>
+              <span className="text-gray-500">Path: </span>
+              <span className="text-gray-300 font-mono">{path}</span>
+            </div>
+          )}
+          {glob && (
+            <div>
+              <span className="text-gray-500">Glob: </span>
+              <span className="text-gray-300 font-mono">{glob}</span>
+            </div>
+          )}
+          {input.type && (
+            <div>
+              <span className="text-gray-500">Type: </span>
+              <span className="text-gray-300">{input.type}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============ GLOB TOOL ============
+function GlobToolDisplay({ tool }: ToolDisplayProps) {
+  const [expanded, setExpanded] = useState(false);
+  const input = tool.input as {
+    pattern?: string;
+    path?: string;
+  };
+
+  const pattern = input.pattern || '';
+  const path = input.path;
+
+  return (
+    <div className="mt-2 text-xs border border-violet-800/50 rounded bg-gray-800 overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-gray-750 text-left transition-colors"
+      >
+        {/* Folder icon */}
+        <svg className="w-3.5 h-3.5 text-violet-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+        </svg>
+        <span className="text-violet-400 font-medium">Glob</span>
+        <code className="text-gray-300 font-mono truncate flex-1 bg-gray-900/50 px-1.5 py-0.5 rounded">
+          {pattern}
+        </code>
+        <svg
+          className={`w-3 h-3 text-gray-400 transition-transform shrink-0 ${expanded ? 'rotate-180' : ''}`}
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {expanded && path && (
+        <div className="border-t border-gray-700 px-2 py-1.5 bg-gray-900/30">
+          <span className="text-gray-500">In: </span>
+          <span className="text-gray-300 font-mono">{path}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============ TASK (AGENT) TOOL ============
+function TaskToolDisplay({ tool, parentSessionId }: ToolDisplayProps) {
+  const [expanded, setExpanded] = useState(false);
+  const [subsessionExpanded, setSubsessionExpanded] = useState(false);
+
+  const input = tool.input as {
+    prompt?: string;
+    description?: string;
+    subagent_type?: string;
+    model?: string;
+  };
+
+  const hasSpawnedAgent = !!tool.spawned_agent_id;
+  const agentType = input.subagent_type || 'general';
+  const description = input.description || '';
+  const prompt = input.prompt || '';
+
+  return (
+    <div className="mt-2 text-xs border border-purple-800/50 rounded bg-gray-800 overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-gray-750 text-left transition-colors"
+      >
+        {/* Agent icon */}
+        <svg className="w-3.5 h-3.5 text-purple-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+        <span className="text-purple-400 font-medium">Task</span>
+        <span className="px-1.5 py-0.5 bg-purple-900/50 text-purple-300 rounded text-[10px]">
+          {agentType}
+        </span>
+        <span className="text-gray-400 truncate flex-1">
+          {description || truncate(prompt, 40)}
+        </span>
+        {input.model && (
+          <span className="text-xs text-gray-500">{input.model}</span>
+        )}
+        <svg
+          className={`w-3 h-3 text-gray-400 transition-transform shrink-0 ${expanded ? 'rotate-180' : ''}`}
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-gray-700">
+          {description && (
+            <div className="px-2 py-1 bg-gray-900/50 text-gray-400 text-[10px] border-b border-gray-700">
+              {description}
+            </div>
+          )}
+          <pre className="p-2 text-xs text-gray-300 whitespace-pre-wrap overflow-auto max-h-40 bg-gray-900/30">
+            {prompt}
+          </pre>
+        </div>
+      )}
+
+      {/* Subsession expansion */}
+      {hasSpawnedAgent && parentSessionId && (
+        <div className="border-t border-gray-700">
+          <button
+            onClick={() => setSubsessionExpanded(!subsessionExpanded)}
+            className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-purple-900/20 text-left transition-colors text-purple-400"
+          >
+            <svg
+              className={`w-3 h-3 transition-transform ${subsessionExpanded ? 'rotate-90' : ''}`}
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            <span>{subsessionExpanded ? 'Hide' : 'View'} agent session</span>
+            <span className="text-gray-500 font-mono text-[10px]">
+              agent-{tool.spawned_agent_id}
+            </span>
+          </button>
+
+          {subsessionExpanded && (
+            <SubsessionView
+              agentId={tool.spawned_agent_id!}
+              parentSessionId={parentSessionId}
+              depth={1}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============ GENERIC TOOL DISPLAY ============
+function GenericToolDisplay({ tool, parentSessionId }: ToolDisplayProps) {
+  const [expanded, setExpanded] = useState(false);
+  const [subsessionExpanded, setSubsessionExpanded] = useState(false);
+
+  const hasSpawnedAgent = !!tool.spawned_agent_id;
   const inputPreview = JSON.stringify(tool.input).slice(0, 100);
   const hasMore = JSON.stringify(tool.input).length > 100;
 
@@ -181,11 +671,14 @@ function ToolUseDisplay({ tool }: { tool: ToolUse }) {
         <span className="text-gray-500 truncate flex-1">
           {hasMore ? inputPreview + '...' : inputPreview}
         </span>
+        {hasSpawnedAgent && (
+          <span className="px-1.5 py-0.5 bg-purple-900/50 text-purple-300 rounded text-[10px]">
+            agent
+          </span>
+        )}
         <svg
           className={`w-3 h-3 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
@@ -197,8 +690,64 @@ function ToolUseDisplay({ tool }: { tool: ToolUse }) {
           </pre>
         </div>
       )}
+
+      {hasSpawnedAgent && parentSessionId && (
+        <div className="border-t border-gray-600">
+          <button
+            onClick={() => setSubsessionExpanded(!subsessionExpanded)}
+            className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-purple-900/20 text-left transition-colors text-purple-400"
+          >
+            <svg
+              className={`w-3 h-3 transition-transform ${subsessionExpanded ? 'rotate-90' : ''}`}
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            <span>{subsessionExpanded ? 'Hide' : 'View'} agent session</span>
+            <span className="text-gray-500 font-mono text-[10px]">
+              agent-{tool.spawned_agent_id}
+            </span>
+          </button>
+
+          {subsessionExpanded && (
+            <SubsessionView
+              agentId={tool.spawned_agent_id!}
+              parentSessionId={parentSessionId}
+              depth={1}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
+}
+
+// ============ MAIN TOOL DISPLAY ROUTER ============
+interface ToolUseDisplayProps {
+  tool: ToolUse;
+  parentSessionId?: string;
+}
+
+function ToolUseDisplay({ tool, parentSessionId }: ToolUseDisplayProps) {
+  // Route to specialized displays based on tool name
+  switch (tool.name) {
+    case 'Edit':
+      return <EditToolDisplay tool={tool} parentSessionId={parentSessionId} />;
+    case 'Read':
+      return <ReadToolDisplay tool={tool} parentSessionId={parentSessionId} />;
+    case 'Bash':
+      return <BashToolDisplay tool={tool} parentSessionId={parentSessionId} />;
+    case 'Write':
+      return <WriteToolDisplay tool={tool} parentSessionId={parentSessionId} />;
+    case 'Grep':
+      return <GrepToolDisplay tool={tool} parentSessionId={parentSessionId} />;
+    case 'Glob':
+      return <GlobToolDisplay tool={tool} parentSessionId={parentSessionId} />;
+    case 'Task':
+      return <TaskToolDisplay tool={tool} parentSessionId={parentSessionId} />;
+    default:
+      return <GenericToolDisplay tool={tool} parentSessionId={parentSessionId} />;
+  }
 }
 
 function ThinkingDisplay({ thinking }: { thinking: string }) {
@@ -240,12 +789,13 @@ function ThinkingDisplay({ thinking }: { thinking: string }) {
 
 interface MessageBubbleProps {
   message: TranscriptMessage;
+  parentSessionId?: string;  // For loading subsessions
   searchQuery?: string;
   matchIndices?: number[];
   currentMatchIndex?: number;
 }
 
-function MessageBubble({ message, searchQuery = '', matchIndices = [], currentMatchIndex }: MessageBubbleProps) {
+function MessageBubble({ message, parentSessionId, searchQuery = '', matchIndices = [], currentMatchIndex }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const hasMatch = matchIndices.length > 0;
   const hasCurrentMatch = currentMatchIndex !== undefined && matchIndices.includes(currentMatchIndex);
@@ -317,7 +867,7 @@ function MessageBubble({ message, searchQuery = '', matchIndices = [], currentMa
           {message.tool_uses.length > 0 && (
             <div className="mt-2 space-y-1">
               {message.tool_uses.map((tool) => (
-                <ToolUseDisplay key={tool.id} tool={tool} />
+                <ToolUseDisplay key={tool.id} tool={tool} parentSessionId={parentSessionId} />
               ))}
             </div>
           )}
@@ -399,6 +949,7 @@ function buildMatchMap(messages: TranscriptMessage[], query: string): Map<number
 
 export function ConversationView({
   transcript,
+  sessionId,
   searchQuery = '',
   currentMatchIndex,
   onMatchesFound,
@@ -483,6 +1034,7 @@ export function ConversationView({
           <MessageBubble
             key={message.uuid || index}
             message={message}
+            parentSessionId={sessionId}
             searchQuery={searchQuery}
             matchIndices={matchMap.get(index) || []}
             currentMatchIndex={currentMatchIndex}

@@ -123,25 +123,36 @@ class ProcessManager:
             claude_session_id=claude_session_id,
         )
 
+        # Validate working directory exists before forking
+        if not os.path.isdir(working_dir):
+            raise ValueError(f"Working directory does not exist: {working_dir}")
+
         # Create pseudo-terminal
         pid, fd = pty.fork()
 
         if pid == 0:
-            # Child process
-            os.chdir(working_dir)
-            # Set terminal environment for Claude Code compatibility
-            os.environ["TERM"] = "xterm-256color"
-            os.environ["COLORTERM"] = "truecolor"
-            os.environ["LANG"] = os.environ.get("LANG", "en_US.UTF-8")
-            os.environ["LC_ALL"] = os.environ.get("LC_ALL", "en_US.UTF-8")
-            # Force color and interactive mode detection
-            os.environ["FORCE_COLOR"] = "1"
-            os.environ["CI"] = ""  # Unset CI to prevent non-interactive detection
-            os.environ["TERM_PROGRAM"] = "xterm"
-            # Ensure proper columns/lines are set
-            os.environ["COLUMNS"] = "120"
-            os.environ["LINES"] = "30"
-            os.execvp("claude", args)
+            # Child process - wrap in try/except to capture errors
+            try:
+                os.chdir(working_dir)
+                # Set terminal environment for Claude Code compatibility
+                os.environ["TERM"] = "xterm-256color"
+                os.environ["COLORTERM"] = "truecolor"
+                os.environ["LANG"] = os.environ.get("LANG", "en_US.UTF-8")
+                os.environ["LC_ALL"] = os.environ.get("LC_ALL", "en_US.UTF-8")
+                # Force color and interactive mode detection
+                os.environ["FORCE_COLOR"] = "1"
+                os.environ["CI"] = ""  # Unset CI to prevent non-interactive detection
+                os.environ["TERM_PROGRAM"] = "xterm"
+                # Ensure proper columns/lines are set
+                os.environ["COLUMNS"] = "120"
+                os.environ["LINES"] = "30"
+                os.execvp("claude", args)
+            except Exception as e:
+                # Write error to stderr so it can be captured
+                import sys
+                sys.stderr.write(f"Failed to start claude: {e}\n")
+                sys.stderr.flush()
+                os._exit(1)
         else:
             # Parent process
             # Set non-blocking

@@ -96,6 +96,7 @@ class ToolUseResponse(BaseModel):
     id: str
     name: str
     input: dict[str, Any]
+    spawned_agent_id: Optional[str] = None  # Agent ID if this tool spawned a subsession
 
 
 class TokenUsageResponse(BaseModel):
@@ -149,3 +150,30 @@ class SessionDetailResponse(BaseModel):
 
     # Status
     is_active: bool = False
+
+
+# ==========================================
+# Subsession Detail
+# ==========================================
+
+class SubsessionDetailResponse(BaseModel):
+    """Full subsession (spawned agent) transcript detail."""
+    agent_id: str  # The 7-char hex ID
+    parent_session_id: str  # The parent session UUID
+    encoded_path: str  # Directory name
+    repo_path: str  # Decoded working directory
+
+    # Transcript data
+    messages: list[TranscriptMessageResponse]
+    summary: Optional[str] = None
+    model: Optional[str] = None
+
+    # Token totals
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    total_cache_read_tokens: int = 0
+    total_cache_creation_tokens: int = 0
+
+    # Timestamps
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None

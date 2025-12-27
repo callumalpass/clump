@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import type {
   Repo, Issue, IssueDetail, PR, Process,
   SessionSummary, SessionDetail, SessionListResponse, EntityLink,
-  ClaudeCodeSettings, ProcessCreateOptions, Tag, IssueTagsMap, GitHubLabel
+  ClaudeCodeSettings, ProcessCreateOptions, Tag, IssueTagsMap, GitHubLabel,
+  CommandsResponse, SubsessionDetail
 } from '../types';
 
 export interface EntityInput {
@@ -51,10 +52,10 @@ export function useRepos() {
     refresh();
   }, [refresh]);
 
-  const addRepo = async (owner: string, name: string, localPath: string) => {
+  const addRepo = async (localPath: string) => {
     const repo = await fetchJson<Repo>(`${API_BASE}/repos`, {
       method: 'POST',
-      body: JSON.stringify({ owner, name, local_path: localPath }),
+      body: JSON.stringify({ local_path: localPath }),
     });
     setRepos((prev) => [...prev, repo]);
     return repo;
@@ -342,6 +343,16 @@ export function useSessions(filters: SessionFilters = {}) {
 // Fetch full session detail with transcript
 export async function fetchSessionDetail(sessionId: string): Promise<SessionDetail> {
   return fetchJson<SessionDetail>(`${API_BASE}/sessions/${sessionId}`);
+}
+
+// Fetch subsession (spawned agent) detail
+export async function fetchSubsession(
+  sessionId: string,
+  agentId: string
+): Promise<SubsessionDetail> {
+  return fetchJson<SubsessionDetail>(
+    `${API_BASE}/sessions/${sessionId}/subsession/${agentId}`
+  );
 }
 
 // Claude Code Settings
@@ -636,4 +647,42 @@ export function useAssignees(repoId: number | null) {
   }, [refresh]);
 
   return { assignees, loading, error, refresh };
+}
+
+// Commands (slash commands from .claude/commands/)
+export function useCommands() {
+  const [commands, setCommands] = useState<CommandsResponse>({ issue: [], pr: [] });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await fetchJson<CommandsResponse>(`${API_BASE}/commands`);
+      setCommands(data);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to fetch commands');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return { commands, loading, error, refresh };
+}
+
+// Build prompt from command template
+export function buildPromptFromTemplate(
+  template: string,
+  context: Record<string, string | number | undefined>
+): string {
+  let result = template;
+  for (const [key, value] of Object.entries(context)) {
+    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), String(value ?? ''));
+  }
+  return result;
 }

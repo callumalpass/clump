@@ -19,6 +19,7 @@ from app.schemas import (
     TranscriptMessageResponse,
     ToolUseResponse,
     TokenUsageResponse,
+    SubsessionDetailResponse,
 )
 from app.storage import (
     discover_sessions,
@@ -178,7 +179,12 @@ def _parsed_to_detail(
     messages = []
     for msg in parsed.messages:
         tool_uses = [
-            ToolUseResponse(id=t.id, name=t.name, input=t.input)
+            ToolUseResponse(
+                id=t.id,
+                name=t.name,
+                input=t.input,
+                spawned_agent_id=t.spawned_agent_id,
+            )
             for t in msg.tool_uses
         ]
         usage = None
@@ -344,6 +350,87 @@ async def get_session(session_id: str):
 
 
 # ==========================================
+# Get Subsession Detail
+# ==========================================
+
+@router.get("/sessions/{session_id}/subsession/{agent_id}", response_model=SubsessionDetailResponse)
+async def get_subsession(session_id: str, agent_id: str):
+    """
+    Get subsession (spawned agent) transcript detail.
+
+    The agent_id is the 7-char hex ID from the spawned agent.
+    The session_id is the parent session UUID (used to locate the project directory).
+    """
+    # Find the parent session to get the encoded_path
+    sessions = discover_sessions(include_subsessions=True)
+    parent_session = None
+    for s in sessions:
+        if s.session_id == session_id:
+            parent_session = s
+            break
+
+    if not parent_session:
+        raise HTTPException(status_code=404, detail="Parent session not found")
+
+    # The subsession file is in the same directory as the parent
+    subsession_id = f"agent-{agent_id}"
+    repo_path = decode_path(parent_session.encoded_path)
+
+    # Parse the subsession transcript
+    parsed = parse_transcript(subsession_id, repo_path)
+
+    if not parsed:
+        raise HTTPException(status_code=404, detail="Subsession not found")
+
+    # Convert messages (same logic as main sessions)
+    messages = []
+    for msg in parsed.messages:
+        tool_uses = [
+            ToolUseResponse(
+                id=t.id,
+                name=t.name,
+                input=t.input,
+                spawned_agent_id=t.spawned_agent_id,
+            )
+            for t in msg.tool_uses
+        ]
+        usage = None
+        if msg.usage:
+            usage = TokenUsageResponse(
+                input_tokens=msg.usage.input_tokens,
+                output_tokens=msg.usage.output_tokens,
+                cache_read_tokens=msg.usage.cache_read_tokens,
+                cache_creation_tokens=msg.usage.cache_creation_tokens,
+            )
+        messages.append(TranscriptMessageResponse(
+            uuid=msg.uuid,
+            role=msg.role,
+            content=msg.content,
+            timestamp=msg.timestamp,
+            thinking=msg.thinking,
+            tool_uses=tool_uses,
+            model=msg.model,
+            usage=usage,
+        ))
+
+    return SubsessionDetailResponse(
+        agent_id=agent_id,
+        parent_session_id=session_id,
+        encoded_path=parent_session.encoded_path,
+        repo_path=repo_path,
+        messages=messages,
+        summary=parsed.summary,
+        model=parsed.model,
+        total_input_tokens=parsed.total_input_tokens,
+        total_output_tokens=parsed.total_output_tokens,
+        total_cache_read_tokens=parsed.total_cache_read_tokens,
+        total_cache_creation_tokens=parsed.total_cache_creation_tokens,
+        start_time=parsed.start_time,
+        end_time=parsed.end_time,
+    )
+
+
+# ==========================================
 # Update Session Metadata
 # ==========================================
 
@@ -495,15 +582,27 @@ async def continue_session(session_id: str):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    repo_path = decode_path(session.encoded_path)
+    # Try to get repo path from matched repo first (more reliable)
+    # Fall back to decoded path if no match
+    matched_repo = match_encoded_path_to_repo(session.encoded_path)
+    if matched_repo:
+        repo_path = matched_repo["local_path"]
+    else:
+        repo_path = decode_path(session.encoded_path)
 
     # Create new PTY process that resumes the Claude conversation
-    process = await process_manager.create_process(
-        working_dir=repo_path,
-        initial_prompt=None,  # No new prompt, just resuming
-        session_id=None,  # No DB session ID in new model
-        resume_session=session_id,
-    )
+    try:
+        process = await process_manager.create_process(
+            working_dir=repo_path,
+            initial_prompt=None,  # No new prompt, just resuming
+            session_id=None,  # No DB session ID in new model
+            resume_session=session_id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot continue session: {e}"
+        )
 
     return {
         "id": process.id,

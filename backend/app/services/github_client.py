@@ -132,10 +132,15 @@ class GitHubClient:
         # Get total count first (triggers the API call)
         total_count = results.totalCount
 
-        # Get just the page we need
+        # Get just the page we need by iterating safely
         start = (page - 1) * per_page
+        end = start + per_page
         issues = []
-        for issue in results[start:start + per_page]:
+        for i, issue in enumerate(results):
+            if i < start:
+                continue
+            if i >= end:
+                break
             issues.append(self._issue_to_data(issue))
 
         return issues, total_count
@@ -184,7 +189,9 @@ class GitHubClient:
         repo = self.get_repo(owner, name)
         prs = []
 
-        for pr in repo.get_pulls(state=state)[:limit]:
+        for pr in repo.get_pulls(state=state):
+            if len(prs) >= limit:
+                break
             prs.append(self._pr_to_data(pr))
 
         return prs
@@ -261,7 +268,12 @@ class GitHubClient:
     def get_assignable_users(self, owner: str, name: str, limit: int = 100) -> list[str]:
         """Get list of users who can be assigned to issues."""
         repo = self.get_repo(owner, name)
-        return [u.login for u in repo.get_assignees()[:limit]]
+        users = []
+        for u in repo.get_assignees():
+            if len(users) >= limit:
+                break
+            users.append(u.login)
+        return users
 
     def get_available_labels(self, owner: str, name: str) -> list[dict]:
         """Get list of available labels for the repo."""

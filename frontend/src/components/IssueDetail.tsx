@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { IssueDetail as IssueDetailType, SessionSummary, Tag, Process } from '../types';
-import type { SessionTypeConfig } from '../constants/sessionTypes';
+import type { IssueDetail as IssueDetailType, SessionSummary, Tag, Process, CommandMetadata } from '../types';
 import { fetchIssue, closeIssue, reopenIssue } from '../hooks/useApi';
 import { Markdown } from './Markdown';
 import { StartSessionButton } from './StartSessionButton';
@@ -10,7 +9,8 @@ import { Editor } from './Editor';
 interface IssueDetailProps {
   repoId: number;
   issueNumber: number;
-  onStartSession: (sessionType: SessionTypeConfig) => void;
+  issueCommands: CommandMetadata[];
+  onStartSession: (command: CommandMetadata) => void;
   sessions?: SessionSummary[];
   processes?: Process[];
   expandedSessionId?: string | null;
@@ -27,6 +27,7 @@ interface IssueDetailProps {
 export function IssueDetail({
   repoId,
   issueNumber,
+  issueCommands,
   onStartSession,
   sessions = [],
   processes = [],
@@ -332,7 +333,8 @@ export function IssueDetail({
         </div>
         <StartSessionButton
           issue={{ number: issue.number, title: issue.title, body: issue.body || '' }}
-          onStart={(_, type) => onStartSession(type)}
+          commands={issueCommands}
+          onStart={(_, command) => onStartSession(command)}
           size="md"
           className="shrink-0"
         />

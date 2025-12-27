@@ -1,6 +1,5 @@
-import type { Issue, SessionSummary, Tag, IssueTagsMap, Process } from '../types';
+import type { Issue, SessionSummary, Tag, IssueTagsMap, Process, CommandMetadata } from '../types';
 import type { IssueFilters as IssueFiltersType } from '../hooks/useApi';
-import type { SessionTypeConfig } from '../constants/sessionTypes';
 import { IssueFilters } from './IssueFilters';
 import { StartSessionButton } from './StartSessionButton';
 import { getContrastColor } from '../utils/colors';
@@ -9,7 +8,8 @@ interface IssueListProps {
   issues: Issue[];
   selectedIssue: number | null;
   onSelectIssue: (issueNumber: number) => void;
-  onStartSession: (issue: Issue, sessionType: SessionTypeConfig) => void;
+  issueCommands: CommandMetadata[];
+  onStartSession: (issue: Issue, command: CommandMetadata) => void;
   loading: boolean;
   page: number;
   totalPages: number;
@@ -30,6 +30,7 @@ export function IssueList({
   issues,
   selectedIssue,
   onSelectIssue,
+  issueCommands,
   onStartSession,
   loading,
   page,
@@ -216,8 +217,9 @@ export function IssueList({
                 </div>
                 <StartSessionButton
                   issue={issue}
-                  onStart={(_, type) => {
-                    onStartSession(issue, type);
+                  commands={issueCommands}
+                  onStart={(_, command) => {
+                    onStartSession(issue, command);
                   }}
                   size="sm"
                   className="shrink-0"

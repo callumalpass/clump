@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
-import { useRepos, useIssues, usePRs, useProcesses, useSessions, useTags, useIssueTags } from './hooks/useApi';
+import { useRepos, useIssues, usePRs, useProcesses, useSessions, useTags, useIssueTags, useCommands, buildPromptFromTemplate } from './hooks/useApi';
 import type { IssueFilters, SessionFilters } from './hooks/useApi';
 import { RepoSelector } from './components/RepoSelector';
 import { IssueList } from './components/IssueList';
@@ -14,12 +14,8 @@ import { SessionTabs } from './components/SessionTabs';
 import { SessionList } from './components/SessionList';
 import { Settings } from './components/Settings';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
-import type { Repo, Issue, PR, SessionSummary } from './types';
+import type { Repo, Issue, PR, SessionSummary, CommandMetadata } from './types';
 import type { SessionFilter } from './components/SessionList';
-import type { SessionTypeConfig } from './constants/sessionTypes';
-import { DEFAULT_SESSION_TYPE } from './constants/sessionTypes';
-import type { PRSessionTypeConfig } from './constants/prSessionTypes';
-import { DEFAULT_PR_SESSION_TYPE } from './constants/prSessionTypes';
 
 function ResizeHandle() {
   return (
@@ -95,6 +91,7 @@ export default function App() {
   const { tags, createTag } = useTags(selectedRepo?.id ?? null);
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
   const { prs, loading: prsLoading } = usePRs(selectedRepo?.id ?? null, prStateFilter);
+  const { commands } = useCommands();
 
   // Clear all UI state when repo changes
   useEffect(() => {
@@ -141,10 +138,10 @@ export default function App() {
   }, [refreshSessions]);
 
   const handleStartIssueSession = useCallback(
-    async (issue: Issue, sessionType: SessionTypeConfig = DEFAULT_SESSION_TYPE) => {
+    async (issue: Issue, command: CommandMetadata) => {
       if (!selectedRepo) return;
 
-      const prompt = sessionType.buildPrompt({
+      const prompt = buildPromptFromTemplate(command.template, {
         number: issue.number,
         title: issue.title,
         body: issue.body,
@@ -155,7 +152,7 @@ export default function App() {
         prompt,
         'issue',
         [{ kind: 'issue', number: issue.number }],
-        `${sessionType.name}: Issue #${issue.number}`
+        `${command.name}: Issue #${issue.number}`
       );
 
       // Store pending context so side-by-side view shows immediately
@@ -180,10 +177,10 @@ export default function App() {
   );
 
   const handleStartPRSession = useCallback(
-    async (pr: PR, sessionType: PRSessionTypeConfig = DEFAULT_PR_SESSION_TYPE) => {
+    async (pr: PR, command: CommandMetadata) => {
       if (!selectedRepo) return;
 
-      const prompt = sessionType.buildPrompt({
+      const prompt = buildPromptFromTemplate(command.template, {
         number: pr.number,
         title: pr.title,
         body: pr.body,
@@ -196,7 +193,7 @@ export default function App() {
         prompt,
         'pr',
         [{ kind: 'pr', number: pr.number }],
-        `${sessionType.name}: PR #${pr.number}`
+        `${command.name}: PR #${pr.number}`
       );
 
       // Store pending context so side-by-side view shows immediately
@@ -620,6 +617,7 @@ export default function App() {
                 issues={issues}
                 selectedIssue={selectedIssue}
                 onSelectIssue={handleSelectIssue}
+                issueCommands={commands.issue}
                 onStartSession={handleStartIssueSession}
                 loading={issuesLoading}
                 page={issuesPage}
@@ -658,6 +656,7 @@ export default function App() {
                 prs={prs}
                 selectedPR={selectedPR}
                 onSelectPR={handleSelectPR}
+                prCommands={commands.pr}
                 onStartSession={handleStartPRSession}
                 loading={prsLoading}
                 stateFilter={prStateFilter}
@@ -728,9 +727,10 @@ export default function App() {
                           <IssueDetail
                             repoId={selectedRepo.id}
                             issueNumber={activeIssueNumber}
-                            onStartSession={(sessionType) => {
+                            issueCommands={commands.issue}
+                            onStartSession={(command) => {
                               const issue = issues.find((i) => i.number === activeIssueNumber);
-                              if (issue) handleStartIssueSession(issue, sessionType);
+                              if (issue) handleStartIssueSession(issue, command);
                             }}
                             sessions={sessions}
                             processes={processes}
@@ -748,7 +748,8 @@ export default function App() {
                         {showPRSideBySide && activePR && (
                           <PRDetail
                             pr={activePR}
-                            onStartSession={(sessionType) => handleStartPRSession(activePR, sessionType)}
+                            prCommands={commands.pr}
+                            onStartSession={(command) => handleStartPRSession(activePR, command)}
                             sessions={sessions}
                             processes={processes}
                             onSelectSession={handleSelectSession}
@@ -838,9 +839,10 @@ export default function App() {
                 <IssueDetail
                   repoId={selectedRepo.id}
                   issueNumber={selectedIssue}
-                  onStartSession={(sessionType) => {
+                  issueCommands={commands.issue}
+                  onStartSession={(command) => {
                     const issue = issues.find((i) => i.number === selectedIssue);
-                    if (issue) handleStartIssueSession(issue, sessionType);
+                    if (issue) handleStartIssueSession(issue, command);
                   }}
                   sessions={sessions}
                   processes={processes}
@@ -862,7 +864,8 @@ export default function App() {
               <div className="flex-1 border-r border-gray-700 overflow-auto">
                 <PRDetail
                   pr={selectedPRData}
-                  onStartSession={(sessionType) => handleStartPRSession(selectedPRData, sessionType)}
+                  prCommands={commands.pr}
+                  onStartSession={(command) => handleStartPRSession(selectedPRData, command)}
                   sessions={sessions}
                   processes={processes}
                   onSelectSession={handleSelectSession}

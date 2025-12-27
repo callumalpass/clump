@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import close_all_engines
 from app.storage import get_clump_dir
-from app.routers import github, processes, sessions, settings, headless, tags
+from app.routers import github, processes, sessions, settings, headless, tags, commands
 
 
 @asynccontextmanager
@@ -54,6 +54,7 @@ app.include_router(sessions.router, prefix="/api", tags=["sessions"])
 app.include_router(settings.router, prefix="/api", tags=["settings"])
 app.include_router(headless.router, prefix="/api", tags=["headless"])
 app.include_router(tags.router, prefix="/api", tags=["tags"])
+app.include_router(commands.router, prefix="/api", tags=["commands"])
 
 
 @app.get("/api/health")

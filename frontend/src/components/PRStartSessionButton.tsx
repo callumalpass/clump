@@ -1,18 +1,25 @@
 import { useState, useRef, useEffect } from 'react';
-import { PR_SESSION_TYPES, DEFAULT_PR_SESSION_TYPE, type PRSessionTypeConfig } from '../constants/prSessionTypes';
-import type { PR } from '../types';
+import type { PR, CommandMetadata } from '../types';
 
 interface PRStartSessionButtonProps {
   pr: PR;
-  onStart: (pr: PR, sessionType: PRSessionTypeConfig) => void;
+  commands: CommandMetadata[];
+  onStart: (pr: PR, command: CommandMetadata) => void;
   size?: 'sm' | 'md';
   className?: string;
 }
 
-export function PRStartSessionButton({ pr, onStart, size = 'md', className = '' }: PRStartSessionButtonProps) {
+export function PRStartSessionButton({ pr, commands, onStart, size = 'md', className = '' }: PRStartSessionButtonProps) {
   const [showDropdown, setShowDropdown] = useState(false);
-  const [selectedType, setSelectedType] = useState<PRSessionTypeConfig>(DEFAULT_PR_SESSION_TYPE);
+  const [selectedCommand, setSelectedCommand] = useState<CommandMetadata | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Set default selected command when commands load
+  useEffect(() => {
+    if (commands.length > 0 && !selectedCommand) {
+      setSelectedCommand(commands[0] ?? null);
+    }
+  }, [commands, selectedCommand]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -26,18 +33,33 @@ export function PRStartSessionButton({ pr, onStart, size = 'md', className = '' 
   }, []);
 
   const handleMainClick = () => {
-    onStart(pr, selectedType);
+    if (selectedCommand) {
+      onStart(pr, selectedCommand);
+    }
   };
 
-  const handleTypeSelect = (type: PRSessionTypeConfig) => {
-    setSelectedType(type);
+  const handleCommandSelect = (command: CommandMetadata) => {
+    setSelectedCommand(command);
     setShowDropdown(false);
-    onStart(pr, type);
+    onStart(pr, command);
   };
 
   const sizeClasses = size === 'sm'
     ? 'text-xs py-1'
     : 'text-sm py-2';
+
+  if (commands.length === 0) {
+    return (
+      <div className={`inline-flex ${className}`}>
+        <button
+          disabled
+          className={`px-3 ${sizeClasses} bg-gray-600 text-gray-400 rounded-lg font-medium cursor-not-allowed`}
+        >
+          Loading...
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className={`relative inline-flex ${className}`} ref={dropdownRef}>
@@ -49,7 +71,7 @@ export function PRStartSessionButton({ pr, onStart, size = 'md', className = '' 
         }}
         className={`px-3 ${sizeClasses} bg-purple-600 hover:bg-purple-700 text-white rounded-l-lg font-medium border-r border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-1 focus:ring-offset-gray-900 focus:z-10`}
       >
-        {selectedType.shortName}
+        {selectedCommand?.shortName || 'Start'}
       </button>
 
       {/* Dropdown trigger */}
@@ -76,26 +98,26 @@ export function PRStartSessionButton({ pr, onStart, size = 'md', className = '' 
             : 'opacity-0 scale-95 pointer-events-none'
         }`}
       >
-        {PR_SESSION_TYPES.map((type) => (
+        {commands.map((command) => (
             <button
-              key={type.id}
+              key={command.id}
               onClick={(e) => {
                 e.stopPropagation();
-                handleTypeSelect(type);
+                handleCommandSelect(command);
               }}
               className={`w-full px-3 py-2 text-left hover:bg-gray-700 first:rounded-t-lg last:rounded-b-lg focus:outline-none focus:bg-gray-700 ${
-                selectedType.id === type.id ? 'bg-gray-700' : ''
+                selectedCommand?.id === command.id ? 'bg-gray-700' : ''
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-white">{type.name}</span>
-                {selectedType.id === type.id && (
+                <span className="text-sm font-medium text-white">{command.name}</span>
+                {selectedCommand?.id === command.id && (
                   <svg className="w-4 h-4 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
                 )}
               </div>
-              <p className="text-xs text-gray-400 mt-0.5">{type.description}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{command.description}</p>
             </button>
         ))}
       </div>

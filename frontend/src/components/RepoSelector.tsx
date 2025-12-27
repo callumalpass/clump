@@ -5,7 +5,7 @@ interface RepoSelectorProps {
   repos: Repo[];
   selectedRepo: Repo | null;
   onSelectRepo: (repo: Repo) => void;
-  onAddRepo: (owner: string, name: string, localPath: string) => Promise<Repo>;
+  onAddRepo: (localPath: string) => Promise<Repo>;
 }
 
 export function RepoSelector({
@@ -15,23 +15,23 @@ export function RepoSelector({
   onAddRepo,
 }: RepoSelectorProps) {
   const [isAdding, setIsAdding] = useState(false);
-  const [owner, setOwner] = useState('');
-  const [name, setName] = useState('');
   const [localPath, setLocalPath] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
 
     try {
-      await onAddRepo(owner, name, localPath);
-      setOwner('');
-      setName('');
+      await onAddRepo(localPath);
       setLocalPath('');
       setIsAdding(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add repo');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -65,34 +65,23 @@ export function RepoSelector({
         <form onSubmit={handleSubmit} className="mt-2 space-y-2">
           <input
             type="text"
-            placeholder="Owner (e.g., anthropics)"
-            value={owner}
-            onChange={(e) => setOwner(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            required
-          />
-          <input
-            type="text"
-            placeholder="Name (e.g., claude-code)"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            required
-          />
-          <input
-            type="text"
-            placeholder="Local path (e.g., /home/user/repos/claude-code)"
+            placeholder="Local path (e.g., ~/projects/my-repo)"
             value={localPath}
             onChange={(e) => setLocalPath(e.target.value)}
             className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             required
+            disabled={isLoading}
           />
+          <p className="text-xs text-gray-500">
+            Owner and repo name will be detected from the git remote
+          </p>
           {error && <div className="text-red-400 text-xs">{error}</div>}
           <button
             type="submit"
-            className="w-full px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900"
+            disabled={isLoading}
+            className="w-full px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900"
           >
-            Add Repository
+            {isLoading ? 'Adding...' : 'Add Repository'}
           </button>
         </form>
       )}

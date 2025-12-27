@@ -5,6 +5,10 @@ Repo information is stored in ~/.clump/repos.json.
 Per-repo data is stored in ~/.clump/projects/{hash}/data.db.
 """
 
+import re
+import subprocess
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
@@ -22,11 +26,65 @@ from app.services.github_client import github_client, IssueData, PRData
 router = APIRouter()
 
 
+def parse_github_remote(local_path: str) -> tuple[str, str]:
+    """
+    Parse the GitHub owner and repo name from a local git repository's origin remote.
+
+    Supports:
+    - SSH URLs: git@github.com:owner/repo.git
+    - HTTPS URLs: https://github.com/owner/repo.git
+    - HTTPS URLs without .git: https://github.com/owner/repo
+
+    Returns:
+        Tuple of (owner, repo_name)
+
+    Raises:
+        ValueError: If the path is not a git repo or has no GitHub origin
+    """
+    path = Path(local_path).expanduser().resolve()
+
+    if not path.exists():
+        raise ValueError(f"Path does not exist: {local_path}")
+
+    if not (path / ".git").exists():
+        raise ValueError(f"Not a git repository: {local_path}")
+
+    try:
+        result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=path,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            raise ValueError(f"No 'origin' remote found in {local_path}")
+
+        remote_url = result.stdout.strip()
+    except subprocess.TimeoutExpired:
+        raise ValueError("Timed out reading git remote")
+    except FileNotFoundError:
+        raise ValueError("git command not found")
+
+    # Parse SSH URL: git@github.com:owner/repo.git
+    ssh_match = re.match(r"git@github\.com:([^/]+)/(.+?)(?:\.git)?$", remote_url)
+    if ssh_match:
+        return ssh_match.group(1), ssh_match.group(2)
+
+    # Parse HTTPS URL: https://github.com/owner/repo.git or https://github.com/owner/repo
+    https_match = re.match(r"https://github\.com/([^/]+)/(.+?)(?:\.git)?$", remote_url)
+    if https_match:
+        return https_match.group(1), https_match.group(2)
+
+    raise ValueError(f"Could not parse GitHub remote URL: {remote_url}")
+
+
 # Pydantic models for API
 class RepoCreate(BaseModel):
-    owner: str
-    name: str
     local_path: str
+    # owner and name are optional - will be inferred from git remote if not provided
+    owner: str | None = None
+    name: str | None = None
 
 
 class RepoResponse(BaseModel):
@@ -96,15 +154,34 @@ async def list_repos():
 
 @router.post("/repos", response_model=RepoResponse)
 async def create_repo(repo: RepoCreate):
-    """Add a repository to track."""
+    """Add a repository to track.
+
+    The owner and name can be automatically inferred from the git remote
+    if only local_path is provided.
+    """
+    owner = repo.owner
+    name = repo.name
+
+    # Infer owner/name from git remote if not provided
+    if not owner or not name:
+        try:
+            inferred_owner, inferred_name = parse_github_remote(repo.local_path)
+            owner = owner or inferred_owner
+            name = name or inferred_name
+        except ValueError as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Could not infer repository info from git remote: {e}"
+            )
+
     # Verify it exists on GitHub
     try:
-        github_client.get_repo(repo.owner, repo.name)
+        github_client.get_repo(owner, name)
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Repository not found: {e}")
 
     try:
-        repo_info = storage_add_repo(repo.owner, repo.name, repo.local_path)
+        repo_info = storage_add_repo(owner, name, repo.local_path)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

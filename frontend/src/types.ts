@@ -201,6 +201,7 @@ export interface ToolUse {
   id: string;
   name: string;
   input: Record<string, unknown>;
+  spawned_agent_id?: string | null;  // Agent ID if this tool spawned a subsession
 }
 
 export interface TokenUsage {
@@ -236,6 +237,44 @@ export interface ParsedTranscript {
   git_branch?: string;
 }
 
+// Subsession (spawned agent) detail
+export interface SubsessionDetail {
+  agent_id: string;  // The 7-char hex ID
+  parent_session_id: string;  // The parent session UUID
+  encoded_path: string;
+  repo_path: string;
+
+  // Transcript data
+  messages: TranscriptMessage[];
+  summary?: string | null;
+  model?: string | null;
+
+  // Token totals
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_cache_read_tokens: number;
+  total_cache_creation_tokens: number;
+
+  // Timestamps
+  start_time?: string | null;
+  end_time?: string | null;
+}
+
 export type TranscriptResponse =
   | { type: 'parsed'; transcript: ParsedTranscript }
   | { type: 'raw'; transcript: string };
+
+// Slash Commands (loaded from .claude/commands/)
+export interface CommandMetadata {
+  id: string;
+  name: string;
+  shortName: string;
+  description: string;
+  category: 'issue' | 'pr';
+  template: string;
+}
+
+export interface CommandsResponse {
+  issue: CommandMetadata[];
+  pr: CommandMetadata[];
+}

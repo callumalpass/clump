@@ -1,12 +1,12 @@
-import type { PR, SessionSummary, Process } from '../types';
-import type { PRSessionTypeConfig } from '../constants/prSessionTypes';
+import type { PR, SessionSummary, Process, CommandMetadata } from '../types';
 import { PRStartSessionButton } from './PRStartSessionButton';
 
 interface PRListProps {
   prs: PR[];
   selectedPR: number | null;
   onSelectPR: (prNumber: number) => void;
-  onStartSession: (pr: PR, sessionType: PRSessionTypeConfig) => void;
+  prCommands: CommandMetadata[];
+  onStartSession: (pr: PR, command: CommandMetadata) => void;
   loading: boolean;
   stateFilter: 'open' | 'closed' | 'all';
   onStateFilterChange: (state: 'open' | 'closed' | 'all') => void;
@@ -24,6 +24,7 @@ export function PRList({
   prs,
   selectedPR,
   onSelectPR,
+  prCommands,
   onStartSession,
   loading,
   stateFilter,
@@ -193,8 +194,9 @@ export function PRList({
                 </div>
                 <PRStartSessionButton
                   pr={pr}
-                  onStart={(_, type) => {
-                    onStartSession(pr, type);
+                  commands={prCommands}
+                  onStart={(_, command) => {
+                    onStartSession(pr, command);
                   }}
                   size="sm"
                   className="shrink-0"

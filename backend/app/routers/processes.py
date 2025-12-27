@@ -90,17 +90,23 @@ async def create_process(data: ProcessCreate):
             await db.commit()
 
         # Create PTY process with Claude Code configuration
-        process = await process_manager.create_process(
-            working_dir=repo["local_path"],
-            initial_prompt=data.prompt,
-            session_id=session.id,
-            allowed_tools=data.allowed_tools,
-            disallowed_tools=data.disallowed_tools,
-            permission_mode=data.permission_mode,
-            max_turns=data.max_turns,
-            model=data.model,
-            resume_session=data.resume_session,
-        )
+        try:
+            process = await process_manager.create_process(
+                working_dir=repo["local_path"],
+                initial_prompt=data.prompt,
+                session_id=session.id,
+                allowed_tools=data.allowed_tools,
+                disallowed_tools=data.disallowed_tools,
+                permission_mode=data.permission_mode,
+                max_turns=data.max_turns,
+                model=data.model,
+                resume_session=data.resume_session,
+            )
+        except ValueError as e:
+            # Working directory doesn't exist or other validation error
+            session.status = SessionStatus.FAILED.value
+            await db.commit()
+            raise HTTPException(status_code=400, detail=str(e))
 
         # Link process to session
         session.process_id = process.id
