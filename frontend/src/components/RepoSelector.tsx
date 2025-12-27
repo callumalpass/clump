@@ -55,7 +55,7 @@ export function RepoSelector({
         </select>
         <button
           onClick={() => setIsAdding(!isAdding)}
-          className="px-2 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="px-2 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           {isAdding ? '×' : '+'}
         </button>
@@ -90,7 +90,7 @@ export function RepoSelector({
           {error && <div className="text-red-400 text-xs">{error}</div>}
           <button
             type="submit"
-            className="w-full px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900"
+            className="w-full px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900"
           >
             Add Repository
           </button>

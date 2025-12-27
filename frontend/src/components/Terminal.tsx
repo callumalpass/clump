@@ -16,9 +16,13 @@ interface TerminalProps {
   onClose?: () => void;
   relatedEntity?: RelatedEntity | null;
   onShowRelated?: () => void;
+  /** Whether to show the header bar (default: true). Set to false when embedded in SessionView. */
+  showHeader?: boolean;
+  /** Callback when connection status changes (for parent components to display status) */
+  onConnectionChange?: (isConnected: boolean) => void;
 }
 
-export function Terminal({ sessionId, onClose, relatedEntity, onShowRelated }: TerminalProps) {
+export function Terminal({ sessionId, onClose, relatedEntity, onShowRelated, showHeader = true, onConnectionChange }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -37,6 +41,11 @@ export function Terminal({ sessionId, onClose, relatedEntity, onShowRelated }: T
   // Keep refs updated with latest functions
   sendInputRef.current = sendInput;
   sendResizeRef.current = sendResize;
+
+  // Notify parent of connection status changes
+  useEffect(() => {
+    onConnectionChange?.(isConnected);
+  }, [isConnected, onConnectionChange]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -106,11 +115,19 @@ export function Terminal({ sessionId, onClose, relatedEntity, onShowRelated }: T
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
+    // Track if we're disposing to prevent resize during cleanup
+    let isDisposing = false;
+
     // Handle resize - use ResizeObserver for more reliable detection
     const handleResize = () => {
+      if (isDisposing) return;
       if (fitAddon && terminal && containerRef.current) {
-        fitAddon.fit();
-        sendResizeRef.current(terminal.rows, terminal.cols);
+        try {
+          fitAddon.fit();
+          sendResizeRef.current(terminal.rows, terminal.cols);
+        } catch {
+          // Ignore errors during resize (can happen during mount/unmount)
+        }
       }
     };
 
@@ -140,6 +157,7 @@ export function Terminal({ sessionId, onClose, relatedEntity, onShowRelated }: T
     terminal.focus();
 
     return () => {
+      isDisposing = true;
       clearTimeout(resizeTimeout);
       resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
@@ -159,44 +177,46 @@ export function Terminal({ sessionId, onClose, relatedEntity, onShowRelated }: T
   }, [sessionId]); // Only re-run when sessionId changes
 
   return (
-    <div className="flex flex-col h-full bg-[#0d1117] rounded-lg overflow-hidden border border-gray-700">
-      <div className="flex items-center justify-between px-3 py-2 bg-[#161b22] border-b border-gray-700">
-        <div className="flex items-center gap-3">
-          <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
-            isConnected
-              ? 'bg-green-500/20 text-green-400'
-              : 'bg-red-500/20 text-red-400'
-          }`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${
+    <div className={`flex flex-col h-full bg-[#0d1117] overflow-hidden ${showHeader ? 'rounded-lg border border-gray-700' : ''}`}>
+      {showHeader && (
+        <div className="flex items-center justify-between px-3 py-2 bg-[#161b22] border-b border-gray-700">
+          <div className="flex items-center gap-3">
+            <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
               isConnected
-                ? 'bg-green-400'
-                : 'bg-red-400 animate-pulse'
-            }`} />
-            {isConnected ? 'Connected' : 'Disconnected'}
+                ? 'bg-green-500/20 text-green-400'
+                : 'bg-red-500/20 text-red-400'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                isConnected
+                  ? 'bg-green-400'
+                  : 'bg-red-400 animate-pulse'
+              }`} />
+              {isConnected ? 'Connected' : 'Disconnected'}
+            </div>
+            <span className="text-sm text-gray-500">|</span>
+            <span className="text-sm text-gray-400">{sessionId.slice(0, 8)}</span>
+            {relatedEntity && onShowRelated && (
+              <>
+                <span className="text-sm text-gray-500">|</span>
+                <button
+                  onClick={onShowRelated}
+                  className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  {relatedEntity.type === 'issue' ? 'Issue' : 'PR'} #{relatedEntity.number}
+                </button>
+              </>
+            )}
           </div>
-          <span className="text-sm text-gray-500">|</span>
-          <span className="text-sm text-gray-400">{sessionId.slice(0, 8)}</span>
-          {relatedEntity && onShowRelated && (
-            <>
-              <span className="text-sm text-gray-500">|</span>
-              <button
-                onClick={onShowRelated}
-                className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
-              >
-                {relatedEntity.type === 'issue' ? 'Issue' : 'PR'} #{relatedEntity.number}
-              </button>
-            </>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-white text-sm px-2 py-1 rounded hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-[#161b22]"
+            >
+              Close
+            </button>
           )}
         </div>
-        {onClose && (
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white text-sm px-2 py-1 rounded hover:bg-gray-700"
-          >
-            Close
-          </button>
-        )}
-      </div>
+      )}
       <div ref={containerRef} className="flex-1 min-h-0" />
     </div>
   );

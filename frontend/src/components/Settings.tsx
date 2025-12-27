@@ -292,7 +292,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                               setNewToken('');
                               setTokenError('');
                             }}
-                            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 focus:ring-offset-gray-900"
+                            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 focus:ring-offset-gray-900"
                           >
                             Cancel
                           </button>
@@ -509,7 +509,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
           </div>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 focus:ring-offset-gray-900"
+            className="px-4 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 focus:ring-offset-gray-900"
           >
             Close
           </button>

@@ -172,7 +172,7 @@ function ToolUseDisplay({ tool }: { tool: ToolUse }) {
     <div className="mt-2 text-xs border border-gray-600 rounded bg-gray-800">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 px-2 py-1 hover:bg-gray-750 text-left"
+        className="w-full flex items-center gap-2 px-2 py-1 hover:bg-gray-750 text-left transition-colors"
       >
         <span className="text-purple-400 font-mono">{tool.name}</span>
         <span className="text-gray-500 truncate flex-1">
@@ -209,7 +209,7 @@ function ThinkingDisplay({ thinking }: { thinking: string }) {
     <div className="mt-2 text-xs border border-gray-600 rounded bg-gray-900">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 px-2 py-1 hover:bg-gray-800 text-left"
+        className="w-full flex items-center gap-2 px-2 py-1 hover:bg-gray-800 text-left transition-colors"
       >
         <span className="text-amber-500">💭 Thinking</span>
         {!expanded && (
@@ -253,7 +253,7 @@ function MessageBubble({ message, searchQuery = '', matchIndices = [], currentMa
       data-has-match={hasMatch}
       data-message-uuid={message.uuid}
     >
-      <div className={`max-w-[85%] ${isUser ? 'ml-8' : 'mr-8'}`}>
+      <div className={`max-w-[85%] min-w-0 ${isUser ? 'ml-8' : 'mr-8'}`}>
         {/* Role indicator */}
         <div className={`text-xs mb-1 flex items-center gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
           <span className={isUser ? 'text-blue-400' : 'text-green-400'}>
@@ -341,9 +341,9 @@ function SearchHighlightedMarkdown({
   const lines = content.split('\n');
 
   return (
-    <div className="prose prose-invert prose-sm max-w-none">
+    <div className="prose prose-invert prose-sm max-w-none overflow-x-auto">
       {lines.map((line, lineIndex) => (
-        <div key={lineIndex} className="whitespace-pre-wrap">
+        <div key={lineIndex} className="whitespace-pre-wrap break-words">
           <HighlightedText
             text={line}
             searchQuery={searchQuery}
@@ -460,9 +460,9 @@ export function ConversationView({
   }
 
   return (
-    <div className="flex flex-col" ref={containerRef}>
+    <div className="flex flex-col min-w-0" ref={containerRef}>
       <SessionStats transcript={transcript} />
-      <div className="space-y-4 p-3">
+      <div className="space-y-4 p-3 min-w-0">
         {transcript.messages.map((message, index) => (
           <MessageBubble
             key={message.uuid || index}
