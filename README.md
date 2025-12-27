@@ -1,26 +1,22 @@
 # Clump
 
-A local web application for triaging GitHub issues and running AI analyses through Claude Code.
+A web UI for triaging GitHub issues with Claude Code.
 
-## Features
+## What it does
 
-- **Issue Browser**: View and triage GitHub issues with full comment threads
-- **Multiple Terminal Sessions**: Run parallel Claude Code sessions for different analyses
-- **Embedded Terminal**: xterm.js-based terminal with full Claude Code interactivity
-- **Analysis History**: Search and browse past analyses with full transcripts
-- **GitHub Integration**: Comment, label, and close issues directly
+- Browse GitHub issues and comment threads
+- Run Claude Code sessions in embedded terminals
+- Keep multiple sessions open at once
+- Save and search past analyses
 
-### Claude Code Integration
+## Claude Code flags used
 
-This hub deeply integrates with Claude Code CLI using its official features:
-
-- **Fine-grained Permissions**: Uses `--allowedTools` and `--permission-mode` instead of blanket `--dangerously-skip-permissions`
-- **Session Resumption**: Tracks Claude Code session IDs for continuing previous conversations
-- **Headless Mode**: Optional `-p` flag mode for programmatic analysis with structured JSON output
-- **Streaming Output**: Real-time `stream-json` format for progressive UI updates
-- **Max Turns Control**: Configurable `--max-turns` to limit agentic execution depth
-- **Model Selection**: Choose between sonnet, opus, or haiku models
-- **MCP Integration**: Optional GitHub MCP server for direct Claude-to-GitHub interaction
+- `--allowedTools` and `--permission-mode` for permissions
+- `--session-id` / `--resume` for continuing conversations
+- `-p` for headless mode with JSON output
+- `--max-turns` to limit execution depth
+- `--model` for model selection
+- MCP GitHub server (optional)
 
 ## Requirements
 
