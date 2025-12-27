@@ -154,7 +154,8 @@ export function SessionView({
   }, [processId, sendInput]);
 
   // View mode: transcript or terminal (only relevant for active sessions)
-  const [viewMode, setViewMode] = useState<ViewMode>('transcript');
+  // Default to terminal for active sessions (preserves continuity from fallback Terminal component)
+  const [viewMode, setViewMode] = useState<ViewMode>(() => processId ? 'terminal' : 'transcript');
 
   // Terminal connection status (updated via callback from Terminal component)
   const [isConnected, setIsConnected] = useState(false);
