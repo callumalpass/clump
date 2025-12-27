@@ -5,7 +5,9 @@ Sessions are discovered from Claude's JSONL files in ~/.claude/projects/
 with optional sidecar metadata stored in ~/.clump/projects/
 """
 
+from pathlib import Path
 from typing import Optional
+
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas import (
@@ -132,13 +134,10 @@ def _find_session_by_id(
     sessions: list[DiscoveredSession], session_id: str
 ) -> Optional[DiscoveredSession]:
     """Find a session by its ID from a list of discovered sessions."""
-    for s in sessions:
-        if s.session_id == session_id:
-            return s
-    return None
+    return next((s for s in sessions if s.session_id == session_id), None)
 
 
-def _quick_scan_transcript(transcript_path) -> dict:
+def _quick_scan_transcript(transcript_path: Path) -> dict:
     """
     Quickly scan a transcript file for summary info without full parsing.
 
@@ -427,11 +426,10 @@ async def get_session(session_id: str):
 
     # Check if this is an active process
     active_processes = await process_manager.list_processes()
-    active_process = None
-    for proc in active_processes:
-        if proc.claude_session_id == session_id:
-            active_process = proc
-            break
+    active_process = next(
+        (proc for proc in active_processes if proc.claude_session_id == session_id),
+        None
+    )
 
     if not session:
         # No JSONL file - check if this is a pending session from an active process
