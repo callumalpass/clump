@@ -137,7 +137,9 @@ select:hover:not(:focus):not(:disabled) {
   background-color: #1f2937;
 }
 
-select:disabled {
+select:disabled,
+input:disabled,
+textarea:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
