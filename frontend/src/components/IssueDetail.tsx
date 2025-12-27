@@ -1,23 +1,8 @@
 import { useState, useEffect } from 'react';
-import type { IssueDetail as IssueDetailType, Analysis, Tag, Session } from '../types';
-import { fetchIssue } from '../hooks/useApi';
+import type { IssueDetail as IssueDetailType, Analysis, Tag, Session, TranscriptResponse, ParsedTranscript } from '../types';
+import { fetchIssue, fetchTranscript } from '../hooks/useApi';
 import { Markdown } from './Markdown';
-
-// Strip ANSI escape codes from terminal output for clean display
-function stripAnsi(text: string): string {
-  // Matches all ANSI escape sequences including:
-  // - CSI sequences: \x1b[...X (colors, cursor, etc.)
-  // - OSC sequences: \x1b]...X (title, hyperlinks, etc.)
-  // - Other escape sequences
-  return text
-    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '') // CSI sequences
-    .replace(/\x1b\][^\x07]*\x07/g, '')     // OSC sequences (bell terminated)
-    .replace(/\x1b\][^\x1b]*\x1b\\/g, '')   // OSC sequences (ST terminated)
-    .replace(/\x1b[PX^_][^\x1b]*\x1b\\/g, '') // DCS, SOS, PM, APC sequences
-    .replace(/\x1b[@-Z\\-_]/g, '')          // Fe sequences
-    .replace(/\x1b\[[\?]?[0-9;]*[hl]/g, '') // Mode sequences
-    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, ''); // Other control chars (keep \n, \r, \t)
-}
+import { ConversationView, RawTranscriptView } from './ConversationView';
 
 // Helper to determine contrasting text color for a background
 function getContrastColor(hexColor: string): string {
@@ -105,6 +90,11 @@ export function IssueDetail({
   const [commentBody, setCommentBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [commentError, setCommentError] = useState('');
+  const [copiedAnalysisId, setCopiedAnalysisId] = useState<number | null>(null);
+
+  // Transcript state - keyed by analysis ID
+  const [transcripts, setTranscripts] = useState<Record<number, TranscriptResponse>>({});
+  const [loadingTranscripts, setLoadingTranscripts] = useState<Set<number>>(new Set());
 
   const loadIssue = () => {
     setLoading(true);
@@ -454,10 +444,66 @@ export function IssueDetail({
                         </div>
                       )}
                       <div>
-                        <h4 className="text-xs font-medium text-gray-400 uppercase mb-1">Transcript</h4>
+                        <div className="flex items-center justify-between mb-1">
+                          <h4 className="text-xs font-medium text-gray-400 uppercase">Transcript</h4>
+                          {analysis.transcript && (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const cleanedTranscript = cleanTranscript(analysis.transcript!);
+                                  navigator.clipboard.writeText(cleanedTranscript);
+                                  setCopiedAnalysisId(analysis.id);
+                                  setTimeout(() => setCopiedAnalysisId(null), 1500);
+                                }}
+                                className="flex items-center gap-1 px-2 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 rounded text-gray-300 hover:text-white"
+                                title="Copy transcript to clipboard"
+                              >
+                                {copiedAnalysisId === analysis.id ? (
+                                  <>
+                                    <svg className="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    <span className="text-green-400">Copied!</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                    </svg>
+                                    Copy
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const cleanedTranscript = cleanTranscript(analysis.transcript!);
+                                  const filename = `analysis-${analysis.id}-${analysis.title.replace(/[^a-zA-Z0-9]/g, '-').slice(0, 50)}.txt`;
+                                  const blob = new Blob([cleanedTranscript], { type: 'text/plain' });
+                                  const url = URL.createObjectURL(blob);
+                                  const link = document.createElement('a');
+                                  link.href = url;
+                                  link.download = filename;
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
+                                  URL.revokeObjectURL(url);
+                                }}
+                                className="flex items-center gap-1 px-2 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 rounded text-gray-300 hover:text-white"
+                                title="Download transcript as file"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                Download
+                              </button>
+                            </div>
+                          )}
+                        </div>
                         {analysis.transcript ? (
                           <pre className="text-xs text-gray-300 bg-gray-900 rounded p-3 overflow-auto max-h-96 whitespace-pre-wrap font-mono">
-                            {stripAnsi(analysis.transcript)}
+                            {cleanTranscript(analysis.transcript)}
                           </pre>
                         ) : (
                           <p className="text-sm text-gray-500 italic">No transcript available</p>
