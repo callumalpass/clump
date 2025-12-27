@@ -72,6 +72,26 @@ export function SessionTabs({
             <span className={`w-2 h-2 rounded-full shrink-0 ${
               isRunning ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'
             }`} />
+            {/* Entity badges - show linked issues/PRs */}
+            {session.entities && session.entities.length > 0 && (
+              <span className="flex items-center gap-0.5 shrink-0">
+                {session.entities.slice(0, 2).map((entity, idx) => (
+                  <span
+                    key={`${entity.kind}-${entity.number}-${idx}`}
+                    className={`text-xs px-1 py-0.5 rounded font-medium ${
+                      entity.kind === 'issue'
+                        ? 'bg-green-500/20 text-green-400'
+                        : 'bg-purple-500/20 text-purple-400'
+                    }`}
+                  >
+                    {entity.kind === 'pr' ? 'PR' : ''}#{entity.number}
+                  </span>
+                ))}
+                {session.entities.length > 2 && (
+                  <span className="text-xs text-gray-500">+{session.entities.length - 2}</span>
+                )}
+              </span>
+            )}
             <span className="text-sm whitespace-nowrap max-w-[180px] truncate">
               {tabName}
             </span>
