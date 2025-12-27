@@ -19,8 +19,15 @@ import type { SessionFilter } from './components/SessionList';
 
 function ResizeHandle() {
   return (
-    <Separator className="group relative flex items-center justify-center w-1 hover:w-2 transition-all">
+    <Separator className="group relative flex items-center justify-center w-2 cursor-col-resize transition-all">
+      {/* Visible drag line */}
       <div className="w-px h-full bg-gray-700 group-hover:bg-blue-500 group-active:bg-blue-400 transition-colors" />
+      {/* Grip dots indicator - visible on hover */}
+      <div className="absolute inset-y-0 flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+        <div className="w-1 h-1 rounded-full bg-blue-400" />
+        <div className="w-1 h-1 rounded-full bg-blue-400" />
+        <div className="w-1 h-1 rounded-full bg-blue-400" />
+      </div>
     </Separator>
   );
 }
