@@ -62,10 +62,14 @@ class GitHubClient:
             self._github = Github(auth=Auth.Token(self._token))
         else:
             self._github = Github()
+        self._repo_cache: dict[str, Repository] = {}
 
     def get_repo(self, owner: str, name: str) -> Repository:
-        """Get a repository."""
-        return self._github.get_repo(f"{owner}/{name}")
+        """Get a repository (cached)."""
+        key = f"{owner}/{name}"
+        if key not in self._repo_cache:
+            self._repo_cache[key] = self._github.get_repo(key)
+        return self._repo_cache[key]
 
     def list_issues(
         self,
@@ -79,22 +83,21 @@ class GitHubClient:
         """List issues for a repository with pagination.
 
         Returns a tuple of (issues, total_count).
+        Uses GitHub's native pagination for efficiency.
         """
         repo = self.get_repo(owner, name)
 
-        kwargs = {"state": state}
-        if labels:
-            kwargs["labels"] = labels
+        # Use GitHub's native pagination (0-indexed pages internally)
+        paginated = repo.get_issues(state=state, sort="created", direction="desc")
 
-        all_issues = repo.get_issues(**kwargs)
-        total_count = all_issues.totalCount
+        # Get total count (cached by PyGitHub after first access)
+        total_count = paginated.totalCount
 
-        # Calculate start/end indices for pagination
-        start = (page - 1) * per_page
-        end = start + per_page
+        # Fetch only the requested page using get_page (0-indexed)
+        page_data = paginated.get_page(page - 1)
 
         issues = []
-        for issue in all_issues[start:end]:
+        for issue in page_data[:per_page]:
             # Skip pull requests (GitHub API returns them as issues)
             if issue.pull_request:
                 continue

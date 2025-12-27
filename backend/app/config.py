@@ -1,10 +1,24 @@
 from pydantic_settings import BaseSettings
+from pydantic import Field
 from pathlib import Path
+from typing import Literal
 
 
 # Compute absolute path for database
 _BASE_DIR = Path(__file__).parent.parent
 _DB_PATH = _BASE_DIR / "claude_code_hub.db"
+
+
+# Default tools to auto-approve for issue analysis
+DEFAULT_ALLOWED_TOOLS = [
+    "Read",
+    "Glob",
+    "Grep",
+    "Bash(git status:*)",
+    "Bash(git log:*)",
+    "Bash(git diff:*)",
+    "Bash(git show:*)",
+]
 
 
 class Settings(BaseSettings):
@@ -20,9 +34,32 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8000
 
-    # Claude Code
+    # Claude Code - Basic
     claude_command: str = "claude"
-    claude_skip_permissions: bool = True  # Use --dangerously-skip-permissions
+
+    # Claude Code - Permission Control
+    # Permission mode: "default", "plan" (read-only), "acceptEdits", "bypassPermissions"
+    claude_permission_mode: Literal["default", "plan", "acceptEdits", "bypassPermissions"] = "acceptEdits"
+
+    # Comma-separated list of tools to auto-approve (e.g., "Read,Glob,Grep,Bash(git:*)")
+    # If empty, uses DEFAULT_ALLOWED_TOOLS
+    claude_allowed_tools: str = ""
+
+    # Tools to explicitly disable
+    claude_disallowed_tools: str = ""
+
+    # Maximum agentic turns (0 = unlimited)
+    claude_max_turns: int = 10
+
+    # Model to use (sonnet, opus, haiku)
+    claude_model: str = "sonnet"
+
+    # Claude Code - Session Management
+    # Whether to use headless mode (-p flag) for programmatic execution
+    claude_headless_mode: bool = False
+
+    # Output format for headless mode: "text", "json", "stream-json"
+    claude_output_format: Literal["text", "json", "stream-json"] = "stream-json"
 
     # Paths
     base_dir: Path = Path(__file__).parent.parent.parent
@@ -30,6 +67,18 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+
+    def get_allowed_tools(self) -> list[str]:
+        """Get list of allowed tools, using defaults if not specified."""
+        if self.claude_allowed_tools:
+            return [t.strip() for t in self.claude_allowed_tools.split(",")]
+        return DEFAULT_ALLOWED_TOOLS
+
+    def get_disallowed_tools(self) -> list[str]:
+        """Get list of disallowed tools."""
+        if self.claude_disallowed_tools:
+            return [t.strip() for t in self.claude_disallowed_tools.split(",")]
+        return []
 
 
 settings = Settings()
