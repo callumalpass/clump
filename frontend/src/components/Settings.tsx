@@ -2,6 +2,11 @@ import { useState, useEffect } from 'react';
 import { useClaudeSettings } from '../hooks/useApi';
 import type { PermissionMode, OutputFormat } from '../types';
 
+interface TokenStatus {
+  configured: boolean;
+  masked_token: string | null;
+}
+
 interface SettingsProps {
   isOpen: boolean;
   onClose: () => void;
@@ -10,7 +15,33 @@ interface SettingsProps {
 export function Settings({ isOpen, onClose }: SettingsProps) {
   const { settings, loading, error, saving, updateSettings, resetSettings } = useClaudeSettings();
   const [customTool, setCustomTool] = useState('');
-  const [activeTab, setActiveTab] = useState<'permissions' | 'execution' | 'advanced'>('permissions');
+  const [activeTab, setActiveTab] = useState<'github' | 'permissions' | 'execution' | 'advanced'>('github');
+
+  // GitHub token state - managed by GitHubTokenSetup component, kept here for future settings panel integration
+  const [, setTokenStatus] = useState<TokenStatus>({ configured: false, masked_token: null });
+  const [, setTokenLoading] = useState(false);
+
+  // Fetch token status when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchTokenStatus();
+    }
+  }, [isOpen]);
+
+  const fetchTokenStatus = async () => {
+    setTokenLoading(true);
+    try {
+      const res = await fetch('/api/settings/github-token');
+      if (res.ok) {
+        const data = await res.json();
+        setTokenStatus(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch token status:', e);
+    } finally {
+      setTokenLoading(false);
+    }
+  };
 
   // Handle Escape key to close modal
   useEffect(() => {
@@ -85,7 +116,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
 
         {/* Tabs */}
         <div className="flex border-b border-gray-700">
-          {(['permissions', 'execution', 'advanced'] as const).map((tab) => (
+          {(['github', 'permissions', 'execution', 'advanced'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -95,7 +126,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                   : 'text-gray-400 hover:text-white'
               }`}
             >
-              {tab}
+              {tab === 'github' ? 'GitHub' : tab}
             </button>
           ))}
         </div>

@@ -154,9 +154,21 @@ export function Terminal({ sessionId, onClose }: TerminalProps) {
   return (
     <div className="flex flex-col h-full bg-[#0d1117] rounded-lg overflow-hidden border border-gray-700">
       <div className="flex items-center justify-between px-3 py-2 bg-[#161b22] border-b border-gray-700">
-        <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-          <span className="text-sm text-gray-400">Session: {sessionId}</span>
+        <div className="flex items-center gap-3">
+          <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
+            isConnected
+              ? 'bg-green-500/20 text-green-400'
+              : 'bg-red-500/20 text-red-400'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${
+              isConnected
+                ? 'bg-green-400'
+                : 'bg-red-400 animate-pulse'
+            }`} />
+            {isConnected ? 'Connected' : 'Disconnected'}
+          </div>
+          <span className="text-sm text-gray-500">|</span>
+          <span className="text-sm text-gray-400">{sessionId.slice(0, 8)}</span>
         </div>
         {onClose && (
           <button
