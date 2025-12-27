@@ -127,7 +127,7 @@ export function SessionList({
         {sessions.map((session) => (
           <div
             key={session.session_id}
-            className="group p-3 cursor-pointer border-l-2 border-transparent hover:bg-gray-800/60 hover:border-blue-500/50 transition-all duration-150"
+            className="group p-3 cursor-pointer border-l-2 border-transparent hover:bg-gray-800/60 hover:border-blue-500/50 transition-all duration-150 list-item-hover"
             onClick={() => onSelectSession(session)}
           >
             <div className="flex items-center gap-2 mb-1">

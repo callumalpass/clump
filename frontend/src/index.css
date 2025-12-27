@@ -109,3 +109,13 @@ body {
 .empty-state-enter {
   animation: empty-state-fade-in 200ms ease-out forwards;
 }
+
+/* List item hover lift effect */
+.list-item-hover {
+  transition: transform 150ms ease-out, box-shadow 150ms ease-out;
+}
+
+.list-item-hover:hover {
+  transform: translateX(2px);
+  box-shadow: -2px 0 8px rgba(59, 130, 246, 0.15);
+}

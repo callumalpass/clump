@@ -163,7 +163,7 @@ export function IssueList({
           return (
             <div
               key={issue.number}
-              className={`p-3 cursor-pointer border-l-2 transition-all duration-150 ${
+              className={`p-3 cursor-pointer border-l-2 transition-all duration-150 list-item-hover ${
                 selectedIssue === issue.number
                   ? 'bg-gray-800/80 border-blue-500'
                   : 'border-transparent hover:bg-gray-800/60 hover:border-blue-500/50'
