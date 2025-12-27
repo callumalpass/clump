@@ -50,7 +50,7 @@ export function AnalyzeButton({ issue, onAnalyze, size = 'md', className = '' }:
       {/* Main button */}
       <button
         onClick={handleMainClick}
-        className={`px-3 ${sizeClasses} bg-blue-600 hover:bg-blue-700 text-white rounded-l-lg font-medium border-r border-blue-500`}
+        className={`px-3 ${sizeClasses} bg-blue-600 hover:bg-blue-700 text-white rounded-l-lg font-medium border-r border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900 focus:z-10`}
       >
         {selectedType.shortName}
       </button>
@@ -61,7 +61,7 @@ export function AnalyzeButton({ issue, onAnalyze, size = 'md', className = '' }:
           e.stopPropagation();
           setShowDropdown(!showDropdown);
         }}
-        className={`px-2 ${sizeClasses} bg-blue-600 hover:bg-blue-700 text-white rounded-r-lg`}
+        className={`px-2 ${sizeClasses} bg-blue-600 hover:bg-blue-700 text-white rounded-r-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900`}
       >
         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -78,7 +78,7 @@ export function AnalyzeButton({ issue, onAnalyze, size = 'md', className = '' }:
                 e.stopPropagation();
                 handleTypeSelect(type);
               }}
-              className={`w-full px-3 py-2 text-left hover:bg-gray-700 first:rounded-t-lg last:rounded-b-lg ${
+              className={`w-full px-3 py-2 text-left hover:bg-gray-700 first:rounded-t-lg last:rounded-b-lg focus:outline-none focus:bg-gray-700 ${
                 selectedType.id === type.id ? 'bg-gray-700' : ''
               }`}
             >

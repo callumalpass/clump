@@ -284,7 +284,7 @@ export function TranscriptPanel({ analysis, onContinue, onClose }: TranscriptPan
                 }, 50);
               }
             }}
-            className={`p-1.5 rounded transition-colors ${
+            className={`p-1.5 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
               searchVisible ? 'bg-blue-600 text-white' : 'hover:bg-gray-700 text-gray-400 hover:text-white'
             }`}
             title="Search transcript (Ctrl+F)"
@@ -298,7 +298,7 @@ export function TranscriptPanel({ analysis, onContinue, onClose }: TranscriptPan
           {transcript && (
             <button
               onClick={() => handleCopy('markdown')}
-              className={`p-1.5 rounded transition-colors ${
+              className={`p-1.5 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                 copyStatus === 'copied'
                   ? 'bg-green-600 text-white'
                   : 'hover:bg-gray-700 text-gray-400 hover:text-white'
@@ -322,7 +322,7 @@ export function TranscriptPanel({ analysis, onContinue, onClose }: TranscriptPan
             <div className="relative" data-export-menu>
               <button
                 onClick={() => setShowExportMenu(!showExportMenu)}
-                className={`p-1.5 rounded transition-colors ${
+                className={`p-1.5 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   showExportMenu ? 'bg-gray-700 text-white' : 'hover:bg-gray-700 text-gray-400 hover:text-white'
                 }`}
                 title="Download transcript"
@@ -338,21 +338,21 @@ export function TranscriptPanel({ analysis, onContinue, onClose }: TranscriptPan
                   <div className="px-3 py-1.5 text-xs text-gray-500 font-medium">Download as</div>
                   <button
                     onClick={() => handleDownload('markdown')}
-                    className="w-full px-3 py-1.5 text-sm text-left hover:bg-gray-700 text-gray-300 flex items-center gap-2"
+                    className="w-full px-3 py-1.5 text-sm text-left hover:bg-gray-700 text-gray-300 flex items-center gap-2 focus:outline-none focus:bg-gray-700"
                   >
                     <span className="text-purple-400">.md</span>
                     <span>Markdown</span>
                   </button>
                   <button
                     onClick={() => handleDownload('text')}
-                    className="w-full px-3 py-1.5 text-sm text-left hover:bg-gray-700 text-gray-300 flex items-center gap-2"
+                    className="w-full px-3 py-1.5 text-sm text-left hover:bg-gray-700 text-gray-300 flex items-center gap-2 focus:outline-none focus:bg-gray-700"
                   >
                     <span className="text-blue-400">.txt</span>
                     <span>Plain text</span>
                   </button>
                   <button
                     onClick={() => handleDownload('json')}
-                    className="w-full px-3 py-1.5 text-sm text-left hover:bg-gray-700 text-gray-300 flex items-center gap-2"
+                    className="w-full px-3 py-1.5 text-sm text-left hover:bg-gray-700 text-gray-300 flex items-center gap-2 focus:outline-none focus:bg-gray-700"
                   >
                     <span className="text-green-400">.json</span>
                     <span>JSON</span>
@@ -366,7 +366,7 @@ export function TranscriptPanel({ analysis, onContinue, onClose }: TranscriptPan
           {analysis.claude_session_id && onContinue && (
             <button
               onClick={onContinue}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
@@ -377,7 +377,7 @@ export function TranscriptPanel({ analysis, onContinue, onClose }: TranscriptPan
           {/* Close button */}
           <button
             onClick={onClose}
-            className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white"
+            className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             title="Close"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -416,7 +416,7 @@ export function TranscriptPanel({ analysis, onContinue, onClose }: TranscriptPan
               <button
                 onClick={goToPrevMatch}
                 disabled={totalMatches === 0}
-                className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500"
                 title="Previous match (Shift+Enter)"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -426,7 +426,7 @@ export function TranscriptPanel({ analysis, onContinue, onClose }: TranscriptPan
               <button
                 onClick={goToNextMatch}
                 disabled={totalMatches === 0}
-                className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500"
                 title="Next match (Enter)"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -442,7 +442,7 @@ export function TranscriptPanel({ analysis, onContinue, onClose }: TranscriptPan
               setSearchVisible(false);
               setSearchQuery('');
             }}
-            className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white"
+            className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             title="Close search (Esc)"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

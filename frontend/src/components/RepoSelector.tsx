@@ -44,7 +44,7 @@ export function RepoSelector({
             const repo = repos.find((r) => r.id === Number(e.target.value));
             if (repo) onSelectRepo(repo);
           }}
-          className="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white"
+          className="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         >
           <option value="">Select repository...</option>
           {repos.map((repo) => (
@@ -55,7 +55,7 @@ export function RepoSelector({
         </select>
         <button
           onClick={() => setIsAdding(!isAdding)}
-          className="px-2 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded"
+          className="px-2 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           {isAdding ? '×' : '+'}
         </button>
@@ -68,7 +68,7 @@ export function RepoSelector({
             placeholder="Owner (e.g., anthropics)"
             value={owner}
             onChange={(e) => setOwner(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm"
+            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             required
           />
           <input
@@ -76,7 +76,7 @@ export function RepoSelector({
             placeholder="Name (e.g., claude-code)"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm"
+            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             required
           />
           <input
@@ -84,13 +84,13 @@ export function RepoSelector({
             placeholder="Local path (e.g., /home/user/repos/claude-code)"
             value={localPath}
             onChange={(e) => setLocalPath(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm"
+            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             required
           />
           {error && <div className="text-red-400 text-xs">{error}</div>}
           <button
             type="submit"
-            className="w-full px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 rounded"
+            className="w-full px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900"
           >
             Add Repository
           </button>

@@ -17,9 +17,13 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
   const [customTool, setCustomTool] = useState('');
   const [activeTab, setActiveTab] = useState<'github' | 'permissions' | 'execution' | 'advanced'>('github');
 
-  // GitHub token state - managed by GitHubTokenSetup component, kept here for future settings panel integration
-  const [, setTokenStatus] = useState<TokenStatus>({ configured: false, masked_token: null });
-  const [, setTokenLoading] = useState(false);
+  // GitHub token state
+  const [tokenStatus, setTokenStatus] = useState<TokenStatus>({ configured: false, masked_token: null });
+  const [tokenLoading, setTokenLoading] = useState(false);
+  const [isEditingToken, setIsEditingToken] = useState(false);
+  const [newToken, setNewToken] = useState('');
+  const [tokenError, setTokenError] = useState('');
+  const [tokenSaving, setTokenSaving] = useState(false);
 
   // Fetch token status when modal opens
   useEffect(() => {
@@ -40,6 +44,43 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
       console.error('Failed to fetch token status:', e);
     } finally {
       setTokenLoading(false);
+    }
+  };
+
+  const handleSaveToken = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTokenError('');
+    setTokenSaving(true);
+
+    try {
+      const res = await fetch('/api/settings/github-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: newToken }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Failed to save token');
+      }
+
+      const data = await res.json();
+      setTokenStatus(data);
+      setNewToken('');
+      setIsEditingToken(false);
+    } catch (e) {
+      setTokenError(e instanceof Error ? e.message : 'Failed to save token');
+    } finally {
+      setTokenSaving(false);
+    }
+  };
+
+  const handleRemoveToken = async () => {
+    try {
+      await fetch('/api/settings/github-token', { method: 'DELETE' });
+      setTokenStatus({ configured: false, masked_token: null });
+    } catch (e) {
+      console.error('Failed to remove token:', e);
     }
   };
 
@@ -103,10 +144,10 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
       <div className="bg-[#161b22] border border-gray-700 rounded-lg w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
-          <h2 className="text-lg font-semibold">Claude Code Settings</h2>
+          <h2 className="text-lg font-semibold">Settings</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white p-1"
+            className="text-gray-400 hover:text-white p-1 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -120,7 +161,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 text-sm capitalize ${
+              className={`px-4 py-2 text-sm capitalize focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset ${
                 activeTab === tab
                   ? 'text-white border-b-2 border-blue-500'
                   : 'text-gray-400 hover:text-white'
@@ -133,7 +174,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
 
         {/* Content */}
         <div className="flex-1 overflow-auto p-4">
-          {loading && (
+          {loading && activeTab !== 'github' && (
             <div className="flex items-center justify-center py-8">
               <div className="text-gray-400">Loading settings...</div>
             </div>
@@ -142,6 +183,119 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
           {error && (
             <div className="bg-red-900/50 border border-red-700 rounded p-3 mb-4">
               <p className="text-red-300 text-sm">{error}</p>
+            </div>
+          )}
+
+          {activeTab === 'github' && (
+            <div className="space-y-6">
+              {/* Token Status */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Personal Access Token</label>
+                <p className="text-xs text-gray-400 mb-3">
+                  Required for higher API rate limits (5,000/hour vs 60/hour unauthenticated)
+                </p>
+
+                {tokenLoading ? (
+                  <div className="text-gray-400 text-sm">Loading...</div>
+                ) : tokenStatus.configured && !isEditingToken ? (
+                  <div className="bg-green-900/30 border border-green-700 rounded p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span className="text-sm text-gray-300">
+                          Token configured: <code className="text-green-400">{tokenStatus.masked_token}</code>
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setIsEditingToken(true)}
+                          className="text-sm text-gray-400 hover:text-white focus:outline-none focus:text-white focus:underline"
+                        >
+                          Change
+                        </button>
+                        <button
+                          onClick={handleRemoveToken}
+                          className="text-sm text-gray-400 hover:text-red-400 focus:outline-none focus:text-red-400 focus:underline"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {!tokenStatus.configured && !isEditingToken && (
+                      <div className="bg-yellow-900/30 border border-yellow-700 rounded p-3">
+                        <div className="flex items-start gap-2">
+                          <svg className="w-4 h-4 text-yellow-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                          <div className="flex-1">
+                            <p className="text-sm text-yellow-200">No token configured</p>
+                            <p className="text-xs text-gray-400 mt-1">Limited to 60 API requests per hour</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <form onSubmit={handleSaveToken} className="space-y-3">
+                      <div className="bg-gray-800 rounded p-3 text-sm">
+                        <p className="text-gray-300 mb-2">Create a token with these permissions:</p>
+                        <ul className="text-gray-400 list-disc list-inside space-y-1 text-xs">
+                          <li><code className="bg-gray-700 px-1 rounded">repo</code> - Full access to repositories</li>
+                          <li><code className="bg-gray-700 px-1 rounded">read:org</code> - Read org membership (optional)</li>
+                        </ul>
+                        <a
+                          href="https://github.com/settings/tokens/new?description=Claude%20Code%20Hub&scopes=repo,read:org"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-block mt-3 text-blue-400 hover:text-blue-300 text-xs"
+                        >
+                          Create new token on GitHub
+                        </a>
+                      </div>
+
+                      <input
+                        type="password"
+                        value={newToken}
+                        onChange={(e) => setNewToken(e.target.value)}
+                        placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                        className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        required
+                      />
+
+                      {tokenError && (
+                        <div className="text-red-400 text-sm">{tokenError}</div>
+                      )}
+
+                      <div className="flex gap-2">
+                        <button
+                          type="submit"
+                          disabled={tokenSaving}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900"
+                        >
+                          {tokenSaving ? 'Saving...' : 'Save Token'}
+                        </button>
+                        {isEditingToken && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsEditingToken(false);
+                              setNewToken('');
+                              setTokenError('');
+                            }}
+                            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 focus:ring-offset-gray-900"
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
+                    </form>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -164,7 +318,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                       key={mode.value}
                       onClick={() => handlePermissionModeChange(mode.value as PermissionMode)}
                       disabled={saving}
-                      className={`p-3 rounded border text-left ${
+                      className={`p-3 rounded border text-left focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                         settings.permission_mode === mode.value
                           ? 'border-blue-500 bg-blue-900/30'
                           : 'border-gray-600 hover:border-gray-500'
@@ -193,7 +347,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                       <button
                         onClick={() => handleRemoveTool(tool)}
                         disabled={saving}
-                        className="text-gray-400 hover:text-red-400"
+                        className="text-gray-400 hover:text-red-400 focus:outline-none focus:text-red-400 rounded"
                       >
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -208,13 +362,13 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                     value={customTool}
                     onChange={(e) => setCustomTool(e.target.value)}
                     placeholder="Add tool (e.g., Bash(npm:*))"
-                    className="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm"
+                    className="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     onKeyDown={(e) => e.key === 'Enter' && handleAddTool()}
                   />
                   <button
                     onClick={handleAddTool}
                     disabled={saving || !customTool.trim()}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded text-sm"
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900"
                   >
                     Add
                   </button>
@@ -262,7 +416,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                       key={model}
                       onClick={() => handleModelChange(model)}
                       disabled={saving}
-                      className={`flex-1 px-4 py-2 rounded border capitalize ${
+                      className={`flex-1 px-4 py-2 rounded border capitalize focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                         settings.model === model
                           ? 'border-blue-500 bg-blue-900/30'
                           : 'border-gray-600 hover:border-gray-500'
@@ -290,7 +444,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                       key={format.value}
                       onClick={() => handleOutputFormatChange(format.value as OutputFormat)}
                       disabled={saving}
-                      className={`flex-1 px-4 py-2 rounded border ${
+                      className={`flex-1 px-4 py-2 rounded border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                         settings.output_format === format.value
                           ? 'border-blue-500 bg-blue-900/30'
                           : 'border-gray-600 hover:border-gray-500'
@@ -314,7 +468,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                     checked={settings.mcp_github}
                     onChange={(e) => handleMcpGithubChange(e.target.checked)}
                     disabled={saving}
-                    className="w-4 h-4 rounded border-gray-600 bg-gray-800"
+                    className="w-4 h-4 rounded border-gray-600 bg-gray-800 focus:ring-2 focus:ring-blue-500 focus:ring-offset-0"
                   />
                   <div>
                     <div className="text-sm font-medium">Enable GitHub MCP Server</div>
@@ -330,7 +484,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                 <button
                   onClick={handleReset}
                   disabled={saving}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 rounded text-sm"
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-1 focus:ring-offset-gray-900"
                 >
                   Reset to Defaults
                 </button>
@@ -349,7 +503,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
           </div>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm"
+            className="px-4 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 focus:ring-offset-gray-900"
           >
             Close
           </button>

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useRepos, useIssues, useSessions, useAnalyses, useTags, useIssueTags } from './hooks/useApi';
 import type { IssueFilters, AnalysisStatusFilter } from './hooks/useApi';
 import { RepoSelector } from './components/RepoSelector';
@@ -14,6 +15,14 @@ import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import type { Repo, Issue, Analysis } from './types';
 import type { AnalysisTypeConfig } from './constants/analysisTypes';
 import { DEFAULT_ANALYSIS_TYPE } from './constants/analysisTypes';
+
+function ResizeHandle() {
+  return (
+    <PanelResizeHandle className="group relative flex items-center justify-center w-1 hover:w-2 transition-all">
+      <div className="w-px h-full bg-gray-700 group-hover:bg-blue-500 group-active:bg-blue-400 transition-colors" />
+    </PanelResizeHandle>
+  );
+}
 
 type Tab = 'issues' | 'prs' | 'analyses';
 
@@ -289,7 +298,7 @@ export default function App() {
           {/* Keyboard shortcuts hint */}
           <button
             onClick={() => setShortcutsOpen(true)}
-            className="hidden sm:flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+            className="hidden sm:flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300 transition-colors focus:outline-none focus:text-gray-300"
             title="Keyboard shortcuts (?)"
           >
             <kbd className="px-1.5 py-0.5 bg-gray-800 border border-gray-600 rounded text-gray-400">?</kbd>
@@ -297,7 +306,7 @@ export default function App() {
           </button>
           <button
             onClick={() => setSettingsOpen(true)}
-            className="p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-white"
+            className="p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             title="Settings"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -330,7 +339,7 @@ export default function App() {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`flex-1 px-4 py-2 text-sm capitalize ${
+                className={`flex-1 px-4 py-2 text-sm capitalize focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset ${
                   activeTab === tab
                     ? 'text-white border-b-2 border-blue-500'
                     : 'text-gray-400 hover:text-white'
@@ -349,7 +358,7 @@ export default function App() {
                 placeholder="Search analyses..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm"
+                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
           )}

@@ -76,7 +76,7 @@ export function IssueFilters({ filters, onFiltersChange, issues }: IssueFiltersP
           placeholder="Search issues..."
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
-          className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm pl-8"
+          className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm pl-8 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         />
         <svg
           className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
@@ -89,7 +89,7 @@ export function IssueFilters({ filters, onFiltersChange, issues }: IssueFiltersP
         {searchInput && (
           <button
             onClick={() => setSearchInput('')}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white focus:outline-none focus:text-white"
           >
             ×
           </button>
@@ -104,7 +104,7 @@ export function IssueFilters({ filters, onFiltersChange, issues }: IssueFiltersP
             <button
               key={state}
               onClick={() => setState(state)}
-              className={`px-2 py-1 text-xs capitalize ${
+              className={`px-2 py-1 text-xs capitalize focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset focus:z-10 ${
                 filters.state === state
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
@@ -120,7 +120,7 @@ export function IssueFilters({ filters, onFiltersChange, issues }: IssueFiltersP
           <select
             value={filters.sort || 'created'}
             onChange={(e) => setSort(e.target.value as 'created' | 'updated' | 'comments')}
-            className="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs"
+            className="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="created">Created</option>
             <option value="updated">Updated</option>
@@ -128,7 +128,7 @@ export function IssueFilters({ filters, onFiltersChange, issues }: IssueFiltersP
           </select>
           <button
             onClick={toggleOrder}
-            className="p-1 bg-gray-800 border border-gray-600 rounded hover:bg-gray-700"
+            className="p-1 bg-gray-800 border border-gray-600 rounded hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             title={filters.order === 'asc' ? 'Oldest first' : 'Newest first'}
           >
             {filters.order === 'asc' ? (
@@ -153,7 +153,7 @@ export function IssueFilters({ filters, onFiltersChange, issues }: IssueFiltersP
               <button
                 key={label}
                 onClick={() => toggleLabel(label)}
-                className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-600 text-white"
+                className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900"
               >
                 {label}
                 <span className="hover:text-blue-200">×</span>
@@ -161,7 +161,7 @@ export function IssueFilters({ filters, onFiltersChange, issues }: IssueFiltersP
             ))}
             <button
               onClick={() => setShowLabelDropdown(!showLabelDropdown)}
-              className="px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 hover:bg-gray-600"
+              className="px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900"
             >
               + Add
             </button>
@@ -178,7 +178,7 @@ export function IssueFilters({ filters, onFiltersChange, issues }: IssueFiltersP
                       toggleLabel(label);
                       setShowLabelDropdown(false);
                     }}
-                    className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-700 truncate"
+                    className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-700 truncate focus:outline-none focus:bg-gray-700 focus:text-white"
                   >
                     {label}
                   </button>
@@ -195,7 +195,7 @@ export function IssueFilters({ filters, onFiltersChange, issues }: IssueFiltersP
       {hasActiveFilters && (
         <button
           onClick={clearFilters}
-          className="text-xs text-gray-400 hover:text-white"
+          className="text-xs text-gray-400 hover:text-white focus:outline-none focus:text-white focus:underline"
         >
           Clear filters
         </button>

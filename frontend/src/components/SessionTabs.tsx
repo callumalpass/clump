@@ -45,9 +45,9 @@ export function SessionTabs({
         const fullTitle = analysis?.title || 'New Session';
 
         return (
-          <div
+          <button
             key={session.id}
-            className={`group flex items-center gap-2 px-3 py-2 cursor-pointer border-b-2 transition-colors ${
+            className={`group flex items-center gap-2 px-3 py-2 cursor-pointer border-b-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset ${
               activeSession === session.id
                 ? 'border-blue-500 text-white'
                 : 'border-transparent text-gray-400 hover:text-white hover:bg-gray-800'
@@ -58,7 +58,9 @@ export function SessionTabs({
             <span className="text-sm whitespace-nowrap max-w-[200px] truncate">
               {tabName}
             </span>
-            <button
+            <span
+              role="button"
+              tabIndex={-1}
               onClick={(e) => {
                 e.stopPropagation();
                 onCloseSession(session.id);
@@ -66,13 +68,13 @@ export function SessionTabs({
               className="opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity"
             >
               ×
-            </button>
-          </div>
+            </span>
+          </button>
         );
       })}
       <button
         onClick={onNewSession}
-        className="px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+        className="px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
         title="New session"
       >
         +

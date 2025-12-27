@@ -27,7 +27,7 @@ export function AnalysisList({ analyses, sessions = [], onSelectAnalysis, onCont
         <button
           key={filter.value}
           onClick={() => onStatusFilterChange(filter.value)}
-          className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
+          className={`px-2.5 py-1 text-xs rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
             statusFilter === filter.value
               ? 'bg-blue-600 text-white'
               : 'text-gray-400 hover:text-white hover:bg-gray-700'
@@ -125,7 +125,7 @@ export function AnalysisList({ analyses, sessions = [], onSelectAnalysis, onCont
               {!isActuallyRunning && analysis.claude_session_id && onContinueAnalysis && (
                 <button
                   onClick={(e) => handleContinue(e, analysis)}
-                  className="flex-shrink-0 px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 rounded flex items-center gap-1"
+                  className="flex-shrink-0 px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 rounded flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
                   title="Continue this conversation"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -138,7 +138,7 @@ export function AnalysisList({ analyses, sessions = [], onSelectAnalysis, onCont
               {onDeleteAnalysis && !isActuallyRunning && (
                 <button
                   onClick={(e) => handleDelete(e, analysis)}
-                  className="flex-shrink-0 p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="flex-shrink-0 p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity focus:outline-none focus:opacity-100 focus:text-red-400 rounded"
                   title="Delete analysis"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
