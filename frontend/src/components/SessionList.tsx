@@ -143,10 +143,13 @@ export function SessionList({
                 </span>
               ) : (
                 <span
-                  className="w-2 h-2 rounded-full flex-shrink-0 bg-green-500"
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-500/20 text-green-400 flex-shrink-0"
                   title="Session completed"
                   aria-label="Completed session"
-                />
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                  Done
+                </span>
               )}
 
               {/* Title */}
