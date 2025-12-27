@@ -35,10 +35,41 @@ from app.storage import (
     DiscoveredSession,
     get_claude_projects_dir,
 )
-from app.services.transcript_parser import parse_transcript, ParsedTranscript
+from app.services.transcript_parser import parse_transcript, ParsedTranscript, TranscriptMessage
 from app.services.session_manager import process_manager
 
 router = APIRouter()
+
+
+def _message_to_response(msg: TranscriptMessage) -> TranscriptMessageResponse:
+    """Convert a TranscriptMessage to a TranscriptMessageResponse."""
+    tool_uses = [
+        ToolUseResponse(
+            id=t.id,
+            name=t.name,
+            input=t.input,
+            spawned_agent_id=t.spawned_agent_id,
+        )
+        for t in msg.tool_uses
+    ]
+    usage = None
+    if msg.usage:
+        usage = TokenUsageResponse(
+            input_tokens=msg.usage.input_tokens,
+            output_tokens=msg.usage.output_tokens,
+            cache_read_tokens=msg.usage.cache_read_tokens,
+            cache_creation_tokens=msg.usage.cache_creation_tokens,
+        )
+    return TranscriptMessageResponse(
+        uuid=msg.uuid,
+        role=msg.role,
+        content=msg.content,
+        timestamp=msg.timestamp,
+        thinking=msg.thinking,
+        tool_uses=tool_uses,
+        model=msg.model,
+        usage=usage,
+    )
 
 
 def _entities_to_response(entities: list[EntityLink]) -> list[EntityLinkResponse]:
@@ -286,35 +317,7 @@ def _parsed_to_detail(
     repo_name = _get_repo_name(encoded_path)
 
     # Convert messages
-    messages = []
-    for msg in parsed.messages:
-        tool_uses = [
-            ToolUseResponse(
-                id=t.id,
-                name=t.name,
-                input=t.input,
-                spawned_agent_id=t.spawned_agent_id,
-            )
-            for t in msg.tool_uses
-        ]
-        usage = None
-        if msg.usage:
-            usage = TokenUsageResponse(
-                input_tokens=msg.usage.input_tokens,
-                output_tokens=msg.usage.output_tokens,
-                cache_read_tokens=msg.usage.cache_read_tokens,
-                cache_creation_tokens=msg.usage.cache_creation_tokens,
-            )
-        messages.append(TranscriptMessageResponse(
-            uuid=msg.uuid,
-            role=msg.role,
-            content=msg.content,
-            timestamp=msg.timestamp,
-            thinking=msg.thinking,
-            tool_uses=tool_uses,
-            model=msg.model,
-            usage=usage,
-        ))
+    messages = [_message_to_response(msg) for msg in parsed.messages]
 
     return SessionDetailResponse(
         session_id=session_id,
@@ -510,36 +513,8 @@ async def get_subsession(session_id: str, agent_id: str):
     if not parsed:
         raise HTTPException(status_code=404, detail="Subsession not found")
 
-    # Convert messages (same logic as main sessions)
-    messages = []
-    for msg in parsed.messages:
-        tool_uses = [
-            ToolUseResponse(
-                id=t.id,
-                name=t.name,
-                input=t.input,
-                spawned_agent_id=t.spawned_agent_id,
-            )
-            for t in msg.tool_uses
-        ]
-        usage = None
-        if msg.usage:
-            usage = TokenUsageResponse(
-                input_tokens=msg.usage.input_tokens,
-                output_tokens=msg.usage.output_tokens,
-                cache_read_tokens=msg.usage.cache_read_tokens,
-                cache_creation_tokens=msg.usage.cache_creation_tokens,
-            )
-        messages.append(TranscriptMessageResponse(
-            uuid=msg.uuid,
-            role=msg.role,
-            content=msg.content,
-            timestamp=msg.timestamp,
-            thinking=msg.thinking,
-            tool_uses=tool_uses,
-            model=msg.model,
-            usage=usage,
-        ))
+    # Convert messages
+    messages = [_message_to_response(msg) for msg in parsed.messages]
 
     return SubsessionDetailResponse(
         agent_id=agent_id,
