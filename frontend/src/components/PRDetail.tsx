@@ -32,10 +32,10 @@ export function PRDetail({
             #{pr.number} {pr.title}
           </h2>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
-            <span className={`px-2 py-0.5 text-xs rounded-full ${
-              pr.state === 'open' ? 'bg-green-900 text-green-300' :
-              pr.state === 'merged' ? 'bg-purple-900 text-purple-300' :
-              'bg-red-900 text-red-300'
+            <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
+              pr.state === 'open' ? 'bg-green-500/20 text-green-400' :
+              pr.state === 'merged' ? 'bg-purple-500/20 text-purple-400' :
+              'bg-red-500/20 text-red-400'
             }`}>
               {pr.state}
             </span>

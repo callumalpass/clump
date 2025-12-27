@@ -186,8 +186,8 @@ export function IssueDetail({
             #{issue.number} {issue.title}
           </h2>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
-            <span className={`px-2 py-0.5 text-xs rounded-full ${
-              issue.state === 'open' ? 'bg-green-900 text-green-300' : 'bg-purple-900 text-purple-300'
+            <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
+              issue.state === 'open' ? 'bg-green-500/20 text-green-400' : 'bg-purple-500/20 text-purple-400'
             }`}>
               {issue.state}
             </span>
