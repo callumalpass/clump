@@ -70,20 +70,20 @@ export function PRList({
         {filterTabs}
         <div className="divide-y divide-gray-700">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="p-3 animate-pulse">
+            <div key={i} className="p-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <div className="h-4 w-8 bg-gray-700 rounded" />
-                    <div className="h-4 w-48 bg-gray-700 rounded" />
+                    <div className="h-4 w-8 rounded skeleton-shimmer" />
+                    <div className="h-4 w-48 rounded skeleton-shimmer" />
                   </div>
                   <div className="flex items-center gap-2 mt-2">
-                    <div className="h-4 w-24 bg-gray-700 rounded" />
-                    <div className="h-4 w-16 bg-gray-700 rounded" />
+                    <div className="h-4 w-24 rounded skeleton-shimmer" />
+                    <div className="h-4 w-16 rounded skeleton-shimmer" />
                   </div>
-                  <div className="h-3 w-32 bg-gray-700 rounded mt-2" />
+                  <div className="h-3 w-32 rounded mt-2 skeleton-shimmer" />
                 </div>
-                <div className="h-7 w-16 bg-gray-700 rounded shrink-0" />
+                <div className="h-7 w-16 rounded shrink-0 skeleton-shimmer" />
               </div>
             </div>
           ))}
