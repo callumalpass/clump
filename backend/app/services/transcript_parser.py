@@ -83,9 +83,6 @@ def find_transcript_file(session_id: str, working_dir: str) -> Optional[Path]:
     # The project directory name is the path with slashes replaced by dashes
     # e.g., /home/user/projects/myapp -> -home-user-projects-myapp
     encoded_path = working_dir.replace("/", "-")
-    if encoded_path.startswith("-"):
-        encoded_path = encoded_path  # Keep leading dash
-
     project_dir = claude_projects_dir / encoded_path
 
     if not project_dir.exists():
