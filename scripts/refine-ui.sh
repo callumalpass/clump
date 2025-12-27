@@ -43,6 +43,7 @@ PROMPT=$(cat <<EOF
 You are improving Clump's user interface and experience.
 
 ## Project Context
+
 Clump is a local web application for:
 - Triaging GitHub issues
 - Running AI analyses through Claude Code CLI
@@ -61,12 +62,11 @@ Clump is a local web application for:
 - \`frontend/src/types.ts\` - TypeScript interfaces
 
 ## Your Task
+
 Explore the frontend codebase and implement 1 UI/UX improvement.
 
 **Focus Areas:**
 - Visual consistency and polish
-- Better loading states and feedback
-- Improved empty states
 - Clearer visual hierarchy
 - Better use of spacing and typography
 - Subtle animations or transitions
@@ -83,7 +83,6 @@ Explore the frontend codebase and implement 1 UI/UX improvement.
 **PREFER changes that:**
 - Use existing Tailwind utilities
 - Improve visual consistency
-- Add micro-interactions
 - Fix obvious UI rough edges
 - Enhance existing components
 

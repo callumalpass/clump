@@ -27,6 +27,7 @@ from app.storage import (
     discover_sessions,
     get_session_metadata,
     save_session_metadata,
+    delete_session_metadata,
     encode_path,
     decode_path,
     match_encoded_path_to_repo,
@@ -684,4 +685,57 @@ async def continue_session(session_id: str):
         "working_dir": process.working_dir,
         "created_at": process.created_at.isoformat(),
         "claude_session_id": process.claude_session_id,
+    }
+
+
+# ==========================================
+# Delete Session
+# ==========================================
+
+@router.delete("/sessions/{session_id}")
+async def delete_session(session_id: str):
+    """
+    Delete a session's transcript file and sidecar metadata.
+
+    This permanently removes both:
+    - The transcript file (~/.claude/projects/{path}/{session_id}.jsonl)
+    - The sidecar metadata (~/.clump/projects/{path}/{session_id}.json)
+
+    Cannot delete sessions that are currently running.
+    """
+    # Find the session
+    sessions = discover_sessions()
+    session = _find_session_by_id(sessions, session_id)
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Check if session is currently active
+    active_processes = await process_manager.list_processes()
+    for proc in active_processes:
+        if proc.claude_session_id == session_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot delete an active session. Stop the process first."
+            )
+
+    # Delete the transcript file
+    transcript_deleted = False
+    if session.transcript_path.exists():
+        try:
+            session.transcript_path.unlink()
+            transcript_deleted = True
+        except OSError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to delete transcript file: {e}"
+            )
+
+    # Delete sidecar metadata
+    metadata_deleted = delete_session_metadata(session.encoded_path, session_id)
+
+    return {
+        "status": "deleted",
+        "transcript_deleted": transcript_deleted,
+        "metadata_deleted": metadata_deleted,
     }

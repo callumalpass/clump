@@ -117,6 +117,8 @@ interface SessionViewProps {
   onClose: () => void;
   /** Callback to continue a finished session */
   onContinue?: () => void;
+  /** Callback when session is deleted */
+  onDelete?: () => void;
   /** Navigate to an issue */
   onShowIssue?: (issueNumber: number) => void;
   /** Navigate to a PR */
@@ -138,6 +140,7 @@ export function SessionView({
   processId,
   onClose,
   onContinue,
+  onDelete,
   onShowIssue,
   onShowPR,
   issues = [],
@@ -191,6 +194,10 @@ export function SessionView({
   const [entityPickerType, setEntityPickerType] = useState<'issue' | 'pr' | null>(null);
   const [entities, setEntities] = useState<EntityLink[]>(session.entities || []);
 
+  // Delete confirmation state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   // Sync entities when session changes
   useEffect(() => {
     setEntities(session.entities || []);
@@ -209,6 +216,18 @@ export function SessionView({
     setEntities(prev => prev.filter((_, i) => i !== entityIdx));
     onEntitiesChange?.();
   }, [session.session_id, onEntitiesChange]);
+
+  // Handle delete confirmation
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!onDelete) return;
+    setDeleting(true);
+    try {
+      await onDelete();
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  }, [onDelete]);
 
   // Close actions menu when clicking outside
   useEffect(() => {
@@ -719,6 +738,24 @@ export function SessionView({
                   </svg>
                   Link PR
                 </button>
+                {/* Delete button - only for non-active sessions */}
+                {!isActiveProcess && onDelete && (
+                  <>
+                    <div className="border-t border-gray-700 my-1" />
+                    <button
+                      onClick={() => {
+                        setShowDeleteConfirm(true);
+                        setShowActionsMenu(false);
+                      }}
+                      className="w-full px-3 py-1.5 text-sm text-left hover:bg-red-900/50 text-red-400 flex items-center gap-2 transition-colors focus:outline-none focus:bg-red-900/50"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      Delete
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -899,6 +936,54 @@ export function SessionView({
         linkedEntities={entities}
         onAdd={handleAddEntity}
       />
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 border border-gray-700 rounded-lg shadow-xl p-6 max-w-sm w-full mx-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-900/50 flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">Delete Session</h3>
+                <p className="text-sm text-gray-400">This action cannot be undone</p>
+              </div>
+            </div>
+            <p className="text-gray-300 mb-6">
+              Are you sure you want to delete this session? The transcript file will be permanently removed.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                className="px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={deleting}
+                className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {deleting ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

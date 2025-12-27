@@ -349,6 +349,13 @@ export function useSessions(filters: SessionFilters = {}) {
     return result;
   };
 
+  const deleteSession = async (sessionId: string): Promise<void> => {
+    await fetchJson(`${API_BASE}/sessions/${sessionId}`, { method: 'DELETE' });
+    // Remove from local state
+    setSessions((prev) => prev.filter((s) => s.session_id !== sessionId));
+    setTotal((prev) => prev - 1);
+  };
+
   const updateSessionMetadata = async (
     sessionId: string,
     updates: { title?: string; summary?: string; tags?: string[]; starred?: boolean }
@@ -362,7 +369,7 @@ export function useSessions(filters: SessionFilters = {}) {
     return result;
   };
 
-  return { sessions, total, loading, refresh, continueSession, updateSessionMetadata };
+  return { sessions, total, loading, refresh, continueSession, deleteSession, updateSessionMetadata };
 }
 
 // Fetch full session detail with transcript

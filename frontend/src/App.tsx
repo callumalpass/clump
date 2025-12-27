@@ -89,7 +89,7 @@ export default function App() {
     starred: sessionFilter === 'starred' ? true : undefined,
     hasEntities: sessionFilter === 'with-entities' ? true : undefined,
   };
-  const { sessions, loading: sessionsLoading, refresh: refreshSessions, continueSession, updateSessionMetadata, total: sessionsTotal } = useSessions(sessionFilters);
+  const { sessions, loading: sessionsLoading, refresh: refreshSessions, continueSession, deleteSession, updateSessionMetadata, total: sessionsTotal } = useSessions(sessionFilters);
   const { tags, createTag } = useTags(selectedRepo?.id ?? null);
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
   const { prs, loading: prsLoading } = usePRs(selectedRepo?.id ?? null, prStateFilter);
@@ -814,6 +814,10 @@ export default function App() {
                         session={viewingSession}
                         onContinue={() => handleContinueSession(viewingSession)}
                         onClose={() => setViewingSessionId(null)}
+                        onDelete={async () => {
+                          await deleteSession(viewingSession.session_id);
+                          setViewingSessionId(null);
+                        }}
                         onShowIssue={handleShowIssue}
                         onShowPR={handleShowPR}
                         issues={issues}
@@ -932,6 +936,10 @@ export default function App() {
                       session={viewingSession}
                       onContinue={() => handleContinueSession(viewingSession)}
                       onClose={() => setViewingSessionId(null)}
+                      onDelete={async () => {
+                        await deleteSession(viewingSession.session_id);
+                        setViewingSessionId(null);
+                      }}
                       onShowIssue={handleShowIssue}
                       onShowPR={handleShowPR}
                       issues={issues}
