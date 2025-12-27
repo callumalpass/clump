@@ -12,6 +12,20 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
   const [customTool, setCustomTool] = useState('');
   const [activeTab, setActiveTab] = useState<'permissions' | 'execution' | 'advanced'>('permissions');
 
+  // Handle Escape key to close modal
+  React.useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handlePermissionModeChange = async (mode: PermissionMode) => {

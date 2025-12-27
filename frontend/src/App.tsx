@@ -31,6 +31,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const [issueFilters, setIssueFilters] = useState<IssueFilters>({ state: 'open' });
+  const [expandedAnalysisId, setExpandedAnalysisId] = useState<number | null>(null);
 
   // Track pending issue context to show side-by-side view immediately
   const pendingIssueContextRef = useRef<PendingIssueContext | null>(null);
@@ -58,6 +59,12 @@ export default function App() {
     setSelectedTagId(null);
     setIssueFilters({ state: 'open' });
   }, [selectedRepo?.id]);
+
+  // Handle issue selection from list - clears expanded analysis
+  const handleSelectIssue = useCallback((issueNumber: number) => {
+    setSelectedIssue(issueNumber);
+    setExpandedAnalysisId(null);
+  }, []);
 
   // Refresh analyses periodically to update status indicators
   useEffect(() => {
@@ -129,6 +136,7 @@ Please:
     if (activeSession) {
       // Session is still running - open the terminal
       setActiveSessionId(analysis.session_id);
+      setExpandedAnalysisId(null);
 
       // Store pending context for immediate side-by-side view
       if (analysis.type === 'issue' && analysis.entity_id) {
@@ -138,8 +146,9 @@ Please:
         };
       }
     } else {
-      // Session ended - just show issue details (user can click Continue to resume)
+      // Session ended - show issue details with this analysis expanded
       setActiveSessionId(null);
+      setExpandedAnalysisId(analysis.id);
     }
   }, [sessions]);
 
@@ -272,7 +281,7 @@ Please:
               <IssueList
                 issues={issues}
                 selectedIssue={selectedIssue}
-                onSelectIssue={setSelectedIssue}
+                onSelectIssue={handleSelectIssue}
                 onAnalyzeIssue={handleAnalyzeIssue}
                 loading={issuesLoading}
                 page={issuesPage}
@@ -367,6 +376,8 @@ Please:
                             }}
                             analyses={analyses}
                             sessions={sessions}
+                            expandedAnalysisId={expandedAnalysisId}
+                            onToggleAnalysis={setExpandedAnalysisId}
                             onSelectAnalysis={handleSelectAnalysis}
                             onContinueAnalysis={handleContinueAnalysis}
                             onDeleteAnalysis={handleDeleteAnalysis}
@@ -405,6 +416,8 @@ Please:
                   }}
                   analyses={analyses}
                   sessions={sessions}
+                  expandedAnalysisId={expandedAnalysisId}
+                  onToggleAnalysis={setExpandedAnalysisId}
                   onSelectAnalysis={handleSelectAnalysis}
                   onContinueAnalysis={handleContinueAnalysis}
                   onDeleteAnalysis={handleDeleteAnalysis}

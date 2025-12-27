@@ -1,12 +1,9 @@
 #!/bin/bash
 
-# Feature Discovery & Implementation Script
-# Identifies missing features by analyzing the codebase, README, and similar projects
-# Then responsibly implements the most valuable additions
-# Usage: ./scripts/discover-features.sh [--discover-only] [--implement N] [--iterations N]
-#   --discover-only   Only discover features, don't implement
-#   --implement N     Number of features to implement per iteration (default: 1)
-#   --iterations N    Number of discovery+implementation cycles (default: 1)
+# Feature Implementation Script
+# Explores the codebase and implements valuable features autonomously
+# Usage: ./scripts/discover-features.sh [--features N] [--tool TOOL]
+#   --features N      Number of features to implement (default: 1)
 #   --tool TOOL       Use 'claude' or 'codex' (default: claude)
 
 set -e
@@ -18,9 +15,7 @@ cd "$PROJECT_ROOT"
 
 # Default values
 TOOL="claude"
-DISCOVER_ONLY=false
-IMPLEMENT_COUNT=1
-ITERATIONS=1
+FEATURE_COUNT=1
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -29,16 +24,8 @@ while [[ $# -gt 0 ]]; do
       TOOL="$2"
       shift 2
       ;;
-    --discover-only)
-      DISCOVER_ONLY=true
-      shift
-      ;;
-    --implement)
-      IMPLEMENT_COUNT="$2"
-      shift 2
-      ;;
-    --iterations)
-      ITERATIONS="$2"
+    --features)
+      FEATURE_COUNT="$2"
       shift 2
       ;;
     *)
@@ -48,18 +35,14 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo "=================================="
-echo "Feature Discovery Script"
+echo "Feature Implementation Script"
 echo "=================================="
 echo "Using tool: $TOOL"
-echo "Discovery only: $DISCOVER_ONLY"
-if [ "$DISCOVER_ONLY" = false ]; then
-    echo "Features to implement: $IMPLEMENT_COUNT"
-    echo "Iterations: $ITERATIONS"
-fi
+echo "Features to implement: $FEATURE_COUNT"
 echo ""
 
 PROMPT=$(cat <<EOF
-You are discovering and implementing missing features for Claude Code Hub.
+You are improving Claude Code Hub by implementing valuable features.
 
 ## Project Context
 Claude Code Hub is a local web application for:
@@ -74,136 +57,42 @@ Claude Code Hub is a local web application for:
 - Database: SQLite via aiosqlite
 - Terminal: xterm.js with PTY
 
-## Phase 1: Feature Discovery
+## Your Task
+Explore the codebase and implement $FEATURE_COUNT feature(s) that you think would be most valuable.
 
-### 1. Analyze Current State
-Read these files to understand what exists:
-- \`README.md\` - Documented features
-- \`backend/app/routers/\` - API capabilities
-- \`frontend/src/components/\` - UI features
-- \`frontend/src/App.tsx\` - Main app structure
-
-### 2. Identify Gaps
-Explore the codebase and identify features that would be natural, valuable additions.
-
-**Discovery approach:**
-- Look for incomplete UI flows or missing user feedback
-- Find places where the UX could be smoother
-- Identify small quality-of-life improvements
-- Notice patterns that could be abstracted or enhanced
-- Check for missing error states or edge case handling
-
-**Complexity constraints - AVOID features that:**
-- Require new external services (webhooks, third-party APIs)
-- Need significant infrastructure (multiple accounts, OAuth flows)
-- Add heavy dependencies (PDF generation, complex exports)
-- Require database migrations or schema changes
+**AVOID features that:**
+- Require new external services or third-party APIs
+- Need database migrations or schema changes
+- Add heavy new dependencies
 
 **PREFER features that:**
-- Improve existing functionality
+- Improve existing functionality or UX
 - Add small UI enhancements
-- Better utilize existing APIs
-- Improve developer/user experience with minimal code
 - Fix obvious gaps in the current flow
+- Are low-risk and self-contained
 
-### 3. Prioritize
-Score each potential feature:
-- **Value:** How useful would this be? (1-5)
-- **Effort:** How much work? (1-5, lower is easier)
-- **Risk:** Could this break things? (1-5, lower is safer)
-- **Priority = Value × (6 - Effort) × (6 - Risk)**
+## Implementation Guidelines
 
-### 4. Create Feature List
-Write to \`docs/features/ROADMAP.md\`:
-\`\`\`markdown
-# Feature Roadmap
-
-## Discovered Features ($(date +%Y-%m-%d))
-
-### High Priority
-| Feature | Value | Effort | Risk | Score |
-|---------|-------|--------|------|-------|
-| ... | ... | ... | ... | ... |
-
-### Medium Priority
-...
-
-### Future Considerations
-...
-\`\`\`
-
-$([ "$DISCOVER_ONLY" = true ] && echo "
-## Phase 2: Skip (Discovery Only Mode)
-Stop after creating the roadmap.
-" || echo "
-## Phase 2: Responsible Implementation
-
-Implement the top $IMPLEMENT_COUNT feature(s) from your prioritized list.
-
-### Implementation Guidelines
-
-1. **Start Small:**
-   - Implement the minimal viable version first
-   - Don't over-engineer or add unnecessary options
-
-2. **Safety First:**
-   - Create a feature branch: \`git checkout -b feature/NAME\`
-   - Make incremental commits
-   - Test each change before moving on
-
-3. **Quality Checks:**
+1. **Explore first** - Read the codebase to understand what exists
+2. **Start small** - Implement minimal viable versions
+3. **Test your changes:**
    - Backend: \`cd backend && python -m py_compile app/main.py\`
    - Frontend: \`cd frontend && npm run build\`
+4. **Commit each feature:** \`git commit -m "feat: Add [feature name]"\`
+5. **If something breaks**, revert and try something else
 
-4. **Documentation:**
-   - Update README.md if the feature is user-facing
-   - Add inline comments for complex logic
-
-5. **Rollback Plan:**
-   - If something breaks that you can't fix, revert
-   - \`git checkout -- .\` to undo uncommitted changes
-   - \`git reset --hard HEAD~1\` to undo last commit
-
-### Implementation Order
-For each feature:
-1. Backend changes (if needed)
-2. Frontend types (if needed)
-3. Frontend components
-4. Integration and testing
-5. Documentation
-6. Commit: \`feat: Add [feature name]\`
-
-### Stop Conditions
-- If complexity exceeds estimate significantly, stop and document why
-- If tests fail and fix isn't obvious, stop and document
-- If feature requires breaking changes, document and get approval first
-")
-
-Begin by reading the current project state.
+Begin by exploring the codebase.
 EOF
 )
 
-for ((i=1; i<=ITERATIONS; i++)); do
-    if [ "$ITERATIONS" -gt 1 ]; then
-        echo ""
-        echo "=================================="
-        echo "Iteration $i of $ITERATIONS"
-        echo "=================================="
-    fi
-
-    if [ "$TOOL" == "codex" ]; then
-        codex --dangerously-bypass-approvals-and-sandbox "$PROMPT"
-    else
-        claude --dangerously-skip-permissions -p "$PROMPT"
-    fi
-done
+if [ "$TOOL" == "codex" ]; then
+    codex --dangerously-bypass-approvals-and-sandbox "$PROMPT"
+else
+    claude --dangerously-skip-permissions -p "$PROMPT"
+fi
 
 echo ""
 echo "=================================="
-echo "Feature discovery complete!"
+echo "Feature implementation complete!"
 echo "=================================="
-echo "Check docs/features/ROADMAP.md for discovered features."
-if [ "$DISCOVER_ONLY" = false ]; then
-    echo "Completed $ITERATIONS iteration(s)."
-    echo "Run 'git log --oneline -10' to see implemented features."
-fi
+echo "Run 'git log --oneline -5' to see implemented features."
