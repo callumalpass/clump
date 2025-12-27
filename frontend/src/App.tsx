@@ -658,6 +658,7 @@ export default function App() {
                 onSelectSession={handleSelectSession}
                 onContinueSession={handleContinueSession}
                 onToggleStar={handleToggleStar}
+                onRefresh={refreshSessions}
                 loading={sessionsLoading}
                 filter={sessionFilter}
                 onFilterChange={setSessionFilter}
