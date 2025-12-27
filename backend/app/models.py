@@ -37,6 +37,7 @@ class Repo(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     analyses: Mapped[list["Analysis"]] = relationship(back_populates="repo")
+    tags: Mapped[list["Tag"]] = relationship(back_populates="repo", cascade="all, delete-orphan")
 
 
 class Analysis(Base):
@@ -51,7 +52,8 @@ class Analysis(Base):
     transcript: Mapped[str] = mapped_column(Text, default="")
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(50), default=AnalysisStatus.RUNNING.value)
-    session_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    session_id: Mapped[str | None] = mapped_column(String(100), nullable=True)  # Internal PTY session ID
+    claude_session_id: Mapped[str | None] = mapped_column(String(100), nullable=True)  # Claude Code CLI session ID for resume
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -70,3 +72,28 @@ class Action(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     analysis: Mapped["Analysis"] = relationship(back_populates="actions")
+
+
+class Tag(Base):
+    __tablename__ = "tags"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    repo_id: Mapped[int] = mapped_column(ForeignKey("repos.id"))
+    name: Mapped[str] = mapped_column(String(100))
+    color: Mapped[str | None] = mapped_column(String(7), nullable=True)  # hex color e.g. #ff0000
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    repo: Mapped["Repo"] = relationship(back_populates="tags")
+    issue_tags: Mapped[list["IssueTag"]] = relationship(back_populates="tag", cascade="all, delete-orphan")
+
+
+class IssueTag(Base):
+    __tablename__ = "issue_tags"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id", ondelete="CASCADE"))
+    repo_id: Mapped[int] = mapped_column(ForeignKey("repos.id"))
+    issue_number: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    tag: Mapped["Tag"] = relationship(back_populates="issue_tags")

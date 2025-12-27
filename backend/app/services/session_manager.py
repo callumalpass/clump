@@ -15,7 +15,6 @@ Uses Claude Code CLI flags for fine-grained permission control:
 import asyncio
 import os
 import pty
-import re
 import signal
 import struct
 import fcntl
@@ -90,6 +89,10 @@ class SessionManager:
         """
         session_id = str(uuid4())[:8]
 
+        # Generate a Claude Code session ID (full UUID) that we can use to resume later
+        # We pass this to Claude Code via --session-id so we know it from the start
+        claude_session_id = str(uuid4()) if not resume_session else None
+
         # Import here to avoid circular imports
         from app.config import settings
 
@@ -102,6 +105,7 @@ class SessionManager:
             max_turns=max_turns,
             model=model,
             resume_session=resume_session,
+            claude_session_id=claude_session_id,
         )
 
         # Create pseudo-terminal
@@ -110,7 +114,18 @@ class SessionManager:
         if pid == 0:
             # Child process
             os.chdir(working_dir)
+            # Set terminal environment for Claude Code compatibility
             os.environ["TERM"] = "xterm-256color"
+            os.environ["COLORTERM"] = "truecolor"
+            os.environ["LANG"] = os.environ.get("LANG", "en_US.UTF-8")
+            os.environ["LC_ALL"] = os.environ.get("LC_ALL", "en_US.UTF-8")
+            # Force color and interactive mode detection
+            os.environ["FORCE_COLOR"] = "1"
+            os.environ["CI"] = ""  # Unset CI to prevent non-interactive detection
+            os.environ["TERM_PROGRAM"] = "xterm"
+            # Ensure proper columns/lines are set
+            os.environ["COLUMNS"] = "120"
+            os.environ["LINES"] = "30"
             os.execvp("claude", args)
         else:
             # Parent process
@@ -118,8 +133,9 @@ class SessionManager:
             flags = fcntl.fcntl(fd, fcntl.F_GETFL)
             fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
-            # Set initial terminal size (80x24)
-            self._resize_pty(fd, 24, 80)
+            # Set initial terminal size - use larger default for modern displays
+            # Will be resized by frontend once terminal mounts
+            self._resize_pty(fd, 30, 120)
 
             session = Session(
                 id=session_id,
@@ -131,6 +147,8 @@ class SessionManager:
                 permission_mode=permission_mode or settings.claude_permission_mode,
                 max_turns=max_turns if max_turns is not None else settings.claude_max_turns,
                 model=model or settings.claude_model,
+                # Set Claude session ID - either our generated one or the one being resumed
+                claude_session_id=claude_session_id or resume_session,
             )
 
             async with self._lock:
@@ -155,6 +173,7 @@ class SessionManager:
         max_turns: int | None = None,
         model: str | None = None,
         resume_session: str | None = None,
+        claude_session_id: str | None = None,
         mcp_config: dict | None = None,
     ) -> list[str]:
         """Build Claude Code command arguments with proper flags."""
@@ -165,6 +184,9 @@ class SessionManager:
         # Resume session if specified
         if resume_session:
             args.extend(["--resume", resume_session])
+        elif claude_session_id:
+            # Set a known session ID for new sessions so we can resume later
+            args.extend(["--session-id", claude_session_id])
 
         # Permission mode
         mode = permission_mode or settings.claude_permission_mode
@@ -215,10 +237,6 @@ class SessionManager:
         """Continuously read from PTY and broadcast to subscribers."""
         loop = asyncio.get_event_loop()
 
-        # Pattern to extract Claude Code session ID from output
-        # Claude Code displays session info like "Session: abc123..." on start
-        session_id_pattern = re.compile(r"Session:\s*([a-f0-9-]{36})", re.IGNORECASE)
-
         while True:
             try:
                 # Read from PTY in executor to not block
@@ -229,12 +247,6 @@ class SessionManager:
                 if data:
                     decoded = data.decode("utf-8", errors="replace")
                     session.transcript += decoded
-
-                    # Try to extract Claude Code session ID if not already found
-                    if not session.claude_session_id:
-                        match = session_id_pattern.search(decoded)
-                        if match:
-                            session.claude_session_id = match.group(1)
 
                     # Notify all subscribers
                     for callback in session.subscribers:

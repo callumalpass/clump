@@ -77,17 +77,57 @@ class GitHubClient:
         name: str,
         state: str = "open",
         labels: list[str] | None = None,
+        search_query: str | None = None,
+        sort: str = "created",
+        order: str = "desc",
         page: int = 1,
         per_page: int = 30,
     ) -> tuple[list[IssueData], int]:
         """List issues for a repository with pagination.
 
+        Args:
+            owner: Repository owner
+            name: Repository name
+            state: Issue state - "open", "closed", or "all"
+            labels: List of label names to filter by
+            search_query: Text to search in issue title/body
+            sort: Sort field - "created", "updated", or "comments"
+            order: Sort order - "asc" or "desc"
+            page: Page number (1-indexed)
+            per_page: Results per page
+
         Returns a tuple of (issues, total_count).
-        Note: total_count includes PRs (GitHub API limitation).
         """
-        # Use GitHub search API to get only issues (not PRs)
-        query = f"repo:{owner}/{name} is:issue state:{state}"
-        results = self._github.search_issues(query, sort="created", order="desc")
+        # Build GitHub search query
+        query = f"repo:{owner}/{name} is:issue"
+
+        # Add state filter (skip if "all")
+        if state and state != "all":
+            query += f" state:{state}"
+
+        # Add label filters
+        if labels:
+            for label in labels:
+                # Quote labels with spaces
+                if " " in label:
+                    query += f' label:"{label}"'
+                else:
+                    query += f" label:{label}"
+
+        # Add text search (prepend to search in title/body)
+        if search_query:
+            query = f"{search_query} {query}"
+
+        # Validate sort field
+        valid_sorts = {"created", "updated", "comments"}
+        if sort not in valid_sorts:
+            sort = "created"
+
+        # Validate order
+        if order not in {"asc", "desc"}:
+            order = "desc"
+
+        results = self._github.search_issues(query, sort=sort, order=order)
 
         # Get total count first (triggers the API call)
         total_count = results.totalCount

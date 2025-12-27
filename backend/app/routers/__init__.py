@@ -1,3 +1,3 @@
-from app.routers import github, sessions, analyses, settings
+from app.routers import github, sessions, analyses, settings, headless, tags
 
-__all__ = ["github", "sessions", "analyses", "settings"]
+__all__ = ["github", "sessions", "analyses", "settings", "headless", "tags"]

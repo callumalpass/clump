@@ -26,6 +26,7 @@ class AnalysisResponse(BaseModel):
     summary: str | None
     status: str
     session_id: str | None
+    claude_session_id: str | None = None  # Claude Code CLI session ID for resume
     created_at: str
     completed_at: str | None
 
@@ -101,6 +102,7 @@ async def list_analyses(
                 summary=a.summary,
                 status=a.status,
                 session_id=a.session_id,
+                claude_session_id=a.claude_session_id,
                 created_at=a.created_at.isoformat(),
                 completed_at=a.completed_at.isoformat() if a.completed_at else None,
             )
@@ -137,6 +139,7 @@ async def get_analysis(
         summary=analysis.summary,
         status=analysis.status,
         session_id=analysis.session_id,
+        claude_session_id=analysis.claude_session_id,
         created_at=analysis.created_at.isoformat(),
         completed_at=analysis.completed_at.isoformat() if analysis.completed_at else None,
     )
@@ -180,6 +183,7 @@ async def update_analysis(
         summary=analysis.summary,
         status=analysis.status,
         session_id=analysis.session_id,
+        claude_session_id=analysis.claude_session_id,
         created_at=analysis.created_at.isoformat(),
         completed_at=analysis.completed_at.isoformat() if analysis.completed_at else None,
     )

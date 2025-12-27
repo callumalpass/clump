@@ -1,17 +1,85 @@
 import { useState, useEffect } from 'react';
-import type { IssueDetail as IssueDetailType } from '../types';
+import type { IssueDetail as IssueDetailType, Analysis, Tag } from '../types';
 import { fetchIssue } from '../hooks/useApi';
 import { Markdown } from './Markdown';
+
+// Helper to determine contrasting text color for a background
+function getContrastColor(hexColor: string): string {
+  const hex = hexColor.replace('#', '');
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.5 ? '#000000' : '#ffffff';
+}
+
+const TAG_COLORS = [
+  '#ef4444', // red
+  '#f97316', // orange
+  '#eab308', // yellow
+  '#22c55e', // green
+  '#14b8a6', // teal
+  '#3b82f6', // blue
+  '#8b5cf6', // violet
+  '#ec4899', // pink
+];
 
 interface IssueDetailProps {
   repoId: number;
   issueNumber: number;
   onAnalyze: () => void;
+  analyses?: Analysis[];
+  onSelectAnalysis?: (analysis: Analysis) => void;
+  onContinueAnalysis?: (analysis: Analysis) => void;
+  onDeleteAnalysis?: (analysis: Analysis) => void;
+  tags?: Tag[];
+  issueTags?: Tag[];
+  onAddTag?: (tagId: number) => void;
+  onRemoveTag?: (tagId: number) => void;
+  onCreateTag?: (name: string, color?: string) => Promise<Tag | undefined>;
 }
 
-export function IssueDetail({ repoId, issueNumber, onAnalyze }: IssueDetailProps) {
+export function IssueDetail({
+  repoId,
+  issueNumber,
+  onAnalyze,
+  analyses = [],
+  onSelectAnalysis,
+  onContinueAnalysis,
+  onDeleteAnalysis,
+  tags = [],
+  issueTags = [],
+  onAddTag,
+  onRemoveTag,
+  onCreateTag,
+}: IssueDetailProps) {
   const [issue, setIssue] = useState<IssueDetailType | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showTagDropdown, setShowTagDropdown] = useState(false);
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0]);
+  const [creatingTag, setCreatingTag] = useState(false);
+
+  const handleCreateTag = async () => {
+    if (!newTagName.trim() || !onCreateTag) return;
+    setCreatingTag(true);
+    try {
+      const tag = await onCreateTag(newTagName.trim(), newTagColor);
+      if (tag) {
+        onAddTag?.(tag.id);
+        setNewTagName('');
+        setNewTagColor(TAG_COLORS[0]);
+        setShowTagDropdown(false);
+      }
+    } finally {
+      setCreatingTag(false);
+    }
+  };
+
+  // Filter analyses for this specific issue
+  const issueAnalyses = analyses.filter(
+    a => a.type === 'issue' && a.entity_id === issueNumber.toString()
+  ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   const [commentBody, setCommentBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [commentError, setCommentError] = useState('');
@@ -71,7 +139,7 @@ export function IssueDetail({ repoId, issueNumber, onAnalyze }: IssueDetailProps
           <h2 className="text-xl font-semibold text-white">
             #{issue.number} {issue.title}
           </h2>
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
             <span className={`px-2 py-0.5 text-xs rounded-full ${
               issue.state === 'open' ? 'bg-green-900 text-green-300' : 'bg-purple-900 text-purple-300'
             }`}>
@@ -93,6 +161,108 @@ export function IssueDetail({ repoId, issueNumber, onAnalyze }: IssueDetailProps
             >
               View on GitHub →
             </a>
+          </div>
+
+          {/* Tags section */}
+          <div className="flex items-center gap-2 mt-3 flex-wrap">
+            <span className="text-xs text-gray-400">Tags:</span>
+            {issueTags.map((tag) => {
+              const bgColor = tag.color || '#374151';
+              return (
+                <span
+                  key={tag.id}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full"
+                  style={{ backgroundColor: bgColor, color: getContrastColor(bgColor) }}
+                >
+                  {tag.name}
+                  <button
+                    onClick={() => onRemoveTag?.(tag.id)}
+                    className="hover:opacity-70 ml-0.5"
+                    title="Remove tag"
+                  >
+                    ×
+                  </button>
+                </span>
+              );
+            })}
+
+            {/* Add tag button/dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowTagDropdown(!showTagDropdown)}
+                className="px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 hover:bg-gray-600"
+              >
+                + Add tag
+              </button>
+
+              {showTagDropdown && (
+                <div className="absolute top-full left-0 mt-1 w-56 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-10">
+                  {/* Existing tags */}
+                  {tags.filter(t => !issueTags.some(it => it.id === t.id)).length > 0 && (
+                    <div className="p-2 border-b border-gray-700">
+                      <div className="text-xs text-gray-400 mb-1">Available tags</div>
+                      <div className="flex flex-wrap gap-1">
+                        {tags
+                          .filter(t => !issueTags.some(it => it.id === t.id))
+                          .map((tag) => {
+                            const bgColor = tag.color || '#374151';
+                            return (
+                              <button
+                                key={tag.id}
+                                onClick={() => {
+                                  onAddTag?.(tag.id);
+                                  setShowTagDropdown(false);
+                                }}
+                                className="px-2 py-0.5 text-xs rounded-full hover:opacity-80"
+                                style={{ backgroundColor: bgColor, color: getContrastColor(bgColor) }}
+                              >
+                                {tag.name}
+                              </button>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Create new tag */}
+                  <div className="p-2">
+                    <div className="text-xs text-gray-400 mb-1">Create new tag</div>
+                    <div className="flex gap-1 mb-2">
+                      <input
+                        type="text"
+                        value={newTagName}
+                        onChange={(e) => setNewTagName(e.target.value)}
+                        placeholder="Tag name"
+                        className="flex-1 px-2 py-1 text-xs bg-gray-900 border border-gray-600 rounded"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && newTagName.trim()) {
+                            e.preventDefault();
+                            handleCreateTag();
+                          }
+                        }}
+                      />
+                      <button
+                        onClick={handleCreateTag}
+                        disabled={!newTagName.trim() || creatingTag}
+                        className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded"
+                      >
+                        {creatingTag ? '...' : 'Add'}
+                      </button>
+                    </div>
+                    <div className="flex gap-1">
+                      {TAG_COLORS.map((color) => (
+                        <button
+                          key={color}
+                          onClick={() => setNewTagColor(color)}
+                          className={`w-5 h-5 rounded-full ${newTagColor === color ? 'ring-2 ring-white ring-offset-1 ring-offset-gray-800' : ''}`}
+                          style={{ backgroundColor: color }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
         <button
@@ -116,6 +286,80 @@ export function IssueDetail({ repoId, issueNumber, onAnalyze }: IssueDetailProps
           )}
         </div>
       </div>
+
+      {/* Related Analysis Sessions */}
+      {issueAnalyses.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-lg font-medium text-white mb-3">
+            Analysis Sessions ({issueAnalyses.length})
+          </h3>
+          <div className="space-y-2">
+            {issueAnalyses.map((analysis) => (
+              <div
+                key={analysis.id}
+                onClick={() => onSelectAnalysis?.(analysis)}
+                className="group bg-gray-800 rounded-lg p-3 cursor-pointer hover:bg-gray-750 border border-gray-700 hover:border-gray-600 transition-colors"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${
+                      analysis.status === 'running' ? 'bg-yellow-500 animate-pulse' :
+                      analysis.status === 'completed' ? 'bg-green-500' : 'bg-red-500'
+                    }`} />
+                    <span className="text-sm font-medium text-white truncate">
+                      {analysis.title}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {/* Continue button */}
+                    {analysis.status === 'completed' && analysis.claude_session_id && onContinueAnalysis && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onContinueAnalysis(analysis);
+                        }}
+                        className="px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 rounded flex items-center gap-1"
+                        title="Continue this conversation"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                        </svg>
+                        Continue
+                      </button>
+                    )}
+                    {/* Delete button */}
+                    {analysis.status !== 'running' && onDeleteAnalysis && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm('Delete this analysis?')) {
+                            onDeleteAnalysis(analysis);
+                          }
+                        }}
+                        className="p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Delete analysis"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    )}
+                    <span className="text-xs text-gray-400 hidden sm:inline">
+                      {new Date(analysis.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+                {analysis.summary && (
+                  <p className="text-sm text-gray-400 mt-2 line-clamp-2">{analysis.summary}</p>
+                )}
+                {analysis.status === 'running' && (
+                  <p className="text-xs text-yellow-400 mt-2">Session in progress - click to view</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Comments */}
       <div className="mb-6">

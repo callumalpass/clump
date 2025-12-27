@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react';
-import { useRepos, useIssues, useSessions, useAnalyses } from './hooks/useApi';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { useRepos, useIssues, useSessions, useAnalyses, useTags, useIssueTags } from './hooks/useApi';
+import type { IssueFilters } from './hooks/useApi';
 import { RepoSelector } from './components/RepoSelector';
 import { IssueList } from './components/IssueList';
 import { IssueDetail } from './components/IssueDetail';
@@ -7,9 +8,18 @@ import { Terminal } from './components/Terminal';
 import { SessionTabs } from './components/SessionTabs';
 import { AnalysisList } from './components/AnalysisList';
 import { GitHubTokenSetup } from './components/GitHubTokenSetup';
+import { Settings } from './components/Settings';
 import type { Repo, Issue, Analysis } from './types';
 
 type Tab = 'issues' | 'prs' | 'analyses';
+
+// Track pending issue context for sessions being created
+// This fixes the race condition where the sidepane doesn't show the issue
+// until the analysis is created and fetched via polling
+interface PendingIssueContext {
+  sessionId: string;
+  issueNumber: number;
+}
 
 export default function App() {
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null);
@@ -17,6 +27,13 @@ export default function App() {
   const [selectedIssue, setSelectedIssue] = useState<number | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [issuePanelCollapsed, setIssuePanelCollapsed] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
+  const [issueFilters, setIssueFilters] = useState<IssueFilters>({ state: 'open' });
+
+  // Track pending issue context to show side-by-side view immediately
+  const pendingIssueContextRef = useRef<PendingIssueContext | null>(null);
 
   const { repos, addRepo } = useRepos();
   const {
@@ -27,12 +44,26 @@ export default function App() {
     totalPages: issuesTotalPages,
     total: issuesTotal,
     goToPage: goToIssuesPage,
-  } = useIssues(selectedRepo?.id ?? null);
-  const { sessions, createSession, killSession } = useSessions();
-  const { analyses, loading: analysesLoading } = useAnalyses(
+  } = useIssues(selectedRepo?.id ?? null, issueFilters);
+  const { sessions, createSession, resumeSession, killSession } = useSessions();
+  const { analyses, loading: analysesLoading, refresh: refreshAnalyses, deleteAnalysis } = useAnalyses(
     selectedRepo?.id,
     searchQuery || undefined
   );
+  const { tags, createTag } = useTags(selectedRepo?.id ?? null);
+  const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
+
+  // Clear filters when repo changes
+  useEffect(() => {
+    setSelectedTagId(null);
+    setIssueFilters({ state: 'open' });
+  }, [selectedRepo?.id]);
+
+  // Refresh analyses periodically to update status indicators
+  useEffect(() => {
+    const interval = setInterval(refreshAnalyses, 5000);
+    return () => clearInterval(interval);
+  }, [refreshAnalyses]);
 
   const handleAnalyzeIssue = useCallback(
     async (issue: Issue) => {
@@ -57,6 +88,13 @@ Please:
         `Issue #${issue.number}: ${issue.title}`
       );
 
+      // Store pending context so side-by-side view shows immediately
+      // (before analysis is created and fetched via polling)
+      pendingIssueContextRef.current = {
+        sessionId: session.id,
+        issueNumber: issue.number,
+      };
+
       setActiveSessionId(session.id);
     },
     [selectedRepo, createSession]
@@ -79,8 +117,66 @@ Please:
   const handleSelectAnalysis = useCallback((analysis: Analysis) => {
     if (analysis.session_id) {
       setActiveSessionId(analysis.session_id);
+      // Also select the related issue if it's an issue analysis
+      if (analysis.type === 'issue' && analysis.entity_id) {
+        setSelectedIssue(parseInt(analysis.entity_id, 10));
+      }
     }
   }, []);
+
+  const handleContinueAnalysis = useCallback(
+    async (analysis: Analysis) => {
+      if (!analysis.claude_session_id || !analysis.repo_id) return;
+
+      // Find the repo for this analysis
+      const repo = repos.find((r) => r.id === analysis.repo_id);
+      if (!repo) return;
+
+      const session = await resumeSession(
+        repo.id,
+        analysis.claude_session_id,
+        `Continue: ${analysis.title}`
+      );
+
+      setActiveSessionId(session.id);
+    },
+    [repos, resumeSession]
+  );
+
+  const handleDeleteAnalysis = useCallback(
+    async (analysis: Analysis) => {
+      await deleteAnalysis(analysis.id);
+    },
+    [deleteAnalysis]
+  );
+
+  // Find the active session's related issue (if any)
+  // First try to find via active session, then fallback to matching session_id in analyses
+  const activeSession = sessions.find(s => s.id === activeSessionId);
+  const activeAnalysis = activeSession?.analysis_id
+    ? analyses.find(a => a.id === activeSession.analysis_id)
+    : analyses.find(a => a.session_id === activeSessionId);
+
+  // Check pending context for newly created sessions (before analysis is fetched)
+  const pendingContext = pendingIssueContextRef.current;
+  const hasPendingIssue = pendingContext && pendingContext.sessionId === activeSessionId;
+
+  // Clear pending context once analysis is loaded
+  if (activeAnalysis && hasPendingIssue) {
+    pendingIssueContextRef.current = null;
+  }
+
+  // Show side-by-side if we have an analysis with issue context OR pending issue context
+  const showSideBySide = activeSessionId && (
+    (activeAnalysis?.type === 'issue' && activeAnalysis?.entity_id) || hasPendingIssue
+  );
+
+  // Determine the issue number to display (from analysis or pending context)
+  const activeIssueNumber = activeAnalysis?.entity_id
+    ? parseInt(activeAnalysis.entity_id, 10)
+    : hasPendingIssue
+      ? pendingContext.issueNumber
+      : null;
 
   return (
     <div className="h-screen flex flex-col bg-[#0d1117] text-white">
@@ -91,8 +187,21 @@ Please:
           <span className="text-sm text-gray-400">
             {sessions.length} active session{sessions.length !== 1 ? 's' : ''}
           </span>
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-white"
+            title="Settings"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
         </div>
       </header>
+
+      {/* Settings Modal */}
+      <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       <div className="flex-1 flex min-h-0">
         {/* Left sidebar */}
@@ -147,12 +256,21 @@ Please:
                 totalPages={issuesTotalPages}
                 total={issuesTotal}
                 onPageChange={goToIssuesPage}
+                analyses={analyses}
+                tags={tags}
+                issueTagsMap={issueTagsMap}
+                selectedTagId={selectedTagId}
+                onSelectTag={setSelectedTagId}
+                filters={issueFilters}
+                onFiltersChange={setIssueFilters}
               />
             )}
             {activeTab === 'analyses' && (
               <AnalysisList
                 analyses={analyses}
                 onSelectAnalysis={handleSelectAnalysis}
+                onContinueAnalysis={handleContinueAnalysis}
+                onDeleteAnalysis={handleDeleteAnalysis}
                 loading={analysesLoading}
               />
             )}
@@ -183,7 +301,70 @@ Please:
 
           {/* Content area */}
           <div className="flex-1 flex min-h-0">
-            {/* Issue detail panel (when issue selected but no terminal) */}
+            {/* Side-by-side view: Issue + Terminal */}
+            {showSideBySide && selectedRepo && (
+              <>
+                {/* Collapsible issue panel */}
+                <div className={`border-r border-gray-700 shrink-0 flex flex-col ${issuePanelCollapsed ? 'w-10' : 'w-[520px]'}`}>
+                  {issuePanelCollapsed ? (
+                    <button
+                      onClick={() => setIssuePanelCollapsed(false)}
+                      className="h-full w-full flex items-center justify-center hover:bg-gray-800 text-gray-400 hover:text-white"
+                      title="Show issue details"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between p-2 border-b border-gray-700 bg-gray-800/50">
+                        <span className="text-sm font-medium text-gray-300">Issue Context</span>
+                        <button
+                          onClick={() => setIssuePanelCollapsed(true)}
+                          className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white"
+                          title="Collapse panel"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                          </svg>
+                        </button>
+                      </div>
+                      <div className="flex-1 overflow-auto">
+                        <IssueDetail
+                          repoId={selectedRepo.id}
+                          issueNumber={parseInt(activeAnalysis.entity_id!, 10)}
+                          onAnalyze={() => {
+                            const issue = issues.find((i) => i.number === parseInt(activeAnalysis.entity_id!, 10));
+                            if (issue) handleAnalyzeIssue(issue);
+                          }}
+                          analyses={analyses}
+                          onSelectAnalysis={handleSelectAnalysis}
+                          onContinueAnalysis={handleContinueAnalysis}
+                          onDeleteAnalysis={handleDeleteAnalysis}
+                          tags={tags}
+                          issueTags={issueTagsMap[parseInt(activeAnalysis.entity_id!, 10)] || []}
+                          onAddTag={(tagId) => addTagToIssue(parseInt(activeAnalysis.entity_id!, 10), tagId)}
+                          onRemoveTag={(tagId) => removeTagFromIssue(parseInt(activeAnalysis.entity_id!, 10), tagId)}
+                          onCreateTag={createTag}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div className="flex-1 p-2">
+                  <Terminal
+                    sessionId={activeSessionId}
+                    onClose={() => {
+                      killSession(activeSessionId);
+                      setActiveSessionId(null);
+                    }}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Issue detail panel only (when issue selected but no terminal) */}
             {selectedIssue && selectedRepo && !activeSessionId && (
               <div className="flex-1 border-r border-gray-700 overflow-auto">
                 <IssueDetail
@@ -193,16 +374,28 @@ Please:
                     const issue = issues.find((i) => i.number === selectedIssue);
                     if (issue) handleAnalyzeIssue(issue);
                   }}
+                  analyses={analyses}
+                  onSelectAnalysis={handleSelectAnalysis}
+                  onContinueAnalysis={handleContinueAnalysis}
+                  onDeleteAnalysis={handleDeleteAnalysis}
+                  tags={tags}
+                  issueTags={issueTagsMap[selectedIssue] || []}
+                  onAddTag={(tagId) => addTagToIssue(selectedIssue, tagId)}
+                  onRemoveTag={(tagId) => removeTagFromIssue(selectedIssue, tagId)}
+                  onCreateTag={createTag}
                 />
               </div>
             )}
 
-            {/* Terminal */}
-            {activeSessionId && (
+            {/* Terminal only (for non-issue sessions) */}
+            {activeSessionId && !showSideBySide && (
               <div className="flex-1 p-2">
                 <Terminal
                   sessionId={activeSessionId}
-                  onClose={() => setActiveSessionId(null)}
+                  onClose={() => {
+                    killSession(activeSessionId);
+                    setActiveSessionId(null);
+                  }}
                 />
               </div>
             )}

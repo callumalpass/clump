@@ -2,7 +2,7 @@
 GitHub API routes for repos, issues, and PRs.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -114,18 +114,38 @@ async def delete_repo(repo_id: int, db: AsyncSession = Depends(get_db)):
 async def list_issues(
     repo_id: int,
     state: str = "open",
+    search: str | None = None,
+    labels: list[str] = Query(default=[]),
+    sort: str = "created",
+    order: str = "desc",
     page: int = 1,
     per_page: int = 30,
     db: AsyncSession = Depends(get_db),
 ):
-    """List issues for a repository with pagination."""
+    """List issues for a repository with pagination and filtering.
+
+    Args:
+        state: Filter by state - "open", "closed", or "all"
+        search: Text search in issue title/body
+        labels: Filter by label names (can specify multiple)
+        sort: Sort field - "created", "updated", or "comments"
+        order: Sort order - "asc" or "desc"
+    """
     result = await db.execute(select(Repo).where(Repo.id == repo_id))
     repo = result.scalar_one_or_none()
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
 
     issues, total = github_client.list_issues(
-        repo.owner, repo.name, state=state, page=page, per_page=per_page
+        repo.owner,
+        repo.name,
+        state=state,
+        labels=labels if labels else None,
+        search_query=search,
+        sort=sort,
+        order=order,
+        page=page,
+        per_page=per_page,
     )
     return IssueListResponse(
         issues=[_issue_to_response(i) for i in issues],

@@ -22,12 +22,21 @@ class SessionCreate(BaseModel):
     entity_id: str | None = None
     title: str = "New Analysis"
 
+    # Claude Code configuration overrides
+    permission_mode: str | None = None  # "default", "plan", "acceptEdits", "bypassPermissions"
+    allowed_tools: list[str] | None = None
+    disallowed_tools: list[str] | None = None
+    max_turns: int | None = None
+    model: str | None = None  # "sonnet", "opus", "haiku"
+    resume_session: str | None = None  # Claude Code session ID to resume
+
 
 class SessionResponse(BaseModel):
     id: str
     working_dir: str
     created_at: str
     analysis_id: int | None
+    claude_session_id: str | None = None  # Claude Code's internal session ID
 
 
 class SessionListResponse(BaseModel):
@@ -59,11 +68,17 @@ async def create_session(
     await db.commit()
     await db.refresh(analysis)
 
-    # Create PTY session
+    # Create PTY session with Claude Code configuration
     session = await session_manager.create_session(
         working_dir=repo.local_path,
         initial_prompt=data.prompt,
         analysis_id=analysis.id,
+        allowed_tools=data.allowed_tools,
+        disallowed_tools=data.disallowed_tools,
+        permission_mode=data.permission_mode,
+        max_turns=data.max_turns,
+        model=data.model,
+        resume_session=data.resume_session,
     )
 
     # Link session to analysis
@@ -75,6 +90,7 @@ async def create_session(
         working_dir=session.working_dir,
         created_at=session.created_at.isoformat(),
         analysis_id=analysis.id,
+        claude_session_id=session.claude_session_id,
     )
 
 
@@ -89,6 +105,7 @@ async def list_sessions():
                 working_dir=s.working_dir,
                 created_at=s.created_at.isoformat(),
                 analysis_id=s.analysis_id,
+                claude_session_id=s.claude_session_id,
             )
             for s in sessions
         ]
@@ -114,6 +131,9 @@ async def kill_session(
         if analysis:
             analysis.status = AnalysisStatus.COMPLETED.value
             analysis.transcript = session.transcript
+            # Save Claude Code session ID for resume support
+            if session.claude_session_id:
+                analysis.claude_session_id = session.claude_session_id
             await db.commit()
 
     await session_manager.kill(session_id)
