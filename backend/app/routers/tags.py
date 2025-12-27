@@ -25,6 +25,17 @@ class TagResponse(BaseModel):
         from_attributes = True
 
 
+def _tag_to_response(tag: Tag) -> TagResponse:
+    """Convert a Tag model to TagResponse."""
+    return TagResponse(
+        id=tag.id,
+        repo_id=tag.repo_id,
+        name=tag.name,
+        color=tag.color,
+        created_at=tag.created_at.isoformat(),
+    )
+
+
 class TagCreate(BaseModel):
     name: str
     color: str | None = None
@@ -59,18 +70,7 @@ async def list_tags(
     )
     tags = result.scalars().all()
 
-    return TagListResponse(
-        tags=[
-            TagResponse(
-                id=t.id,
-                repo_id=t.repo_id,
-                name=t.name,
-                color=t.color,
-                created_at=t.created_at.isoformat(),
-            )
-            for t in tags
-        ]
-    )
+    return TagListResponse(tags=[_tag_to_response(t) for t in tags])
 
 
 @router.post("/repos/{repo_id}/tags", response_model=TagResponse)
@@ -94,13 +94,7 @@ async def create_tag(
     await db.commit()
     await db.refresh(tag)
 
-    return TagResponse(
-        id=tag.id,
-        repo_id=tag.repo_id,
-        name=tag.name,
-        color=tag.color,
-        created_at=tag.created_at.isoformat(),
-    )
+    return _tag_to_response(tag)
 
 
 @router.patch("/repos/{repo_id}/tags/{tag_id}", response_model=TagResponse)
@@ -135,13 +129,7 @@ async def update_tag(
     await db.commit()
     await db.refresh(tag)
 
-    return TagResponse(
-        id=tag.id,
-        repo_id=tag.repo_id,
-        name=tag.name,
-        color=tag.color,
-        created_at=tag.created_at.isoformat(),
-    )
+    return _tag_to_response(tag)
 
 
 @router.delete("/repos/{repo_id}/tags/{tag_id}")
@@ -181,16 +169,7 @@ async def get_issue_tags(
 
     return IssueTagsResponse(
         issue_number=issue_number,
-        tags=[
-            TagResponse(
-                id=tag.id,
-                repo_id=tag.repo_id,
-                name=tag.name,
-                color=tag.color,
-                created_at=tag.created_at.isoformat(),
-            )
-            for _, tag in rows
-        ],
+        tags=[_tag_to_response(tag) for _, tag in rows],
     )
 
 
@@ -274,14 +253,6 @@ async def get_all_issue_tags(
     for issue_tag, tag in rows:
         if issue_tag.issue_number not in issue_tags:
             issue_tags[issue_tag.issue_number] = []
-        issue_tags[issue_tag.issue_number].append(
-            TagResponse(
-                id=tag.id,
-                repo_id=tag.repo_id,
-                name=tag.name,
-                color=tag.color,
-                created_at=tag.created_at.isoformat(),
-            )
-        )
+        issue_tags[issue_tag.issue_number].append(_tag_to_response(tag))
 
     return {"issue_tags": issue_tags}
