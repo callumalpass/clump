@@ -18,6 +18,16 @@ import asyncio
 # Frontend will send actual dimensions once terminal component mounts
 INITIAL_PTY_ROWS = 30
 INITIAL_PTY_COLS = 120
+
+# Timing constants for PTY operations
+CLAUDE_INIT_DELAY_SECS = 2.0  # Wait for Claude Code to initialize before sending prompt
+PROMPT_ENTER_DELAY_SECS = 0.1  # Delay between typing prompt and pressing Enter
+READ_LOOP_POLL_INTERVAL_SECS = 0.01  # Polling interval for read loop to prevent busy waiting
+SIGTERM_SIGKILL_DELAY_SECS = 0.1  # Grace period between SIGTERM and SIGKILL
+
+# Buffer size for reading from PTY file descriptor
+PTY_READ_BUFFER_SIZE = 4096
+
 import os
 import pty
 import signal
@@ -230,11 +240,11 @@ class SessionManager:
     async def _send_initial_prompt(self, session: Session, prompt: str):
         """Send initial prompt after Claude Code starts and is ready."""
         # Wait for Claude to initialize and show the prompt
-        await asyncio.sleep(2.0)
+        await asyncio.sleep(CLAUDE_INIT_DELAY_SECS)
 
         # Send the prompt as if user typed it, then press Enter
         await self.write(session.id, prompt)
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(PROMPT_ENTER_DELAY_SECS)
         await self.write(session.id, "\n")
 
     async def _read_loop(self, session: Session):
@@ -259,7 +269,7 @@ class SessionManager:
                         except Exception:
                             pass
 
-                await asyncio.sleep(0.01)  # Small delay to prevent busy loop
+                await asyncio.sleep(READ_LOOP_POLL_INTERVAL_SECS)
 
             except OSError:
                 # PTY closed
@@ -270,7 +280,7 @@ class SessionManager:
     def _read_pty(self, fd: int) -> bytes:
         """Read available data from PTY (blocking call for executor)."""
         try:
-            return os.read(fd, 4096)
+            return os.read(fd, PTY_READ_BUFFER_SIZE)
         except (OSError, BlockingIOError):
             return b""
 
@@ -343,7 +353,7 @@ class SessionManager:
         # Kill process
         try:
             os.kill(session.pid, signal.SIGTERM)
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(SIGTERM_SIGKILL_DELAY_SECS)
             os.kill(session.pid, signal.SIGKILL)
         except OSError:
             pass
