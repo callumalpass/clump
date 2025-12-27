@@ -48,7 +48,7 @@ export function SessionTabs({
         return (
           <button
             key={session.id}
-            className={`group flex items-center gap-2 px-3 py-2 cursor-pointer border-b-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset ${
+            className={`group flex items-center gap-1.5 px-3 py-2 cursor-pointer border-b-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset ${
               activeSession === session.id
                 ? 'border-blue-500 text-white'
                 : 'border-transparent text-gray-400 hover:text-white hover:bg-gray-800'
@@ -56,21 +56,24 @@ export function SessionTabs({
             onClick={() => onSelectSession(session.id)}
             title={fullTitle}
           >
-            <span className="text-sm whitespace-nowrap max-w-[200px] truncate">
+            <span className="text-sm whitespace-nowrap max-w-[180px] truncate">
               {tabName}
             </span>
-            <ElapsedTimer startTime={session.created_at} className="text-xs text-gray-500 ml-1" />
-            <span
-              role="button"
-              tabIndex={-1}
+            <ElapsedTimer startTime={session.created_at} className="text-xs text-gray-500 tabular-nums" />
+            <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onCloseSession(session.id);
               }}
-              className="opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity"
+              className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-gray-600 hover:text-red-400 focus:opacity-100 focus:outline-none focus:ring-1 focus:ring-gray-500 transition-all"
+              title="Close session"
+              aria-label={`Close ${fullTitle}`}
             >
-              ×
-            </span>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </button>
         );
       })}
