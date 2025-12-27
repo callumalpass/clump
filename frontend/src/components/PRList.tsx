@@ -134,7 +134,7 @@ export function PRList({
               className={`p-3 cursor-pointer border-l-2 transition-all duration-150 ${
                 selectedPR === pr.number
                   ? 'bg-gray-800/80 border-blue-500'
-                  : 'border-transparent hover:bg-gray-800/50 hover:border-gray-600'
+                  : 'border-transparent hover:bg-gray-800/60 hover:border-blue-500/50'
               }`}
               onClick={() => onSelectPR(pr.number)}
             >
