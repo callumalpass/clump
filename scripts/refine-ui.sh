@@ -72,6 +72,7 @@ Explore the frontend codebase and implement 1 UI/UX improvement.
 - Subtle animations or transitions
 - Accessibility improvements
 - Responsive design fixes
+- Improved UX
 
 **AVOID changes that:**
 - Require new npm dependencies
