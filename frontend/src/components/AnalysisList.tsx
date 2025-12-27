@@ -1,28 +1,7 @@
-import { useState, useEffect } from 'react';
 import type { Analysis, Session } from '../types';
 import type { AnalysisStatusFilter } from '../hooks/useApi';
-import { formatDuration, calculateDuration } from '../hooks/useElapsedTime';
-
-// Component to show elapsed time that updates every second (for running analyses)
-function ElapsedTimer({ startTime }: { startTime: string }) {
-  const [elapsed, setElapsed] = useState('');
-
-  useEffect(() => {
-    const start = new Date(startTime);
-
-    const updateElapsed = () => {
-      const now = new Date();
-      const diffMs = now.getTime() - start.getTime();
-      setElapsed(formatDuration(diffMs));
-    };
-
-    updateElapsed();
-    const interval = setInterval(updateElapsed, 1000);
-    return () => clearInterval(interval);
-  }, [startTime]);
-
-  return <span>{elapsed}</span>;
-}
+import { calculateDuration } from '../hooks/useElapsedTime';
+import { ElapsedTimer } from './ElapsedTimer';
 
 interface AnalysisListProps {
   analyses: Analysis[];

@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react';
 import type { Session, Analysis } from '../types';
-import { formatDuration } from '../hooks/useElapsedTime';
+import { ElapsedTimer } from './ElapsedTimer';
 
 interface SessionTabsProps {
   sessions: Session[];
@@ -9,31 +8,6 @@ interface SessionTabsProps {
   onCloseSession: (sessionId: string) => void;
   onNewSession: () => void;
   analyses?: Analysis[];
-}
-
-// Component to show elapsed time that updates every second
-function ElapsedTimer({ startTime }: { startTime: string }) {
-  const [elapsed, setElapsed] = useState('');
-
-  useEffect(() => {
-    const start = new Date(startTime);
-
-    const updateElapsed = () => {
-      const now = new Date();
-      const diffMs = now.getTime() - start.getTime();
-      setElapsed(formatDuration(diffMs));
-    };
-
-    updateElapsed();
-    const interval = setInterval(updateElapsed, 1000);
-    return () => clearInterval(interval);
-  }, [startTime]);
-
-  return (
-    <span className="text-xs text-gray-500 ml-1">
-      {elapsed}
-    </span>
-  );
 }
 
 function getTabName(session: Session, analyses: Analysis[]): string {
@@ -85,7 +59,7 @@ export function SessionTabs({
             <span className="text-sm whitespace-nowrap max-w-[200px] truncate">
               {tabName}
             </span>
-            <ElapsedTimer startTime={session.created_at} />
+            <ElapsedTimer startTime={session.created_at} className="text-xs text-gray-500 ml-1" />
             <span
               role="button"
               tabIndex={-1}
