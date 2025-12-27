@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
@@ -28,6 +28,17 @@ export function Terminal({ processId, onClose, relatedEntity, onShowRelated, sho
   const fitAddonRef = useRef<FitAddon | null>(null);
   const sendInputRef = useRef<(data: string) => void>(() => {});
   const sendResizeRef = useRef<(rows: number, cols: number) => void>(() => {});
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
+
+  const handleCopyProcessId = async () => {
+    try {
+      await navigator.clipboard.writeText(processId);
+      setCopyStatus('copied');
+      setTimeout(() => setCopyStatus('idle'), 2000);
+    } catch {
+      console.error('Failed to copy process ID');
+    }
+  };
 
   const { isConnected, sendInput, sendResize } = useWebSocket(processId, {
     onMessage: (data) => {
@@ -194,7 +205,27 @@ export function Terminal({ processId, onClose, relatedEntity, onShowRelated, sho
               {isConnected ? 'Connected' : 'Disconnected'}
             </div>
             <span className="text-sm text-gray-500">|</span>
-            <span className="text-sm text-gray-400">{processId.slice(0, 8)}</span>
+            <button
+              onClick={handleCopyProcessId}
+              className={`flex items-center gap-1.5 text-sm transition-colors focus:outline-none ${
+                copyStatus === 'copied'
+                  ? 'text-green-400'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+              title={copyStatus === 'copied' ? 'Copied!' : 'Copy process ID'}
+              aria-label={copyStatus === 'copied' ? 'Copied to clipboard' : 'Copy process ID to clipboard'}
+            >
+              <span>{processId.slice(0, 8)}</span>
+              {copyStatus === 'copied' ? (
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              )}
+            </button>
             {relatedEntity && onShowRelated && (
               <>
                 <span className="text-sm text-gray-500">|</span>
