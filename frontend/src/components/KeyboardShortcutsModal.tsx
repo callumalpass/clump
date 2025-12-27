@@ -21,6 +21,15 @@ const shortcutGroups: ShortcutGroup[] = [
     ],
   },
   {
+    title: 'Session Tabs',
+    shortcuts: [
+      { keys: ['Alt', '1-9'], description: 'Switch to session tab 1-9' },
+      { keys: ['Alt', '['], description: 'Previous session tab' },
+      { keys: ['Alt', ']'], description: 'Next session tab' },
+      { keys: ['Alt', 'N'], description: 'Open new session (requires repo)' },
+    ],
+  },
+  {
     title: 'Terminal',
     shortcuts: [
       { keys: ['Ctrl', 'C'], description: 'Interrupt current command' },

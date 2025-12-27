@@ -245,7 +245,7 @@ export default function App() {
     }
   }, [selectedRepo, createProcess]);
 
-  // Global keyboard shortcuts
+  // Global keyboard shortcuts (basic navigation)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't trigger shortcuts when typing in inputs/textareas
@@ -437,6 +437,68 @@ export default function App() {
       setSelectedIssue(null);
     }
   }, [sessions, processes]);
+
+  // Session tab keyboard shortcuts (Alt + 1-9, [, ], N)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts when typing in inputs/textareas
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
+      // Tab navigation shortcuts (Alt + 1-9)
+      if (e.altKey && !e.metaKey && !e.ctrlKey && e.key >= '1' && e.key <= '9') {
+        e.preventDefault();
+        const tabIndex = parseInt(e.key) - 1;
+        const sessionId = openSessionIds[tabIndex];
+        if (sessionId) {
+          handleSelectSessionTab(sessionId);
+        }
+        return;
+      }
+
+      // Previous tab (Alt + [)
+      if (e.altKey && !e.metaKey && !e.ctrlKey && e.key === '[') {
+        e.preventDefault();
+        if (openSessionIds.length > 0 && activeTabSessionId) {
+          const currentIndex = openSessionIds.indexOf(activeTabSessionId);
+          const prevIndex = currentIndex > 0 ? currentIndex - 1 : openSessionIds.length - 1;
+          const sessionId = openSessionIds[prevIndex];
+          if (sessionId) {
+            handleSelectSessionTab(sessionId);
+          }
+        }
+        return;
+      }
+
+      // Next tab (Alt + ])
+      if (e.altKey && !e.metaKey && !e.ctrlKey && e.key === ']') {
+        e.preventDefault();
+        if (openSessionIds.length > 0 && activeTabSessionId) {
+          const currentIndex = openSessionIds.indexOf(activeTabSessionId);
+          const nextIndex = currentIndex < openSessionIds.length - 1 ? currentIndex + 1 : 0;
+          const sessionId = openSessionIds[nextIndex];
+          if (sessionId) {
+            handleSelectSessionTab(sessionId);
+          }
+        }
+        return;
+      }
+
+      // New session (Alt + N)
+      if (e.altKey && !e.metaKey && !e.ctrlKey && e.key === 'n') {
+        e.preventDefault();
+        if (selectedRepo) {
+          handleNewProcess();
+        }
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [openSessionIds, activeTabSessionId, handleSelectSessionTab, handleCloseSessionTab, selectedRepo, handleNewProcess]);
 
   // Find the active process and its related session
   const activeProcess = processes.find(p => p.id === activeProcessId);
