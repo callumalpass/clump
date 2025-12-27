@@ -272,6 +272,14 @@ export interface CommandMetadata {
   description: string;
   category: 'issue' | 'pr';
   template: string;
+  source: 'builtin' | 'repo';
+}
+
+export interface CommandCreate {
+  name: string;
+  shortName: string;
+  description: string;
+  template: string;
 }
 
 export interface CommandsResponse {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useClaudeSettings } from '../hooks/useApi';
-import type { PermissionMode, OutputFormat } from '../types';
+import type { PermissionMode, OutputFormat, CommandMetadata } from '../types';
+import { CommandEditor } from './CommandEditor';
 
 interface TokenStatus {
   configured: boolean;
@@ -10,12 +11,15 @@ interface TokenStatus {
 interface SettingsProps {
   isOpen: boolean;
   onClose: () => void;
+  commands?: { issue: CommandMetadata[]; pr: CommandMetadata[] };
+  repoPath?: string | null;
+  onRefreshCommands?: () => void;
 }
 
-export function Settings({ isOpen, onClose }: SettingsProps) {
+export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommands }: SettingsProps) {
   const { settings, loading, error, saving, updateSettings, resetSettings } = useClaudeSettings();
   const [customTool, setCustomTool] = useState('');
-  const [activeTab, setActiveTab] = useState<'github' | 'permissions' | 'execution' | 'advanced'>('github');
+  const [activeTab, setActiveTab] = useState<'github' | 'permissions' | 'execution' | 'commands' | 'advanced'>('github');
 
   // GitHub token state
   const [tokenStatus, setTokenStatus] = useState<TokenStatus>({ configured: false, masked_token: null });
@@ -163,7 +167,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
 
         {/* Tabs */}
         <div className="flex border-b border-gray-700">
-          {(['github', 'permissions', 'execution', 'advanced'] as const).map((tab) => (
+          {(['github', 'permissions', 'execution', 'commands', 'advanced'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -461,6 +465,33 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'commands' && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-medium mb-2">Session Commands</h3>
+                <p className="text-xs text-gray-400 mb-4">
+                  Commands define the prompts used when starting sessions on issues and PRs.
+                  {repoPath && (
+                    <span className="block mt-1">
+                      Commands can be saved to the current repo or as global defaults.
+                    </span>
+                  )}
+                </p>
+              </div>
+              {commands && onRefreshCommands ? (
+                <CommandEditor
+                  commands={commands}
+                  repoPath={repoPath}
+                  onRefresh={onRefreshCommands}
+                />
+              ) : (
+                <div className="text-gray-400 text-sm">
+                  Select a repository to manage commands
+                </div>
+              )}
             </div>
           )}
 

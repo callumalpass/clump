@@ -3,7 +3,7 @@ import type {
   Repo, Issue, IssueDetail, PR, Process,
   SessionSummary, SessionDetail, SessionListResponse, EntityLink,
   ClaudeCodeSettings, ProcessCreateOptions, Tag, IssueTagsMap, GitHubLabel,
-  CommandsResponse, SubsessionDetail
+  CommandsResponse, CommandMetadata, SubsessionDetail
 } from '../types';
 
 export interface EntityInput {
@@ -97,7 +97,10 @@ export function useIssues(repoId: number | null, filters: IssueFilters = {}) {
   // Extract filter values with defaults
   const { state = 'open', search, labels, sort = 'created', order = 'desc' } = filters;
 
-  const fetchPage = useCallback(async (pageNum: number) => {
+  // Stable reference for labels to avoid re-renders from array reference changes
+  const labelsKey = labels?.join(',') ?? '';
+
+  const fetchPage = useCallback(async (pageNum: number, signal?: AbortSignal) => {
     if (!repoId) return;
 
     try {
@@ -119,13 +122,16 @@ export function useIssues(repoId: number | null, filters: IssueFilters = {}) {
       }
 
       const data = await fetchJson<IssueListResponse>(
-        `${API_BASE}/repos/${repoId}/issues?${params}`
+        `${API_BASE}/repos/${repoId}/issues?${params}`,
+        { signal }
       );
       setIssues(data.issues);
       setTotal(data.total);
       setPage(data.page);
       setError(null);
     } catch (e) {
+      // Ignore abort errors
+      if (e instanceof Error && e.name === 'AbortError') return;
       setError(e instanceof Error ? e.message : 'Failed to fetch issues');
     } finally {
       setLoading(false);
@@ -141,17 +147,21 @@ export function useIssues(repoId: number | null, filters: IssueFilters = {}) {
 
   // Reset to page 1 when filters change
   useEffect(() => {
-    if (repoId) {
-      setLoading(true);
-      setPage(1);
-      fetchPage(1);
-    } else {
+    if (!repoId) {
       // Clear issues and reset loading when no repo selected
       setIssues([]);
       setTotal(0);
       setLoading(false);
+      return;
     }
-  }, [repoId, state, search, JSON.stringify(labels), sort, order]);
+
+    const controller = new AbortController();
+    setLoading(true);
+    setPage(1);
+    fetchPage(1, controller.signal);
+
+    return () => controller.abort();
+  }, [repoId, state, search, labelsKey, sort, order]);
 
   const totalPages = Math.ceil(total / perPage);
 
@@ -165,20 +175,24 @@ export async function fetchIssue(repoId: number, issueNumber: number): Promise<I
 // PRs
 export function usePRs(repoId: number | null, state: string = 'open') {
   const [prs, setPRs] = useState<PR[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Start with loading=true if we have a repoId to prevent "No PRs" flash
+  const [loading, setLoading] = useState(repoId !== null);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (signal?: AbortSignal) => {
     if (!repoId) return;
 
     try {
       setLoading(true);
       const data = await fetchJson<PR[]>(
-        `${API_BASE}/repos/${repoId}/prs?state=${state}`
+        `${API_BASE}/repos/${repoId}/prs?state=${state}`,
+        { signal }
       );
       setPRs(data);
       setError(null);
     } catch (e) {
+      // Ignore abort errors
+      if (e instanceof Error && e.name === 'AbortError') return;
       setError(e instanceof Error ? e.message : 'Failed to fetch PRs');
     } finally {
       setLoading(false);
@@ -186,10 +200,21 @@ export function usePRs(repoId: number | null, state: string = 'open') {
   }, [repoId, state]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (!repoId) {
+      // Clear PRs and reset loading when no repo selected
+      setPRs([]);
+      setLoading(false);
+      return;
+    }
 
-  return { prs, loading, error, refresh };
+    const controller = new AbortController();
+    setLoading(true);
+    refresh(controller.signal);
+
+    return () => controller.abort();
+  }, [repoId, state, refresh]);
+
+  return { prs, loading, error, refresh: () => refresh() };
 }
 
 // Processes (PTY processes running Claude Code)
@@ -428,21 +453,24 @@ export function useClaudeSettings() {
 // Tags
 export function useTags(repoId: number | null) {
   const [tags, setTags] = useState<Tag[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Start with loading=true if we have a repoId
+  const [loading, setLoading] = useState(repoId !== null);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    if (!repoId) {
-      setTags([]);
-      return;
-    }
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    if (!repoId) return;
 
     try {
       setLoading(true);
-      const data = await fetchJson<{ tags: Tag[] }>(`${API_BASE}/repos/${repoId}/tags`);
+      const data = await fetchJson<{ tags: Tag[] }>(
+        `${API_BASE}/repos/${repoId}/tags`,
+        { signal }
+      );
       setTags(data.tags);
       setError(null);
     } catch (e) {
+      // Ignore abort errors
+      if (e instanceof Error && e.name === 'AbortError') return;
       setError(e instanceof Error ? e.message : 'Failed to fetch tags');
     } finally {
       setLoading(false);
@@ -450,8 +478,18 @@ export function useTags(repoId: number | null) {
   }, [repoId]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (!repoId) {
+      setTags([]);
+      setLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setLoading(true);
+    refresh(controller.signal);
+
+    return () => controller.abort();
+  }, [repoId, refresh]);
 
   const createTag = async (name: string, color?: string) => {
     if (!repoId) return;
@@ -479,25 +517,28 @@ export function useTags(repoId: number | null) {
     setTags((prev) => prev.filter((t) => t.id !== tagId));
   };
 
-  return { tags, loading, error, refresh, createTag, updateTag, deleteTag };
+  return { tags, loading, error, refresh: () => refresh(), createTag, updateTag, deleteTag };
 }
 
 // Issue Tags (bulk loading for issue list)
 export function useIssueTags(repoId: number | null) {
   const [issueTagsMap, setIssueTagsMap] = useState<IssueTagsMap>({});
-  const [loading, setLoading] = useState(false);
+  // Start with loading=true if we have a repoId
+  const [loading, setLoading] = useState(repoId !== null);
 
-  const refresh = useCallback(async () => {
-    if (!repoId) {
-      setIssueTagsMap({});
-      return;
-    }
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    if (!repoId) return;
 
     try {
       setLoading(true);
-      const data = await fetchJson<{ issue_tags: IssueTagsMap }>(`${API_BASE}/repos/${repoId}/issue-tags`);
+      const data = await fetchJson<{ issue_tags: IssueTagsMap }>(
+        `${API_BASE}/repos/${repoId}/issue-tags`,
+        { signal }
+      );
       setIssueTagsMap(data.issue_tags);
     } catch (e) {
+      // Ignore abort errors
+      if (e instanceof Error && e.name === 'AbortError') return;
       console.error('Failed to fetch issue tags:', e);
     } finally {
       setLoading(false);
@@ -505,8 +546,18 @@ export function useIssueTags(repoId: number | null) {
   }, [repoId]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (!repoId) {
+      setIssueTagsMap({});
+      setLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setLoading(true);
+    refresh(controller.signal);
+
+    return () => controller.abort();
+  }, [repoId, refresh]);
 
   const addTagToIssue = async (issueNumber: number, tagId: number) => {
     if (!repoId) return;
@@ -526,7 +577,7 @@ export function useIssueTags(repoId: number | null) {
     setIssueTagsMap((prev) => ({ ...prev, [issueNumber]: data.tags }));
   };
 
-  return { issueTagsMap, loading, refresh, addTagToIssue, removeTagFromIssue };
+  return { issueTagsMap, loading, refresh: () => refresh(), addTagToIssue, removeTagFromIssue };
 }
 
 // Session Entity Management
@@ -578,28 +629,31 @@ export async function createIssue(repoId: number, params: CreateIssueParams): Pr
 }
 
 // GitHub Labels
-export async function fetchLabels(repoId: number): Promise<GitHubLabel[]> {
-  const data = await fetchJson<{ labels: GitHubLabel[] }>(`${API_BASE}/repos/${repoId}/labels`);
+export async function fetchLabels(repoId: number, signal?: AbortSignal): Promise<GitHubLabel[]> {
+  const data = await fetchJson<{ labels: GitHubLabel[] }>(
+    `${API_BASE}/repos/${repoId}/labels`,
+    { signal }
+  );
   return data.labels;
 }
 
 export function useLabels(repoId: number | null) {
   const [labels, setLabels] = useState<GitHubLabel[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Start with loading=true if we have a repoId
+  const [loading, setLoading] = useState(repoId !== null);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    if (!repoId) {
-      setLabels([]);
-      return;
-    }
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    if (!repoId) return;
 
     try {
       setLoading(true);
-      const data = await fetchLabels(repoId);
+      const data = await fetchLabels(repoId, signal);
       setLabels(data);
       setError(null);
     } catch (e) {
+      // Ignore abort errors
+      if (e instanceof Error && e.name === 'AbortError') return;
       setError(e instanceof Error ? e.message : 'Failed to fetch labels');
     } finally {
       setLoading(false);
@@ -607,35 +661,48 @@ export function useLabels(repoId: number | null) {
   }, [repoId]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (!repoId) {
+      setLabels([]);
+      setLoading(false);
+      return;
+    }
 
-  return { labels, loading, error, refresh };
+    const controller = new AbortController();
+    setLoading(true);
+    refresh(controller.signal);
+
+    return () => controller.abort();
+  }, [repoId, refresh]);
+
+  return { labels, loading, error, refresh: () => refresh() };
 }
 
 // GitHub Assignees
-export async function fetchAssignees(repoId: number): Promise<string[]> {
-  const data = await fetchJson<{ assignees: string[] }>(`${API_BASE}/repos/${repoId}/assignees`);
+export async function fetchAssignees(repoId: number, signal?: AbortSignal): Promise<string[]> {
+  const data = await fetchJson<{ assignees: string[] }>(
+    `${API_BASE}/repos/${repoId}/assignees`,
+    { signal }
+  );
   return data.assignees;
 }
 
 export function useAssignees(repoId: number | null) {
   const [assignees, setAssignees] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Start with loading=true if we have a repoId
+  const [loading, setLoading] = useState(repoId !== null);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    if (!repoId) {
-      setAssignees([]);
-      return;
-    }
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    if (!repoId) return;
 
     try {
       setLoading(true);
-      const data = await fetchAssignees(repoId);
+      const data = await fetchAssignees(repoId, signal);
       setAssignees(data);
       setError(null);
     } catch (e) {
+      // Ignore abort errors
+      if (e instanceof Error && e.name === 'AbortError') return;
       setError(e instanceof Error ? e.message : 'Failed to fetch assignees');
     } finally {
       setLoading(false);
@@ -643,14 +710,24 @@ export function useAssignees(repoId: number | null) {
   }, [repoId]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (!repoId) {
+      setAssignees([]);
+      setLoading(false);
+      return;
+    }
 
-  return { assignees, loading, error, refresh };
+    const controller = new AbortController();
+    setLoading(true);
+    refresh(controller.signal);
+
+    return () => controller.abort();
+  }, [repoId, refresh]);
+
+  return { assignees, loading, error, refresh: () => refresh() };
 }
 
 // Commands (slash commands from .claude/commands/)
-export function useCommands() {
+export function useCommands(repoPath?: string | null) {
   const [commands, setCommands] = useState<CommandsResponse>({ issue: [], pr: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -658,7 +735,8 @@ export function useCommands() {
   const refresh = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await fetchJson<CommandsResponse>(`${API_BASE}/commands`);
+      const params = repoPath ? `?repo_path=${encodeURIComponent(repoPath)}` : '';
+      const data = await fetchJson<CommandsResponse>(`${API_BASE}/commands${params}`);
       setCommands(data);
       setError(null);
     } catch (e) {
@@ -666,13 +744,50 @@ export function useCommands() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [repoPath]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
   return { commands, loading, error, refresh };
+}
+
+// Command CRUD operations
+export async function createCommand(
+  category: 'issue' | 'pr',
+  command: { name: string; shortName: string; description: string; template: string },
+  repoPath?: string
+): Promise<CommandMetadata> {
+  const params = repoPath ? `?repo_path=${encodeURIComponent(repoPath)}` : '';
+  return fetchJson<CommandMetadata>(`${API_BASE}/commands/${category}${params}`, {
+    method: 'POST',
+    body: JSON.stringify(command),
+  });
+}
+
+export async function updateCommand(
+  category: 'issue' | 'pr',
+  commandId: string,
+  command: { name: string; shortName: string; description: string; template: string },
+  repoPath?: string
+): Promise<CommandMetadata> {
+  const params = repoPath ? `?repo_path=${encodeURIComponent(repoPath)}` : '';
+  return fetchJson<CommandMetadata>(`${API_BASE}/commands/${category}/${commandId}${params}`, {
+    method: 'PUT',
+    body: JSON.stringify(command),
+  });
+}
+
+export async function deleteCommand(
+  category: 'issue' | 'pr',
+  commandId: string,
+  repoPath?: string
+): Promise<void> {
+  const params = repoPath ? `?repo_path=${encodeURIComponent(repoPath)}` : '';
+  await fetchJson(`${API_BASE}/commands/${category}/${commandId}${params}`, {
+    method: 'DELETE',
+  });
 }
 
 // Build prompt from command template

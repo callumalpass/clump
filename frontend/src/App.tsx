@@ -91,7 +91,7 @@ export default function App() {
   const { tags, createTag } = useTags(selectedRepo?.id ?? null);
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
   const { prs, loading: prsLoading } = usePRs(selectedRepo?.id ?? null, prStateFilter);
-  const { commands } = useCommands();
+  const { commands, refresh: refreshCommands } = useCommands(selectedRepo?.local_path);
 
   // Clear all UI state when repo changes
   useEffect(() => {
@@ -543,7 +543,13 @@ export default function App() {
       </header>
 
       {/* Settings Modal */}
-      <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <Settings
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        commands={commands}
+        repoPath={selectedRepo?.local_path}
+        onRefreshCommands={refreshCommands}
+      />
 
       {/* Keyboard Shortcuts Modal */}
       <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
