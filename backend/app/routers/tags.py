@@ -56,6 +56,14 @@ class IssueTagsResponse(BaseModel):
     tags: list[TagResponse]
 
 
+class DeleteResponse(BaseModel):
+    status: str
+
+
+class AllIssueTagsResponse(BaseModel):
+    issue_tags: dict[int, list[TagResponse]]
+
+
 # --- Tag CRUD ---
 
 @router.get("/repos/{repo_id}/tags", response_model=TagListResponse)
@@ -126,8 +134,8 @@ async def update_tag(repo_id: int, tag_id: int, data: TagUpdate):
         return _tag_to_response(tag)
 
 
-@router.delete("/repos/{repo_id}/tags/{tag_id}")
-async def delete_tag(repo_id: int, tag_id: int):
+@router.delete("/repos/{repo_id}/tags/{tag_id}", response_model=DeleteResponse)
+async def delete_tag(repo_id: int, tag_id: int) -> DeleteResponse:
     """Delete a tag (also removes it from all issues)."""
     repo = get_repo_or_404(repo_id)
 
@@ -141,7 +149,7 @@ async def delete_tag(repo_id: int, tag_id: int):
 
         await db.delete(tag)
         await db.commit()
-        return {"status": "deleted"}
+        return DeleteResponse(status="deleted")
 
 
 # --- Issue Tag Assignment ---
@@ -243,8 +251,8 @@ async def remove_tag_from_issue(repo_id: int, issue_number: int, tag_id: int):
 
 # --- Bulk Query ---
 
-@router.get("/repos/{repo_id}/issue-tags")
-async def get_all_issue_tags(repo_id: int):
+@router.get("/repos/{repo_id}/issue-tags", response_model=AllIssueTagsResponse)
+async def get_all_issue_tags(repo_id: int) -> AllIssueTagsResponse:
     """Get all issue-tag assignments for a repository (for efficient bulk loading)."""
     repo = get_repo_or_404(repo_id)
 
@@ -263,4 +271,4 @@ async def get_all_issue_tags(repo_id: int):
                 issue_tags[issue_tag.issue_number] = []
             issue_tags[issue_tag.issue_number].append(_tag_to_response(tag))
 
-        return {"issue_tags": issue_tags}
+        return AllIssueTagsResponse(issue_tags=issue_tags)
