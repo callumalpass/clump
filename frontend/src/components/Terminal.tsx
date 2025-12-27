@@ -6,12 +6,19 @@ import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { useWebSocket } from '../hooks/useWebSocket';
 import '@xterm/xterm/css/xterm.css';
 
+interface RelatedEntity {
+  type: 'issue' | 'pr';
+  number: number;
+}
+
 interface TerminalProps {
   sessionId: string;
   onClose?: () => void;
+  relatedEntity?: RelatedEntity | null;
+  onShowRelated?: () => void;
 }
 
-export function Terminal({ sessionId, onClose }: TerminalProps) {
+export function Terminal({ sessionId, onClose, relatedEntity, onShowRelated }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -169,6 +176,17 @@ export function Terminal({ sessionId, onClose }: TerminalProps) {
           </div>
           <span className="text-sm text-gray-500">|</span>
           <span className="text-sm text-gray-400">{sessionId.slice(0, 8)}</span>
+          {relatedEntity && onShowRelated && (
+            <>
+              <span className="text-sm text-gray-500">|</span>
+              <button
+                onClick={onShowRelated}
+                className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                {relatedEntity.type === 'issue' ? 'Issue' : 'PR'} #{relatedEntity.number}
+              </button>
+            </>
+          )}
         </div>
         {onClose && (
           <button
