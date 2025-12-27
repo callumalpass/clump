@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import type { TranscriptMessage, ToolUse, ParsedTranscript } from '../types';
 import { Markdown } from './Markdown';
+import { Editor } from './Editor';
 
 // Highlight matching text in a string
 function HighlightedText({
@@ -63,6 +64,8 @@ interface ConversationViewProps {
   searchQuery?: string;
   currentMatchIndex?: number;
   onMatchesFound?: (count: number) => void;
+  isActiveSession?: boolean;
+  onSendMessage?: (message: string) => void;
 }
 
 // Format token count for display
@@ -398,9 +401,22 @@ export function ConversationView({
   transcript,
   searchQuery = '',
   currentMatchIndex,
-  onMatchesFound
+  onMatchesFound,
+  isActiveSession = false,
+  onSendMessage,
 }: ConversationViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [inputMessage, setInputMessage] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const handleSend = () => {
+    if (!inputMessage.trim() || !onSendMessage || sending) return;
+    setSending(true);
+    onSendMessage(inputMessage);
+    setInputMessage('');
+    // Reset sending state after a delay to show feedback
+    setTimeout(() => setSending(false), 500);
+  };
 
   // Calculate match map and total matches
   const matchMap = useMemo(
@@ -460,9 +476,9 @@ export function ConversationView({
   }
 
   return (
-    <div className="flex flex-col min-w-0" ref={containerRef}>
+    <div className="flex flex-col min-w-0 h-full" ref={containerRef}>
       <SessionStats transcript={transcript} />
-      <div className="space-y-4 p-3 min-w-0">
+      <div className="flex-1 overflow-auto space-y-4 p-3 min-w-0">
         {transcript.messages.map((message, index) => (
           <MessageBubble
             key={message.uuid || index}
@@ -473,6 +489,36 @@ export function ConversationView({
           />
         ))}
       </div>
+      {/* Inline editor for active sessions */}
+      {isActiveSession && onSendMessage && (
+        <div className="shrink-0 border-t border-gray-700 bg-gray-900 p-3">
+          <Editor
+            value={inputMessage}
+            onChange={setInputMessage}
+            placeholder="Send a message to Claude..."
+            minHeight="60px"
+            maxHeight="200px"
+            onSubmit={handleSend}
+            disabled={sending}
+          />
+          <div className="flex justify-end mt-2">
+            <button
+              onClick={handleSend}
+              disabled={sending || !inputMessage.trim()}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center gap-2"
+            >
+              {sending ? (
+                <span>Sending...</span>
+              ) : (
+                <>
+                  <span>Send</span>
+                  <kbd className="text-xs bg-blue-700/50 px-1 py-0.5 rounded">⌘↵</kbd>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

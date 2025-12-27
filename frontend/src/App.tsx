@@ -5,6 +5,7 @@ import type { IssueFilters, SessionStatusFilter } from './hooks/useApi';
 import { RepoSelector } from './components/RepoSelector';
 import { IssueList } from './components/IssueList';
 import { IssueDetail } from './components/IssueDetail';
+import { IssueCreateView } from './components/IssueCreateView';
 import { PRList } from './components/PRList';
 import { PRDetail } from './components/PRDetail';
 import { Terminal } from './components/Terminal';
@@ -62,6 +63,7 @@ export default function App() {
   const [viewingSessionId, setViewingSessionId] = useState<number | null>(null);
   const [selectedPR, setSelectedPR] = useState<number | null>(null);
   const [prStateFilter, setPRStateFilter] = useState<'open' | 'closed' | 'all'>('open');
+  const [isCreatingIssue, setIsCreatingIssue] = useState(false);
 
   // Track pending issue/PR context to show side-by-side view immediately
   const pendingIssueContextRef = useRef<PendingIssueContext | null>(null);
@@ -74,13 +76,12 @@ export default function App() {
   const {
     issues,
     loading: issuesLoading,
-    refresh: _refreshIssues,
+    refresh: refreshIssues,
     page: issuesPage,
     totalPages: issuesTotalPages,
     total: issuesTotal,
     goToPage: goToIssuesPage,
   } = useIssues(selectedRepo?.id ?? null, issueFilters);
-  void _refreshIssues; // Reserved for future use
   const { processes, createProcess, killProcess, addProcess } = useProcesses();
   const { sessions, loading: sessionsLoading, refresh: refreshSessions, deleteSession, continueSession, total: sessionsTotal } = useSessions(
     selectedRepo?.id,
@@ -632,6 +633,10 @@ export default function App() {
                 onSelectTag={setSelectedTagId}
                 filters={issueFilters}
                 onFiltersChange={setIssueFilters}
+                onCreateIssue={() => {
+                  setIsCreatingIssue(true);
+                  setSelectedIssue(null);
+                }}
               />
             )}
             {activeTab === 'sessions' && (
@@ -813,8 +818,23 @@ export default function App() {
               </Group>
             )}
 
+            {/* Issue creation panel */}
+            {isCreatingIssue && selectedRepo && (
+              <div className="flex-1 border-r border-gray-700 overflow-auto">
+                <IssueCreateView
+                  repoId={selectedRepo.id}
+                  onCancel={() => setIsCreatingIssue(false)}
+                  onCreated={(issue) => {
+                    setIsCreatingIssue(false);
+                    setSelectedIssue(issue.number);
+                    refreshIssues();
+                  }}
+                />
+              </div>
+            )}
+
             {/* Issue detail panel only (when issue selected but no sessions) */}
-            {selectedIssue && selectedRepo && !showSideBySide && !selectedPR && (
+            {selectedIssue && selectedRepo && !showSideBySide && !selectedPR && !isCreatingIssue && (
               <div className="flex-1 border-r border-gray-700 overflow-auto">
                 <IssueDetail
                   repoId={selectedRepo.id}

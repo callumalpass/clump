@@ -25,6 +25,12 @@ export interface IssueComment {
   created_at: string;
 }
 
+export interface GitHubLabel {
+  name: string;
+  color: string;
+  description: string | null;
+}
+
 export interface IssueDetail extends Issue {
   comments: IssueComment[];
 }

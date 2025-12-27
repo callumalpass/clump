@@ -233,6 +233,44 @@ class GitHubClient:
         issue = repo.get_issue(issue_number)
         issue.edit(state="closed")
 
+    def reopen_issue(self, owner: str, name: str, issue_number: int):
+        """Reopen a closed issue."""
+        repo = self.get_repo(owner, name)
+        issue = repo.get_issue(issue_number)
+        issue.edit(state="open")
+
+    def create_issue(
+        self,
+        owner: str,
+        name: str,
+        title: str,
+        body: str,
+        labels: list[str] | None = None,
+        assignees: list[str] | None = None,
+    ) -> IssueData:
+        """Create a new issue."""
+        repo = self.get_repo(owner, name)
+        issue = repo.create_issue(
+            title=title,
+            body=body,
+            labels=labels or [],
+            assignees=assignees or [],
+        )
+        return self._issue_to_data(issue)
+
+    def get_assignable_users(self, owner: str, name: str, limit: int = 100) -> list[str]:
+        """Get list of users who can be assigned to issues."""
+        repo = self.get_repo(owner, name)
+        return [u.login for u in repo.get_assignees()[:limit]]
+
+    def get_available_labels(self, owner: str, name: str) -> list[dict]:
+        """Get list of available labels for the repo."""
+        repo = self.get_repo(owner, name)
+        return [
+            {"name": label.name, "color": label.color, "description": label.description}
+            for label in repo.get_labels()
+        ]
+
 
 # Global client instance
 github_client = GitHubClient()

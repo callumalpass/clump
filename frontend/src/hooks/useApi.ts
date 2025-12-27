@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Repo, Issue, IssueDetail, PR, Process, Session, SessionEntity, ClaudeCodeSettings, ProcessCreateOptions, Tag, IssueTagsMap, TranscriptResponse } from '../types';
+import type { Repo, Issue, IssueDetail, PR, Process, Session, SessionEntity, ClaudeCodeSettings, ProcessCreateOptions, Tag, IssueTagsMap, TranscriptResponse, GitHubLabel } from '../types';
 
 export interface EntityInput {
   kind: string;  // "issue" or "pr"
@@ -513,4 +513,103 @@ export async function removeEntityFromSession(
   await fetchJson(`${API_BASE}/sessions/${sessionId}/entities/${entityId}`, {
     method: 'DELETE',
   });
+}
+
+// Issue Actions
+export async function closeIssue(repoId: number, issueNumber: number): Promise<void> {
+  await fetchJson(`${API_BASE}/repos/${repoId}/issues/${issueNumber}/close`, {
+    method: 'POST',
+  });
+}
+
+export async function reopenIssue(repoId: number, issueNumber: number): Promise<void> {
+  await fetchJson(`${API_BASE}/repos/${repoId}/issues/${issueNumber}/reopen`, {
+    method: 'POST',
+  });
+}
+
+export interface CreateIssueParams {
+  title: string;
+  body: string;
+  labels?: string[];
+  assignees?: string[];
+}
+
+export async function createIssue(repoId: number, params: CreateIssueParams): Promise<Issue> {
+  return fetchJson<Issue>(`${API_BASE}/repos/${repoId}/issues`, {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
+// GitHub Labels
+export async function fetchLabels(repoId: number): Promise<GitHubLabel[]> {
+  const data = await fetchJson<{ labels: GitHubLabel[] }>(`${API_BASE}/repos/${repoId}/labels`);
+  return data.labels;
+}
+
+export function useLabels(repoId: number | null) {
+  const [labels, setLabels] = useState<GitHubLabel[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (!repoId) {
+      setLabels([]);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const data = await fetchLabels(repoId);
+      setLabels(data);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to fetch labels');
+    } finally {
+      setLoading(false);
+    }
+  }, [repoId]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return { labels, loading, error, refresh };
+}
+
+// GitHub Assignees
+export async function fetchAssignees(repoId: number): Promise<string[]> {
+  const data = await fetchJson<{ assignees: string[] }>(`${API_BASE}/repos/${repoId}/assignees`);
+  return data.assignees;
+}
+
+export function useAssignees(repoId: number | null) {
+  const [assignees, setAssignees] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (!repoId) {
+      setAssignees([]);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const data = await fetchAssignees(repoId);
+      setAssignees(data);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to fetch assignees');
+    } finally {
+      setLoading(false);
+    }
+  }, [repoId]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return { assignees, loading, error, refresh };
 }

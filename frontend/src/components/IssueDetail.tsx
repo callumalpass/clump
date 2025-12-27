@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import type { IssueDetail as IssueDetailType, Session, Tag, Process } from '../types';
 import type { SessionTypeConfig } from '../constants/sessionTypes';
-import { fetchIssue } from '../hooks/useApi';
+import { fetchIssue, closeIssue, reopenIssue } from '../hooks/useApi';
 import { Markdown } from './Markdown';
 import { StartSessionButton } from './StartSessionButton';
 import { getContrastColor, TAG_COLORS } from '../utils/colors';
+import { Editor } from './Editor';
 
 interface IssueDetailProps {
   repoId: number;
@@ -71,6 +72,8 @@ export function IssueDetail({
   const [commentBody, setCommentBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [commentError, setCommentError] = useState('');
+  const [issueActionLoading, setIssueActionLoading] = useState(false);
+  const [issueActionError, setIssueActionError] = useState('');
 
   const loadIssue = () => {
     setLoading(true);
@@ -109,6 +112,32 @@ export function IssueDetail({
       setCommentError(e instanceof Error ? e.message : 'Failed to post comment');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleCloseIssue = async () => {
+    setIssueActionLoading(true);
+    setIssueActionError('');
+    try {
+      await closeIssue(repoId, issueNumber);
+      loadIssue();
+    } catch (e) {
+      setIssueActionError(e instanceof Error ? e.message : 'Failed to close issue');
+    } finally {
+      setIssueActionLoading(false);
+    }
+  };
+
+  const handleReopenIssue = async () => {
+    setIssueActionLoading(true);
+    setIssueActionError('');
+    try {
+      await reopenIssue(repoId, issueNumber);
+      loadIssue();
+    } catch (e) {
+      setIssueActionError(e instanceof Error ? e.message : 'Failed to reopen issue');
+    } finally {
+      setIssueActionLoading(false);
     }
   };
 
@@ -179,7 +208,27 @@ export function IssueDetail({
             >
               View on GitHub →
             </a>
+            {issue.state === 'open' ? (
+              <button
+                onClick={handleCloseIssue}
+                disabled={issueActionLoading}
+                className="px-2 py-0.5 text-xs rounded bg-red-900/50 text-red-300 hover:bg-red-900/70 disabled:opacity-50 transition-colors"
+              >
+                {issueActionLoading ? 'Closing...' : 'Close Issue'}
+              </button>
+            ) : (
+              <button
+                onClick={handleReopenIssue}
+                disabled={issueActionLoading}
+                className="px-2 py-0.5 text-xs rounded bg-green-900/50 text-green-300 hover:bg-green-900/70 disabled:opacity-50 transition-colors"
+              >
+                {issueActionLoading ? 'Reopening...' : 'Reopen Issue'}
+              </button>
+            )}
           </div>
+          {issueActionError && (
+            <div className="text-red-400 text-xs mt-1">{issueActionError}</div>
+          )}
 
           {/* Tags section */}
           <div className="flex items-center gap-2 mt-3 flex-wrap">
@@ -403,27 +452,34 @@ export function IssueDetail({
         )}
 
         {/* Add comment form */}
-        <form onSubmit={handleSubmitComment} className="bg-gray-800 rounded-lg p-4">
+        <div className="bg-gray-800 rounded-lg p-4">
           <h4 className="text-sm font-medium text-gray-300 mb-2">Add a comment</h4>
-          <textarea
+          <Editor
             value={commentBody}
-            onChange={(e) => setCommentBody(e.target.value)}
+            onChange={setCommentBody}
             placeholder="Write your comment here... (Markdown supported)"
-            className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm min-h-[100px] resize-y mb-2"
+            minHeight="100px"
+            onSubmit={() => {
+              if (commentBody.trim() && !submitting) {
+                handleSubmitComment({ preventDefault: () => {} } as React.FormEvent);
+              }
+            }}
+            disabled={submitting}
           />
           {commentError && (
-            <div className="text-red-400 text-sm mb-2">{commentError}</div>
+            <div className="text-red-400 text-sm mt-2">{commentError}</div>
           )}
-          <div className="flex justify-end">
+          <div className="flex justify-end mt-2">
             <button
-              type="submit"
+              type="button"
+              onClick={(e) => handleSubmitComment(e)}
               disabled={submitting || !commentBody.trim()}
               className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
             >
               {submitting ? 'Posting...' : 'Comment'}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

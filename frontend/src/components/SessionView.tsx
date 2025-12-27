@@ -4,6 +4,7 @@ import { ConversationView, RawTranscriptView } from './ConversationView';
 import { EntityPicker } from './EntityPicker';
 import type { Session, SessionEntity, Issue, PR, TranscriptResponse, ParsedTranscript } from '../types';
 import { fetchTranscript, addEntityToSession, removeEntityFromSession } from '../hooks/useApi';
+import { useWebSocket } from '../hooks/useWebSocket';
 
 // Format transcript as markdown for export
 function formatTranscriptAsMarkdown(transcript: ParsedTranscript, session: Session): string {
@@ -135,6 +136,16 @@ export function SessionView({
 }: SessionViewProps) {
   // Determine if process is active (has a running PTY)
   const isActiveProcess = !!processId;
+
+  // WebSocket for sending input to active sessions
+  const { sendInput } = useWebSocket(processId ?? null);
+
+  // Handler to send messages to Claude via WebSocket
+  const handleSendMessage = useCallback((message: string) => {
+    if (processId && message.trim()) {
+      sendInput(message + '\n');
+    }
+  }, [processId, sendInput]);
 
   // View mode: transcript or terminal (only relevant for active sessions)
   const [viewMode, setViewMode] = useState<ViewMode>('transcript');
@@ -818,6 +829,8 @@ export function SessionView({
               searchQuery={searchQuery}
               currentMatchIndex={currentMatchIndex}
               onMatchesFound={handleMatchesFound}
+              isActiveSession={isActiveProcess}
+              onSendMessage={handleSendMessage}
             />
           ) : (
             <div className="p-4">

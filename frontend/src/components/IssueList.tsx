@@ -23,6 +23,7 @@ interface IssueListProps {
   onSelectTag?: (tagId: number | null) => void;
   filters?: IssueFiltersType;
   onFiltersChange?: (filters: IssueFiltersType) => void;
+  onCreateIssue?: () => void;
 }
 
 export function IssueList({
@@ -43,6 +44,7 @@ export function IssueList({
   onSelectTag,
   filters = {},
   onFiltersChange,
+  onCreateIssue,
 }: IssueListProps) {
   // Group sessions by issue number (a session can appear under multiple issues)
   const sessionsByIssue = sessions.reduce((acc, session) => {
@@ -244,9 +246,20 @@ export function IssueList({
           </>
         ) : (
           <>
-            <span className="text-gray-400">
-              {total} issues
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-400">
+                {total} issues
+              </span>
+              {onCreateIssue && (
+                <button
+                  onClick={onCreateIssue}
+                  className="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded transition-colors"
+                  title="Create new issue"
+                >
+                  + New
+                </button>
+              )}
+            </div>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => onPageChange(page - 1)}

@@ -192,6 +192,94 @@ async def create_comment(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# Issue action endpoints
+@router.post("/repos/{repo_id}/issues/{issue_number}/close")
+async def close_issue(
+    repo_id: int,
+    issue_number: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Close an issue."""
+    repo = await get_repo_or_404(db, repo_id)
+    try:
+        github_client.close_issue(repo.owner, repo.name, issue_number)
+        return {"status": "closed"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/repos/{repo_id}/issues/{issue_number}/reopen")
+async def reopen_issue(
+    repo_id: int,
+    issue_number: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Reopen a closed issue."""
+    repo = await get_repo_or_404(db, repo_id)
+    try:
+        github_client.reopen_issue(repo.owner, repo.name, issue_number)
+        return {"status": "opened"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class IssueCreate(BaseModel):
+    title: str
+    body: str
+    labels: list[str] = []
+    assignees: list[str] = []
+
+
+@router.post("/repos/{repo_id}/issues", response_model=IssueResponse)
+async def create_issue(
+    repo_id: int,
+    issue: IssueCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new issue."""
+    repo = await get_repo_or_404(db, repo_id)
+    try:
+        created = github_client.create_issue(
+            repo.owner,
+            repo.name,
+            issue.title,
+            issue.body,
+            issue.labels,
+            issue.assignees,
+        )
+        return _issue_to_response(created)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/repos/{repo_id}/labels")
+async def get_labels(
+    repo_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get available labels for a repository."""
+    repo = await get_repo_or_404(db, repo_id)
+    try:
+        labels = github_client.get_available_labels(repo.owner, repo.name)
+        return {"labels": labels}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/repos/{repo_id}/assignees")
+async def get_assignees(
+    repo_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get users who can be assigned to issues."""
+    repo = await get_repo_or_404(db, repo_id)
+    try:
+        assignees = github_client.get_assignable_users(repo.owner, repo.name)
+        return {"assignees": assignees}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 # PR endpoints
 @router.get("/repos/{repo_id}/prs", response_model=list[PRResponse])
 async def list_prs(
