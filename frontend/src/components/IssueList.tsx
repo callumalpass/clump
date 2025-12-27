@@ -166,8 +166,10 @@ export function IssueList({
           return (
             <div
               key={issue.number}
-              className={`p-3 cursor-pointer hover:bg-gray-800 ${
-                selectedIssue === issue.number ? 'bg-gray-800 border-l-2 border-blue-500' : ''
+              className={`p-3 cursor-pointer border-l-2 transition-all duration-150 ${
+                selectedIssue === issue.number
+                  ? 'bg-gray-800/80 border-blue-500'
+                  : 'border-transparent hover:bg-gray-800/50 hover:border-gray-600'
               }`}
               onClick={() => onSelectIssue(issue.number)}
             >
