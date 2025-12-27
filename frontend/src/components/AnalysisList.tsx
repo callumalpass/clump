@@ -144,7 +144,7 @@ export function AnalysisList({ analyses, sessions = [], onSelectAnalysis, onCont
               {onDeleteAnalysis && !isActuallyRunning && (
                 <button
                   onClick={(e) => handleDelete(e, analysis)}
-                  className="flex-shrink-0 p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity focus:outline-none focus:opacity-100 focus:text-red-400 rounded"
+                  className="flex-shrink-0 p-1 text-gray-500 opacity-40 group-hover:opacity-100 hover:text-red-400 hover:bg-red-500/10 transition-all rounded focus:outline-none focus:opacity-100 focus:text-red-400 focus:ring-2 focus:ring-red-400/50"
                   title="Delete analysis"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

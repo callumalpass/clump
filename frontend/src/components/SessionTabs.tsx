@@ -66,7 +66,7 @@ export function SessionTabs({
                 e.stopPropagation();
                 onCloseSession(session.id);
               }}
-              className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-gray-600 hover:text-red-400 focus:opacity-100 focus:outline-none focus:ring-1 focus:ring-gray-500 transition-all"
+              className="ml-1 p-0.5 rounded text-gray-500 opacity-40 group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-400 focus:opacity-100 focus:outline-none focus:ring-1 focus:ring-red-400/50 transition-all"
               title="Close session"
               aria-label={`Close ${fullTitle}`}
             >
