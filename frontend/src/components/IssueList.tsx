@@ -117,7 +117,7 @@ export function IssueList({
         <div className="shrink-0 p-2 border-b border-gray-700 flex flex-wrap gap-1">
           <button
             onClick={() => onSelectTag?.(null)}
-            className={`px-2 py-0.5 text-xs rounded-full transition-colors ${
+            className={`px-2 py-0.5 text-xs rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900 ${
               !selectedTagId
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -132,7 +132,7 @@ export function IssueList({
               <button
                 key={tag.id}
                 onClick={() => onSelectTag?.(isSelected ? null : tag.id)}
-                className={`px-2 py-0.5 text-xs rounded-full transition-colors ${
+                className={`px-2 py-0.5 text-xs rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900 ${
                   isSelected ? 'ring-2 ring-white ring-offset-1 ring-offset-gray-900' : 'hover:opacity-80'
                 }`}
                 style={{ backgroundColor: bgColor, color: getContrastColor(bgColor) }}
@@ -248,7 +248,7 @@ export function IssueList({
               <button
                 onClick={() => onPageChange(page - 1)}
                 disabled={page <= 1}
-                className="p-1.5 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-1.5 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900"
                 title="Previous page"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -261,7 +261,7 @@ export function IssueList({
               <button
                 onClick={() => onPageChange(page + 1)}
                 disabled={page >= totalPages}
-                className="p-1.5 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-1.5 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900"
                 title="Next page"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
