@@ -106,7 +106,7 @@ function formatTranscriptAsText(detail: SessionDetail): string {
   return lines.join('\n');
 }
 
-type ViewMode = 'transcript' | 'terminal';
+export type ViewMode = 'transcript' | 'terminal';
 
 interface SessionViewProps {
   /** The session summary (from list) */
@@ -127,6 +127,10 @@ interface SessionViewProps {
   prs?: PR[];
   /** Callback when entities change */
   onEntitiesChange?: () => void;
+  /** View mode (transcript vs terminal) - controlled by parent */
+  viewMode?: ViewMode;
+  /** Callback when view mode changes */
+  onViewModeChange?: (mode: ViewMode) => void;
 }
 
 export function SessionView({
@@ -139,6 +143,8 @@ export function SessionView({
   issues = [],
   prs = [],
   onEntitiesChange,
+  viewMode: controlledViewMode,
+  onViewModeChange,
 }: SessionViewProps) {
   // Determine if process is active (has a running PTY)
   const isActiveProcess = !!processId || session.is_active;
@@ -153,9 +159,14 @@ export function SessionView({
     }
   }, [processId, sendInput]);
 
-  // View mode: transcript or terminal (only relevant for active sessions)
+  // View mode: use controlled value if provided, otherwise default based on process state
   // Default to terminal for active sessions (preserves continuity from fallback Terminal component)
-  const [viewMode, setViewMode] = useState<ViewMode>(() => processId ? 'terminal' : 'transcript');
+  const defaultViewMode: ViewMode = processId ? 'terminal' : 'transcript';
+  const viewMode = controlledViewMode ?? defaultViewMode;
+
+  const setViewMode = useCallback((mode: ViewMode) => {
+    onViewModeChange?.(mode);
+  }, [onViewModeChange]);
 
   // Terminal connection status (updated via callback from Terminal component)
   const [isConnected, setIsConnected] = useState(false);

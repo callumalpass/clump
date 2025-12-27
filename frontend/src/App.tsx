@@ -61,6 +61,8 @@ export default function App() {
   const [selectedPR, setSelectedPR] = useState<number | null>(null);
   const [prStateFilter, setPRStateFilter] = useState<'open' | 'closed' | 'all'>('open');
   const [isCreatingIssue, setIsCreatingIssue] = useState(false);
+  // Track view mode (transcript vs terminal) per session
+  const [sessionViewModes, setSessionViewModes] = useState<Record<string, 'transcript' | 'terminal'>>({});
 
   // Track pending issue/PR context to show side-by-side view immediately
   const pendingIssueContextRef = useRef<PendingIssueContext | null>(null);
@@ -511,6 +513,11 @@ export default function App() {
     setSelectedIssue(null);
   }, []);
 
+  // Handler for changing session view mode (transcript vs terminal)
+  const handleSetSessionViewMode = useCallback((sessionId: string, mode: 'transcript' | 'terminal') => {
+    setSessionViewModes(prev => ({ ...prev, [sessionId]: mode }));
+  }, []);
+
   return (
     <div className="h-screen flex flex-col bg-[#0d1117] text-white">
       {/* Header */}
@@ -790,6 +797,8 @@ export default function App() {
                         issues={issues}
                         prs={prs}
                         onEntitiesChange={refreshSessions}
+                        viewMode={sessionViewModes[activeSession.session_id]}
+                        onViewModeChange={(mode) => handleSetSessionViewMode(activeSession.session_id, mode)}
                       />
                     ) : activeProcessId ? (
                       // Fallback to terminal-only if no analysis found yet
@@ -810,6 +819,8 @@ export default function App() {
                         issues={issues}
                         prs={prs}
                         onEntitiesChange={refreshSessions}
+                        viewMode={sessionViewModes[viewingSession.session_id]}
+                        onViewModeChange={(mode) => handleSetSessionViewMode(viewingSession.session_id, mode)}
                       />
                     ) : (
                       <div className="h-full flex items-center justify-center">
@@ -904,6 +915,8 @@ export default function App() {
                       issues={issues}
                       prs={prs}
                       onEntitiesChange={refreshSessions}
+                      viewMode={sessionViewModes[activeSession.session_id]}
+                      onViewModeChange={(mode) => handleSetSessionViewMode(activeSession.session_id, mode)}
                     />
                   ) : activeProcessId ? (
                     // Fallback to terminal-only if no analysis found yet
@@ -924,6 +937,8 @@ export default function App() {
                       issues={issues}
                       prs={prs}
                       onEntitiesChange={refreshSessions}
+                      viewMode={sessionViewModes[viewingSession.session_id]}
+                      onViewModeChange={(mode) => handleSetSessionViewMode(viewingSession.session_id, mode)}
                     />
                   ) : (
                     <div className="h-full flex items-center justify-center">
