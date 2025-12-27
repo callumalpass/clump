@@ -1,5 +1,28 @@
+import { useState, useEffect } from 'react';
 import type { Analysis, Session } from '../types';
 import type { AnalysisStatusFilter } from '../hooks/useApi';
+import { formatDuration, calculateDuration } from '../hooks/useElapsedTime';
+
+// Component to show elapsed time that updates every second (for running analyses)
+function ElapsedTimer({ startTime }: { startTime: string }) {
+  const [elapsed, setElapsed] = useState('');
+
+  useEffect(() => {
+    const start = new Date(startTime);
+
+    const updateElapsed = () => {
+      const now = new Date();
+      const diffMs = now.getTime() - start.getTime();
+      setElapsed(formatDuration(diffMs));
+    };
+
+    updateElapsed();
+    const interval = setInterval(updateElapsed, 1000);
+    return () => clearInterval(interval);
+  }, [startTime]);
+
+  return <span>{elapsed}</span>;
+}
 
 interface AnalysisListProps {
   analyses: Analysis[];
@@ -155,7 +178,17 @@ export function AnalysisList({ analyses, sessions = [], onSelectAnalysis, onCont
                 <span>#{analysis.entity_id}</span>
               )}
               <span>{new Date(analysis.created_at).toLocaleDateString()}</span>
-              {analysis.claude_session_id && (
+              {/* Duration display */}
+              {isActuallyRunning ? (
+                <span className="text-yellow-500" title="Time elapsed">
+                  <ElapsedTimer startTime={analysis.created_at} />
+                </span>
+              ) : analysis.completed_at ? (
+                <span className="text-gray-600" title="Total duration">
+                  {calculateDuration(analysis.created_at, analysis.completed_at)}
+                </span>
+              ) : null}
+              {analysis.claude_session_id && !isActuallyRunning && (
                 <span className="text-gray-600" title={`Session: ${analysis.claude_session_id}`}>
                   (resumable)
                 </span>

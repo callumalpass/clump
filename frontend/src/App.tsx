@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
+import { Group, Panel, Separator } from 'react-resizable-panels';
 import { useRepos, useIssues, useSessions, useAnalyses, useTags, useIssueTags } from './hooks/useApi';
 import type { IssueFilters, AnalysisStatusFilter } from './hooks/useApi';
 import { RepoSelector } from './components/RepoSelector';
@@ -9,7 +9,6 @@ import { Terminal } from './components/Terminal';
 import { TranscriptPanel } from './components/TranscriptPanel';
 import { SessionTabs } from './components/SessionTabs';
 import { AnalysisList } from './components/AnalysisList';
-import { GitHubTokenSetup } from './components/GitHubTokenSetup';
 import { Settings } from './components/Settings';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import type { Repo, Issue, Analysis } from './types';
@@ -18,9 +17,9 @@ import { DEFAULT_ANALYSIS_TYPE } from './constants/analysisTypes';
 
 function ResizeHandle() {
   return (
-    <PanelResizeHandle className="group relative flex items-center justify-center w-1 hover:w-2 transition-all">
+    <Separator className="group relative flex items-center justify-center w-1 hover:w-2 transition-all">
       <div className="w-px h-full bg-gray-700 group-hover:bg-blue-500 group-active:bg-blue-400 transition-colors" />
-    </PanelResizeHandle>
+    </Separator>
   );
 }
 
@@ -56,12 +55,13 @@ export default function App() {
   const {
     issues,
     loading: issuesLoading,
-    refresh: refreshIssues,
+    refresh: _refreshIssues,
     page: issuesPage,
     totalPages: issuesTotalPages,
     total: issuesTotal,
     goToPage: goToIssuesPage,
   } = useIssues(selectedRepo?.id ?? null, issueFilters);
+  void _refreshIssues; // Reserved for future use
   const { sessions, createSession, killSession, addSession } = useSessions();
   const { analyses, loading: analysesLoading, refresh: refreshAnalyses, deleteAnalysis, continueAnalysis, total: analysesTotal } = useAnalyses(
     selectedRepo?.id,
@@ -290,7 +290,7 @@ export default function App() {
     <div className="h-screen flex flex-col bg-[#0d1117] text-white">
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-[#161b22]">
-        <h1 className="text-lg font-semibold">Claude Code Hub</h1>
+        <h1 className="text-lg font-semibold">Clump</h1>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-400">
             {sessions.length} active session{sessions.length !== 1 ? 's' : ''}
@@ -323,9 +323,9 @@ export default function App() {
       {/* Keyboard Shortcuts Modal */}
       <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
-      <div className="flex-1 flex min-h-0">
+      <Group orientation="horizontal" className="flex-1 min-h-0">
         {/* Left sidebar */}
-        <aside className="w-80 border-r border-gray-700 flex flex-col bg-[#0d1117]">
+        <Panel defaultSize={20} minSize={15} maxSize={35} className="border-r border-gray-700 flex flex-col bg-[#0d1117]">
           <RepoSelector
             repos={repos}
             selectedRepo={selectedRepo}
@@ -406,13 +406,12 @@ export default function App() {
               <div className="p-4 text-gray-400">Select a repository to view {activeTab}</div>
             )}
           </div>
-        </aside>
+        </Panel>
+
+        <ResizeHandle />
 
         {/* Main content */}
-        <main className="flex-1 flex flex-col min-w-0">
-          {/* GitHub Token Setup */}
-          <GitHubTokenSetup onTokenConfigured={refreshIssues} />
-
+        <Panel defaultSize={80} minSize={40} className="flex flex-col min-w-0">
           {/* Session tabs */}
           {sessions.length > 0 && (
             <SessionTabs
@@ -429,9 +428,16 @@ export default function App() {
           <div className="flex-1 flex min-h-0">
             {/* Side-by-side view: Issue + Terminal */}
             {showSideBySide && selectedRepo && (
-              <>
+              <Group orientation="horizontal" className="flex-1">
                 {/* Collapsible issue panel */}
-                <div className={`border-r border-gray-700 shrink-0 flex flex-col ${issuePanelCollapsed ? 'w-10' : 'w-[520px]'}`}>
+                <Panel
+                  defaultSize={issuePanelCollapsed ? 3 : 40}
+                  minSize={3}
+                  maxSize={60}
+                  collapsible
+                  collapsedSize={3}
+                  className="flex flex-col border-r border-gray-700"
+                >
                   {issuePanelCollapsed ? (
                     <button
                       onClick={() => setIssuePanelCollapsed(false)}
@@ -482,8 +488,9 @@ export default function App() {
                       </div>
                     </>
                   )}
-                </div>
-                <div className="flex-1 p-2">
+                </Panel>
+                <ResizeHandle />
+                <Panel defaultSize={60} minSize={30} className="p-2">
                   {activeSessionId ? (
                     <Terminal
                       sessionId={activeSessionId}
@@ -499,8 +506,8 @@ export default function App() {
                       onClose={() => setViewingAnalysisId(null)}
                     />
                   ) : null}
-                </div>
-              </>
+                </Panel>
+              </Group>
             )}
 
             {/* Issue detail panel only (when issue selected but no terminal/transcript) */}
@@ -566,8 +573,8 @@ export default function App() {
               </div>
             )}
           </div>
-        </main>
-      </div>
+        </Panel>
+      </Group>
     </div>
   );
 }
