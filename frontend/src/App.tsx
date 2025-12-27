@@ -134,10 +134,8 @@ Please:
         if (e.key !== 'Escape') return;
       }
 
-      const isMod = e.metaKey || e.ctrlKey;
-
-      // Ctrl/Cmd + K: Focus search (switch to analyses tab)
-      if (isMod && e.key === 'k') {
+      // "/" : Focus search (switch to analyses tab) - like GitHub/Slack
+      if (e.key === '/') {
         e.preventDefault();
         setActiveTab('analyses');
         // Focus the search input after a short delay
@@ -145,15 +143,6 @@ Please:
           const searchInput = document.querySelector('input[placeholder="Search analyses..."]') as HTMLInputElement;
           searchInput?.focus();
         }, 50);
-        return;
-      }
-
-      // Ctrl/Cmd + N: New session
-      if (isMod && e.key === 'n') {
-        if (selectedRepo) {
-          e.preventDefault();
-          handleNewSession();
-        }
         return;
       }
 
@@ -172,7 +161,7 @@ Please:
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedRepo, settingsOpen, activeSessionId, selectedIssue, handleNewSession]);
+  }, [settingsOpen, activeSessionId, selectedIssue]);
 
   const handleSelectAnalysis = useCallback((analysis: Analysis) => {
     // Check if this analysis has an active session we can view
@@ -248,17 +237,19 @@ Please:
     pendingIssueContextRef.current = null;
   }
 
-  // Show side-by-side if we have an analysis with issue context OR pending issue context
+  // Show side-by-side if we have an active session AND any issue context (from analysis, pending, or user selection)
   const showSideBySide = activeSessionId && (
-    (activeAnalysis?.type === 'issue' && activeAnalysis?.entity_id) || hasPendingIssue
+    (activeAnalysis?.type === 'issue' && activeAnalysis?.entity_id) || hasPendingIssue || selectedIssue
   );
 
-  // Determine the issue number to display (from analysis or pending context)
-  const activeIssueNumber = activeAnalysis?.entity_id
-    ? parseInt(activeAnalysis.entity_id, 10)
-    : hasPendingIssue
-      ? pendingContext.issueNumber
-      : null;
+  // Determine the issue number to display - prefer user selection, fallback to analysis context
+  const activeIssueNumber = selectedIssue ?? (
+    activeAnalysis?.entity_id
+      ? parseInt(activeAnalysis.entity_id, 10)
+      : hasPendingIssue
+        ? pendingContext.issueNumber
+        : null
+  );
 
   return (
     <div className="h-screen flex flex-col bg-[#0d1117] text-white">
@@ -271,10 +262,10 @@ Please:
           </span>
           {/* Keyboard shortcuts hint */}
           <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
-            <kbd className="px-1.5 py-0.5 bg-gray-800 border border-gray-600 rounded text-gray-400">⌘K</kbd>
+            <kbd className="px-1.5 py-0.5 bg-gray-800 border border-gray-600 rounded text-gray-400">/</kbd>
             <span>Search</span>
-            <kbd className="px-1.5 py-0.5 bg-gray-800 border border-gray-600 rounded text-gray-400 ml-2">⌘N</kbd>
-            <span>New</span>
+            <kbd className="px-1.5 py-0.5 bg-gray-800 border border-gray-600 rounded text-gray-400 ml-2">Esc</kbd>
+            <span>Close</span>
           </div>
           <button
             onClick={() => setSettingsOpen(true)}
