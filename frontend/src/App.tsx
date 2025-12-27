@@ -5,6 +5,7 @@ import { RepoSelector } from './components/RepoSelector';
 import { IssueList } from './components/IssueList';
 import { IssueDetail } from './components/IssueDetail';
 import { Terminal } from './components/Terminal';
+import { TranscriptPanel } from './components/TranscriptPanel';
 import { SessionTabs } from './components/SessionTabs';
 import { AnalysisList } from './components/AnalysisList';
 import { GitHubTokenSetup } from './components/GitHubTokenSetup';
@@ -35,6 +36,7 @@ export default function App() {
   const [issueFilters, setIssueFilters] = useState<IssueFilters>({ state: 'open' });
   const [expandedAnalysisId, setExpandedAnalysisId] = useState<number | null>(null);
   const [analysisStatusFilter, setAnalysisStatusFilter] = useState<AnalysisStatusFilter>('all');
+  const [viewingAnalysisId, setViewingAnalysisId] = useState<number | null>(null);
 
   // Track pending issue context to show side-by-side view immediately
   const pendingIssueContextRef = useRef<PendingIssueContext | null>(null);
@@ -174,6 +176,7 @@ export default function App() {
     if (activeSession) {
       // Session is still running - open the terminal
       setActiveSessionId(analysis.session_id);
+      setViewingAnalysisId(null);
       setExpandedAnalysisId(null);
 
       // Store pending context for immediate side-by-side view
@@ -184,9 +187,10 @@ export default function App() {
         };
       }
     } else {
-      // Session ended - show issue details with this analysis expanded
+      // Session ended - show transcript in details panel
       setActiveSessionId(null);
-      setExpandedAnalysisId(analysis.id);
+      setViewingAnalysisId(analysis.id);
+      setExpandedAnalysisId(null);
     }
   }, [sessions]);
 
@@ -208,6 +212,8 @@ export default function App() {
         };
       }
 
+      // Clear viewing state and switch to terminal
+      setViewingAnalysisId(null);
       setActiveSessionId(session.id);
     },
     [continueAnalysis, addSession]
@@ -227,6 +233,11 @@ export default function App() {
     ? analyses.find(a => a.id === activeSession.analysis_id)
     : analyses.find(a => a.session_id === activeSessionId);
 
+  // Find the analysis being viewed (for transcript panel)
+  const viewingAnalysis = viewingAnalysisId
+    ? analyses.find(a => a.id === viewingAnalysisId)
+    : null;
+
   // Check pending context for newly created sessions (before analysis is fetched)
   const pendingContext = pendingIssueContextRef.current;
   const hasPendingIssue = pendingContext && pendingContext.sessionId === activeSessionId;
@@ -236,18 +247,23 @@ export default function App() {
     pendingIssueContextRef.current = null;
   }
 
-  // Show side-by-side if we have an active session AND any issue context (from analysis, pending, or user selection)
-  const showSideBySide = activeSessionId && (
-    (activeAnalysis?.type === 'issue' && activeAnalysis?.entity_id) || hasPendingIssue || selectedIssue
+  // Show side-by-side if we have an active session/transcript AND any issue context
+  const showSideBySide = (activeSessionId || viewingAnalysis) && (
+    (activeAnalysis?.type === 'issue' && activeAnalysis?.entity_id) ||
+    (viewingAnalysis?.type === 'issue' && viewingAnalysis?.entity_id) ||
+    hasPendingIssue ||
+    selectedIssue
   );
 
   // Determine the issue number to display - prefer user selection, fallback to analysis context
   const activeIssueNumber = selectedIssue ?? (
     activeAnalysis?.entity_id
       ? parseInt(activeAnalysis.entity_id, 10)
-      : hasPendingIssue
-        ? pendingContext.issueNumber
-        : null
+      : viewingAnalysis?.entity_id
+        ? parseInt(viewingAnalysis.entity_id, 10)
+        : hasPendingIssue
+          ? pendingContext.issueNumber
+          : null
   );
 
   return (
@@ -443,19 +459,27 @@ export default function App() {
                   )}
                 </div>
                 <div className="flex-1 p-2">
-                  <Terminal
-                    sessionId={activeSessionId}
-                    onClose={() => {
-                      killSession(activeSessionId);
-                      setActiveSessionId(null);
-                    }}
-                  />
+                  {activeSessionId ? (
+                    <Terminal
+                      sessionId={activeSessionId}
+                      onClose={() => {
+                        killSession(activeSessionId);
+                        setActiveSessionId(null);
+                      }}
+                    />
+                  ) : viewingAnalysis ? (
+                    <TranscriptPanel
+                      analysis={viewingAnalysis}
+                      onContinue={viewingAnalysis.claude_session_id ? () => handleContinueAnalysis(viewingAnalysis) : undefined}
+                      onClose={() => setViewingAnalysisId(null)}
+                    />
+                  ) : null}
                 </div>
               </>
             )}
 
-            {/* Issue detail panel only (when issue selected but no terminal) */}
-            {selectedIssue && selectedRepo && !activeSessionId && (
+            {/* Issue detail panel only (when issue selected but no terminal/transcript) */}
+            {selectedIssue && selectedRepo && !activeSessionId && !viewingAnalysis && (
               <div className="flex-1 border-r border-gray-700 overflow-auto">
                 <IssueDetail
                   repoId={selectedRepo.id}
@@ -493,12 +517,26 @@ export default function App() {
               </div>
             )}
 
+            {/* Transcript only (for non-issue completed analyses) */}
+            {viewingAnalysis && !showSideBySide && (
+              <div className="flex-1 p-2">
+                <TranscriptPanel
+                  analysis={viewingAnalysis}
+                  onContinue={viewingAnalysis.claude_session_id ? () => handleContinueAnalysis(viewingAnalysis) : undefined}
+                  onClose={() => setViewingAnalysisId(null)}
+                />
+              </div>
+            )}
+
             {/* Empty state */}
-            {!selectedIssue && !activeSessionId && (
-              <div className="flex-1 flex items-center justify-center text-gray-500">
-                <div className="text-center">
-                  <p className="mb-2">Select an issue to view details</p>
-                  <p className="text-sm">or click "Analyze" to start a Claude Code session</p>
+            {!selectedIssue && !activeSessionId && !viewingAnalysis && (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center p-8">
+                  <svg className="w-16 h-16 text-gray-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+                  </svg>
+                  <p className="text-gray-400 font-medium mb-2">Select an issue to view details</p>
+                  <p className="text-gray-500 text-sm">or click "Analyze" to start a Claude Code session</p>
                 </div>
               </div>
             )}

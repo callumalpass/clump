@@ -3,6 +3,7 @@ Analysis CRUD and search routes.
 """
 
 from datetime import datetime
+from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select, or_
@@ -11,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Analysis, AnalysisStatus, Repo
 from app.services.session_manager import session_manager
+from app.services.transcript_parser import parse_transcript, transcript_to_dict
 
 router = APIRouter()
 
@@ -265,3 +267,69 @@ async def delete_analysis(
     await db.delete(analysis)
     await db.commit()
     return {"status": "deleted"}
+
+
+class TranscriptMessage(BaseModel):
+    """A message in the parsed transcript."""
+    uuid: str
+    role: str
+    content: str
+    timestamp: str
+    thinking: str | None = None
+    tool_uses: list[dict[str, Any]] = []
+
+
+class ParsedTranscriptResponse(BaseModel):
+    """Parsed Claude Code transcript."""
+    session_id: str
+    messages: list[TranscriptMessage]
+    total_cost_usd: float = 0.0
+    total_duration_ms: int = 0
+
+
+@router.get("/analyses/{analysis_id}/transcript")
+async def get_analysis_transcript(
+    analysis_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get the parsed transcript for an analysis.
+
+    Reads Claude Code's JSONL transcript file and returns structured messages.
+    Falls back to raw transcript if JSONL not available.
+    """
+    result = await db.execute(select(Analysis).where(Analysis.id == analysis_id))
+    analysis = result.scalar_one_or_none()
+    if not analysis:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    # Get the repo for working directory
+    repo_result = await db.execute(select(Repo).where(Repo.id == analysis.repo_id))
+    repo = repo_result.scalar_one_or_none()
+    if not repo:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    # Try to get Claude session ID from analysis or currently running session
+    claude_session_id = analysis.claude_session_id
+
+    if not claude_session_id:
+        # No Claude session ID available - return raw transcript
+        return {
+            "type": "raw",
+            "transcript": analysis.transcript or "",
+        }
+
+    # Try to parse the JSONL transcript
+    parsed = parse_transcript(claude_session_id, repo.local_path)
+
+    if parsed:
+        return {
+            "type": "parsed",
+            "transcript": transcript_to_dict(parsed),
+        }
+    else:
+        # JSONL not found - return raw transcript
+        return {
+            "type": "raw",
+            "transcript": analysis.transcript or "",
+        }

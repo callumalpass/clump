@@ -1,6 +1,8 @@
 import type { Issue, Analysis, Tag, IssueTagsMap, Session } from '../types';
 import type { IssueFilters as IssueFiltersType } from '../hooks/useApi';
+import type { AnalysisTypeConfig } from '../constants/analysisTypes';
 import { IssueFilters } from './IssueFilters';
+import { AnalyzeButton } from './AnalyzeButton';
 
 // Helper to determine contrasting text color for a background
 function getContrastColor(hexColor: string): string {
@@ -16,7 +18,7 @@ interface IssueListProps {
   issues: Issue[];
   selectedIssue: number | null;
   onSelectIssue: (issueNumber: number) => void;
-  onAnalyzeIssue: (issue: Issue) => void;
+  onAnalyzeIssue: (issue: Issue, analysisType: AnalysisTypeConfig) => void;
   loading: boolean;
   page: number;
   totalPages: number;
@@ -106,7 +108,13 @@ export function IssueList({
 
       {/* Empty state */}
       {!loading && issues.length === 0 && (
-        <div className="p-4 text-gray-400">No issues found</div>
+        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+          <svg className="w-12 h-12 text-gray-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          <p className="text-gray-400 font-medium mb-1">No issues found</p>
+          <p className="text-gray-500 text-sm">Try adjusting your filters or check the repository</p>
+        </div>
       )}
 
       {/* Tag filter chips */}
@@ -208,15 +216,14 @@ export function IssueList({
                     )}
                   </div>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAnalyzeIssue(issue);
+                <AnalyzeButton
+                  issue={issue}
+                  onAnalyze={(_, type) => {
+                    onAnalyzeIssue(issue, type);
                   }}
-                  className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded shrink-0"
-                >
-                  Analyze
-                </button>
+                  size="sm"
+                  className="shrink-0"
+                />
               </div>
             </div>
           );

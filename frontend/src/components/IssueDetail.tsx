@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import type { IssueDetail as IssueDetailType, Analysis, Tag, Session, TranscriptResponse, ParsedTranscript } from '../types';
-import { fetchIssue, fetchTranscript } from '../hooks/useApi';
+import type { IssueDetail as IssueDetailType, Analysis, Tag, Session } from '../types';
+import type { AnalysisTypeConfig } from '../constants/analysisTypes';
+import { fetchIssue } from '../hooks/useApi';
 import { Markdown } from './Markdown';
-import { ConversationView, RawTranscriptView } from './ConversationView';
+import { AnalyzeButton } from './AnalyzeButton';
 
 // Helper to determine contrasting text color for a background
 function getContrastColor(hexColor: string): string {
@@ -28,13 +29,10 @@ const TAG_COLORS = [
 interface IssueDetailProps {
   repoId: number;
   issueNumber: number;
-  onAnalyze: () => void;
+  onAnalyze: (analysisType: AnalysisTypeConfig) => void;
   analyses?: Analysis[];
   sessions?: Session[];
-  expandedAnalysisId?: number | null;
-  onToggleAnalysis?: (analysisId: number | null) => void;
   onSelectAnalysis?: (analysis: Analysis) => void;
-  onContinueAnalysis?: (analysis: Analysis) => void;
   onDeleteAnalysis?: (analysis: Analysis) => void;
   tags?: Tag[];
   issueTags?: Tag[];
@@ -49,10 +47,7 @@ export function IssueDetail({
   onAnalyze,
   analyses = [],
   sessions = [],
-  expandedAnalysisId,
-  onToggleAnalysis,
   onSelectAnalysis,
-  onContinueAnalysis,
   onDeleteAnalysis,
   tags = [],
   issueTags = [],
@@ -90,11 +85,6 @@ export function IssueDetail({
   const [commentBody, setCommentBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [commentError, setCommentError] = useState('');
-  const [copiedAnalysisId, setCopiedAnalysisId] = useState<number | null>(null);
-
-  // Transcript state - keyed by analysis ID
-  const [transcripts, setTranscripts] = useState<Record<number, TranscriptResponse>>({});
-  const [loadingTranscripts, setLoadingTranscripts] = useState<Set<number>>(new Set());
 
   const loadIssue = () => {
     setLoading(true);
@@ -307,12 +297,12 @@ export function IssueDetail({
             </div>
           </div>
         </div>
-        <button
-          onClick={onAnalyze}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shrink-0"
-        >
-          Analyze with Claude
-        </button>
+        <AnalyzeButton
+          issue={{ number: issue.number, title: issue.title, body: issue.body || '' }}
+          onAnalyze={(_, type) => onAnalyze(type)}
+          size="md"
+          className="shrink-0"
+        />
       </div>
 
       {/* Issue body */}
@@ -340,176 +330,63 @@ export function IssueDetail({
               // Check if this analysis has an actually running session
               const hasActiveSession = sessions.some(s => s.id === analysis.session_id);
               const isActuallyRunning = analysis.status === 'running' && hasActiveSession;
-              const isExpanded = expandedAnalysisId === analysis.id;
               // Show as completed if DB says running but session is gone
               const effectiveStatus = isActuallyRunning ? 'running' :
                 (analysis.status === 'running' ? 'completed' : analysis.status);
 
-              const handleClick = () => {
-                if (isActuallyRunning) {
-                  // Running session - open terminal
-                  onSelectAnalysis?.(analysis);
-                } else {
-                  // Completed - toggle expand to show transcript
-                  onToggleAnalysis?.(isExpanded ? null : analysis.id);
-                }
-              };
-
               return (
                 <div
                   key={analysis.id}
-                  className={`group bg-gray-800 rounded-lg border transition-colors ${
-                    isExpanded ? 'border-blue-500' : 'border-gray-700 hover:border-gray-600'
-                  }`}
+                  onClick={() => onSelectAnalysis?.(analysis)}
+                  className="group bg-gray-800 rounded-lg border border-gray-700 hover:border-gray-600 p-3 cursor-pointer hover:bg-gray-750 transition-colors"
                 >
-                  <div
-                    onClick={handleClick}
-                    className="p-3 cursor-pointer hover:bg-gray-750"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${
-                          isActuallyRunning ? 'bg-yellow-500 animate-pulse' :
-                          effectiveStatus === 'completed' ? 'bg-green-500' : 'bg-red-500'
-                        }`} />
-                        <span className="text-sm font-medium text-white truncate">
-                          {analysis.title}
-                        </span>
-                        {/* Expand/collapse indicator for non-running */}
-                        {!isActuallyRunning && (
-                          <svg
-                            className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${
+                        isActuallyRunning ? 'bg-yellow-500 animate-pulse' :
+                        effectiveStatus === 'completed' ? 'bg-green-500' : 'bg-red-500'
+                      }`} />
+                      <span className="text-sm font-medium text-white truncate">
+                        {analysis.title}
+                      </span>
+                      {/* Arrow to indicate opens in panel */}
+                      <svg
+                        className="w-4 h-4 text-gray-500"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Delete button - show if not actively running */}
+                      {!isActuallyRunning && onDeleteAnalysis && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm('Delete this analysis?')) {
+                              onDeleteAnalysis(analysis);
+                            }
+                          }}
+                          className="p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Delete analysis"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {/* Continue button - show if not actively running and has claude session */}
-                        {!isActuallyRunning && analysis.claude_session_id && onContinueAnalysis && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onContinueAnalysis(analysis);
-                            }}
-                            className="px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 rounded flex items-center gap-1"
-                            title="Continue this conversation"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                            </svg>
-                            Continue
-                          </button>
-                        )}
-                        {/* Delete button - show if not actively running */}
-                        {!isActuallyRunning && onDeleteAnalysis && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (confirm('Delete this analysis?')) {
-                                onDeleteAnalysis(analysis);
-                              }
-                            }}
-                            className="p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                            title="Delete analysis"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        )}
-                        <span className="text-xs text-gray-400 hidden sm:inline">
-                          {new Date(analysis.created_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-                    {analysis.summary && !isExpanded && (
-                      <p className="text-sm text-gray-400 mt-2 line-clamp-2">{analysis.summary}</p>
-                    )}
-                    {isActuallyRunning && (
-                      <p className="text-xs text-yellow-400 mt-2">Session in progress - click to view</p>
-                    )}
-                  </div>
-
-                  {/* Expanded transcript view */}
-                  {isExpanded && (
-                    <div className="border-t border-gray-700 p-3">
-                      {analysis.summary && (
-                        <div className="mb-3">
-                          <h4 className="text-xs font-medium text-gray-400 uppercase mb-1">Summary</h4>
-                          <p className="text-sm text-gray-300">{analysis.summary}</p>
-                        </div>
+                        </button>
                       )}
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <h4 className="text-xs font-medium text-gray-400 uppercase">Transcript</h4>
-                          {analysis.transcript && (
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const cleanedTranscript = cleanTranscript(analysis.transcript!);
-                                  navigator.clipboard.writeText(cleanedTranscript);
-                                  setCopiedAnalysisId(analysis.id);
-                                  setTimeout(() => setCopiedAnalysisId(null), 1500);
-                                }}
-                                className="flex items-center gap-1 px-2 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 rounded text-gray-300 hover:text-white"
-                                title="Copy transcript to clipboard"
-                              >
-                                {copiedAnalysisId === analysis.id ? (
-                                  <>
-                                    <svg className="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                    </svg>
-                                    <span className="text-green-400">Copied!</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                    </svg>
-                                    Copy
-                                  </>
-                                )}
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const cleanedTranscript = cleanTranscript(analysis.transcript!);
-                                  const filename = `analysis-${analysis.id}-${analysis.title.replace(/[^a-zA-Z0-9]/g, '-').slice(0, 50)}.txt`;
-                                  const blob = new Blob([cleanedTranscript], { type: 'text/plain' });
-                                  const url = URL.createObjectURL(blob);
-                                  const link = document.createElement('a');
-                                  link.href = url;
-                                  link.download = filename;
-                                  document.body.appendChild(link);
-                                  link.click();
-                                  document.body.removeChild(link);
-                                  URL.revokeObjectURL(url);
-                                }}
-                                className="flex items-center gap-1 px-2 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 rounded text-gray-300 hover:text-white"
-                                title="Download transcript as file"
-                              >
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                </svg>
-                                Download
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                        {analysis.transcript ? (
-                          <pre className="text-xs text-gray-300 bg-gray-900 rounded p-3 overflow-auto max-h-96 whitespace-pre-wrap font-mono">
-                            {cleanTranscript(analysis.transcript)}
-                          </pre>
-                        ) : (
-                          <p className="text-sm text-gray-500 italic">No transcript available</p>
-                        )}
-                      </div>
+                      <span className="text-xs text-gray-400 hidden sm:inline">
+                        {new Date(analysis.created_at).toLocaleDateString()}
+                      </span>
                     </div>
+                  </div>
+                  {analysis.summary && (
+                    <p className="text-sm text-gray-400 mt-2 line-clamp-2">{analysis.summary}</p>
+                  )}
+                  {isActuallyRunning && (
+                    <p className="text-xs text-yellow-400 mt-2">Session in progress - click to view</p>
                   )}
                 </div>
               );

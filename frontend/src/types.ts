@@ -105,3 +105,47 @@ export interface SessionCreateOptions {
   model?: ClaudeModel;
   resume_session?: string;
 }
+
+// Parsed transcript types from Claude Code JSONL files
+export interface ToolUse {
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+export interface TokenUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_creation_tokens: number;
+}
+
+export interface TranscriptMessage {
+  uuid: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  thinking?: string;
+  tool_uses: ToolUse[];
+  model?: string;
+  usage?: TokenUsage;
+}
+
+export interface ParsedTranscript {
+  session_id: string;
+  messages: TranscriptMessage[];
+  summary?: string;
+  model?: string;
+  total_input_tokens?: number;
+  total_output_tokens?: number;
+  total_cache_read_tokens?: number;
+  total_cache_creation_tokens?: number;
+  start_time?: string;
+  end_time?: string;
+  claude_code_version?: string;
+  git_branch?: string;
+}
+
+export type TranscriptResponse =
+  | { type: 'parsed'; transcript: ParsedTranscript }
+  | { type: 'raw'; transcript: string };
