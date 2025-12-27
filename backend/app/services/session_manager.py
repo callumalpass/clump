@@ -39,6 +39,8 @@ from datetime import datetime
 from typing import Callable
 from uuid import uuid4
 
+from app.config import Settings
+
 
 @dataclass
 class Process:
@@ -190,7 +192,7 @@ class ProcessManager:
 
     def _build_command_args(
         self,
-        settings,
+        settings: Settings,
         *,
         allowed_tools: list[str] | None = None,
         disallowed_tools: list[str] | None = None,
