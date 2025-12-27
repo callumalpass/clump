@@ -1,4 +1,4 @@
-import type { Issue, Analysis, Tag, IssueTagsMap } from '../types';
+import type { Issue, Analysis, Tag, IssueTagsMap, Session } from '../types';
 import type { IssueFilters as IssueFiltersType } from '../hooks/useApi';
 import { IssueFilters } from './IssueFilters';
 
@@ -23,6 +23,7 @@ interface IssueListProps {
   total: number;
   onPageChange: (page: number) => void;
   analyses?: Analysis[];
+  sessions?: Session[];
   tags?: Tag[];
   issueTagsMap?: IssueTagsMap;
   selectedTagId?: number | null;
@@ -42,6 +43,7 @@ export function IssueList({
   total,
   onPageChange,
   analyses = [],
+  sessions = [],
   tags = [],
   issueTagsMap = {},
   selectedTagId,
@@ -144,8 +146,13 @@ export function IssueList({
         <div className="flex-1 overflow-auto min-h-0 divide-y divide-gray-700">
           {filteredIssues.map((issue) => {
           const issueAnalyses = analysesByIssue[issue.number.toString()] || [];
-          const hasRunning = issueAnalyses.some(a => a.status === 'running');
-          const hasCompleted = issueAnalyses.some(a => a.status === 'completed');
+          // Check if any analysis has an actually running session (not just DB status)
+          const hasRunning = issueAnalyses.some(a =>
+            a.status === 'running' && sessions.some(s => s.id === a.session_id)
+          );
+          const hasCompleted = issueAnalyses.some(a => a.status === 'completed') ||
+            // Also count as completed if DB says running but session is gone
+            issueAnalyses.some(a => a.status === 'running' && !sessions.some(s => s.id === a.session_id));
           const issueTags = issueTagsMap[issue.number] || [];
 
           return (

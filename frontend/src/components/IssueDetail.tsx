@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { IssueDetail as IssueDetailType, Analysis, Tag } from '../types';
+import type { IssueDetail as IssueDetailType, Analysis, Tag, Session } from '../types';
 import { fetchIssue } from '../hooks/useApi';
 import { Markdown } from './Markdown';
 
@@ -29,6 +29,7 @@ interface IssueDetailProps {
   issueNumber: number;
   onAnalyze: () => void;
   analyses?: Analysis[];
+  sessions?: Session[];
   onSelectAnalysis?: (analysis: Analysis) => void;
   onContinueAnalysis?: (analysis: Analysis) => void;
   onDeleteAnalysis?: (analysis: Analysis) => void;
@@ -44,6 +45,7 @@ export function IssueDetail({
   issueNumber,
   onAnalyze,
   analyses = [],
+  sessions = [],
   onSelectAnalysis,
   onContinueAnalysis,
   onDeleteAnalysis,
@@ -324,69 +326,78 @@ export function IssueDetail({
             Analysis Sessions ({issueAnalyses.length})
           </h3>
           <div className="space-y-2">
-            {issueAnalyses.map((analysis) => (
-              <div
-                key={analysis.id}
-                onClick={() => onSelectAnalysis?.(analysis)}
-                className="group bg-gray-800 rounded-lg p-3 cursor-pointer hover:bg-gray-750 border border-gray-700 hover:border-gray-600 transition-colors"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${
-                      analysis.status === 'running' ? 'bg-yellow-500 animate-pulse' :
-                      analysis.status === 'completed' ? 'bg-green-500' : 'bg-red-500'
-                    }`} />
-                    <span className="text-sm font-medium text-white truncate">
-                      {analysis.title}
-                    </span>
+            {issueAnalyses.map((analysis) => {
+              // Check if this analysis has an actually running session
+              const hasActiveSession = sessions.some(s => s.id === analysis.session_id);
+              const isActuallyRunning = analysis.status === 'running' && hasActiveSession;
+              // Show as completed if DB says running but session is gone
+              const effectiveStatus = isActuallyRunning ? 'running' :
+                (analysis.status === 'running' ? 'completed' : analysis.status);
+
+              return (
+                <div
+                  key={analysis.id}
+                  onClick={() => onSelectAnalysis?.(analysis)}
+                  className="group bg-gray-800 rounded-lg p-3 cursor-pointer hover:bg-gray-750 border border-gray-700 hover:border-gray-600 transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${
+                        isActuallyRunning ? 'bg-yellow-500 animate-pulse' :
+                        effectiveStatus === 'completed' ? 'bg-green-500' : 'bg-red-500'
+                      }`} />
+                      <span className="text-sm font-medium text-white truncate">
+                        {analysis.title}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Continue button - show if not actively running and has claude session */}
+                      {!isActuallyRunning && analysis.claude_session_id && onContinueAnalysis && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onContinueAnalysis(analysis);
+                          }}
+                          className="px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 rounded flex items-center gap-1"
+                          title="Continue this conversation"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                          </svg>
+                          Continue
+                        </button>
+                      )}
+                      {/* Delete button - show if not actively running */}
+                      {!isActuallyRunning && onDeleteAnalysis && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm('Delete this analysis?')) {
+                              onDeleteAnalysis(analysis);
+                            }
+                          }}
+                          className="p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Delete analysis"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      )}
+                      <span className="text-xs text-gray-400 hidden sm:inline">
+                        {new Date(analysis.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {/* Continue button */}
-                    {analysis.status === 'completed' && analysis.claude_session_id && onContinueAnalysis && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onContinueAnalysis(analysis);
-                        }}
-                        className="px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 rounded flex items-center gap-1"
-                        title="Continue this conversation"
-                      >
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                        </svg>
-                        Continue
-                      </button>
-                    )}
-                    {/* Delete button */}
-                    {analysis.status !== 'running' && onDeleteAnalysis && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (confirm('Delete this analysis?')) {
-                            onDeleteAnalysis(analysis);
-                          }
-                        }}
-                        className="p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Delete analysis"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    )}
-                    <span className="text-xs text-gray-400 hidden sm:inline">
-                      {new Date(analysis.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
+                  {analysis.summary && (
+                    <p className="text-sm text-gray-400 mt-2 line-clamp-2">{analysis.summary}</p>
+                  )}
+                  {isActuallyRunning && (
+                    <p className="text-xs text-yellow-400 mt-2">Session in progress - click to view</p>
+                  )}
                 </div>
-                {analysis.summary && (
-                  <p className="text-sm text-gray-400 mt-2 line-clamp-2">{analysis.summary}</p>
-                )}
-                {analysis.status === 'running' && (
-                  <p className="text-xs text-yellow-400 mt-2">Session in progress - click to view</p>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

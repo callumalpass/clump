@@ -9,8 +9,6 @@ Based on a comprehensive analysis of the codebase, the following potential featu
 | Feature | Value | Effort | Risk | Score | Description |
 |---------|-------|--------|------|-------|-------------|
 | Session Tab Names from Analysis Title | 5 | 1 | 1 | 125 | Session tabs show raw session IDs instead of meaningful titles. The analysis title is already available. |
-| Keyboard Shortcut: Close Session | 4 | 1 | 1 | 100 | No keyboard shortcut to close terminal (Ctrl+D/Ctrl+W). Improves power user workflow. |
-| Copy Session ID Button | 4 | 1 | 1 | 100 | Terminal header shows session ID but can't be copied. Useful for debugging/support. |
 | Analysis Status Filter | 4 | 2 | 1 | 80 | Analysis list has no status filter (running/completed/failed). Already have the data. |
 | Refresh Issues Button | 4 | 1 | 2 | 64 | No manual refresh for issues list. Only auto-refresh on filter change. |
 | Empty Terminal State | 4 | 2 | 1 | 80 | When no session is active but sessions exist, no guidance shown. |
@@ -23,9 +21,7 @@ Based on a comprehensive analysis of the codebase, the following potential featu
 | Analysis Type Filter | 3 | 2 | 1 | 60 | Filter analyses by type (issue/custom/codebase). Backend already supports this. |
 | Session Count Badge | 3 | 1 | 1 | 75 | Show running session count per issue in the list (already shows dot indicator). |
 | Timestamp in Session Tabs | 3 | 1 | 1 | 75 | Show relative time (e.g., "5m ago") in session tabs for context. |
-| Terminal Clear Button | 3 | 2 | 2 | 48 | No way to clear terminal output without restarting session. |
 | Issue Link in Session Header | 3 | 1 | 1 | 75 | Terminal header could link back to the issue being analyzed. |
-| Collapsible Comments | 3 | 2 | 1 | 60 | Long comment threads are hard to navigate in IssueDetail. |
 
 ### Lower Priority
 
@@ -33,7 +29,6 @@ Based on a comprehensive analysis of the codebase, the following potential featu
 |---------|-------|--------|------|-------|-------------|
 | PR Tab Implementation | 4 | 4 | 2 | 32 | PRs tab shows "coming soon". Needs PR-specific analysis prompts. |
 | Dark/Light Theme Toggle | 2 | 3 | 2 | 16 | Single dark theme. Most dev tools are dark, low priority. |
-| Analysis Export | 3 | 3 | 2 | 24 | Export analysis transcript to file (markdown/text). |
 | Bulk Tag Operations | 2 | 3 | 2 | 16 | Apply/remove tags to multiple issues at once. |
 
 ### Future Considerations (Not Recommended Now)

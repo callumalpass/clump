@@ -280,6 +280,7 @@ Please:
                 total={issuesTotal}
                 onPageChange={goToIssuesPage}
                 analyses={analyses}
+                sessions={sessions}
                 tags={tags}
                 issueTagsMap={issueTagsMap}
                 selectedTagId={selectedTagId}
@@ -291,6 +292,7 @@ Please:
             {activeTab === 'analyses' && (
               <AnalysisList
                 analyses={analyses}
+                sessions={sessions}
                 onSelectAnalysis={handleSelectAnalysis}
                 onContinueAnalysis={handleContinueAnalysis}
                 onDeleteAnalysis={handleDeleteAnalysis}
@@ -364,6 +366,7 @@ Please:
                               if (issue) handleAnalyzeIssue(issue);
                             }}
                             analyses={analyses}
+                            sessions={sessions}
                             onSelectAnalysis={handleSelectAnalysis}
                             onContinueAnalysis={handleContinueAnalysis}
                             onDeleteAnalysis={handleDeleteAnalysis}
@@ -401,6 +404,7 @@ Please:
                     if (issue) handleAnalyzeIssue(issue);
                   }}
                   analyses={analyses}
+                  sessions={sessions}
                   onSelectAnalysis={handleSelectAnalysis}
                   onContinueAnalysis={handleContinueAnalysis}
                   onDeleteAnalysis={handleDeleteAnalysis}
