@@ -1225,10 +1225,10 @@ function MessageBubble({ message, parentSessionId, searchQuery = '', matchIndice
 
         {/* Message content */}
         <div
-          className={`rounded-lg px-3 py-2 ${
+          className={`rounded-lg px-3 py-2 message-bubble-enter ${
             isUser
-              ? 'bg-blue-900/50 border border-blue-800'
-              : 'bg-gray-800 border border-gray-700'
+              ? 'bg-blue-900/40 border border-blue-800/60 message-user'
+              : 'bg-gray-800/80 border border-gray-700/60 message-assistant'
           } ${hasCurrentMatch ? 'ring-2 ring-yellow-400' : ''}`}
         >
           {/* Thinking (if present) */}

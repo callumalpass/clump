@@ -166,3 +166,43 @@ textarea:disabled {
   transform: scale(0.97);
   box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5);
 }
+
+/* Message bubble styling for conversation view */
+.message-bubble {
+  transition: opacity 150ms ease-out, transform 150ms ease-out;
+}
+
+@keyframes message-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-bubble-enter {
+  animation: message-fade-in 150ms ease-out forwards;
+}
+
+/* Assistant message left border accent */
+.message-assistant {
+  border-left: 2px solid rgba(34, 197, 94, 0.4);
+  transition: border-color 150ms ease;
+}
+
+.message-assistant:hover {
+  border-color: rgba(34, 197, 94, 0.6);
+}
+
+/* User message right border accent */
+.message-user {
+  border-right: 2px solid rgba(59, 130, 246, 0.4);
+  transition: border-color 150ms ease;
+}
+
+.message-user:hover {
+  border-color: rgba(59, 130, 246, 0.6);
+}
