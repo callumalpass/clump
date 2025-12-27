@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useClaudeSettings } from '../hooks/useApi';
 import type { PermissionMode, OutputFormat } from '../types';
 
@@ -13,7 +13,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<'permissions' | 'execution' | 'advanced'>('permissions');
 
   // Handle Escape key to close modal
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {

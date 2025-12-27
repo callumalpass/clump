@@ -124,6 +124,56 @@ Please:
     setActiveSessionId(session.id);
   }, [selectedRepo, createSession]);
 
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts when typing in inputs/textareas
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        // Allow Escape in inputs
+        if (e.key !== 'Escape') return;
+      }
+
+      const isMod = e.metaKey || e.ctrlKey;
+
+      // Ctrl/Cmd + K: Focus search (switch to analyses tab)
+      if (isMod && e.key === 'k') {
+        e.preventDefault();
+        setActiveTab('analyses');
+        // Focus the search input after a short delay
+        setTimeout(() => {
+          const searchInput = document.querySelector('input[placeholder="Search analyses..."]') as HTMLInputElement;
+          searchInput?.focus();
+        }, 50);
+        return;
+      }
+
+      // Ctrl/Cmd + N: New session
+      if (isMod && e.key === 'n') {
+        if (selectedRepo) {
+          e.preventDefault();
+          handleNewSession();
+        }
+        return;
+      }
+
+      // Escape: Close settings, deselect issue, or close terminal
+      if (e.key === 'Escape') {
+        if (settingsOpen) {
+          setSettingsOpen(false);
+        } else if (activeSessionId) {
+          setActiveSessionId(null);
+        } else if (selectedIssue) {
+          setSelectedIssue(null);
+        }
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedRepo, settingsOpen, activeSessionId, selectedIssue, handleNewSession]);
+
   const handleSelectAnalysis = useCallback((analysis: Analysis) => {
     // Check if this analysis has an active session we can view
     const activeSession = sessions.find(s => s.id === analysis.session_id);
@@ -219,6 +269,13 @@ Please:
           <span className="text-sm text-gray-400">
             {sessions.length} active session{sessions.length !== 1 ? 's' : ''}
           </span>
+          {/* Keyboard shortcuts hint */}
+          <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
+            <kbd className="px-1.5 py-0.5 bg-gray-800 border border-gray-600 rounded text-gray-400">⌘K</kbd>
+            <span>Search</span>
+            <kbd className="px-1.5 py-0.5 bg-gray-800 border border-gray-600 rounded text-gray-400 ml-2">⌘N</kbd>
+            <span>New</span>
+          </div>
           <button
             onClick={() => setSettingsOpen(true)}
             className="p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-white"
