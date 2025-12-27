@@ -116,7 +116,7 @@ export function AnalysisList({ analyses, sessions = [], onSelectAnalysis, onCont
         return (
           <div
             key={analysis.id}
-            className="group p-3 cursor-pointer hover:bg-gray-800"
+            className="group p-3 cursor-pointer hover:bg-gray-800/80 transition-colors duration-150"
             onClick={() => onSelectAnalysis(analysis)}
           >
             <div className="flex items-center gap-2 mb-1">
