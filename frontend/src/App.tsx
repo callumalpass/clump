@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Group, Panel, Separator } from 'react-resizable-panels';
+import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
 import { useRepos, useIssues, usePRs, useSessions, useAnalyses, useTags, useIssueTags } from './hooks/useApi';
 import type { IssueFilters, AnalysisStatusFilter } from './hooks/useApi';
 import { RepoSelector } from './components/RepoSelector';
@@ -8,7 +8,7 @@ import { IssueDetail } from './components/IssueDetail';
 import { PRList } from './components/PRList';
 import { PRDetail } from './components/PRDetail';
 import { Terminal } from './components/Terminal';
-import { TranscriptPanel } from './components/TranscriptPanel';
+import { SessionView } from './components/SessionView';
 import { SessionTabs } from './components/SessionTabs';
 import { AnalysisList } from './components/AnalysisList';
 import { Settings } from './components/Settings';
@@ -62,6 +62,9 @@ export default function App() {
   // Track pending issue/PR context to show side-by-side view immediately
   const pendingIssueContextRef = useRef<PendingIssueContext | null>(null);
   const pendingPRContextRef = useRef<PendingPRContext | null>(null);
+
+  // Ref for collapsible issue/PR context panel
+  const contextPanelRef = useRef<PanelImperativeHandle>(null);
 
   const { repos, addRepo } = useRepos();
   const {
@@ -393,8 +396,8 @@ export default function App() {
   const hasIssueContext = !!activeIssueNumber;
   const hasPRContext = !!activePRNumber;
 
-  // Show side-by-side if we have sessions and any issue/PR selected
-  const showSideBySide = sessions.length > 0 && (hasIssueContext || hasPRContext);
+  // Show side-by-side if we have sessions/transcript and any issue/PR selected
+  const showSideBySide = (sessions.length > 0 || viewingAnalysis) && (hasIssueContext || hasPRContext);
 
   // Determine which context to show in side-by-side (issue vs PR)
   // Prioritize user's explicit selection over analysis context
@@ -488,10 +491,10 @@ export default function App() {
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`flex-1 px-4 py-2 text-sm capitalize focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset flex items-center justify-center gap-1.5 ${
+                  className={`flex-1 px-4 py-2 text-sm capitalize focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset flex items-center justify-center gap-1.5 transition-colors duration-150 ${
                     activeTab === tab
                       ? 'text-white border-b-2 border-blue-500'
-                      : 'text-gray-400 hover:text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
                 >
                   {tab}
@@ -591,40 +594,47 @@ export default function App() {
               <Group orientation="horizontal" className="flex-1">
                 {/* Collapsible context panel (issue or PR) */}
                 <Panel
-                  defaultSize="400px"
-                  minSize="40px"
-                  maxSize="70%"
+                  panelRef={contextPanelRef}
+                  defaultSize="40%"
+                  minSize="200px"
+                  maxSize="60%"
                   collapsible
                   collapsedSize="40px"
                   className="flex flex-col border-r border-gray-700"
                 >
-                  {issuePanelCollapsed ? (
+                  {/* Always-visible header with toggle button */}
+                  <div className="flex items-center justify-between p-2 border-b border-gray-700 bg-gray-800/50 shrink-0">
+                    {!issuePanelCollapsed && (
+                      <span className="text-sm font-medium text-gray-300">
+                        {showIssueSideBySide ? 'Issue Context' : 'PR Context'}
+                      </span>
+                    )}
                     <button
-                      onClick={() => setIssuePanelCollapsed(false)}
-                      className="h-full w-full flex items-center justify-center hover:bg-gray-800 text-gray-400 hover:text-white"
-                      title={showIssueSideBySide ? "Show issue details" : "Show PR details"}
+                      onClick={() => {
+                        const panel = contextPanelRef.current;
+                        if (panel?.isCollapsed()) {
+                          panel.expand();
+                          setIssuePanelCollapsed(false);
+                        } else {
+                          panel?.collapse();
+                          setIssuePanelCollapsed(true);
+                        }
+                      }}
+                      className={`p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white ${issuePanelCollapsed ? 'mx-auto' : ''}`}
+                      title={issuePanelCollapsed ? "Expand panel" : "Collapse panel"}
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg
+                        className={`w-4 h-4 transition-transform duration-200 ${issuePanelCollapsed ? '' : 'rotate-180'}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
                     </button>
-                  ) : (
-                    <>
-                      <div className="flex items-center justify-between p-2 border-b border-gray-700 bg-gray-800/50">
-                        <span className="text-sm font-medium text-gray-300">
-                          {showIssueSideBySide ? 'Issue Context' : 'PR Context'}
-                        </span>
-                        <button
-                          onClick={() => setIssuePanelCollapsed(true)}
-                          className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white"
-                          title="Collapse panel"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                          </svg>
-                        </button>
-                      </div>
-                      <div className="flex-1 overflow-auto">
+                  </div>
+                  {/* Content area - invisible when collapsed but still in layout */}
+                  <div className={`flex-1 overflow-auto transition-opacity duration-150 ${issuePanelCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                         {showIssueSideBySide && activeIssueNumber && (
                           <IssueDetail
                             repoId={selectedRepo.id}
@@ -657,9 +667,7 @@ export default function App() {
                             onDeleteAnalysis={handleDeleteAnalysis}
                           />
                         )}
-                      </div>
-                    </>
-                  )}
+                  </div>
                 </Panel>
                 <ResizeHandle />
                 <Panel minSize="300px" className="flex flex-col">
@@ -675,7 +683,22 @@ export default function App() {
                     />
                   )}
                   <div className="flex-1 min-h-0 p-2">
-                    {activeSessionId ? (
+                    {activeSessionId && activeAnalysis ? (
+                      <SessionView
+                        analysis={activeAnalysis}
+                        sessionId={activeSessionId}
+                        onClose={() => {
+                          killSession(activeSessionId);
+                          setActiveSessionId(null);
+                        }}
+                        relatedEntity={relatedEntity && (
+                          (relatedEntity.type === 'issue' && selectedIssue !== relatedEntity.number) ||
+                          (relatedEntity.type === 'pr' && selectedPR !== relatedEntity.number)
+                        ) ? relatedEntity : null}
+                        onShowRelated={handleShowRelated}
+                      />
+                    ) : activeSessionId ? (
+                      // Fallback to terminal-only if no analysis found yet
                       <Terminal
                         sessionId={activeSessionId}
                         onClose={() => {
@@ -689,7 +712,7 @@ export default function App() {
                         onShowRelated={handleShowRelated}
                       />
                     ) : viewingAnalysis ? (
-                      <TranscriptPanel
+                      <SessionView
                         analysis={viewingAnalysis}
                         onContinue={viewingAnalysis.claude_session_id ? () => handleContinueAnalysis(viewingAnalysis) : undefined}
                         onClose={() => setViewingAnalysisId(null)}
@@ -764,7 +787,19 @@ export default function App() {
                   analyses={analyses}
                 />
                 <div className="flex-1 min-h-0 p-2">
-                  {activeSessionId ? (
+                  {activeSessionId && activeAnalysis ? (
+                    <SessionView
+                      analysis={activeAnalysis}
+                      sessionId={activeSessionId}
+                      onClose={() => {
+                        killSession(activeSessionId);
+                        setActiveSessionId(null);
+                      }}
+                      relatedEntity={relatedEntity}
+                      onShowRelated={handleShowRelated}
+                    />
+                  ) : activeSessionId ? (
+                    // Fallback to terminal-only if no analysis found yet
                     <Terminal
                       sessionId={activeSessionId}
                       onClose={() => {
@@ -775,7 +810,7 @@ export default function App() {
                       onShowRelated={handleShowRelated}
                     />
                   ) : viewingAnalysis ? (
-                    <TranscriptPanel
+                    <SessionView
                       analysis={viewingAnalysis}
                       onContinue={viewingAnalysis.claude_session_id ? () => handleContinueAnalysis(viewingAnalysis) : undefined}
                       onClose={() => setViewingAnalysisId(null)}
