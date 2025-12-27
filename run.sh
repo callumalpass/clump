@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Claude Code Hub - Development Runner
+# Clump - Development Runner
 # Starts both backend and frontend servers
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -41,7 +41,7 @@ cleanup() {
 # Set trap BEFORE starting processes
 trap cleanup EXIT INT TERM HUP
 
-echo -e "${GREEN}Starting Claude Code Hub...${NC}"
+echo -e "${GREEN}Starting Clump...${NC}"
 
 # Check for required tools
 if ! command -v python3 &> /dev/null; then
@@ -94,7 +94,7 @@ fi
 npm run dev &
 FRONTEND_PID=$!
 
-echo -e "${GREEN}Claude Code Hub is running!${NC}"
+echo -e "${GREEN}Clump is running!${NC}"
 echo -e "  Backend:  http://127.0.0.1:8000"
 echo -e "  Frontend: http://localhost:5173"
 echo ""

@@ -50,7 +50,7 @@ for ((i=1; i<=MAX_ITERATIONS; i++)); do
     echo ""
 
     PROMPT=$(cat <<EOF
-You are an expert QA Engineer tasked with improving the test suite of Claude Code Hub.
+You are an expert QA Engineer tasked with improving the test suite of Clump.
 
 ## Project Context
 - **Backend:** Python/FastAPI in \`backend/app/\`

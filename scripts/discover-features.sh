@@ -42,10 +42,10 @@ echo "Features to implement: $FEATURE_COUNT"
 echo ""
 
 PROMPT=$(cat <<EOF
-You are improving Claude Code Hub by implementing valuable features.
+You are improving Clump by implementing valuable features.
 
 ## Project Context
-Claude Code Hub is a local web application for:
+Clump is a local web application for:
 - Triaging GitHub issues
 - Running AI analyses through Claude Code CLI
 - Managing multiple terminal sessions

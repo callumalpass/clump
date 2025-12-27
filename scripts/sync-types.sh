@@ -44,7 +44,7 @@ echo "Mode: $MODE"
 echo ""
 
 PROMPT=$(cat <<EOF
-You are synchronizing types between the backend and frontend of Claude Code Hub.
+You are synchronizing types between the backend and frontend of Clump.
 
 ## Project Context
 - **Backend models:** \`backend/app/models.py\` (SQLAlchemy/Pydantic)

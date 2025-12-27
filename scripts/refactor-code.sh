@@ -47,7 +47,7 @@ for ((i=1; i<=MAX_ITERATIONS; i++)); do
 Your goal is to pay down technical debt by refactoring code to be cleaner, safer, and more idiomatic.
 
 ## Project Context
-This is Claude Code Hub - a web app with:
+This is Clump - a web app with:
 - **Backend:** Python/FastAPI in `backend/app/`
 - **Frontend:** React/TypeScript in `frontend/src/`
 

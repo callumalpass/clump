@@ -14,7 +14,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Claude Code Hub",
+    title="Clump",
     description="Local command center for running AI analyses through Claude Code",
     version="0.1.0",
     lifespan=lifespan,

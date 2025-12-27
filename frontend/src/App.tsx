@@ -10,6 +10,7 @@ import { SessionTabs } from './components/SessionTabs';
 import { AnalysisList } from './components/AnalysisList';
 import { GitHubTokenSetup } from './components/GitHubTokenSetup';
 import { Settings } from './components/Settings';
+import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import type { Repo, Issue, Analysis } from './types';
 import type { AnalysisTypeConfig } from './constants/analysisTypes';
 import { DEFAULT_ANALYSIS_TYPE } from './constants/analysisTypes';
@@ -32,6 +33,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [issuePanelCollapsed, setIssuePanelCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const [issueFilters, setIssueFilters] = useState<IssueFilters>({ state: 'open' });
   const [expandedAnalysisId, setExpandedAnalysisId] = useState<number | null>(null);
@@ -135,6 +137,13 @@ export default function App() {
         if (e.key !== 'Escape') return;
       }
 
+      // "?" : Show keyboard shortcuts help
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setShortcutsOpen((prev) => !prev);
+        return;
+      }
+
       // "/" : Focus search (switch to analyses tab) - like GitHub/Slack
       if (e.key === '/') {
         e.preventDefault();
@@ -147,9 +156,11 @@ export default function App() {
         return;
       }
 
-      // Escape: Close settings, deselect issue, or close terminal
+      // Escape: Close modals, deselect issue, or close terminal
       if (e.key === 'Escape') {
-        if (settingsOpen) {
+        if (shortcutsOpen) {
+          setShortcutsOpen(false);
+        } else if (settingsOpen) {
           setSettingsOpen(false);
         } else if (activeSessionId) {
           setActiveSessionId(null);
@@ -162,7 +173,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [settingsOpen, activeSessionId, selectedIssue]);
+  }, [settingsOpen, shortcutsOpen, activeSessionId, selectedIssue]);
 
   const handleSelectAnalysis = useCallback((analysis: Analysis) => {
     // Check if this analysis has an active session we can view
@@ -276,12 +287,14 @@ export default function App() {
             {sessions.length} active session{sessions.length !== 1 ? 's' : ''}
           </span>
           {/* Keyboard shortcuts hint */}
-          <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
-            <kbd className="px-1.5 py-0.5 bg-gray-800 border border-gray-600 rounded text-gray-400">/</kbd>
-            <span>Search</span>
-            <kbd className="px-1.5 py-0.5 bg-gray-800 border border-gray-600 rounded text-gray-400 ml-2">Esc</kbd>
-            <span>Close</span>
-          </div>
+          <button
+            onClick={() => setShortcutsOpen(true)}
+            className="hidden sm:flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+            title="Keyboard shortcuts (?)"
+          >
+            <kbd className="px-1.5 py-0.5 bg-gray-800 border border-gray-600 rounded text-gray-400">?</kbd>
+            <span>Help</span>
+          </button>
           <button
             onClick={() => setSettingsOpen(true)}
             className="p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-white"

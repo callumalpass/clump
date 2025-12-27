@@ -46,7 +46,7 @@ echo "Auto-fix enabled: $FIX_ISSUES"
 echo ""
 
 PROMPT=$(cat <<EOF
-You are performing a security audit of Claude Code Hub.
+You are performing a security audit of Clump.
 
 ## Project Context
 - **Backend:** Python/FastAPI in \`backend/app/\`

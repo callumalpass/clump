@@ -1,5 +1,5 @@
 [project]
-name = "claude-code-hub"
+name = "clump"
 version = "0.1.0"
 description = "Local command center for running AI analyses through Claude Code"
 requires-python = ">=3.11"

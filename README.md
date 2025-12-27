@@ -1,4 +1,4 @@
-# Claude Code Hub
+# Clump
 
 A local web application for triaging GitHub issues and running AI analyses through Claude Code.
 

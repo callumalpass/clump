@@ -1,5 +1,5 @@
 """
-Services for Claude Code Hub.
+Services for Clump.
 
 This module provides the core services for:
 - session_manager: Interactive PTY-based terminal sessions with Claude Code

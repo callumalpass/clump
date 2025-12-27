@@ -53,7 +53,7 @@ for ((i=1; i<=MAX_ITERATIONS; i++)); do
     echo ""
 
     PROMPT=$(cat <<EOF
-You are creating end-to-end tests for Claude Code Hub.
+You are creating end-to-end tests for Clump.
 
 ## Project Context
 - **Backend:** Python/FastAPI at http://localhost:8000

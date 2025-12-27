@@ -48,7 +48,7 @@ fi
 echo ""
 
 PROMPT=$(cat <<EOF
-You are performing a comprehensive code review of Claude Code Hub.
+You are performing a comprehensive code review of Clump.
 
 ## Project Context
 - **Backend:** Python/FastAPI in \`backend/app/\`

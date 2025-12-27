@@ -46,7 +46,7 @@ echo "Feature: $FEATURE_DESC"
 echo ""
 
 PROMPT=$(cat <<EOF
-You are implementing a new feature for Claude Code Hub.
+You are implementing a new feature for Clump.
 
 ## Feature Request
 $FEATURE_DESC

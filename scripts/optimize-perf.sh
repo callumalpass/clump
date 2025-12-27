@@ -50,7 +50,7 @@ for ((i=1; i<=MAX_ITERATIONS; i++)); do
     echo ""
 
     PROMPT=$(cat <<EOF
-You are optimizing the performance of Claude Code Hub.
+You are optimizing the performance of Clump.
 
 ## Project Context
 - **Backend:** Python/FastAPI in \`backend/app/\`

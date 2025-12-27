@@ -61,7 +61,7 @@ else
 fi
 
 PROMPT=$(cat <<EOF
-You are fixing GitHub issues for the Claude Code Hub project.
+You are fixing GitHub issues for the Clump project.
 
 ## Project Context
 - **Backend:** Python/FastAPI in \`backend/app/\`

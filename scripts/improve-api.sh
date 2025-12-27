@@ -44,7 +44,7 @@ for ((i=1; i<=MAX_ITERATIONS; i++)); do
     echo ""
 
     PROMPT=$(cat <<'EOF'
-You are improving the API design of Claude Code Hub.
+You are improving the API design of Clump.
 
 ## Project Context
 - **API Location:** `backend/app/routers/`
