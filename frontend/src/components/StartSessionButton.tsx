@@ -73,7 +73,7 @@ export function StartSessionButton({ issue, commands, onStart, size = 'md', clas
       {/* Main button */}
       <button
         onClick={handleMainClick}
-        className={`px-3 ${sizeClasses} bg-blue-600 hover:bg-blue-700 text-white rounded-l-lg font-medium border-r border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900 focus:z-10`}
+        className={`px-3 ${sizeClasses} bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-l-lg font-medium border-r border-blue-500 transition-transform focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900 focus:z-10`}
       >
         {selectedCommand?.shortName || 'Start'}
       </button>
@@ -84,7 +84,7 @@ export function StartSessionButton({ issue, commands, onStart, size = 'md', clas
           e.stopPropagation();
           setShowDropdown(!showDropdown);
         }}
-        className={`px-2 ${sizeClasses} bg-blue-600 hover:bg-blue-700 text-white rounded-r-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900`}
+        className={`px-2 ${sizeClasses} bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-r-lg transition-transform focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900`}
         aria-label="Select session type"
         aria-expanded={showDropdown}
         aria-haspopup="listbox"

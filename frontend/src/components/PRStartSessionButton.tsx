@@ -69,7 +69,7 @@ export function PRStartSessionButton({ pr, commands, onStart, size = 'md', class
           e.stopPropagation();
           handleMainClick();
         }}
-        className={`px-3 ${sizeClasses} bg-purple-600 hover:bg-purple-700 text-white rounded-l-lg font-medium border-r border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-1 focus:ring-offset-gray-900 focus:z-10`}
+        className={`px-3 ${sizeClasses} bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-l-lg font-medium border-r border-purple-500 transition-transform focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-1 focus:ring-offset-gray-900 focus:z-10`}
       >
         {selectedCommand?.shortName || 'Start'}
       </button>
@@ -80,7 +80,7 @@ export function PRStartSessionButton({ pr, commands, onStart, size = 'md', class
           e.stopPropagation();
           setShowDropdown(!showDropdown);
         }}
-        className={`px-2 ${sizeClasses} bg-purple-600 hover:bg-purple-700 text-white rounded-r-lg focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-1 focus:ring-offset-gray-900`}
+        className={`px-2 ${sizeClasses} bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-r-lg transition-transform focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-1 focus:ring-offset-gray-900`}
         aria-label="Select PR session type"
         aria-expanded={showDropdown}
         aria-haspopup="listbox"
