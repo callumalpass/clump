@@ -36,9 +36,9 @@ export function IssueList({
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Issue list */}
-      <div className="flex-1 overflow-auto divide-y divide-gray-700">
+      <div className="flex-1 overflow-auto min-h-0 divide-y divide-gray-700">
         {issues.map((issue) => (
           <div
             key={issue.number}

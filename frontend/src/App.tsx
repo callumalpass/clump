@@ -135,7 +135,7 @@ Please:
           )}
 
           {/* List content */}
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 min-h-0 flex flex-col">
             {activeTab === 'issues' && selectedRepo && (
               <IssueList
                 issues={issues}

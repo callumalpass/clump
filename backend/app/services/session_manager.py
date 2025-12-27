@@ -3,11 +3,19 @@ PTY Session Manager for Claude Code terminals.
 
 Manages multiple pseudo-terminal sessions running Claude Code,
 with WebSocket streaming for real-time output.
+
+Uses Claude Code CLI flags for fine-grained permission control:
+- --allowedTools: Auto-approve specific tools
+- --permission-mode: Control permission behavior (plan, acceptEdits, etc.)
+- --max-turns: Limit agentic execution depth
+- --model: Select Claude model
+- --resume: Continue previous session
 """
 
 import asyncio
 import os
 import pty
+import re
 import signal
 import struct
 import fcntl
@@ -31,6 +39,15 @@ class Session:
     transcript: str = ""
     subscribers: list[Callable[[bytes], None]] = field(default_factory=list)
     _read_task: asyncio.Task | None = field(default=None, repr=False)
+
+    # Claude Code session ID (extracted from output for resume support)
+    claude_session_id: str | None = None
+
+    # Session configuration
+    allowed_tools: list[str] = field(default_factory=list)
+    permission_mode: str = "default"
+    max_turns: int = 0
+    model: str = ""
 
 
 class SessionManager:
