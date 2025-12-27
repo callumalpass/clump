@@ -118,7 +118,9 @@ describe('KeyboardShortcutsModal', () => {
     it('displays Alt and Enter for multiline input', () => {
       render(<KeyboardShortcutsModal {...defaultProps} />);
 
-      expect(screen.getByText('Alt')).toBeInTheDocument();
+      // Multiple Alt keys exist (Session Tabs and Terminal sections)
+      const altKeys = screen.getAllByText('Alt');
+      expect(altKeys.length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText('Enter')).toBeInTheDocument();
     });
 
@@ -182,10 +184,11 @@ describe('KeyboardShortcutsModal', () => {
 
       // Section titles should be h3
       const h3Elements = screen.getAllByRole('heading', { level: 3 });
-      expect(h3Elements).toHaveLength(3);
+      expect(h3Elements).toHaveLength(4);
       expect(h3Elements[0]).toHaveTextContent('Navigation');
-      expect(h3Elements[1]).toHaveTextContent('Terminal');
-      expect(h3Elements[2]).toHaveTextContent('Quick Tips');
+      expect(h3Elements[1]).toHaveTextContent('Session Tabs');
+      expect(h3Elements[2]).toHaveTextContent('Terminal');
+      expect(h3Elements[3]).toHaveTextContent('Quick Tips');
     });
 
     it('close button is focusable', () => {

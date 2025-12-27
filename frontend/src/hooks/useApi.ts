@@ -173,11 +173,21 @@ export async function fetchIssue(repoId: number, issueNumber: number): Promise<I
 }
 
 // PRs
-export function usePRs(repoId: number | null, state: string = 'open') {
+export interface PRFilters {
+  state?: 'open' | 'closed' | 'all';
+  search?: string;
+  sort?: 'created' | 'updated';
+  order?: 'asc' | 'desc';
+}
+
+export function usePRs(repoId: number | null, filters: PRFilters = {}) {
+  const { state = 'open', search, sort = 'created', order = 'desc' } = filters;
   const [prs, setPRs] = useState<PR[]>([]);
   // Start with loading=true if we have a repoId to prevent "No PRs" flash
   const [loading, setLoading] = useState(repoId !== null);
   const [error, setError] = useState<string | null>(null);
+
+  const [allPRs, setAllPRs] = useState<PR[]>([]);
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     if (!repoId) return;
@@ -188,7 +198,7 @@ export function usePRs(repoId: number | null, state: string = 'open') {
         `${API_BASE}/repos/${repoId}/prs?state=${state}`,
         { signal }
       );
-      setPRs(data);
+      setAllPRs(data);
       setError(null);
     } catch (e) {
       // Ignore abort errors
@@ -202,6 +212,7 @@ export function usePRs(repoId: number | null, state: string = 'open') {
   useEffect(() => {
     if (!repoId) {
       // Clear PRs and reset loading when no repo selected
+      setAllPRs([]);
       setPRs([]);
       setLoading(false);
       return;
@@ -213,6 +224,34 @@ export function usePRs(repoId: number | null, state: string = 'open') {
 
     return () => controller.abort();
   }, [repoId, state, refresh]);
+
+  // Apply client-side search and sorting
+  useEffect(() => {
+    let filtered = [...allPRs];
+
+    // Search filter
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filtered = filtered.filter(pr =>
+        pr.title.toLowerCase().includes(searchLower) ||
+        pr.number.toString().includes(searchLower) ||
+        pr.author.toLowerCase().includes(searchLower) ||
+        pr.head_ref.toLowerCase().includes(searchLower) ||
+        pr.base_ref.toLowerCase().includes(searchLower) ||
+        pr.labels.some(label => label.toLowerCase().includes(searchLower))
+      );
+    }
+
+    // Sort
+    filtered.sort((a, b) => {
+      const aVal = sort === 'updated' ? a.updated_at : a.created_at;
+      const bVal = sort === 'updated' ? b.updated_at : b.created_at;
+      const comparison = new Date(aVal).getTime() - new Date(bVal).getTime();
+      return order === 'asc' ? comparison : -comparison;
+    });
+
+    setPRs(filtered);
+  }, [allPRs, search, sort, order]);
 
   return { prs, loading, error, refresh: () => refresh() };
 }
@@ -296,6 +335,7 @@ export interface SessionFilters {
   starred?: boolean;
   hasEntities?: boolean;
   search?: string;
+  isActive?: boolean;
 }
 
 export function useSessions(filters: SessionFilters = {}) {
@@ -305,7 +345,7 @@ export function useSessions(filters: SessionFilters = {}) {
   const [perPage] = useState(30);
   const [loading, setLoading] = useState(true);
 
-  const { repoPath, starred, hasEntities, search } = filters;
+  const { repoPath, starred, hasEntities, search, isActive } = filters;
 
   // Internal fetch that optionally shows loading state
   const fetchPage = useCallback(async (pageNum: number, showLoading: boolean) => {
@@ -315,6 +355,7 @@ export function useSessions(filters: SessionFilters = {}) {
       if (repoPath) params.set('repo_path', repoPath);
       if (starred !== undefined) params.set('starred', starred.toString());
       if (hasEntities !== undefined) params.set('has_entities', hasEntities.toString());
+      if (isActive !== undefined) params.set('is_active', isActive.toString());
       if (search) params.set('search', search);
       params.set('limit', perPage.toString());
       params.set('offset', ((pageNum - 1) * perPage).toString());
@@ -330,7 +371,7 @@ export function useSessions(filters: SessionFilters = {}) {
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [repoPath, starred, hasEntities, search, perPage]);
+  }, [repoPath, starred, hasEntities, search, isActive, perPage]);
 
   // Public refresh - silent by default for polling
   const refresh = useCallback(() => fetchPage(page, false), [fetchPage, page]);
@@ -343,7 +384,7 @@ export function useSessions(filters: SessionFilters = {}) {
   useEffect(() => {
     setPage(1);
     fetchPage(1, true);
-  }, [repoPath, starred, hasEntities, search]);
+  }, [repoPath, starred, hasEntities, search, isActive]);
 
   const continueSession = async (sessionId: string): Promise<Process> => {
     const result = await fetchJson<Process>(

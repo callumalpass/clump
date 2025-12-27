@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
 import { useRepos, useIssues, usePRs, useProcesses, useSessions, useTags, useIssueTags, useCommands, buildPromptFromTemplate } from './hooks/useApi';
-import type { IssueFilters, SessionFilters } from './hooks/useApi';
+import type { IssueFilters, SessionFilters, PRFilters } from './hooks/useApi';
 import { RepoSelector } from './components/RepoSelector';
 import { IssueList } from './components/IssueList';
 import { IssueDetail } from './components/IssueDetail';
@@ -15,7 +15,7 @@ import { SessionList } from './components/SessionList';
 import { Settings } from './components/Settings';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import type { Repo, Issue, PR, SessionSummary, CommandMetadata } from './types';
-import type { SessionFilter } from './components/SessionList';
+import type { SessionListFilters } from './components/SessionList';
 
 function ResizeHandle() {
   return (
@@ -56,17 +56,16 @@ export default function App() {
   const [openSessionIds, setOpenSessionIds] = useState<string[]>([]);
   // Track which session tab is currently active
   const [activeTabSessionId, setActiveTabSessionId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
   const [issuePanelCollapsed, setIssuePanelCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const [issueFilters, setIssueFilters] = useState<IssueFilters>({ state: 'open' });
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
-  const [sessionFilter, setSessionFilter] = useState<SessionFilter>('all');
+  const [sessionListFilters, setSessionListFilters] = useState<SessionListFilters>({ category: 'all' });
   const [viewingSessionId, setViewingSessionId] = useState<string | null>(null);
   const [selectedPR, setSelectedPR] = useState<number | null>(null);
-  const [prStateFilter, setPRStateFilter] = useState<'open' | 'closed' | 'all'>('open');
+  const [prFilters, setPRFilters] = useState<PRFilters>({ state: 'open' });
   const [isCreatingIssue, setIsCreatingIssue] = useState(false);
   // Track view mode (transcript vs terminal) per session
   const [sessionViewModes, setSessionViewModes] = useState<Record<string, 'transcript' | 'terminal'>>({});
@@ -92,14 +91,15 @@ export default function App() {
   // Build session filters based on UI state
   const sessionFilters: SessionFilters = {
     repoPath: selectedRepo?.local_path,
-    search: searchQuery || undefined,
-    starred: sessionFilter === 'starred' ? true : undefined,
-    hasEntities: sessionFilter === 'with-entities' ? true : undefined,
+    search: sessionListFilters.search || undefined,
+    starred: sessionListFilters.category === 'starred' ? true : undefined,
+    hasEntities: sessionListFilters.category === 'with-entities' ? true : undefined,
+    isActive: sessionListFilters.category === 'active' ? true : undefined,
   };
   const { sessions, loading: sessionsLoading, refresh: refreshSessions, continueSession, deleteSession, updateSessionMetadata, total: sessionsTotal, page: sessionsPage, totalPages: sessionsTotalPages, goToPage: goToSessionsPage } = useSessions(sessionFilters);
   const { tags, createTag } = useTags(selectedRepo?.id ?? null);
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
-  const { prs, loading: prsLoading } = usePRs(selectedRepo?.id ?? null, prStateFilter);
+  const { prs, loading: prsLoading } = usePRs(selectedRepo?.id ?? null, prFilters);
   const { commands, refresh: refreshCommands } = useCommands(selectedRepo?.local_path);
 
   // Clear all UI state when repo changes
@@ -107,6 +107,8 @@ export default function App() {
     // Clear filters
     setSelectedTagId(null);
     setIssueFilters({ state: 'open' });
+    setPRFilters({ state: 'open' });
+    setSessionListFilters({ category: 'all' });
 
     // Clear selections (issues/PRs belong to specific repos)
     setSelectedIssue(null);
@@ -262,13 +264,15 @@ export default function App() {
         return;
       }
 
-      // "/" : Focus search (switch to sessions tab) - like GitHub/Slack
+      // "/" : Focus search in current tab - like GitHub/Slack
       if (e.key === '/') {
         e.preventDefault();
-        setActiveTab('sessions');
-        // Focus the search input after a short delay
+        // Focus the search input in the current tab after a short delay
         setTimeout(() => {
-          const searchInput = document.querySelector('input[placeholder="Search sessions..."]') as HTMLInputElement;
+          const placeholder = activeTab === 'issues' ? 'Search issues...'
+            : activeTab === 'prs' ? 'Search PRs...'
+            : 'Search sessions...';
+          const searchInput = document.querySelector(`input[placeholder="${placeholder}"]`) as HTMLInputElement;
           searchInput?.focus();
         }, 50);
         return;
@@ -293,7 +297,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [settingsOpen, shortcutsOpen, activeProcessId, selectedIssue, selectedPR]);
+  }, [settingsOpen, shortcutsOpen, activeProcessId, selectedIssue, selectedPR, activeTab]);
 
   const handleSelectSession = useCallback((session: SessionSummary) => {
     // Check if this session is active (has a running process)
@@ -679,19 +683,6 @@ export default function App() {
             })}
           </div>
 
-          {/* Search (for sessions) */}
-          {activeTab === 'sessions' && (
-            <div className="p-2 border-b border-gray-700">
-              <input
-                type="text"
-                placeholder="Search sessions..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          )}
-
           {/* List content */}
           <div className="flex-1 min-h-0 flex flex-col">
             {activeTab === 'issues' && selectedRepo && (
@@ -729,8 +720,8 @@ export default function App() {
                 onToggleStar={handleToggleStar}
                 onRefresh={refreshSessions}
                 loading={sessionsLoading}
-                filter={sessionFilter}
-                onFilterChange={setSessionFilter}
+                filters={sessionListFilters}
+                onFiltersChange={setSessionListFilters}
                 total={sessionsTotal}
                 page={sessionsPage}
                 totalPages={sessionsTotalPages}
@@ -745,8 +736,8 @@ export default function App() {
                 prCommands={commands.pr}
                 onStartSession={handleStartPRSession}
                 loading={prsLoading}
-                stateFilter={prStateFilter}
-                onStateFilterChange={setPRStateFilter}
+                filters={prFilters}
+                onFiltersChange={setPRFilters}
                 sessions={sessions}
                 processes={processes}
               />

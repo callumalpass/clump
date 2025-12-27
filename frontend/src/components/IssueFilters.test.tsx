@@ -47,9 +47,9 @@ describe('IssueFilters', () => {
     it('renders state toggle buttons', () => {
       render(<IssueFilters {...defaultProps} />);
 
-      expect(screen.getByRole('button', { name: 'open' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'closed' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'all' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Open' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Closed' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument();
     });
 
     it('renders sort dropdown', () => {
@@ -171,7 +171,7 @@ describe('IssueFilters', () => {
     it('highlights the current state', () => {
       render(<IssueFilters {...defaultProps} filters={{ state: 'open' }} />);
 
-      const openButton = screen.getByRole('button', { name: 'open' });
+      const openButton = screen.getByRole('button', { name: 'Open' });
       expect(openButton).toHaveClass('bg-blue-600');
     });
 
@@ -185,7 +185,7 @@ describe('IssueFilters', () => {
         />
       );
 
-      fireEvent.click(screen.getByRole('button', { name: 'closed' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Closed' }));
 
       expect(onFiltersChange).toHaveBeenCalledWith({ state: 'closed' });
     });
@@ -200,7 +200,7 @@ describe('IssueFilters', () => {
         />
       );
 
-      fireEvent.click(screen.getByRole('button', { name: 'all' }));
+      fireEvent.click(screen.getByRole('button', { name: 'All' }));
 
       expect(onFiltersChange).toHaveBeenCalledWith({ state: 'all' });
     });
@@ -387,7 +387,7 @@ describe('IssueFilters', () => {
       expect(dropdown).not.toBeInTheDocument();
     });
 
-    it('shows "All labels selected" when all labels are selected', () => {
+    it('hides "+ Add" button when all labels are selected', () => {
       const singleLabelIssue = [createMockIssue({ labels: ['onlylabel'] })];
       render(
         <IssueFilters
@@ -397,10 +397,8 @@ describe('IssueFilters', () => {
         />
       );
 
-      // Open dropdown
-      fireEvent.click(screen.getByText('+ Add'));
-
-      expect(screen.getByText('All labels selected')).toBeInTheDocument();
+      // When all labels are selected, the "+ Add" button should not be shown
+      expect(screen.queryByText('+ Add')).not.toBeInTheDocument();
     });
 
     it('hides already selected labels from dropdown', () => {
@@ -521,14 +519,28 @@ describe('IssueFilters', () => {
     });
 
     it('also clears search input when clear filters is clicked', () => {
-      render(
+      const onFiltersChange = vi.fn();
+      const { rerender } = render(
         <IssueFilters
           {...defaultProps}
           filters={{ state: 'open', search: 'test' }}
+          onFiltersChange={onFiltersChange}
         />
       );
 
       fireEvent.click(screen.getByText('Clear filters'));
+
+      // Verify onFiltersChange was called to clear filters
+      expect(onFiltersChange).toHaveBeenCalledWith({ state: 'open' });
+
+      // Simulate the parent updating props (which is what would happen in the real app)
+      rerender(
+        <IssueFilters
+          {...defaultProps}
+          filters={{ state: 'open' }}
+          onFiltersChange={onFiltersChange}
+        />
+      );
 
       const input = screen.getByPlaceholderText('Search issues...') as HTMLInputElement;
       expect(input.value).toBe('');
@@ -546,7 +558,7 @@ describe('IssueFilters', () => {
         />
       );
 
-      fireEvent.click(screen.getByRole('button', { name: 'closed' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Closed' }));
 
       expect(onFiltersChange).toHaveBeenCalledWith({
         state: 'closed',

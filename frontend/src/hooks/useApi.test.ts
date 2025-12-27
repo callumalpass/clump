@@ -273,7 +273,7 @@ describe('usePRs', () => {
     const mockPRs = [{ number: 1, title: 'Test PR', state: 'open' }];
     mockFetch.mockResolvedValueOnce(createMockResponse(mockPRs));
 
-    const { result } = renderHook(() => usePRs(1, 'closed'));
+    const { result } = renderHook(() => usePRs(1, { state: 'closed' }));
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);

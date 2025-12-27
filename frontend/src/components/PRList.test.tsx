@@ -84,8 +84,8 @@ describe('PRList', () => {
     prCommands: [createMockCommand()],
     onStartSession: vi.fn(),
     loading: false,
-    stateFilter: 'open' as const,
-    onStateFilterChange: vi.fn(),
+    filters: { state: 'open' as const },
+    onFiltersChange: vi.fn(),
   };
 
   beforeEach(() => {
@@ -114,28 +114,32 @@ describe('PRList', () => {
     it('renders empty state when no PRs and not loading', () => {
       render(<PRList {...defaultProps} prs={[]} loading={false} />);
 
-      expect(screen.getByText('No open pull requests')).toBeInTheDocument();
-      expect(screen.getByText('Try selecting a different filter')).toBeInTheDocument();
+      // With default filters (state: 'open'), shows generic empty state
+      expect(screen.getByText('No pull requests')).toBeInTheDocument();
+      expect(screen.getByText('This repository has no PRs yet')).toBeInTheDocument();
     });
 
     it('shows correct empty message for closed filter', () => {
-      render(<PRList {...defaultProps} prs={[]} loading={false} stateFilter="closed" />);
+      render(<PRList {...defaultProps} prs={[]} loading={false} filters={{ state: 'closed' }} />);
 
-      expect(screen.getByText('No closed pull requests')).toBeInTheDocument();
+      // With filters active, shows "no matching" message
+      expect(screen.getByText('No matching pull requests')).toBeInTheDocument();
+      expect(screen.getByText('Try adjusting your filters')).toBeInTheDocument();
     });
 
     it('shows correct empty message for all filter', () => {
-      render(<PRList {...defaultProps} prs={[]} loading={false} stateFilter="all" />);
+      render(<PRList {...defaultProps} prs={[]} loading={false} filters={{ state: 'all' }} />);
 
-      expect(screen.getByText('No pull requests')).toBeInTheDocument();
-      expect(screen.getByText('This repository has no PRs yet')).toBeInTheDocument();
+      // With 'all' filter (not default 'open'), shows "no matching" message
+      expect(screen.getByText('No matching pull requests')).toBeInTheDocument();
+      expect(screen.getByText('Try adjusting your filters')).toBeInTheDocument();
     });
 
     it('does not show empty state when loading', () => {
       render(<PRList {...defaultProps} prs={[]} loading={true} />);
 
       expect(screen.queryByText('No pull requests')).not.toBeInTheDocument();
-      expect(screen.queryByText('No open pull requests')).not.toBeInTheDocument();
+      expect(screen.queryByText('No matching pull requests')).not.toBeInTheDocument();
     });
   });
 
@@ -334,7 +338,7 @@ describe('PRList', () => {
     });
 
     it('highlights active filter tab', () => {
-      render(<PRList {...defaultProps} stateFilter="closed" />);
+      render(<PRList {...defaultProps} filters={{ state: 'closed' }} />);
 
       const closedButton = screen.getByText('Closed');
       expect(closedButton).toHaveClass('bg-blue-600');
@@ -343,24 +347,24 @@ describe('PRList', () => {
       expect(openButton).not.toHaveClass('bg-blue-600');
     });
 
-    it('calls onStateFilterChange when filter is clicked', () => {
-      const onStateFilterChange = vi.fn();
+    it('calls onFiltersChange when filter is clicked', () => {
+      const onFiltersChange = vi.fn();
 
-      render(<PRList {...defaultProps} onStateFilterChange={onStateFilterChange} />);
+      render(<PRList {...defaultProps} onFiltersChange={onFiltersChange} />);
 
       fireEvent.click(screen.getByText('Closed'));
 
-      expect(onStateFilterChange).toHaveBeenCalledWith('closed');
+      expect(onFiltersChange).toHaveBeenCalledWith({ state: 'closed' });
     });
 
-    it('calls onStateFilterChange with all when All tab is clicked', () => {
-      const onStateFilterChange = vi.fn();
+    it('calls onFiltersChange with all when All tab is clicked', () => {
+      const onFiltersChange = vi.fn();
 
-      render(<PRList {...defaultProps} onStateFilterChange={onStateFilterChange} />);
+      render(<PRList {...defaultProps} onFiltersChange={onFiltersChange} />);
 
       fireEvent.click(screen.getByText('All'));
 
-      expect(onStateFilterChange).toHaveBeenCalledWith('all');
+      expect(onFiltersChange).toHaveBeenCalledWith({ state: 'all' });
     });
   });
 

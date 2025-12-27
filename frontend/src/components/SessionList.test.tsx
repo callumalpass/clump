@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { SessionList, SessionFilter } from './SessionList';
+import { SessionList, SessionListFilters } from './SessionList';
 import type { SessionSummary, Process } from '../types';
 
 // Mock ElapsedTimer component
@@ -51,8 +51,8 @@ describe('SessionList', () => {
     onToggleStar: vi.fn(),
     onRefresh: vi.fn(),
     loading: false,
-    filter: 'all' as SessionFilter,
-    onFilterChange: vi.fn(),
+    filters: { category: 'all' } as SessionListFilters,
+    onFiltersChange: vi.fn(),
     total: 0,
     page: 1,
     totalPages: 1,
@@ -74,7 +74,7 @@ describe('SessionList', () => {
     });
 
     it('highlights the currently selected filter', () => {
-      render(<SessionList {...defaultProps} filter="starred" />);
+      render(<SessionList {...defaultProps} filters={{ category: 'starred' }} />);
 
       const starredButton = screen.getByRole('button', { name: 'Starred' });
       expect(starredButton).toHaveClass('bg-blue-600');
@@ -83,13 +83,13 @@ describe('SessionList', () => {
       expect(allButton).not.toHaveClass('bg-blue-600');
     });
 
-    it('calls onFilterChange when a filter is clicked', () => {
-      const onFilterChange = vi.fn();
-      render(<SessionList {...defaultProps} onFilterChange={onFilterChange} />);
+    it('calls onFiltersChange when a filter is clicked', () => {
+      const onFiltersChange = vi.fn();
+      render(<SessionList {...defaultProps} onFiltersChange={onFiltersChange} />);
 
       fireEvent.click(screen.getByRole('button', { name: 'Active' }));
 
-      expect(onFilterChange).toHaveBeenCalledWith('active');
+      expect(onFiltersChange).toHaveBeenCalledWith({ category: 'active' });
     });
 
     it('displays session count', () => {
@@ -109,20 +109,20 @@ describe('SessionList', () => {
     it('renders refresh button when onRefresh provided', () => {
       render(<SessionList {...defaultProps} onRefresh={vi.fn()} />);
 
-      expect(screen.getByTitle('Refresh sessions')).toBeInTheDocument();
+      expect(screen.getByTitle('Refresh')).toBeInTheDocument();
     });
 
     it('does not render refresh button when onRefresh not provided', () => {
       render(<SessionList {...defaultProps} onRefresh={undefined} />);
 
-      expect(screen.queryByTitle('Refresh sessions')).not.toBeInTheDocument();
+      expect(screen.queryByTitle('Refresh')).not.toBeInTheDocument();
     });
 
     it('calls onRefresh when refresh button clicked', () => {
       const onRefresh = vi.fn();
       render(<SessionList {...defaultProps} onRefresh={onRefresh} />);
 
-      fireEvent.click(screen.getByTitle('Refresh sessions'));
+      fireEvent.click(screen.getByTitle('Refresh'));
 
       expect(onRefresh).toHaveBeenCalled();
     });
@@ -130,14 +130,14 @@ describe('SessionList', () => {
     it('disables refresh button when loading', () => {
       render(<SessionList {...defaultProps} onRefresh={vi.fn()} loading={true} />);
 
-      const refreshButton = screen.getByTitle('Refresh sessions');
+      const refreshButton = screen.getByTitle('Refresh');
       expect(refreshButton).toBeDisabled();
     });
 
     it('shows spinning animation when loading', () => {
       render(<SessionList {...defaultProps} onRefresh={vi.fn()} loading={true} />);
 
-      const refreshButton = screen.getByTitle('Refresh sessions');
+      const refreshButton = screen.getByTitle('Refresh');
       const svg = refreshButton.querySelector('svg');
       expect(svg).toHaveClass('animate-spin');
     });
@@ -163,23 +163,25 @@ describe('SessionList', () => {
 
   describe('Empty State', () => {
     it('renders empty state when no sessions and not loading', () => {
-      render(<SessionList {...defaultProps} sessions={[]} loading={false} filter="all" />);
+      render(<SessionList {...defaultProps} sessions={[]} loading={false} filters={{ category: 'all' }} />);
 
       expect(screen.getByText('No Claude sessions found')).toBeInTheDocument();
       expect(screen.getByText('Sessions from Claude Code will appear here')).toBeInTheDocument();
     });
 
     it('shows filter-specific empty message for active filter', () => {
-      render(<SessionList {...defaultProps} sessions={[]} loading={false} filter="active" />);
+      render(<SessionList {...defaultProps} sessions={[]} loading={false} filters={{ category: 'active' }} />);
 
-      expect(screen.getByText('No active sessions')).toBeInTheDocument();
-      expect(screen.getByText('Try selecting a different filter')).toBeInTheDocument();
+      // When category filter is active (not 'all'), shows "no matching" message
+      expect(screen.getByText('No matching sessions')).toBeInTheDocument();
+      expect(screen.getByText('Try adjusting your filters')).toBeInTheDocument();
     });
 
     it('shows filter-specific empty message for starred filter', () => {
-      render(<SessionList {...defaultProps} sessions={[]} loading={false} filter="starred" />);
+      render(<SessionList {...defaultProps} sessions={[]} loading={false} filters={{ category: 'starred' }} />);
 
-      expect(screen.getByText('No starred sessions')).toBeInTheDocument();
+      // When category filter is starred (not 'all'), shows "no matching" message
+      expect(screen.getByText('No matching sessions')).toBeInTheDocument();
     });
 
     it('does not show empty state when loading', () => {

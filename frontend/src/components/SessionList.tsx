@@ -1,8 +1,25 @@
 import type { SessionSummary, Process } from '../types';
 import { calculateDuration } from '../hooks/useElapsedTime';
 import { ElapsedTimer } from './ElapsedTimer';
+import {
+  FilterBar,
+  FilterBarRow,
+  SearchInput,
+  SortControl,
+  ItemCount,
+  RefreshButton,
+  ClearFiltersButton,
+  filterBarStyles,
+} from './FilterBar';
 
 export type SessionFilter = 'all' | 'active' | 'starred' | 'with-entities';
+
+export interface SessionListFilters {
+  category: SessionFilter;
+  search?: string;
+  sort?: 'created' | 'updated' | 'messages';
+  order?: 'asc' | 'desc';
+}
 
 interface SessionListProps {
   sessions: SessionSummary[];
@@ -12,19 +29,25 @@ interface SessionListProps {
   onToggleStar?: (session: SessionSummary) => void;
   onRefresh?: () => void;
   loading: boolean;
-  filter: SessionFilter;
-  onFilterChange: (filter: SessionFilter) => void;
+  filters: SessionListFilters;
+  onFiltersChange: (filters: SessionListFilters) => void;
   total: number;
   page: number;
   totalPages: number;
   onPageChange: (page: number) => void;
 }
 
-const FILTERS: { value: SessionFilter; label: string }[] = [
+const CATEGORY_FILTERS: { value: SessionFilter; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'active', label: 'Active' },
   { value: 'starred', label: 'Starred' },
   { value: 'with-entities', label: 'Linked' },
+];
+
+const SORT_OPTIONS = [
+  { value: 'created', label: 'Created' },
+  { value: 'updated', label: 'Updated' },
+  { value: 'messages', label: 'Messages' },
 ];
 
 export function SessionList({
@@ -35,57 +58,78 @@ export function SessionList({
   onToggleStar,
   onRefresh,
   loading,
-  filter,
-  onFilterChange,
+  filters,
+  onFiltersChange,
   total,
   page,
   totalPages,
   onPageChange,
 }: SessionListProps) {
-  const filterTabs = (
-    <div className="flex gap-1 p-2 border-b border-gray-700 bg-gray-800/30">
-      {FILTERS.map((f) => (
-        <button
-          key={f.value}
-          onClick={() => onFilterChange(f.value)}
-          className={`toggle-btn px-2.5 py-1 text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900 ${
-            filter === f.value
-              ? 'bg-blue-600 text-white'
-              : 'text-gray-400 hover:text-white hover:bg-gray-700'
-          }`}
-        >
-          {f.label}
-        </button>
-      ))}
-      <div className="ml-auto flex items-center gap-1.5">
-        <span className="text-xs text-gray-500">
-          {total} session{total !== 1 ? 's' : ''}
-        </span>
-        {onRefresh && (
+  const setSearch = (search: string) => {
+    onFiltersChange({ ...filters, search: search || undefined });
+  };
+
+  const setCategory = (category: SessionFilter) => {
+    onFiltersChange({ ...filters, category });
+  };
+
+  const setSort = (sort: string) => {
+    onFiltersChange({ ...filters, sort: sort as 'created' | 'updated' | 'messages' });
+  };
+
+  const setOrder = (order: 'asc' | 'desc') => {
+    onFiltersChange({ ...filters, order });
+  };
+
+  const clearFilters = () => {
+    onFiltersChange({ category: 'all' });
+  };
+
+  const hasActiveFilters =
+    filters.search ||
+    filters.category !== 'all' ||
+    filters.sort !== 'created' ||
+    filters.order !== 'desc';
+
+  const filterBar = (
+    <FilterBar>
+      <SearchInput
+        value={filters.search || ''}
+        onChange={setSearch}
+        placeholder="Search sessions..."
+      />
+      <FilterBarRow className="flex-wrap gap-1">
+        {CATEGORY_FILTERS.map((f) => (
           <button
-            onClick={onRefresh}
-            disabled={loading}
-            className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900"
-            title="Refresh sessions"
+            key={f.value}
+            onClick={() => setCategory(f.value)}
+            className={filterBarStyles.pillButton(filters.category === f.value)}
           >
-            <svg
-              className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
+            {f.label}
           </button>
-        )}
-      </div>
-    </div>
+        ))}
+      </FilterBarRow>
+      <FilterBarRow className="justify-between">
+        <SortControl
+          sortValue={filters.sort || 'created'}
+          orderValue={filters.order || 'desc'}
+          options={SORT_OPTIONS}
+          onSortChange={setSort}
+          onOrderChange={setOrder}
+        />
+        <div className="flex items-center gap-1.5">
+          <ItemCount count={total} singular="session" />
+          {onRefresh && <RefreshButton onClick={onRefresh} loading={loading} />}
+        </div>
+      </FilterBarRow>
+      <ClearFiltersButton onClick={clearFilters} show={!!hasActiveFilters} />
+    </FilterBar>
   );
 
   if (loading) {
     return (
       <div className="flex flex-col flex-1">
-        {filterTabs}
+        {filterBar}
         <div className="divide-y divide-gray-700">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="p-3">
@@ -106,9 +150,10 @@ export function SessionList({
   }
 
   if (sessions.length === 0) {
+    const hasFilters = filters.search || filters.category !== 'all';
     return (
       <div className="flex flex-col flex-1">
-        {filterTabs}
+        {filterBar}
         <div className="flex-1 flex flex-col items-center justify-center p-8">
           <div className="text-center p-6 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-xs empty-state-enter">
             <div className="w-14 h-14 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4">
@@ -117,12 +162,12 @@ export function SessionList({
               </svg>
             </div>
             <p className="text-gray-300 font-medium mb-1">
-              {filter === 'all' ? 'No Claude sessions found' : `No ${filter} sessions`}
+              {hasFilters ? 'No matching sessions' : 'No Claude sessions found'}
             </p>
             <p className="text-gray-500 text-sm">
-              {filter === 'all'
-                ? 'Sessions from Claude Code will appear here'
-                : 'Try selecting a different filter'}
+              {hasFilters
+                ? 'Try adjusting your filters'
+                : 'Sessions from Claude Code will appear here'}
             </p>
           </div>
         </div>
@@ -149,7 +194,7 @@ export function SessionList({
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {filterTabs}
+      {filterBar}
       <div className="divide-y divide-gray-700 overflow-auto flex-1 min-h-0">
         {sessions.map((session) => (
           <div

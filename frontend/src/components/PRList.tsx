@@ -1,5 +1,15 @@
 import type { PR, SessionSummary, Process, CommandMetadata } from '../types';
+import type { PRFilters } from '../hooks/useApi';
 import { PRStartSessionButton } from './PRStartSessionButton';
+import {
+  FilterBar,
+  FilterBarRow,
+  SearchInput,
+  StateToggle,
+  SortControl,
+  ItemCount,
+  ClearFiltersButton,
+} from './FilterBar';
 
 interface PRListProps {
   prs: PR[];
@@ -8,16 +18,15 @@ interface PRListProps {
   prCommands: CommandMetadata[];
   onStartSession: (pr: PR, command: CommandMetadata) => void;
   loading: boolean;
-  stateFilter: 'open' | 'closed' | 'all';
-  onStateFilterChange: (state: 'open' | 'closed' | 'all') => void;
+  filters: PRFilters;
+  onFiltersChange: (filters: PRFilters) => void;
   sessions?: SessionSummary[];
   processes?: Process[];
 }
 
-const STATE_FILTERS: { value: 'open' | 'closed' | 'all'; label: string }[] = [
-  { value: 'open', label: 'Open' },
-  { value: 'closed', label: 'Closed' },
-  { value: 'all', label: 'All' },
+const SORT_OPTIONS = [
+  { value: 'created', label: 'Created' },
+  { value: 'updated', label: 'Updated' },
 ];
 
 export function PRList({
@@ -27,8 +36,8 @@ export function PRList({
   prCommands,
   onStartSession,
   loading,
-  stateFilter,
-  onStateFilterChange,
+  filters,
+  onFiltersChange,
   sessions = [],
   processes: _processes = [],
 }: PRListProps) {
@@ -45,33 +54,62 @@ export function PRList({
     return acc;
   }, {} as Record<string, SessionSummary[]>);
 
+  const setSearch = (search: string) => {
+    onFiltersChange({ ...filters, search: search || undefined });
+  };
+
+  const setState = (state: 'open' | 'closed' | 'all') => {
+    onFiltersChange({ ...filters, state });
+  };
+
+  const setSort = (sort: string) => {
+    onFiltersChange({ ...filters, sort: sort as 'created' | 'updated' });
+  };
+
+  const setOrder = (order: 'asc' | 'desc') => {
+    onFiltersChange({ ...filters, order });
+  };
+
+  const clearFilters = () => {
+    onFiltersChange({ state: 'open' });
+  };
+
+  const hasActiveFilters =
+    filters.search ||
+    filters.state !== 'open' ||
+    filters.sort !== 'created' ||
+    filters.order !== 'desc';
+
   // Filter tabs
-  const filterTabs = (
-    <div className="flex gap-1 p-2 border-b border-gray-700 bg-gray-800/30">
-      {STATE_FILTERS.map((filter) => (
-        <button
-          key={filter.value}
-          onClick={() => onStateFilterChange(filter.value)}
-          className={`toggle-btn px-2.5 py-1 text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900 ${
-            stateFilter === filter.value
-              ? 'bg-blue-600 text-white'
-              : 'text-gray-400 hover:text-white hover:bg-gray-700'
-          }`}
-        >
-          {filter.label}
-        </button>
-      ))}
-      <span className="ml-auto text-xs text-gray-500 self-center pr-1">
-        {prs.length} PR{prs.length !== 1 ? 's' : ''}
-      </span>
-    </div>
+  const filterBar = (
+    <FilterBar>
+      <SearchInput
+        value={filters.search || ''}
+        onChange={setSearch}
+        placeholder="Search PRs..."
+      />
+      <FilterBarRow className="justify-between">
+        <StateToggle value={filters.state || 'open'} onChange={setState} />
+        <div className="flex items-center gap-2">
+          <SortControl
+            sortValue={filters.sort || 'created'}
+            orderValue={filters.order || 'desc'}
+            options={SORT_OPTIONS}
+            onSortChange={setSort}
+            onOrderChange={setOrder}
+          />
+          <ItemCount count={prs.length} singular="PR" />
+        </div>
+      </FilterBarRow>
+      <ClearFiltersButton onClick={clearFilters} show={!!hasActiveFilters} />
+    </FilterBar>
   );
 
   // Loading state
   if (loading) {
     return (
       <div className="flex flex-col flex-1 min-h-0">
-        {filterTabs}
+        {filterBar}
         <div className="divide-y divide-gray-700">
           {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="p-3">
@@ -98,9 +136,11 @@ export function PRList({
 
   // Empty state
   if (prs.length === 0) {
+    const stateFilter = filters.state || 'open';
+    const hasFilters = filters.search || stateFilter !== 'open';
     return (
       <div className="flex flex-col flex-1 min-h-0">
-        {filterTabs}
+        {filterBar}
         <div className="flex-1 flex flex-col items-center justify-center p-8">
           <div className="text-center p-6 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-xs empty-state-enter">
             <div className="w-14 h-14 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4">
@@ -109,10 +149,10 @@ export function PRList({
               </svg>
             </div>
             <p className="text-gray-300 font-medium mb-1">
-              {stateFilter === 'all' ? 'No pull requests' : `No ${stateFilter} pull requests`}
+              {hasFilters ? 'No matching pull requests' : 'No pull requests'}
             </p>
             <p className="text-gray-500 text-sm">
-              {stateFilter !== 'all' ? 'Try selecting a different filter' : 'This repository has no PRs yet'}
+              {hasFilters ? 'Try adjusting your filters' : 'This repository has no PRs yet'}
             </p>
           </div>
         </div>
@@ -122,7 +162,7 @@ export function PRList({
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {filterTabs}
+      {filterBar}
       <div className="flex-1 overflow-auto min-h-0 divide-y divide-gray-700">
         {prs.map((pr) => {
           const prSessions = sessionsByPR[pr.number.toString()] || [];
