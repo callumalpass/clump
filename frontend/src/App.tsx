@@ -96,7 +96,7 @@ export default function App() {
     starred: sessionFilter === 'starred' ? true : undefined,
     hasEntities: sessionFilter === 'with-entities' ? true : undefined,
   };
-  const { sessions, loading: sessionsLoading, refresh: refreshSessions, continueSession, deleteSession, updateSessionMetadata, total: sessionsTotal } = useSessions(sessionFilters);
+  const { sessions, loading: sessionsLoading, refresh: refreshSessions, continueSession, deleteSession, updateSessionMetadata, total: sessionsTotal, page: sessionsPage, totalPages: sessionsTotalPages, goToPage: goToSessionsPage } = useSessions(sessionFilters);
   const { tags, createTag } = useTags(selectedRepo?.id ?? null);
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
   const { prs, loading: prsLoading } = usePRs(selectedRepo?.id ?? null, prStateFilter);
@@ -732,6 +732,9 @@ export default function App() {
                 filter={sessionFilter}
                 onFilterChange={setSessionFilter}
                 total={sessionsTotal}
+                page={sessionsPage}
+                totalPages={sessionsTotalPages}
+                onPageChange={goToSessionsPage}
               />
             )}
             {activeTab === 'prs' && selectedRepo && (

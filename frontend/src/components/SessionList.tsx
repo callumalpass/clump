@@ -15,6 +15,9 @@ interface SessionListProps {
   filter: SessionFilter;
   onFilterChange: (filter: SessionFilter) => void;
   total: number;
+  page: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
 }
 
 const FILTERS: { value: SessionFilter; label: string }[] = [
@@ -34,7 +37,10 @@ export function SessionList({
   loading,
   filter,
   onFilterChange,
-  total
+  total,
+  page,
+  totalPages,
+  onPageChange,
 }: SessionListProps) {
   const filterTabs = (
     <div className="flex gap-1 p-2 border-b border-gray-700 bg-gray-800/30">
@@ -256,6 +262,39 @@ export function SessionList({
           </div>
         ))}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="shrink-0 border-t border-gray-700 p-2 flex items-center justify-end text-sm">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => onPageChange(page - 1)}
+              disabled={page <= 1}
+              className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900 flex items-center gap-1"
+              aria-label="Go to previous page"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              <span>Prev</span>
+            </button>
+            <span className="px-2 text-gray-300 tabular-nums">
+              {page} / {totalPages}
+            </span>
+            <button
+              onClick={() => onPageChange(page + 1)}
+              disabled={page >= totalPages}
+              className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900 flex items-center gap-1"
+              aria-label="Go to next page"
+            >
+              <span>Next</span>
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

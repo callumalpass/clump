@@ -301,12 +301,14 @@ export interface SessionFilters {
 export function useSessions(filters: SessionFilters = {}) {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [perPage] = useState(30);
   const [loading, setLoading] = useState(true);
 
   const { repoPath, starred, hasEntities, search } = filters;
 
   // Internal fetch that optionally shows loading state
-  const fetchSessions = useCallback(async (showLoading: boolean) => {
+  const fetchPage = useCallback(async (pageNum: number, showLoading: boolean) => {
     try {
       if (showLoading) setLoading(true);
       const params = new URLSearchParams();
@@ -314,26 +316,34 @@ export function useSessions(filters: SessionFilters = {}) {
       if (starred !== undefined) params.set('starred', starred.toString());
       if (hasEntities !== undefined) params.set('has_entities', hasEntities.toString());
       if (search) params.set('search', search);
+      params.set('limit', perPage.toString());
+      params.set('offset', ((pageNum - 1) * perPage).toString());
 
       const data = await fetchJson<SessionListResponse>(
         `${API_BASE}/sessions?${params}`
       );
       setSessions(data.sessions);
       setTotal(data.total);
+      setPage(pageNum);
     } catch (e) {
       console.error('Failed to fetch sessions:', e);
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [repoPath, starred, hasEntities, search]);
+  }, [repoPath, starred, hasEntities, search, perPage]);
 
   // Public refresh - silent by default for polling
-  const refresh = useCallback(() => fetchSessions(false), [fetchSessions]);
+  const refresh = useCallback(() => fetchPage(page, false), [fetchPage, page]);
 
-  // Initial load and when filters change - show loading
+  const goToPage = useCallback((pageNum: number) => {
+    fetchPage(pageNum, true);
+  }, [fetchPage]);
+
+  // Initial load and when filters change - reset to page 1
   useEffect(() => {
-    fetchSessions(true);
-  }, [fetchSessions]);
+    setPage(1);
+    fetchPage(1, true);
+  }, [repoPath, starred, hasEntities, search]);
 
   const continueSession = async (sessionId: string): Promise<Process> => {
     const result = await fetchJson<Process>(
@@ -369,7 +379,9 @@ export function useSessions(filters: SessionFilters = {}) {
     return result;
   };
 
-  return { sessions, total, loading, refresh, continueSession, deleteSession, updateSessionMetadata };
+  const totalPages = Math.ceil(total / perPage);
+
+  return { sessions, total, loading, refresh, continueSession, deleteSession, updateSessionMetadata, page, totalPages, goToPage };
 }
 
 // Fetch full session detail with transcript

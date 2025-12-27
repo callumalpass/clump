@@ -54,6 +54,9 @@ describe('SessionList', () => {
     filter: 'all' as SessionFilter,
     onFilterChange: vi.fn(),
     total: 0,
+    page: 1,
+    totalPages: 1,
+    onPageChange: vi.fn(),
   };
 
   beforeEach(() => {
