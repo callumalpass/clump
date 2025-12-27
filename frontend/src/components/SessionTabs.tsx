@@ -1,6 +1,11 @@
 import type { Session, Analysis } from '../types';
 import { ElapsedTimer } from './ElapsedTimer';
 
+/** Maximum length of a tab title before truncation */
+const MAX_TAB_TITLE_LENGTH = 30;
+/** Suffix appended to truncated titles */
+const TRUNCATION_SUFFIX = '...';
+
 interface SessionTabsProps {
   sessions: Session[];
   activeSession: string | null;
@@ -17,10 +22,10 @@ function getTabName(session: Session, analyses: Analysis[]): string {
   );
 
   if (analysis) {
-    // Truncate long titles
     const title = analysis.title;
-    if (title.length > 30) {
-      return title.slice(0, 27) + '...';
+    if (title.length > MAX_TAB_TITLE_LENGTH) {
+      const truncateAt = MAX_TAB_TITLE_LENGTH - TRUNCATION_SUFFIX.length;
+      return title.slice(0, truncateAt) + TRUNCATION_SUFFIX;
     }
     return title;
   }
