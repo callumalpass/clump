@@ -1,241 +1,302 @@
 """
-Terminal session routes with WebSocket support.
+Session CRUD and search routes.
 """
 
-import asyncio
-
-# Default terminal dimensions (standard VT100 size)
-# Used as fallback when client doesn't send resize dimensions
-DEFAULT_TERMINAL_ROWS = 24
-DEFAULT_TERMINAL_COLS = 80
 from datetime import datetime
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException
+from typing import Any
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.db_helpers import get_repo_or_404
-from app.models import Analysis, AnalysisStatus
-from app.services.session_manager import session_manager
+from app.db_helpers import get_session_or_404
+from app.models import Session, SessionStatus, Repo
+from app.services.session_manager import process_manager
+from app.services.transcript_parser import parse_transcript, transcript_to_dict
 
 router = APIRouter()
 
 
-class SessionCreate(BaseModel):
-    repo_id: int
-    prompt: str | None = None
-    analysis_type: str = "custom"
-    entity_id: str | None = None
-    title: str = "New Analysis"
-
-    # Claude Code configuration overrides
-    permission_mode: str | None = None  # "default", "plan", "acceptEdits", "bypassPermissions"
-    allowed_tools: list[str] | None = None
-    disallowed_tools: list[str] | None = None
-    max_turns: int | None = None
-    model: str | None = None  # "sonnet", "opus", "haiku"
-    resume_session: str | None = None  # Claude Code session ID to resume
-
-
 class SessionResponse(BaseModel):
-    id: str
-    working_dir: str
+    id: int
+    repo_id: int
+    repo_name: str | None = None
+    kind: str
+    entity_id: str | None
+    title: str
+    prompt: str
+    transcript: str
+    summary: str | None
+    status: str
+    process_id: str | None
+    claude_session_id: str | None = None  # Claude Code CLI session ID for resume
     created_at: str
-    analysis_id: int | None
-    claude_session_id: str | None = None  # Claude Code's internal session ID
+    completed_at: str | None
+
+    class Config:
+        from_attributes = True
+
+
+def _session_to_response(session: Session, repo: Repo | None) -> SessionResponse:
+    """Convert a Session model to SessionResponse."""
+    return SessionResponse(
+        id=session.id,
+        repo_id=session.repo_id,
+        repo_name=f"{repo.owner}/{repo.name}" if repo else None,
+        kind=session.kind,
+        entity_id=session.entity_id,
+        title=session.title,
+        prompt=session.prompt,
+        transcript=session.transcript,
+        summary=session.summary,
+        status=session.status,
+        process_id=session.process_id,
+        claude_session_id=session.claude_session_id,
+        created_at=session.created_at.isoformat(),
+        completed_at=session.completed_at.isoformat() if session.completed_at else None,
+    )
+
+
+class SessionUpdate(BaseModel):
+    summary: str | None = None
+    status: str | None = None
 
 
 class SessionListResponse(BaseModel):
     sessions: list[SessionResponse]
-
-
-@router.post("/sessions", response_model=SessionResponse)
-async def create_session(
-    data: SessionCreate,
-    db: AsyncSession = Depends(get_db),
-):
-    """Create a new terminal session running Claude Code."""
-    repo = await get_repo_or_404(db, data.repo_id)
-
-    # Create analysis record
-    analysis = Analysis(
-        repo_id=repo.id,
-        type=data.analysis_type,
-        entity_id=data.entity_id,
-        title=data.title,
-        prompt=data.prompt or "",
-        status=AnalysisStatus.RUNNING.value,
-    )
-    db.add(analysis)
-    await db.commit()
-    await db.refresh(analysis)
-
-    # Create PTY session with Claude Code configuration
-    session = await session_manager.create_session(
-        working_dir=repo.local_path,
-        initial_prompt=data.prompt,
-        analysis_id=analysis.id,
-        allowed_tools=data.allowed_tools,
-        disallowed_tools=data.disallowed_tools,
-        permission_mode=data.permission_mode,
-        max_turns=data.max_turns,
-        model=data.model,
-        resume_session=data.resume_session,
-    )
-
-    # Link session to analysis
-    analysis.session_id = session.id
-    await db.commit()
-
-    return SessionResponse(
-        id=session.id,
-        working_dir=session.working_dir,
-        created_at=session.created_at.isoformat(),
-        analysis_id=analysis.id,
-        claude_session_id=session.claude_session_id,
-    )
+    total: int
 
 
 @router.get("/sessions", response_model=SessionListResponse)
-async def list_sessions(db: AsyncSession = Depends(get_db)):
-    """List all active terminal sessions."""
-    # First, check for dead sessions and update their analysis status
-    dead_session_info = await session_manager.get_dead_session_info()
-    for analysis_id, transcript, claude_session_id in dead_session_info:
-        result = await db.execute(
-            select(Analysis).where(Analysis.id == analysis_id)
+async def list_sessions(
+    repo_id: int | None = None,
+    kind: str | None = None,
+    status: str | None = None,
+    search: str | None = None,
+    limit: int = Query(default=50, le=200),
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db),
+):
+    """List sessions with optional filtering and search."""
+    query = select(Session).order_by(Session.created_at.desc())
+
+    if repo_id:
+        query = query.where(Session.repo_id == repo_id)
+    if kind:
+        query = query.where(Session.kind == kind)
+    if status:
+        query = query.where(Session.status == status)
+    if search:
+        search_term = f"%{search}%"
+        query = query.where(
+            or_(
+                Session.title.ilike(search_term),
+                Session.prompt.ilike(search_term),
+                Session.transcript.ilike(search_term),
+                Session.summary.ilike(search_term),
+            )
         )
-        analysis = result.scalar_one_or_none()
-        if analysis and analysis.status == AnalysisStatus.RUNNING.value:
-            analysis.status = AnalysisStatus.COMPLETED.value
-            analysis.transcript = transcript
-            analysis.completed_at = datetime.utcnow()
-            if claude_session_id:
-                analysis.claude_session_id = claude_session_id
 
-    if dead_session_info:
-        await db.commit()
+    # Get total count
+    count_result = await db.execute(select(Session.id).where(query.whereclause) if query.whereclause is not None else select(Session.id))
+    total = len(count_result.all())
 
-    # Now list only actually running sessions
-    sessions = await session_manager.list_sessions()
+    # Apply pagination
+    query = query.offset(offset).limit(limit)
+    result = await db.execute(query)
+    sessions = result.scalars().all()
+
+    # Get repo names
+    repo_ids = {s.repo_id for s in sessions}
+    repo_result = await db.execute(select(Repo).where(Repo.id.in_(repo_ids)))
+    repos = {r.id: r for r in repo_result.scalars().all()}
+
     return SessionListResponse(
         sessions=[
-            SessionResponse(
-                id=s.id,
-                working_dir=s.working_dir,
-                created_at=s.created_at.isoformat(),
-                analysis_id=s.analysis_id,
-                claude_session_id=s.claude_session_id,
-            )
+            _session_to_response(s, repos.get(s.repo_id))
             for s in sessions
-        ]
+        ],
+        total=total,
+    )
+
+
+@router.get("/sessions/{session_id}", response_model=SessionResponse)
+async def get_session(
+    session_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a single session."""
+    session = await get_session_or_404(db, session_id)
+
+    # Get repo name
+    repo_result = await db.execute(select(Repo).where(Repo.id == session.repo_id))
+    repo = repo_result.scalar_one_or_none()
+
+    return _session_to_response(session, repo)
+
+
+@router.patch("/sessions/{session_id}", response_model=SessionResponse)
+async def update_session(
+    session_id: int,
+    data: SessionUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a session (summary, status)."""
+    session = await get_session_or_404(db, session_id)
+
+    if data.summary is not None:
+        session.summary = data.summary
+    if data.status is not None:
+        session.status = data.status
+        if data.status == SessionStatus.COMPLETED.value:
+            session.completed_at = datetime.utcnow()
+
+    await db.commit()
+    await db.refresh(session)
+
+    # Get repo name
+    repo_result = await db.execute(select(Repo).where(Repo.id == session.repo_id))
+    repo = repo_result.scalar_one_or_none()
+
+    return _session_to_response(session, repo)
+
+
+class ContinueResponse(BaseModel):
+    """Response from continuing a session - includes full process data."""
+    id: str
+    working_dir: str
+    created_at: str
+    session_id: int
+    claude_session_id: str | None = None
+
+
+@router.post("/sessions/{session_id}/continue", response_model=ContinueResponse)
+async def continue_session(
+    session_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Continue an existing session by resuming its Claude conversation.
+
+    This creates a new PTY process that resumes the Claude conversation,
+    but keeps the same session record (no duplicates).
+    """
+    session = await get_session_or_404(db, session_id)
+
+    if not session.claude_session_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot continue: no Claude session ID available"
+        )
+
+    # Get the repo for the working directory
+    repo_result = await db.execute(select(Repo).where(Repo.id == session.repo_id))
+    repo = repo_result.scalar_one_or_none()
+    if not repo:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    # Create new PTY process that resumes the Claude conversation
+    process = await process_manager.create_process(
+        working_dir=repo.local_path,
+        initial_prompt=None,  # No new prompt, just resuming
+        session_id=session.id,
+        resume_session=session.claude_session_id,
+    )
+
+    # Update the session to link to this new process and set status to running
+    session.process_id = process.id
+    session.status = SessionStatus.RUNNING.value
+    session.completed_at = None  # Clear completed time since we're resuming
+    await db.commit()
+
+    # Return full process data so frontend can add it directly to state
+    return ContinueResponse(
+        id=process.id,
+        working_dir=process.working_dir,
+        created_at=process.created_at.isoformat(),
+        session_id=session.id,
+        claude_session_id=process.claude_session_id,
     )
 
 
 @router.delete("/sessions/{session_id}")
-async def kill_session(
-    session_id: str,
+async def delete_session(
+    session_id: int,
     db: AsyncSession = Depends(get_db),
 ):
-    """Kill a terminal session."""
-    session = await session_manager.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    """Delete a session."""
+    session = await get_session_or_404(db, session_id)
 
-    # Update analysis status if linked
-    if session.analysis_id:
-        result = await db.execute(
-            select(Analysis).where(Analysis.id == session.analysis_id)
-        )
-        analysis = result.scalar_one_or_none()
-        if analysis:
-            analysis.status = AnalysisStatus.COMPLETED.value
-            analysis.transcript = session.transcript
-            # Save Claude Code session ID for resume support
-            if session.claude_session_id:
-                analysis.claude_session_id = session.claude_session_id
-            await db.commit()
+    await db.delete(session)
+    await db.commit()
+    return {"status": "deleted"}
 
-    await session_manager.kill(session_id)
-    return {"status": "killed"}
+
+class TranscriptMessage(BaseModel):
+    """A message in the parsed transcript."""
+    uuid: str
+    role: str
+    content: str
+    timestamp: str
+    thinking: str | None = None
+    tool_uses: list[dict[str, Any]] = []
+
+
+class ParsedTranscriptResponse(BaseModel):
+    """Parsed Claude Code transcript."""
+    session_id: str
+    messages: list[TranscriptMessage]
+    total_cost_usd: float = 0.0
+    total_duration_ms: int = 0
 
 
 @router.get("/sessions/{session_id}/transcript")
-async def get_transcript(session_id: str):
-    """Get the current transcript for a session."""
-    session = await session_manager.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    return {"transcript": session.transcript}
-
-
-@router.websocket("/sessions/{session_id}/ws")
-async def session_websocket(websocket: WebSocket, session_id: str):
+async def get_session_transcript(
+    session_id: int,
+    db: AsyncSession = Depends(get_db),
+):
     """
-    WebSocket endpoint for terminal I/O.
+    Get the parsed transcript for a session.
 
-    Receives: JSON messages with type "input" or "resize"
-    Sends: Raw terminal output bytes (base64 encoded)
+    Reads Claude Code's JSONL transcript file and returns structured messages.
+    Falls back to raw transcript if JSONL not available.
     """
-    await websocket.accept()
+    session = await get_session_or_404(db, session_id)
 
-    session = await session_manager.get_session(session_id)
-    if not session:
-        await websocket.close(code=4004, reason="Session not found")
-        return
+    # Get the repo for working directory
+    repo_result = await db.execute(select(Repo).where(Repo.id == session.repo_id))
+    repo = repo_result.scalar_one_or_none()
+    if not repo:
+        raise HTTPException(status_code=404, detail="Repository not found")
 
-    # Queue for sending data to client
-    output_queue: asyncio.Queue[bytes] = asyncio.Queue()
+    # Try to get Claude session ID from session or currently running process
+    claude_session_id = session.claude_session_id
 
-    def on_output(data: bytes):
-        try:
-            output_queue.put_nowait(data)
-        except asyncio.QueueFull:
-            pass
+    if not claude_session_id and session.process_id:
+        # Check if there's an active process with the claude_session_id
+        active_process = await process_manager.get_process(session.process_id)
+        if active_process:
+            claude_session_id = active_process.claude_session_id
 
-    session_manager.subscribe(session_id, on_output)
+    if not claude_session_id:
+        # No Claude session ID available - return raw transcript
+        return {
+            "type": "raw",
+            "transcript": session.transcript or "",
+        }
 
-    # Send existing transcript
-    if session.transcript:
-        await websocket.send_bytes(session.transcript.encode())
+    # Try to parse the JSONL transcript
+    parsed = parse_transcript(claude_session_id, repo.local_path)
 
-    async def send_output():
-        """Task to send output to client."""
-        while True:
-            try:
-                data = await output_queue.get()
-                await websocket.send_bytes(data)
-            except Exception:
-                break
-
-    async def receive_input():
-        """Task to receive input from client."""
-        while True:
-            try:
-                message = await websocket.receive_json()
-
-                if message.get("type") == "input":
-                    await session_manager.write(session_id, message.get("data", ""))
-
-                elif message.get("type") == "resize":
-                    rows = message.get("rows", DEFAULT_TERMINAL_ROWS)
-                    cols = message.get("cols", DEFAULT_TERMINAL_COLS)
-                    await session_manager.resize(session_id, rows, cols)
-
-            except WebSocketDisconnect:
-                break
-            except Exception:
-                break
-
-    # Run both tasks concurrently
-    send_task = asyncio.create_task(send_output())
-    receive_task = asyncio.create_task(receive_input())
-
-    try:
-        await asyncio.gather(send_task, receive_task, return_exceptions=True)
-    finally:
-        session_manager.unsubscribe(session_id, on_output)
-        send_task.cancel()
-        receive_task.cancel()
+    if parsed:
+        return {
+            "type": "parsed",
+            "transcript": transcript_to_dict(parsed),
+        }
+    else:
+        # JSONL not found - return raw transcript
+        return {
+            "type": "raw",
+            "transcript": session.transcript or "",
+        }

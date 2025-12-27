@@ -1,17 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Terminal } from './Terminal';
 import { ConversationView, RawTranscriptView } from './ConversationView';
-import type { Analysis, TranscriptResponse, ParsedTranscript } from '../types';
+import type { Session, TranscriptResponse, ParsedTranscript } from '../types';
 import { fetchTranscript } from '../hooks/useApi';
 
 // Format transcript as markdown for export
-function formatTranscriptAsMarkdown(transcript: ParsedTranscript, analysis: Analysis): string {
+function formatTranscriptAsMarkdown(transcript: ParsedTranscript, session: Session): string {
   const lines: string[] = [];
 
-  lines.push(`# ${analysis.title}`);
+  lines.push(`# ${session.title}`);
   lines.push('');
-  lines.push(`**Analysis Type:** ${analysis.type}`);
-  lines.push(`**Date:** ${new Date(analysis.created_at).toLocaleString()}`);
+  lines.push(`**Session Type:** ${session.kind}`);
+  lines.push(`**Date:** ${new Date(session.created_at).toLocaleString()}`);
   if (transcript.model) {
     lines.push(`**Model:** ${transcript.model}`);
   }
@@ -61,14 +61,14 @@ function formatTranscriptAsMarkdown(transcript: ParsedTranscript, analysis: Anal
 }
 
 // Format transcript as plain text
-function formatTranscriptAsText(transcript: ParsedTranscript, analysis: Analysis): string {
+function formatTranscriptAsText(transcript: ParsedTranscript, session: Session): string {
   const lines: string[] = [];
 
-  lines.push(analysis.title);
-  lines.push('='.repeat(analysis.title.length));
+  lines.push(session.title);
+  lines.push('='.repeat(session.title.length));
   lines.push('');
-  lines.push(`Analysis Type: ${analysis.type}`);
-  lines.push(`Date: ${new Date(analysis.created_at).toLocaleString()}`);
+  lines.push(`Session Type: ${session.kind}`);
+  lines.push(`Date: ${new Date(session.created_at).toLocaleString()}`);
   if (transcript.model) {
     lines.push(`Model: ${transcript.model}`);
   }
@@ -106,10 +106,10 @@ interface RelatedEntity {
 type ViewMode = 'transcript' | 'terminal';
 
 interface SessionViewProps {
-  /** The analysis record (required for transcript view) */
-  analysis: Analysis;
-  /** Active session ID (if session is still running) */
-  sessionId?: string | null;
+  /** The session record (required for transcript view) */
+  session: Session;
+  /** Active process ID (if PTY process is still running) */
+  processId?: string | null;
   /** Callback when session is closed */
   onClose: () => void;
   /** Callback to continue a finished session */
@@ -121,15 +121,15 @@ interface SessionViewProps {
 }
 
 export function SessionView({
-  analysis,
-  sessionId,
+  session,
+  processId,
   onClose,
   onContinue,
   relatedEntity,
   onShowRelated,
 }: SessionViewProps) {
-  // Determine if session is active (has a running PTY)
-  const isActiveSession = !!sessionId;
+  // Determine if process is active (has a running PTY)
+  const isActiveProcess = !!processId;
 
   // View mode: transcript or terminal (only relevant for active sessions)
   const [viewMode, setViewMode] = useState<ViewMode>('transcript');
@@ -158,7 +158,7 @@ export function SessionView({
     let pollTimeout: NodeJS.Timeout | null = null;
 
     const fetchData = () => {
-      fetchTranscript(analysis.id)
+      fetchTranscript(session.id)
         .then((data) => {
           if (isMounted) {
             setTranscript(data);
@@ -173,7 +173,7 @@ export function SessionView({
         })
         .finally(() => {
           // Poll for updates if this is an active session and we're viewing transcript
-          if (isMounted && isActiveSession && viewMode === 'transcript') {
+          if (isMounted && isActiveProcess && viewMode === 'transcript') {
             pollTimeout = setTimeout(fetchData, 2000);
           }
         });
@@ -187,14 +187,14 @@ export function SessionView({
       isMounted = false;
       if (pollTimeout) clearTimeout(pollTimeout);
     };
-  }, [analysis.id, isActiveSession, viewMode]);
+  }, [session.id, isActiveProcess, viewMode]);
 
-  // Reset search when analysis changes
+  // Reset search when session changes
   useEffect(() => {
     setSearchQuery('');
     setCurrentMatchIndex(0);
     setTotalMatches(0);
-  }, [analysis.id]);
+  }, [session.id]);
 
   // Get formatted content for export
   const getExportContent = useCallback((format: 'markdown' | 'text' | 'json'): string | null => {
@@ -207,15 +207,15 @@ export function SessionView({
     const parsed = transcript.transcript;
     switch (format) {
       case 'markdown':
-        return formatTranscriptAsMarkdown(parsed, analysis);
+        return formatTranscriptAsMarkdown(parsed, session);
       case 'text':
-        return formatTranscriptAsText(parsed, analysis);
+        return formatTranscriptAsText(parsed, session);
       case 'json':
         return JSON.stringify(parsed, null, 2);
       default:
         return null;
     }
-  }, [transcript, analysis]);
+  }, [transcript, session]);
 
   // Copy to clipboard
   const handleCopy = useCallback(async (format: 'markdown' | 'text' | 'json' = 'markdown') => {
@@ -244,13 +244,13 @@ export function SessionView({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${analysis.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.${extensions[format]}`;
+    a.download = `${session.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.${extensions[format]}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     setShowExportMenu(false);
-  }, [getExportContent, analysis.title]);
+  }, [getExportContent, session.title]);
 
   const handleMatchesFound = useCallback((count: number) => {
     setTotalMatches(count);
@@ -327,7 +327,7 @@ export function SessionView({
   }, [viewMode, searchVisible, goToNextMatch, goToPrevMatch]);
 
   // If viewing terminal mode for an active session, render Terminal component
-  if (isActiveSession && viewMode === 'terminal') {
+  if (isActiveProcess && viewMode === 'terminal') {
     return (
       <div className="h-full flex flex-col bg-[#0d1117] rounded-lg border border-gray-700 overflow-hidden">
         {/* Header with toggle */}
@@ -348,7 +348,7 @@ export function SessionView({
               {isConnected ? 'Connected' : 'Disconnected'}
             </div>
             <span className="text-sm text-gray-500">|</span>
-            <span className="text-sm text-gray-400 shrink-0">{sessionId.slice(0, 8)}</span>
+            <span className="text-sm text-gray-400 shrink-0">{processId.slice(0, 8)}</span>
             {relatedEntity && onShowRelated && (
               <>
                 <span className="text-sm text-gray-500">|</span>
@@ -394,7 +394,7 @@ export function SessionView({
         {/* Terminal (without its own header) */}
         <div className="flex-1 min-h-0">
           <Terminal
-            sessionId={sessionId}
+            processId={processId}
             showHeader={false}
             onConnectionChange={setIsConnected}
           />
@@ -410,10 +410,10 @@ export function SessionView({
       <div className="flex items-center justify-between gap-3 px-4 py-2 bg-gray-800/50 border-b border-gray-700">
         {/* Left: Title (truncates) */}
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          {!isActiveSession && (
+          {!isActiveProcess && (
             <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
           )}
-          <h3 className="text-sm font-medium text-white truncate">{analysis.title}</h3>
+          <h3 className="text-sm font-medium text-white truncate">{session.title}</h3>
           {relatedEntity && onShowRelated && (
             <button
               onClick={onShowRelated}
@@ -427,7 +427,7 @@ export function SessionView({
         {/* Right: Controls (never truncate) */}
         <div className="flex items-center gap-2 shrink-0">
           {/* View toggle (only show for active sessions) */}
-          {isActiveSession && (
+          {isActiveProcess && (
             <div className="flex items-center bg-gray-900 rounded-lg p-0.5 mr-1">
               <button
                 onClick={() => setViewMode('transcript')}
@@ -445,7 +445,7 @@ export function SessionView({
           )}
 
           {/* Live indicator for active sessions */}
-          {isActiveSession && (
+          {isActiveProcess && (
             <span className="flex items-center gap-1 px-1.5 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-full shrink-0">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
               Live
@@ -546,7 +546,7 @@ export function SessionView({
           )}
 
           {/* Continue button (only for completed sessions) */}
-          {!isActiveSession && analysis.claude_session_id && onContinue && (
+          {!isActiveProcess && session.claude_session_id && onContinue && (
             <button
               onClick={onContinue}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900"
@@ -710,7 +710,7 @@ export function SessionView({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
             <p className="text-gray-400 font-medium mb-1">No transcript available</p>
-            <p className="text-gray-500 text-sm">The analysis session didn't produce a transcript</p>
+            <p className="text-gray-500 text-sm">This session didn't produce a transcript</p>
           </div>
         )}
       </div>
@@ -719,11 +719,11 @@ export function SessionView({
       <div className="px-4 py-2 border-t border-gray-700 bg-gray-800/30">
         <div className="flex items-center justify-between text-xs text-gray-500">
           <span>
-            {new Date(analysis.created_at).toLocaleString()}
+            {new Date(session.created_at).toLocaleString()}
           </span>
-          {analysis.claude_session_id && (
-            <span className="text-gray-600" title={analysis.claude_session_id}>
-              Session: {analysis.claude_session_id.slice(0, 8)}...
+          {session.claude_session_id && (
+            <span className="text-gray-600" title={session.claude_session_id}>
+              Session: {session.claude_session_id.slice(0, 8)}...
             </span>
           )}
         </div>

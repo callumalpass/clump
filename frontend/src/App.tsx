@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
-import { useRepos, useIssues, usePRs, useSessions, useAnalyses, useTags, useIssueTags } from './hooks/useApi';
-import type { IssueFilters, AnalysisStatusFilter } from './hooks/useApi';
+import { useRepos, useIssues, usePRs, useProcesses, useSessions, useTags, useIssueTags } from './hooks/useApi';
+import type { IssueFilters, SessionStatusFilter } from './hooks/useApi';
 import { RepoSelector } from './components/RepoSelector';
 import { IssueList } from './components/IssueList';
 import { IssueDetail } from './components/IssueDetail';
@@ -10,14 +10,14 @@ import { PRDetail } from './components/PRDetail';
 import { Terminal } from './components/Terminal';
 import { SessionView } from './components/SessionView';
 import { SessionTabs } from './components/SessionTabs';
-import { AnalysisList } from './components/AnalysisList';
+import { SessionList } from './components/SessionList';
 import { Settings } from './components/Settings';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
-import type { Repo, Issue, PR, Analysis } from './types';
-import type { AnalysisTypeConfig } from './constants/analysisTypes';
-import { DEFAULT_ANALYSIS_TYPE } from './constants/analysisTypes';
-import type { PRAnalysisTypeConfig } from './constants/prAnalysisTypes';
-import { DEFAULT_PR_ANALYSIS_TYPE } from './constants/prAnalysisTypes';
+import type { Repo, Issue, PR, Session } from './types';
+import type { SessionTypeConfig } from './constants/sessionTypes';
+import { DEFAULT_SESSION_TYPE } from './constants/sessionTypes';
+import type { PRSessionTypeConfig } from './constants/prSessionTypes';
+import { DEFAULT_PR_SESSION_TYPE } from './constants/prSessionTypes';
 
 function ResizeHandle() {
   return (
@@ -27,18 +27,18 @@ function ResizeHandle() {
   );
 }
 
-type Tab = 'issues' | 'prs' | 'analyses';
+type Tab = 'issues' | 'prs' | 'sessions';
 
-// Track pending issue/PR context for sessions being created
+// Track pending issue/PR context for processes being created
 // This fixes the race condition where the sidepane doesn't show the issue/PR
 // until the analysis is created and fetched via polling
 interface PendingIssueContext {
-  sessionId: string;
+  processId: string;
   issueNumber: number;
 }
 
 interface PendingPRContext {
-  sessionId: string;
+  processId: string;
   prNumber: number;
 }
 
@@ -46,16 +46,20 @@ export default function App() {
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('issues');
   const [selectedIssue, setSelectedIssue] = useState<number | null>(null);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [activeProcessId, setActiveProcessId] = useState<string | null>(null);
+  // Track which sessions are open as tabs (persists after process ends)
+  const [openSessionIds, setOpenSessionIds] = useState<number[]>([]);
+  // Track which session tab is currently active
+  const [activeTabSessionId, setActiveTabSessionId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [issuePanelCollapsed, setIssuePanelCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const [issueFilters, setIssueFilters] = useState<IssueFilters>({ state: 'open' });
-  const [expandedAnalysisId, setExpandedAnalysisId] = useState<number | null>(null);
-  const [analysisStatusFilter, setAnalysisStatusFilter] = useState<AnalysisStatusFilter>('all');
-  const [viewingAnalysisId, setViewingAnalysisId] = useState<number | null>(null);
+  const [expandedSessionId, setExpandedSessionId] = useState<number | null>(null);
+  const [sessionStatusFilter, setSessionStatusFilter] = useState<SessionStatusFilter>('all');
+  const [viewingSessionId, setViewingSessionId] = useState<number | null>(null);
   const [selectedPR, setSelectedPR] = useState<number | null>(null);
   const [prStateFilter, setPRStateFilter] = useState<'open' | 'closed' | 'all'>('open');
 
@@ -77,11 +81,11 @@ export default function App() {
     goToPage: goToIssuesPage,
   } = useIssues(selectedRepo?.id ?? null, issueFilters);
   void _refreshIssues; // Reserved for future use
-  const { sessions, createSession, killSession, addSession } = useSessions();
-  const { analyses, loading: analysesLoading, refresh: refreshAnalyses, deleteAnalysis, continueAnalysis, total: analysesTotal } = useAnalyses(
+  const { processes, createProcess, killProcess, addProcess } = useProcesses();
+  const { sessions, loading: sessionsLoading, refresh: refreshSessions, deleteSession, continueSession, total: sessionsTotal } = useSessions(
     selectedRepo?.id,
     searchQuery || undefined,
-    analysisStatusFilter
+    sessionStatusFilter
   );
   const { tags, createTag } = useTags(selectedRepo?.id ?? null);
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
@@ -98,11 +102,13 @@ export default function App() {
     setSelectedPR(null);
 
     // Clear active session (sessions are repo-specific)
-    setActiveSessionId(null);
+    setActiveProcessId(null);
+    setOpenSessionIds([]);
+    setActiveTabSessionId(null);
 
     // Clear analysis viewing state
-    setViewingAnalysisId(null);
-    setExpandedAnalysisId(null);
+    setViewingSessionId(null);
+    setExpandedSessionId(null);
 
     // Clear pending context refs
     pendingIssueContextRef.current = null;
@@ -113,60 +119,66 @@ export default function App() {
   const handleSelectIssue = useCallback((issueNumber: number) => {
     setSelectedIssue(issueNumber);
     setSelectedPR(null);
-    setExpandedAnalysisId(null);
+    setExpandedSessionId(null);
   }, []);
 
   // Handle PR selection from list - clears issue selection
   const handleSelectPR = useCallback((prNumber: number) => {
     setSelectedPR(prNumber);
     setSelectedIssue(null);
-    setExpandedAnalysisId(null);
+    setExpandedSessionId(null);
   }, []);
 
-  // Refresh analyses periodically to update status indicators
+  // Refresh sessions periodically to update status indicators
   useEffect(() => {
-    const interval = setInterval(refreshAnalyses, 5000);
+    const interval = setInterval(refreshSessions, 5000);
     return () => clearInterval(interval);
-  }, [refreshAnalyses]);
+  }, [refreshSessions]);
 
-  const handleAnalyzeIssue = useCallback(
-    async (issue: Issue, analysisType: AnalysisTypeConfig = DEFAULT_ANALYSIS_TYPE) => {
+  const handleStartIssueSession = useCallback(
+    async (issue: Issue, sessionType: SessionTypeConfig = DEFAULT_SESSION_TYPE) => {
       if (!selectedRepo) return;
 
-      const prompt = analysisType.buildPrompt({
+      const prompt = sessionType.buildPrompt({
         number: issue.number,
         title: issue.title,
         body: issue.body,
       });
 
-      const session = await createSession(
+      const process = await createProcess(
         selectedRepo.id,
         prompt,
         'issue',
         issue.number.toString(),
-        `${analysisType.name}: Issue #${issue.number}`
+        `${sessionType.name}: Issue #${issue.number}`
       );
 
       // Store pending context so side-by-side view shows immediately
-      // (before analysis is created and fetched via polling)
+      // (before session is created and fetched via polling)
       pendingIssueContextRef.current = {
-        sessionId: session.id,
+        processId: process.id,
         issueNumber: issue.number,
       };
 
-      setActiveSessionId(session.id);
+      setActiveProcessId(process.id);
 
-      // Trigger immediate refresh to get analysis data sooner
-      setTimeout(refreshAnalyses, 500);
+      // Add session to open tabs if session_id is available
+      if (process.session_id) {
+        setOpenSessionIds(prev => prev.includes(process.session_id!) ? prev : [...prev, process.session_id!]);
+        setActiveTabSessionId(process.session_id);
+      }
+
+      // Trigger immediate refresh to get session data sooner
+      setTimeout(refreshSessions, 500);
     },
-    [selectedRepo, createSession, refreshAnalyses]
+    [selectedRepo, createProcess, refreshSessions]
   );
 
-  const handleAnalyzePR = useCallback(
-    async (pr: PR, analysisType: PRAnalysisTypeConfig = DEFAULT_PR_ANALYSIS_TYPE) => {
+  const handleStartPRSession = useCallback(
+    async (pr: PR, sessionType: PRSessionTypeConfig = DEFAULT_PR_SESSION_TYPE) => {
       if (!selectedRepo) return;
 
-      const prompt = analysisType.buildPrompt({
+      const prompt = sessionType.buildPrompt({
         number: pr.number,
         title: pr.title,
         body: pr.body,
@@ -174,32 +186,38 @@ export default function App() {
         base_ref: pr.base_ref,
       });
 
-      const session = await createSession(
+      const process = await createProcess(
         selectedRepo.id,
         prompt,
         'pr',
         pr.number.toString(),
-        `${analysisType.name}: PR #${pr.number}`
+        `${sessionType.name}: PR #${pr.number}`
       );
 
       // Store pending context so side-by-side view shows immediately
       pendingPRContextRef.current = {
-        sessionId: session.id,
+        processId: process.id,
         prNumber: pr.number,
       };
 
-      setActiveSessionId(session.id);
+      setActiveProcessId(process.id);
+
+      // Add session to open tabs if session_id is available
+      if (process.session_id) {
+        setOpenSessionIds(prev => prev.includes(process.session_id!) ? prev : [...prev, process.session_id!]);
+        setActiveTabSessionId(process.session_id);
+      }
 
       // Trigger immediate refresh to get analysis data sooner
-      setTimeout(refreshAnalyses, 500);
+      setTimeout(refreshSessions, 500);
     },
-    [selectedRepo, createSession, refreshAnalyses]
+    [selectedRepo, createProcess, refreshSessions]
   );
 
-  const handleNewSession = useCallback(async () => {
+  const handleNewProcess = useCallback(async () => {
     if (!selectedRepo) return;
 
-    const session = await createSession(
+    const process = await createProcess(
       selectedRepo.id,
       undefined,
       'custom',
@@ -207,8 +225,14 @@ export default function App() {
       'New Session'
     );
 
-    setActiveSessionId(session.id);
-  }, [selectedRepo, createSession]);
+    setActiveProcessId(process.id);
+
+    // Add session to open tabs if session_id is available
+    if (process.session_id) {
+      setOpenSessionIds(prev => prev.includes(process.session_id!) ? prev : [...prev, process.session_id!]);
+      setActiveTabSessionId(process.session_id);
+    }
+  }, [selectedRepo, createProcess]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -227,13 +251,13 @@ export default function App() {
         return;
       }
 
-      // "/" : Focus search (switch to analyses tab) - like GitHub/Slack
+      // "/" : Focus search (switch to sessions tab) - like GitHub/Slack
       if (e.key === '/') {
         e.preventDefault();
-        setActiveTab('analyses');
+        setActiveTab('sessions');
         // Focus the search input after a short delay
         setTimeout(() => {
-          const searchInput = document.querySelector('input[placeholder="Search analyses..."]') as HTMLInputElement;
+          const searchInput = document.querySelector('input[placeholder="Search sessions..."]') as HTMLInputElement;
           searchInput?.focus();
         }, 50);
         return;
@@ -245,8 +269,8 @@ export default function App() {
           setShortcutsOpen(false);
         } else if (settingsOpen) {
           setSettingsOpen(false);
-        } else if (activeSessionId) {
-          setActiveSessionId(null);
+        } else if (activeProcessId) {
+          setActiveProcessId(null);
         } else if (selectedIssue) {
           setSelectedIssue(null);
         } else if (selectedPR) {
@@ -258,134 +282,191 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [settingsOpen, shortcutsOpen, activeSessionId, selectedIssue, selectedPR]);
+  }, [settingsOpen, shortcutsOpen, activeProcessId, selectedIssue, selectedPR]);
 
-  const handleSelectAnalysis = useCallback((analysis: Analysis) => {
-    // Check if this analysis has an active session we can view
-    const activeSession = sessions.find(s => s.id === analysis.session_id);
+  const handleSelectSession = useCallback((session: Session) => {
+    // Check if this session has an active process we can view
+    const activeProcess = processes.find(p => p.id === session.process_id);
 
-    // If it's an issue analysis, select the issue for context
-    if (analysis.type === 'issue' && analysis.entity_id) {
-      setSelectedIssue(parseInt(analysis.entity_id, 10));
+    // If it's an issue session, select the issue for context
+    if (session.kind === 'issue' && session.entity_id) {
+      setSelectedIssue(parseInt(session.entity_id, 10));
       setSelectedPR(null);
     }
 
-    // If it's a PR analysis, select the PR for context
-    if (analysis.type === 'pr' && analysis.entity_id) {
-      setSelectedPR(parseInt(analysis.entity_id, 10));
+    // If it's a PR session, select the PR for context
+    if (session.kind === 'pr' && session.entity_id) {
+      setSelectedPR(parseInt(session.entity_id, 10));
       setSelectedIssue(null);
     }
 
-    if (activeSession) {
-      // Session is still running - open the terminal
-      setActiveSessionId(analysis.session_id);
-      setViewingAnalysisId(null);
-      setExpandedAnalysisId(null);
+    // Add session to open tabs
+    setOpenSessionIds(prev => prev.includes(session.id) ? prev : [...prev, session.id]);
+    setActiveTabSessionId(session.id);
+
+    if (activeProcess) {
+      // Process is still running - open the terminal
+      setActiveProcessId(session.process_id);
+      setViewingSessionId(null);
+      setExpandedSessionId(null);
 
       // Store pending context for immediate side-by-side view
-      if (analysis.type === 'issue' && analysis.entity_id) {
+      if (session.kind === 'issue' && session.entity_id) {
         pendingIssueContextRef.current = {
-          sessionId: analysis.session_id!,
-          issueNumber: parseInt(analysis.entity_id, 10),
+          processId: session.process_id!,
+          issueNumber: parseInt(session.entity_id, 10),
         };
       }
-      if (analysis.type === 'pr' && analysis.entity_id) {
+      if (session.kind === 'pr' && session.entity_id) {
         pendingPRContextRef.current = {
-          sessionId: analysis.session_id!,
-          prNumber: parseInt(analysis.entity_id, 10),
+          processId: session.process_id!,
+          prNumber: parseInt(session.entity_id, 10),
         };
       }
     } else {
-      // Session ended - show transcript in details panel
-      setActiveSessionId(null);
-      setViewingAnalysisId(analysis.id);
-      setExpandedAnalysisId(null);
+      // Process ended - show transcript in details panel
+      setActiveProcessId(null);
+      setViewingSessionId(session.id);
+      setExpandedSessionId(null);
     }
-  }, [sessions]);
+  }, [processes]);
 
-  const handleContinueAnalysis = useCallback(
-    async (analysis: Analysis) => {
-      if (!analysis.claude_session_id) return;
+  const handleContinueSession = useCallback(
+    async (session: Session) => {
+      if (!session.claude_session_id) return;
 
-      // Use the new continue endpoint - this reuses the existing analysis record
-      const session = await continueAnalysis(analysis.id);
+      // Use the new continue endpoint - this reuses the existing session record
+      const process = await continueSession(session.id);
 
-      // Add the new session to state immediately
-      addSession(session);
+      // Add the new process to state immediately
+      addProcess(process);
 
-      // Store pending context for issue analyses so side-by-side shows immediately
-      if (analysis.type === 'issue' && analysis.entity_id) {
+      // Store pending context for issue sessions so side-by-side shows immediately
+      if (session.kind === 'issue' && session.entity_id) {
         pendingIssueContextRef.current = {
-          sessionId: session.id,
-          issueNumber: parseInt(analysis.entity_id, 10),
+          processId: process.id,
+          issueNumber: parseInt(session.entity_id, 10),
         };
       }
 
-      // Store pending context for PR analyses so side-by-side shows immediately
-      if (analysis.type === 'pr' && analysis.entity_id) {
+      // Store pending context for PR sessions so side-by-side shows immediately
+      if (session.kind === 'pr' && session.entity_id) {
         pendingPRContextRef.current = {
-          sessionId: session.id,
-          prNumber: parseInt(analysis.entity_id, 10),
+          processId: process.id,
+          prNumber: parseInt(session.entity_id, 10),
         };
       }
+
+      // Ensure session is in open tabs and active
+      setOpenSessionIds(prev => prev.includes(session.id) ? prev : [...prev, session.id]);
+      setActiveTabSessionId(session.id);
 
       // Clear viewing state and switch to terminal
-      setViewingAnalysisId(null);
-      setActiveSessionId(session.id);
+      setViewingSessionId(null);
+      setActiveProcessId(process.id);
     },
-    [continueAnalysis, addSession]
+    [continueSession, addProcess]
   );
 
-  const handleDeleteAnalysis = useCallback(
-    async (analysis: Analysis) => {
-      await deleteAnalysis(analysis.id);
+  const handleDeleteSession = useCallback(
+    async (session: Session) => {
+      await deleteSession(session.id);
     },
-    [deleteAnalysis]
+    [deleteSession]
   );
 
-  // Find the active session's related issue (if any)
-  // First try to find via active session, then fallback to matching session_id in analyses
-  const activeSession = sessions.find(s => s.id === activeSessionId);
-  const activeAnalysis = activeSession?.analysis_id
-    ? analyses.find(a => a.id === activeSession.analysis_id)
-    : analyses.find(a => a.session_id === activeSessionId);
+  // Handler for closing a session tab (not deleting the session)
+  const handleCloseSessionTab = useCallback((sessionId: number) => {
+    // Find the session to check if it has a running process
+    const session = sessions.find(s => s.id === sessionId);
+    if (session?.process_id) {
+      const hasActiveProcess = processes.some(p => p.id === session.process_id);
+      if (hasActiveProcess) {
+        killProcess(session.process_id);
+      }
+    }
+
+    // Remove from open tabs
+    setOpenSessionIds(prev => prev.filter(id => id !== sessionId));
+
+    // If this was the active tab, clear it
+    if (activeTabSessionId === sessionId) {
+      setActiveTabSessionId(null);
+      setActiveProcessId(null);
+      setViewingSessionId(null);
+    }
+  }, [sessions, processes, killProcess, activeTabSessionId]);
+
+  // Handler for selecting a session tab
+  const handleSelectSessionTab = useCallback((sessionId: number) => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    setActiveTabSessionId(sessionId);
+
+    // Check if session has a running process
+    const activeProcess = processes.find(p => p.id === session.process_id);
+    if (activeProcess) {
+      setActiveProcessId(session.process_id);
+      setViewingSessionId(null);
+    } else {
+      setActiveProcessId(null);
+      setViewingSessionId(sessionId);
+    }
+
+    // Update issue/PR selection for context
+    if (session.kind === 'issue' && session.entity_id) {
+      setSelectedIssue(parseInt(session.entity_id, 10));
+      setSelectedPR(null);
+    } else if (session.kind === 'pr' && session.entity_id) {
+      setSelectedPR(parseInt(session.entity_id, 10));
+      setSelectedIssue(null);
+    }
+  }, [sessions, processes]);
+
+  // Find the active process's related issue (if any)
+  // First try to find via active process, then fallback to matching session_id in sessions
+  const activeProcess = processes.find(p => p.id === activeProcessId);
+  const activeSession = activeProcess?.session_id
+    ? sessions.find(a => a.id === activeProcess.session_id)
+    : sessions.find(a => a.process_id === activeProcessId);
 
   // Find the analysis being viewed (for transcript panel)
-  const viewingAnalysis = viewingAnalysisId
-    ? analyses.find(a => a.id === viewingAnalysisId)
+  const viewingSession = viewingSessionId
+    ? sessions.find(a => a.id === viewingSessionId)
     : null;
 
-  // Check pending context for newly created sessions (before analysis is fetched)
+  // Check pending context for newly created processes (before analysis is fetched)
   const pendingIssueContext = pendingIssueContextRef.current;
-  const hasPendingIssue = pendingIssueContext && pendingIssueContext.sessionId === activeSessionId;
+  const hasPendingIssue = pendingIssueContext && pendingIssueContext.processId === activeProcessId;
   const pendingPRContext = pendingPRContextRef.current;
-  const hasPendingPR = pendingPRContext && pendingPRContext.sessionId === activeSessionId;
+  const hasPendingPR = pendingPRContext && pendingPRContext.processId === activeProcessId;
 
   // Clear pending context once analysis is loaded
-  if (activeAnalysis && hasPendingIssue) {
+  if (activeSession && hasPendingIssue) {
     pendingIssueContextRef.current = null;
   }
-  if (activeAnalysis && hasPendingPR) {
+  if (activeSession && hasPendingPR) {
     pendingPRContextRef.current = null;
   }
 
-  // Determine the issue number to display - prefer user selection, fallback to analysis context
+  // Determine the issue number to display - prefer user selection, fallback to session context
   const activeIssueNumber = selectedIssue ?? (
-    activeAnalysis?.type === 'issue' && activeAnalysis?.entity_id
-      ? parseInt(activeAnalysis.entity_id, 10)
-      : viewingAnalysis?.type === 'issue' && viewingAnalysis?.entity_id
-        ? parseInt(viewingAnalysis.entity_id, 10)
+    activeSession?.kind === 'issue' && activeSession?.entity_id
+      ? parseInt(activeSession.entity_id, 10)
+      : viewingSession?.kind === 'issue' && viewingSession?.entity_id
+        ? parseInt(viewingSession.entity_id, 10)
         : hasPendingIssue
           ? pendingIssueContext.issueNumber
           : null
   );
 
-  // Determine the PR number to display - prefer user selection, fallback to analysis context
+  // Determine the PR number to display - prefer user selection, fallback to session context
   const activePRNumber = selectedPR ?? (
-    activeAnalysis?.type === 'pr' && activeAnalysis?.entity_id
-      ? parseInt(activeAnalysis.entity_id, 10)
-      : viewingAnalysis?.type === 'pr' && viewingAnalysis?.entity_id
-        ? parseInt(viewingAnalysis.entity_id, 10)
+    activeSession?.kind === 'pr' && activeSession?.entity_id
+      ? parseInt(activeSession.entity_id, 10)
+      : viewingSession?.kind === 'pr' && viewingSession?.entity_id
+        ? parseInt(viewingSession.entity_id, 10)
         : hasPendingPR
           ? pendingPRContext.prNumber
           : null
@@ -396,8 +477,13 @@ export default function App() {
   const hasIssueContext = !!activeIssueNumber;
   const hasPRContext = !!activePRNumber;
 
-  // Show side-by-side if we have sessions/transcript and any issue/PR selected
-  const showSideBySide = (sessions.length > 0 || viewingAnalysis) && (hasIssueContext || hasPRContext);
+  // Get the list of open sessions (sessions that have tabs open)
+  const openSessions = openSessionIds
+    .map(id => sessions.find(s => s.id === id))
+    .filter((s): s is Session => !!s);
+
+  // Show side-by-side if we have open session tabs and any issue/PR selected
+  const showSideBySide = openSessions.length > 0 && (hasIssueContext || hasPRContext);
 
   // Determine which context to show in side-by-side (issue vs PR)
   // Prioritize user's explicit selection over analysis context
@@ -410,11 +496,11 @@ export default function App() {
   // Find the selected PR data (for standalone PR detail view)
   const selectedPRData = selectedPR ? prs.find(p => p.number === selectedPR) : null;
 
-  // Get related entity from current analysis (for "show related" button)
-  const currentAnalysis = activeAnalysis || viewingAnalysis;
-  const relatedEntity = currentAnalysis?.entity_id ? {
-    type: currentAnalysis.type as 'issue' | 'pr',
-    number: parseInt(currentAnalysis.entity_id, 10),
+  // Get related entity from current session (for "show related" button)
+  const currentSession = activeSession || viewingSession;
+  const relatedEntity = currentSession?.entity_id ? {
+    type: currentSession.kind as 'issue' | 'pr',
+    number: parseInt(currentSession.entity_id, 10),
   } : null;
 
   // Handler to show related issue/PR
@@ -436,7 +522,7 @@ export default function App() {
         <h1 className="text-lg font-semibold">Clump</h1>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-400">
-            {sessions.length} active session{sessions.length !== 1 ? 's' : ''}
+            {processes.length} active process{processes.length !== 1 ? 'es' : ''}
           </span>
           {/* Keyboard shortcuts hint */}
           <button
@@ -478,13 +564,13 @@ export default function App() {
 
           {/* Tabs */}
           <div className="flex border-b border-gray-700">
-            {(['issues', 'prs', 'analyses'] as Tab[]).map((tab) => {
+            {(['issues', 'prs', 'sessions'] as Tab[]).map((tab) => {
               // Get count for each tab
               const count = tab === 'issues' ? issuesTotal
                 : tab === 'prs' ? prs.length
-                : analysesTotal;
-              const hasRunning = tab === 'analyses' && analyses.some(a =>
-                a.status === 'running' && sessions.some(s => s.id === a.session_id)
+                : sessionsTotal;
+              const hasRunning = tab === 'sessions' && sessions.some(s =>
+                s.status === 'running' && processes.some(p => p.id === s.process_id)
               );
 
               return (
@@ -515,12 +601,12 @@ export default function App() {
             })}
           </div>
 
-          {/* Search (for analyses) */}
-          {activeTab === 'analyses' && (
+          {/* Search (for sessions) */}
+          {activeTab === 'sessions' && (
             <div className="p-2 border-b border-gray-700">
               <input
                 type="text"
-                placeholder="Search analyses..."
+                placeholder="Search sessions..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -535,14 +621,14 @@ export default function App() {
                 issues={issues}
                 selectedIssue={selectedIssue}
                 onSelectIssue={handleSelectIssue}
-                onAnalyzeIssue={handleAnalyzeIssue}
+                onStartSession={handleStartIssueSession}
                 loading={issuesLoading}
                 page={issuesPage}
                 totalPages={issuesTotalPages}
                 total={issuesTotal}
                 onPageChange={goToIssuesPage}
-                analyses={analyses}
                 sessions={sessions}
+                processes={processes}
                 tags={tags}
                 issueTagsMap={issueTagsMap}
                 selectedTagId={selectedTagId}
@@ -551,17 +637,17 @@ export default function App() {
                 onFiltersChange={setIssueFilters}
               />
             )}
-            {activeTab === 'analyses' && (
-              <AnalysisList
-                analyses={analyses}
+            {activeTab === 'sessions' && (
+              <SessionList
                 sessions={sessions}
-                onSelectAnalysis={handleSelectAnalysis}
-                onContinueAnalysis={handleContinueAnalysis}
-                onDeleteAnalysis={handleDeleteAnalysis}
-                loading={analysesLoading}
-                statusFilter={analysisStatusFilter}
-                onStatusFilterChange={setAnalysisStatusFilter}
-                total={analysesTotal}
+                processes={processes}
+                onSelectSession={handleSelectSession}
+                onContinueSession={handleContinueSession}
+                onDeleteSession={handleDeleteSession}
+                loading={sessionsLoading}
+                statusFilter={sessionStatusFilter}
+                onStatusFilterChange={setSessionStatusFilter}
+                total={sessionsTotal}
               />
             )}
             {activeTab === 'prs' && selectedRepo && (
@@ -569,15 +655,15 @@ export default function App() {
                 prs={prs}
                 selectedPR={selectedPR}
                 onSelectPR={handleSelectPR}
-                onAnalyzePR={handleAnalyzePR}
+                onStartSession={handleStartPRSession}
                 loading={prsLoading}
                 stateFilter={prStateFilter}
                 onStateFilterChange={setPRStateFilter}
-                analyses={analyses}
                 sessions={sessions}
+                processes={processes}
               />
             )}
-            {!selectedRepo && activeTab !== 'analyses' && (
+            {!selectedRepo && activeTab !== 'sessions' && (
               <div className="p-4 text-gray-400">Select a repository to view {activeTab}</div>
             )}
           </div>
@@ -639,17 +725,17 @@ export default function App() {
                           <IssueDetail
                             repoId={selectedRepo.id}
                             issueNumber={activeIssueNumber}
-                            onAnalyze={(analysisType) => {
+                            onStartSession={(sessionType) => {
                               const issue = issues.find((i) => i.number === activeIssueNumber);
-                              if (issue) handleAnalyzeIssue(issue, analysisType);
+                              if (issue) handleStartIssueSession(issue, sessionType);
                             }}
-                            analyses={analyses}
                             sessions={sessions}
-                            expandedAnalysisId={expandedAnalysisId}
-                            onToggleAnalysis={setExpandedAnalysisId}
-                            onSelectAnalysis={handleSelectAnalysis}
-                            onContinueAnalysis={handleContinueAnalysis}
-                            onDeleteAnalysis={handleDeleteAnalysis}
+                            processes={processes}
+                            expandedSessionId={expandedSessionId}
+                            onToggleSession={setExpandedSessionId}
+                            onSelectSession={handleSelectSession}
+                            onContinueSession={handleContinueSession}
+                            onDeleteSession={handleDeleteSession}
                             tags={tags}
                             issueTags={issueTagsMap[activeIssueNumber] || []}
                             onAddTag={(tagId) => addTagToIssue(activeIssueNumber, tagId)}
@@ -660,11 +746,11 @@ export default function App() {
                         {showPRSideBySide && activePR && (
                           <PRDetail
                             pr={activePR}
-                            onAnalyze={(analysisType) => handleAnalyzePR(activePR, analysisType)}
-                            analyses={analyses}
+                            onStartSession={(sessionType) => handleStartPRSession(activePR, sessionType)}
                             sessions={sessions}
-                            onSelectAnalysis={handleSelectAnalysis}
-                            onDeleteAnalysis={handleDeleteAnalysis}
+                            processes={processes}
+                            onSelectSession={handleSelectSession}
+                            onDeleteSession={handleDeleteSession}
                           />
                         )}
                   </div>
@@ -672,24 +758,24 @@ export default function App() {
                 <ResizeHandle />
                 <Panel minSize="300px" className="flex flex-col">
                   {/* Session tabs */}
-                  {sessions.length > 0 && (
+                  {openSessions.length > 0 && (
                     <SessionTabs
-                      sessions={sessions}
-                      activeSession={activeSessionId}
-                      onSelectSession={setActiveSessionId}
-                      onCloseSession={killSession}
-                      onNewSession={handleNewSession}
-                      analyses={analyses}
+                      sessions={openSessions}
+                      processes={processes}
+                      activeSessionId={activeTabSessionId}
+                      onSelectSession={handleSelectSessionTab}
+                      onCloseSession={handleCloseSessionTab}
+                      onNewSession={handleNewProcess}
                     />
                   )}
                   <div className="flex-1 min-h-0 p-2">
-                    {activeSessionId && activeAnalysis ? (
+                    {activeProcessId && activeSession ? (
                       <SessionView
-                        analysis={activeAnalysis}
-                        sessionId={activeSessionId}
+                        session={activeSession}
+                        processId={activeProcessId}
                         onClose={() => {
-                          killSession(activeSessionId);
-                          setActiveSessionId(null);
+                          killProcess(activeProcessId);
+                          setActiveProcessId(null);
                         }}
                         relatedEntity={relatedEntity && (
                           (relatedEntity.type === 'issue' && selectedIssue !== relatedEntity.number) ||
@@ -697,13 +783,13 @@ export default function App() {
                         ) ? relatedEntity : null}
                         onShowRelated={handleShowRelated}
                       />
-                    ) : activeSessionId ? (
+                    ) : activeProcessId ? (
                       // Fallback to terminal-only if no analysis found yet
                       <Terminal
-                        sessionId={activeSessionId}
+                        processId={activeProcessId}
                         onClose={() => {
-                          killSession(activeSessionId);
-                          setActiveSessionId(null);
+                          killProcess(activeProcessId);
+                          setActiveProcessId(null);
                         }}
                         relatedEntity={relatedEntity && (
                           (relatedEntity.type === 'issue' && selectedIssue !== relatedEntity.number) ||
@@ -711,11 +797,11 @@ export default function App() {
                         ) ? relatedEntity : null}
                         onShowRelated={handleShowRelated}
                       />
-                    ) : viewingAnalysis ? (
+                    ) : viewingSession ? (
                       <SessionView
-                        analysis={viewingAnalysis}
-                        onContinue={viewingAnalysis.claude_session_id ? () => handleContinueAnalysis(viewingAnalysis) : undefined}
-                        onClose={() => setViewingAnalysisId(null)}
+                        session={viewingSession}
+                        onContinue={viewingSession.claude_session_id ? () => handleContinueSession(viewingSession) : undefined}
+                        onClose={() => setViewingSessionId(null)}
                         relatedEntity={relatedEntity && (
                           (relatedEntity.type === 'issue' && selectedIssue !== relatedEntity.number) ||
                           (relatedEntity.type === 'pr' && selectedPR !== relatedEntity.number)
@@ -741,17 +827,17 @@ export default function App() {
                 <IssueDetail
                   repoId={selectedRepo.id}
                   issueNumber={selectedIssue}
-                  onAnalyze={(analysisType) => {
+                  onStartSession={(sessionType) => {
                     const issue = issues.find((i) => i.number === selectedIssue);
-                    if (issue) handleAnalyzeIssue(issue, analysisType);
+                    if (issue) handleStartIssueSession(issue, sessionType);
                   }}
-                  analyses={analyses}
                   sessions={sessions}
-                  expandedAnalysisId={expandedAnalysisId}
-                  onToggleAnalysis={setExpandedAnalysisId}
-                  onSelectAnalysis={handleSelectAnalysis}
-                  onContinueAnalysis={handleContinueAnalysis}
-                  onDeleteAnalysis={handleDeleteAnalysis}
+                  processes={processes}
+                  expandedSessionId={expandedSessionId}
+                  onToggleSession={setExpandedSessionId}
+                  onSelectSession={handleSelectSession}
+                  onContinueSession={handleContinueSession}
+                  onDeleteSession={handleDeleteSession}
                   tags={tags}
                   issueTags={issueTagsMap[selectedIssue] || []}
                   onAddTag={(tagId) => addTagToIssue(selectedIssue, tagId)}
@@ -766,54 +852,54 @@ export default function App() {
               <div className="flex-1 border-r border-gray-700 overflow-auto">
                 <PRDetail
                   pr={selectedPRData}
-                  onAnalyze={(analysisType) => handleAnalyzePR(selectedPRData, analysisType)}
-                  analyses={analyses}
+                  onStartSession={(sessionType) => handleStartPRSession(selectedPRData, sessionType)}
                   sessions={sessions}
-                  onSelectAnalysis={handleSelectAnalysis}
-                  onDeleteAnalysis={handleDeleteAnalysis}
+                  processes={processes}
+                  onSelectSession={handleSelectSession}
+                  onDeleteSession={handleDeleteSession}
                 />
               </div>
             )}
 
-            {/* Sessions panel (no issue/PR context but sessions exist) */}
-            {sessions.length > 0 && !hasIssueContext && !hasPRContext && (
+            {/* Sessions panel (no issue/PR context but open sessions exist) */}
+            {openSessions.length > 0 && !hasIssueContext && !hasPRContext && (
               <div className="flex-1 flex flex-col">
                 <SessionTabs
-                  sessions={sessions}
-                  activeSession={activeSessionId}
-                  onSelectSession={setActiveSessionId}
-                  onCloseSession={killSession}
-                  onNewSession={handleNewSession}
-                  analyses={analyses}
+                  sessions={openSessions}
+                  processes={processes}
+                  activeSessionId={activeTabSessionId}
+                  onSelectSession={handleSelectSessionTab}
+                  onCloseSession={handleCloseSessionTab}
+                  onNewSession={handleNewProcess}
                 />
                 <div className="flex-1 min-h-0 p-2">
-                  {activeSessionId && activeAnalysis ? (
+                  {activeProcessId && activeSession ? (
                     <SessionView
-                      analysis={activeAnalysis}
-                      sessionId={activeSessionId}
+                      session={activeSession}
+                      processId={activeProcessId}
                       onClose={() => {
-                        killSession(activeSessionId);
-                        setActiveSessionId(null);
+                        killProcess(activeProcessId);
+                        setActiveProcessId(null);
                       }}
                       relatedEntity={relatedEntity}
                       onShowRelated={handleShowRelated}
                     />
-                  ) : activeSessionId ? (
+                  ) : activeProcessId ? (
                     // Fallback to terminal-only if no analysis found yet
                     <Terminal
-                      sessionId={activeSessionId}
+                      processId={activeProcessId}
                       onClose={() => {
-                        killSession(activeSessionId);
-                        setActiveSessionId(null);
+                        killProcess(activeProcessId);
+                        setActiveProcessId(null);
                       }}
                       relatedEntity={relatedEntity}
                       onShowRelated={handleShowRelated}
                     />
-                  ) : viewingAnalysis ? (
+                  ) : viewingSession ? (
                     <SessionView
-                      analysis={viewingAnalysis}
-                      onContinue={viewingAnalysis.claude_session_id ? () => handleContinueAnalysis(viewingAnalysis) : undefined}
-                      onClose={() => setViewingAnalysisId(null)}
+                      session={viewingSession}
+                      onContinue={viewingSession.claude_session_id ? () => handleContinueSession(viewingSession) : undefined}
+                      onClose={() => setViewingSessionId(null)}
                       relatedEntity={relatedEntity}
                       onShowRelated={handleShowRelated}
                     />
@@ -829,8 +915,8 @@ export default function App() {
               </div>
             )}
 
-            {/* Empty state (no sessions and no issue/PR selected) */}
-            {sessions.length === 0 && !selectedIssue && !selectedPR && (
+            {/* Empty state (no open session tabs and no issue/PR selected) */}
+            {openSessions.length === 0 && !selectedIssue && !selectedPR && (
               <div className="flex-1 flex items-center justify-center p-8">
                 <div className="text-center p-8 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-sm">
                   <div className="w-16 h-16 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-5">
@@ -839,7 +925,7 @@ export default function App() {
                     </svg>
                   </div>
                   <p className="text-gray-300 font-medium mb-2">Select an issue or PR to view details</p>
-                  <p className="text-gray-500 text-sm">or click "Analyze" to start a Claude Code session</p>
+                  <p className="text-gray-500 text-sm">or start a session from an issue or PR</p>
                 </div>
               </div>
             )}

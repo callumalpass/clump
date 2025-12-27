@@ -1,23 +1,23 @@
 import { useState, useRef, useEffect } from 'react';
-import { ANALYSIS_TYPES, DEFAULT_ANALYSIS_TYPE, type AnalysisTypeConfig } from '../constants/analysisTypes';
+import { SESSION_TYPES, DEFAULT_SESSION_TYPE, type SessionTypeConfig } from '../constants/sessionTypes';
 
-// Minimal issue info needed for analysis
-export interface AnalyzableIssue {
+// Minimal issue info needed for starting a session
+export interface SessionableIssue {
   number: number;
   title: string;
   body: string;
 }
 
-interface AnalyzeButtonProps {
-  issue: AnalyzableIssue;
-  onAnalyze: (issue: AnalyzableIssue, analysisType: AnalysisTypeConfig) => void;
+interface StartSessionButtonProps {
+  issue: SessionableIssue;
+  onStart: (issue: SessionableIssue, sessionType: SessionTypeConfig) => void;
   size?: 'sm' | 'md';
   className?: string;
 }
 
-export function AnalyzeButton({ issue, onAnalyze, size = 'md', className = '' }: AnalyzeButtonProps) {
+export function StartSessionButton({ issue, onStart, size = 'md', className = '' }: StartSessionButtonProps) {
   const [showDropdown, setShowDropdown] = useState(false);
-  const [selectedType, setSelectedType] = useState<AnalysisTypeConfig>(DEFAULT_ANALYSIS_TYPE);
+  const [selectedType, setSelectedType] = useState<SessionTypeConfig>(DEFAULT_SESSION_TYPE);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
@@ -32,13 +32,13 @@ export function AnalyzeButton({ issue, onAnalyze, size = 'md', className = '' }:
   }, []);
 
   const handleMainClick = () => {
-    onAnalyze(issue, selectedType);
+    onStart(issue, selectedType);
   };
 
-  const handleTypeSelect = (type: AnalysisTypeConfig) => {
+  const handleTypeSelect = (type: SessionTypeConfig) => {
     setSelectedType(type);
     setShowDropdown(false);
-    onAnalyze(issue, type);
+    onStart(issue, type);
   };
 
   const sizeClasses = size === 'sm'
@@ -62,7 +62,7 @@ export function AnalyzeButton({ issue, onAnalyze, size = 'md', className = '' }:
           setShowDropdown(!showDropdown);
         }}
         className={`px-2 ${sizeClasses} bg-blue-600 hover:bg-blue-700 text-white rounded-r-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900`}
-        aria-label="Select analysis type"
+        aria-label="Select session type"
         aria-expanded={showDropdown}
         aria-haspopup="listbox"
       >
@@ -79,7 +79,7 @@ export function AnalyzeButton({ issue, onAnalyze, size = 'md', className = '' }:
             : 'opacity-0 scale-95 pointer-events-none'
         }`}
       >
-        {ANALYSIS_TYPES.map((type) => (
+        {SESSION_TYPES.map((type) => (
             <button
               key={type.id}
               onClick={(e) => {

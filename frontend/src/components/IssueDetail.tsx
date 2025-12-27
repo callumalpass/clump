@@ -1,22 +1,22 @@
 import { useState, useEffect } from 'react';
-import type { IssueDetail as IssueDetailType, Analysis, Tag, Session } from '../types';
-import type { AnalysisTypeConfig } from '../constants/analysisTypes';
+import type { IssueDetail as IssueDetailType, Session, Tag, Process } from '../types';
+import type { SessionTypeConfig } from '../constants/sessionTypes';
 import { fetchIssue } from '../hooks/useApi';
 import { Markdown } from './Markdown';
-import { AnalyzeButton } from './AnalyzeButton';
+import { StartSessionButton } from './StartSessionButton';
 import { getContrastColor, TAG_COLORS } from '../utils/colors';
 
 interface IssueDetailProps {
   repoId: number;
   issueNumber: number;
-  onAnalyze: (analysisType: AnalysisTypeConfig) => void;
-  analyses?: Analysis[];
+  onStartSession: (sessionType: SessionTypeConfig) => void;
   sessions?: Session[];
-  expandedAnalysisId?: number | null;
-  onToggleAnalysis?: (analysisId: number | null) => void;
-  onSelectAnalysis?: (analysis: Analysis) => void;
-  onContinueAnalysis?: (analysis: Analysis) => void;
-  onDeleteAnalysis?: (analysis: Analysis) => void;
+  processes?: Process[];
+  expandedSessionId?: number | null;
+  onToggleSession?: (sessionId: number | null) => void;
+  onSelectSession?: (session: Session) => void;
+  onContinueSession?: (session: Session) => void;
+  onDeleteSession?: (session: Session) => void;
   tags?: Tag[];
   issueTags?: Tag[];
   onAddTag?: (tagId: number) => void;
@@ -27,14 +27,14 @@ interface IssueDetailProps {
 export function IssueDetail({
   repoId,
   issueNumber,
-  onAnalyze,
-  analyses = [],
+  onStartSession,
   sessions = [],
-  expandedAnalysisId: _expandedAnalysisId,
-  onToggleAnalysis: _onToggleAnalysis,
-  onSelectAnalysis,
-  onContinueAnalysis: _onContinueAnalysis,
-  onDeleteAnalysis,
+  processes = [],
+  expandedSessionId: _expandedSessionId,
+  onToggleSession: _onToggleSession,
+  onSelectSession,
+  onContinueSession: _onContinueSession,
+  onDeleteSession,
   tags = [],
   issueTags = [],
   onAddTag,
@@ -64,9 +64,9 @@ export function IssueDetail({
     }
   };
 
-  // Filter analyses for this specific issue
-  const issueAnalyses = analyses.filter(
-    a => a.type === 'issue' && a.entity_id === issueNumber.toString()
+  // Filter sessions for this specific issue
+  const issueSessions = sessions.filter(
+    s => s.kind === 'issue' && s.entity_id === issueNumber.toString()
   ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   const [commentBody, setCommentBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -283,9 +283,9 @@ export function IssueDetail({
             </div>
           </div>
         </div>
-        <AnalyzeButton
+        <StartSessionButton
           issue={{ number: issue.number, title: issue.title, body: issue.body || '' }}
-          onAnalyze={(_, type) => onAnalyze(type)}
+          onStart={(_, type) => onStartSession(type)}
           size="md"
           className="shrink-0"
         />
@@ -305,25 +305,25 @@ export function IssueDetail({
         </div>
       </div>
 
-      {/* Related Analysis Sessions */}
-      {issueAnalyses.length > 0 && (
+      {/* Related Sessions */}
+      {issueSessions.length > 0 && (
         <div className="mb-6">
           <h3 className="text-lg font-medium text-white mb-3">
-            Analysis Sessions ({issueAnalyses.length})
+            Sessions ({issueSessions.length})
           </h3>
           <div className="space-y-2">
-            {issueAnalyses.map((analysis) => {
-              // Check if this analysis has an actually running session
-              const hasActiveSession = sessions.some(s => s.id === analysis.session_id);
-              const isActuallyRunning = analysis.status === 'running' && hasActiveSession;
-              // Show as completed if DB says running but session is gone
+            {issueSessions.map((session) => {
+              // Check if this session has an actually running process
+              const hasActiveProcess = processes.some(p => p.id === session.process_id);
+              const isActuallyRunning = session.status === 'running' && hasActiveProcess;
+              // Show as completed if DB says running but process is gone
               const effectiveStatus = isActuallyRunning ? 'running' :
-                (analysis.status === 'running' ? 'completed' : analysis.status);
+                (session.status === 'running' ? 'completed' : session.status);
 
               return (
                 <div
-                  key={analysis.id}
-                  onClick={() => onSelectAnalysis?.(analysis)}
+                  key={session.id}
+                  onClick={() => onSelectSession?.(session)}
                   className="group bg-gray-800 rounded-lg border border-gray-700 hover:border-gray-600 p-3 cursor-pointer hover:bg-gray-750 transition-colors"
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -333,7 +333,7 @@ export function IssueDetail({
                         effectiveStatus === 'completed' ? 'bg-green-500' : 'bg-red-500'
                       }`} />
                       <span className="text-sm font-medium text-white truncate">
-                        {analysis.title}
+                        {session.title}
                       </span>
                       {/* Arrow to indicate opens in panel */}
                       <svg
@@ -347,16 +347,16 @@ export function IssueDetail({
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {/* Delete button - show if not actively running */}
-                      {!isActuallyRunning && onDeleteAnalysis && (
+                      {!isActuallyRunning && onDeleteSession && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (confirm('Delete this analysis?')) {
-                              onDeleteAnalysis(analysis);
+                            if (confirm('Delete this session?')) {
+                              onDeleteSession(session);
                             }
                           }}
                           className="p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-70 hover:!opacity-100 transition-opacity duration-150"
-                          title="Delete analysis"
+                          title="Delete session"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -364,15 +364,15 @@ export function IssueDetail({
                         </button>
                       )}
                       <span className="text-xs text-gray-400 hidden sm:inline">
-                        {new Date(analysis.created_at).toLocaleDateString()}
+                        {new Date(session.created_at).toLocaleDateString()}
                       </span>
                     </div>
                   </div>
-                  {analysis.summary && (
-                    <p className="text-sm text-gray-400 mt-2 line-clamp-2">{analysis.summary}</p>
+                  {session.summary && (
+                    <p className="text-sm text-gray-400 mt-2 line-clamp-2">{session.summary}</p>
                   )}
                   {isActuallyRunning && (
-                    <p className="text-xs text-yellow-400 mt-2">Session in progress - click to view</p>
+                    <p className="text-xs text-yellow-400 mt-2">Process running - click to view</p>
                   )}
                 </div>
               );

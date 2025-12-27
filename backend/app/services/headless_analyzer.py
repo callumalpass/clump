@@ -17,7 +17,7 @@ from app.config import settings
 
 
 @dataclass
-class AnalysisMessage:
+class SessionMessage:
     """A single message from Claude Code's stream-json output."""
 
     type: str  # "system", "assistant", "result", "error"
@@ -30,8 +30,8 @@ class AnalysisMessage:
 
 
 @dataclass
-class AnalysisResult:
-    """Complete result of a headless analysis."""
+class SessionResult:
+    """Complete result of a headless session."""
 
     session_id: str
     result: str
@@ -39,20 +39,20 @@ class AnalysisResult:
     cost_usd: float = 0.0
     duration_ms: int = 0
     turns: int = 0
-    messages: list[AnalysisMessage] = field(default_factory=list)
+    messages: list[SessionMessage] = field(default_factory=list)
     error: str | None = None
 
 
 class HeadlessAnalyzer:
     """
-    Runs Claude Code in headless mode for programmatic analysis.
+    Runs Claude Code in headless mode for programmatic sessions.
 
     Uses -p flag with --output-format stream-json for real-time
     structured output that can be parsed and displayed progressively.
     """
 
     def __init__(self):
-        self._running_analyses: dict[str, subprocess.Popen] = {}
+        self._running_sessions: dict[str, subprocess.Popen] = {}
 
     def _build_command(
         self,
@@ -128,12 +128,12 @@ class HeadlessAnalyzer:
         permission_mode: str | None = None,
         model: str | None = None,
         system_prompt: str | None = None,
-    ) -> AnalysisResult:
+    ) -> SessionResult:
         """
-        Run a headless analysis and return the complete result.
+        Run a headless session and return the complete result.
 
         Args:
-            prompt: The analysis prompt
+            prompt: The session prompt
             working_dir: Directory to run Claude Code in
             session_id: Specific UUID to use for this session
             resume_session: Session ID to resume from
@@ -145,7 +145,7 @@ class HeadlessAnalyzer:
             system_prompt: Additional system prompt to append
 
         Returns:
-            AnalysisResult with complete analysis data
+            SessionResult with complete session data
         """
         messages = []
         async for msg in self.analyze_stream(
@@ -169,7 +169,7 @@ class HeadlessAnalyzer:
         )
 
         if result_msg and result_msg.subtype == "success":
-            return AnalysisResult(
+            return SessionResult(
                 session_id=result_msg.session_id or "",
                 result=result_msg.content or "",
                 success=True,
@@ -182,7 +182,7 @@ class HeadlessAnalyzer:
                 (m for m in reversed(messages) if m.type == "error"),
                 None,
             )
-            return AnalysisResult(
+            return SessionResult(
                 session_id="",
                 result="",
                 success=False,
@@ -204,11 +204,11 @@ class HeadlessAnalyzer:
         model: str | None = None,
         system_prompt: str | None = None,
         output_format: str = "stream-json",
-    ) -> AsyncGenerator[AnalysisMessage, None]:
+    ) -> AsyncGenerator[SessionMessage, None]:
         """
-        Run a headless analysis and stream results as they arrive.
+        Run a headless session and stream results as they arrive.
 
-        Yields AnalysisMessage objects parsed from stream-json output.
+        Yields SessionMessage objects parsed from stream-json output.
         """
         cmd = self._build_command(
             prompt,
@@ -231,8 +231,8 @@ class HeadlessAnalyzer:
             cwd=working_dir,
         )
 
-        analysis_id = session_id or str(uuid4())[:8]
-        self._running_analyses[analysis_id] = process
+        run_id = session_id or str(uuid4())[:8]
+        self._running_sessions[run_id] = process
 
         try:
             # Read stdout line by line (stream-json is newline-delimited)
@@ -249,7 +249,7 @@ class HeadlessAnalyzer:
                     yield self._parse_message(data)
                 except json.JSONDecodeError:
                     # Non-JSON output (shouldn't happen with stream-json)
-                    yield AnalysisMessage(
+                    yield SessionMessage(
                         type="text",
                         content=line.decode("utf-8", errors="replace"),
                     )
@@ -259,15 +259,15 @@ class HeadlessAnalyzer:
             if process.returncode != 0 and process.stderr:
                 stderr = await process.stderr.read()
                 if stderr:
-                    yield AnalysisMessage(
+                    yield SessionMessage(
                         type="error",
                         content=stderr.decode("utf-8", errors="replace"),
                     )
 
         finally:
-            self._running_analyses.pop(analysis_id, None)
+            self._running_sessions.pop(run_id, None)
 
-    def _parse_message(self, data: dict) -> AnalysisMessage:
+    def _parse_message(self, data: dict) -> SessionMessage:
         """Parse a JSON message from stream-json output."""
         msg_type = data.get("type", "unknown")
         subtype = data.get("subtype")
@@ -286,7 +286,7 @@ class HeadlessAnalyzer:
         elif msg_type == "result":
             content = data.get("result", "")
 
-        return AnalysisMessage(
+        return SessionMessage(
             type=msg_type,
             subtype=subtype,
             content=content,
@@ -296,9 +296,9 @@ class HeadlessAnalyzer:
             raw=data,
         )
 
-    async def cancel(self, analysis_id: str) -> bool:
-        """Cancel a running analysis."""
-        process = self._running_analyses.get(analysis_id)
+    async def cancel(self, session_id: str) -> bool:
+        """Cancel a running session."""
+        process = self._running_sessions.get(session_id)
         if process:
             process.terminate()
             try:
@@ -309,8 +309,8 @@ class HeadlessAnalyzer:
         return False
 
     def list_running(self) -> list[str]:
-        """List IDs of running analyses."""
-        return list(self._running_analyses.keys())
+        """List IDs of running sessions."""
+        return list(self._running_sessions.keys())
 
 
 # Global analyzer instance

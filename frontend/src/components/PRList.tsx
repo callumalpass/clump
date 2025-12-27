@@ -1,17 +1,17 @@
-import type { PR, Analysis, Session } from '../types';
-import type { PRAnalysisTypeConfig } from '../constants/prAnalysisTypes';
-import { PRAnalyzeButton } from './PRAnalyzeButton';
+import type { PR, Session, Process } from '../types';
+import type { PRSessionTypeConfig } from '../constants/prSessionTypes';
+import { PRStartSessionButton } from './PRStartSessionButton';
 
 interface PRListProps {
   prs: PR[];
   selectedPR: number | null;
   onSelectPR: (prNumber: number) => void;
-  onAnalyzePR: (pr: PR, analysisType: PRAnalysisTypeConfig) => void;
+  onStartSession: (pr: PR, sessionType: PRSessionTypeConfig) => void;
   loading: boolean;
   stateFilter: 'open' | 'closed' | 'all';
   onStateFilterChange: (state: 'open' | 'closed' | 'all') => void;
-  analyses?: Analysis[];
   sessions?: Session[];
+  processes?: Process[];
 }
 
 const STATE_FILTERS: { value: 'open' | 'closed' | 'all'; label: string }[] = [
@@ -24,22 +24,22 @@ export function PRList({
   prs,
   selectedPR,
   onSelectPR,
-  onAnalyzePR,
+  onStartSession,
   loading,
   stateFilter,
   onStateFilterChange,
-  analyses = [],
   sessions = [],
+  processes = [],
 }: PRListProps) {
-  // Group analyses by PR number
-  const analysesByPR = analyses.reduce((acc, analysis) => {
-    if (analysis.type === 'pr' && analysis.entity_id) {
-      const prNum = analysis.entity_id;
+  // Group sessions by PR number
+  const sessionsByPR = sessions.reduce((acc, session) => {
+    if (session.kind === 'pr' && session.entity_id) {
+      const prNum = session.entity_id;
       if (!acc[prNum]) acc[prNum] = [];
-      acc[prNum].push(analysis);
+      acc[prNum].push(session);
     }
     return acc;
-  }, {} as Record<string, Analysis[]>);
+  }, {} as Record<string, Session[]>);
 
   // Filter tabs
   const filterTabs = (
@@ -121,12 +121,12 @@ export function PRList({
       {filterTabs}
       <div className="flex-1 overflow-auto min-h-0 divide-y divide-gray-700">
         {prs.map((pr) => {
-          const prAnalyses = analysesByPR[pr.number.toString()] || [];
-          const hasRunning = prAnalyses.some(a =>
-            a.status === 'running' && sessions.some(s => s.id === a.session_id)
+          const prSessions = sessionsByPR[pr.number.toString()] || [];
+          const hasRunning = prSessions.some(s =>
+            s.status === 'running' && processes.some(p => p.id === s.process_id)
           );
-          const hasCompleted = prAnalyses.some(a => a.status === 'completed') ||
-            prAnalyses.some(a => a.status === 'running' && !sessions.some(s => s.id === a.session_id));
+          const hasCompleted = prSessions.some(s => s.status === 'completed') ||
+            prSessions.some(s => s.status === 'running' && !processes.some(p => p.id === s.process_id));
 
           return (
             <div
@@ -146,10 +146,10 @@ export function PRList({
                       {pr.title}
                     </h3>
                     {hasRunning && (
-                      <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse shrink-0" title="Analysis running" />
+                      <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse shrink-0" title="Session running" />
                     )}
                     {!hasRunning && hasCompleted && (
-                      <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" title={`${prAnalyses.length} analysis session(s)`} />
+                      <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" title={`${prSessions.length} session(s)`} />
                     )}
                   </div>
                   {/* Branch info */}
@@ -185,15 +185,15 @@ export function PRList({
                       <span className="text-red-500">-{pr.deletions}</span>
                     </span>
                     <span>{pr.changed_files} file{pr.changed_files !== 1 ? 's' : ''}</span>
-                    {prAnalyses.length > 0 && (
-                      <span className="text-purple-400">{prAnalyses.length} session{prAnalyses.length !== 1 ? 's' : ''}</span>
+                    {prSessions.length > 0 && (
+                      <span className="text-purple-400">{prSessions.length} session{prSessions.length !== 1 ? 's' : ''}</span>
                     )}
                   </div>
                 </div>
-                <PRAnalyzeButton
+                <PRStartSessionButton
                   pr={pr}
-                  onAnalyze={(_, type) => {
-                    onAnalyzePR(pr, type);
+                  onStart={(_, type) => {
+                    onStartSession(pr, type);
                   }}
                   size="sm"
                   className="shrink-0"

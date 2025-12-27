@@ -1,28 +1,28 @@
-import type { Analysis, Session } from '../types';
-import type { AnalysisStatusFilter } from '../hooks/useApi';
+import type { Session, Process } from '../types';
+import type { SessionStatusFilter } from '../hooks/useApi';
 import { calculateDuration } from '../hooks/useElapsedTime';
 import { ElapsedTimer } from './ElapsedTimer';
 
-interface AnalysisListProps {
-  analyses: Analysis[];
-  sessions?: Session[];
-  onSelectAnalysis: (analysis: Analysis) => void;
-  onContinueAnalysis?: (analysis: Analysis) => void;
-  onDeleteAnalysis?: (analysis: Analysis) => void;
+interface SessionListProps {
+  sessions: Session[];
+  processes?: Process[];
+  onSelectSession: (session: Session) => void;
+  onContinueSession?: (session: Session) => void;
+  onDeleteSession?: (session: Session) => void;
   loading: boolean;
-  statusFilter: AnalysisStatusFilter;
-  onStatusFilterChange: (filter: AnalysisStatusFilter) => void;
+  statusFilter: SessionStatusFilter;
+  onStatusFilterChange: (filter: SessionStatusFilter) => void;
   total: number;
 }
 
-const STATUS_FILTERS: { value: AnalysisStatusFilter; label: string }[] = [
+const STATUS_FILTERS: { value: SessionStatusFilter; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'running', label: 'Running' },
   { value: 'completed', label: 'Completed' },
   { value: 'failed', label: 'Failed' },
 ];
 
-export function AnalysisList({ analyses, sessions = [], onSelectAnalysis, onContinueAnalysis, onDeleteAnalysis, loading, statusFilter, onStatusFilterChange, total }: AnalysisListProps) {
+export function SessionList({ sessions, processes = [], onSelectSession, onContinueSession, onDeleteSession, loading, statusFilter, onStatusFilterChange, total }: SessionListProps) {
   const filterTabs = (
     <div className="flex gap-1 p-2 border-b border-gray-700 bg-gray-800/30">
       {STATUS_FILTERS.map((filter) => (
@@ -67,7 +67,7 @@ export function AnalysisList({ analyses, sessions = [], onSelectAnalysis, onCont
     );
   }
 
-  if (analyses.length === 0) {
+  if (sessions.length === 0) {
     return (
       <div className="flex flex-col flex-1">
         {filterTabs}
@@ -79,11 +79,11 @@ export function AnalysisList({ analyses, sessions = [], onSelectAnalysis, onCont
               </svg>
             </div>
             <p className="text-gray-300 font-medium mb-1">
-              {statusFilter === 'all' ? 'No analyses yet' : `No ${statusFilter} analyses`}
+              {statusFilter === 'all' ? 'No sessions yet' : `No ${statusFilter} sessions`}
             </p>
             <p className="text-gray-500 text-sm">
               {statusFilter === 'all'
-                ? 'Click "Analyze" on an issue to start a session'
+                ? 'Click "Start" on an issue to start a session'
                 : 'Try selecting a different filter'}
             </p>
           </div>
@@ -92,15 +92,15 @@ export function AnalysisList({ analyses, sessions = [], onSelectAnalysis, onCont
     );
   }
 
-  const handleContinue = (e: React.MouseEvent, analysis: Analysis) => {
+  const handleContinue = (e: React.MouseEvent, session: Session) => {
     e.stopPropagation();
-    onContinueAnalysis?.(analysis);
+    onContinueSession?.(session);
   };
 
-  const handleDelete = (e: React.MouseEvent, analysis: Analysis) => {
+  const handleDelete = (e: React.MouseEvent, session: Session) => {
     e.stopPropagation();
-    if (confirm(`Delete "${analysis.title}"?`)) {
-      onDeleteAnalysis?.(analysis);
+    if (confirm(`Delete "${session.title}"?`)) {
+      onDeleteSession?.(session);
     }
   };
 
@@ -108,32 +108,32 @@ export function AnalysisList({ analyses, sessions = [], onSelectAnalysis, onCont
     <div className="flex flex-col flex-1">
       {filterTabs}
       <div className="divide-y divide-gray-700 overflow-auto flex-1">
-        {analyses.map((analysis) => {
-        // Check if this analysis has an actually running session
-        const hasActiveSession = sessions.some(s => s.id === analysis.session_id);
-        const isActuallyRunning = analysis.status === 'running' && hasActiveSession;
+        {sessions.map((session) => {
+        // Check if this session has an actually running process
+        const hasActiveProcess = processes.some(p => p.id === session.process_id);
+        const isActuallyRunning = session.status === 'running' && hasActiveProcess;
 
         return (
           <div
-            key={analysis.id}
+            key={session.id}
             className="group p-3 cursor-pointer border-l-2 border-transparent hover:bg-gray-800/60 hover:border-blue-500/50 transition-all duration-150"
-            onClick={() => onSelectAnalysis(analysis)}
+            onClick={() => onSelectSession(session)}
           >
             <div className="flex items-center gap-2 mb-1">
               <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
                 isActuallyRunning ? 'bg-yellow-500 animate-pulse' :
-                (analysis.status === 'completed' || analysis.status === 'running') ? 'bg-green-500' : 'bg-red-500'
+                (session.status === 'completed' || session.status === 'running') ? 'bg-green-500' : 'bg-red-500'
               }`} />
               <span className="text-sm font-medium text-white truncate flex-1">
-                {analysis.title}
+                {session.title}
               </span>
               {/* Continue button - show if not actively running and has claude session */}
-              {!isActuallyRunning && analysis.claude_session_id && onContinueAnalysis && (
+              {!isActuallyRunning && session.claude_session_id && onContinueSession && (
                 <button
-                  onClick={(e) => handleContinue(e, analysis)}
+                  onClick={(e) => handleContinue(e, session)}
                   className="flex-shrink-0 px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 rounded flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
                   title="Continue this conversation"
-                  aria-label={`Continue analysis: ${analysis.title}`}
+                  aria-label={`Continue session: ${session.title}`}
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
@@ -142,12 +142,12 @@ export function AnalysisList({ analyses, sessions = [], onSelectAnalysis, onCont
                 </button>
               )}
               {/* Delete button - show if not actively running */}
-              {onDeleteAnalysis && !isActuallyRunning && (
+              {onDeleteSession && !isActuallyRunning && (
                 <button
-                  onClick={(e) => handleDelete(e, analysis)}
+                  onClick={(e) => handleDelete(e, session)}
                   className="flex-shrink-0 p-1 text-gray-500 opacity-0 group-hover:opacity-70 hover:!opacity-100 hover:text-red-400 hover:bg-red-500/10 transition-opacity duration-150 rounded focus:outline-none focus:opacity-100 focus:text-red-400 focus:ring-2 focus:ring-red-400/50"
-                  title="Delete analysis"
-                  aria-label={`Delete analysis: ${analysis.title}`}
+                  title="Delete session"
+                  aria-label={`Delete session: ${session.title}`}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -157,24 +157,24 @@ export function AnalysisList({ analyses, sessions = [], onSelectAnalysis, onCont
             </div>
             <div className="flex items-center gap-2 text-xs text-gray-500">
               <span className="px-1.5 py-0.5 bg-gray-700 rounded">
-                {analysis.type}
+                {session.kind}
               </span>
-              {analysis.entity_id && (
-                <span>#{analysis.entity_id}</span>
+              {session.entity_id && (
+                <span>#{session.entity_id}</span>
               )}
-              <span>{new Date(analysis.created_at).toLocaleDateString()}</span>
+              <span>{new Date(session.created_at).toLocaleDateString()}</span>
               {/* Duration display */}
               {isActuallyRunning ? (
                 <span className="text-yellow-500" title="Time elapsed">
-                  <ElapsedTimer startTime={analysis.created_at} />
+                  <ElapsedTimer startTime={session.created_at} />
                 </span>
-              ) : analysis.completed_at ? (
+              ) : session.completed_at ? (
                 <span className="text-gray-600" title="Total duration">
-                  {calculateDuration(analysis.created_at, analysis.completed_at)}
+                  {calculateDuration(session.created_at, session.completed_at)}
                 </span>
               ) : null}
-              {analysis.claude_session_id && !isActuallyRunning && (
-                <span className="text-gray-600" title={`Session: ${analysis.claude_session_id}`}>
+              {session.claude_session_id && !isActuallyRunning && (
+                <span className="text-gray-600" title={`Session: ${session.claude_session_id}`}>
                   (resumable)
                 </span>
               )}

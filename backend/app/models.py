@@ -6,14 +6,14 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 
-class AnalysisType(str, Enum):
+class SessionKind(str, Enum):
     ISSUE = "issue"
     PR = "pr"
     CODEBASE = "codebase"
     CUSTOM = "custom"
 
 
-class AnalysisStatus(str, Enum):
+class SessionStatus(str, Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -36,42 +36,42 @@ class Repo(Base):
     local_path: Mapped[str] = mapped_column(String(1024))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    analyses: Mapped[list["Analysis"]] = relationship(back_populates="repo")
+    sessions: Mapped[list["Session"]] = relationship(back_populates="repo")
     tags: Mapped[list["Tag"]] = relationship(back_populates="repo", cascade="all, delete-orphan")
 
 
-class Analysis(Base):
-    __tablename__ = "analyses"
+class Session(Base):
+    __tablename__ = "sessions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     repo_id: Mapped[int] = mapped_column(ForeignKey("repos.id"))
-    type: Mapped[str] = mapped_column(String(50))
+    kind: Mapped[str] = mapped_column(String(50))
     entity_id: Mapped[str | None] = mapped_column(String(255), nullable=True)  # issue/PR number
     title: Mapped[str] = mapped_column(String(500))
     prompt: Mapped[str] = mapped_column(Text)
     transcript: Mapped[str] = mapped_column(Text, default="")
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(String(50), default=AnalysisStatus.RUNNING.value)
-    session_id: Mapped[str | None] = mapped_column(String(100), nullable=True)  # Internal PTY session ID
+    status: Mapped[str] = mapped_column(String(50), default=SessionStatus.RUNNING.value)
+    process_id: Mapped[str | None] = mapped_column(String(100), nullable=True)  # Internal PTY process ID
     claude_session_id: Mapped[str | None] = mapped_column(String(100), nullable=True)  # Claude Code CLI session ID for resume
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    repo: Mapped["Repo"] = relationship(back_populates="analyses")
-    actions: Mapped[list["Action"]] = relationship(back_populates="analysis")
+    repo: Mapped["Repo"] = relationship(back_populates="sessions")
+    actions: Mapped[list["Action"]] = relationship(back_populates="session")
 
 
 class Action(Base):
     __tablename__ = "actions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    analysis_id: Mapped[int] = mapped_column(ForeignKey("analyses.id"))
+    session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id"))
     type: Mapped[str] = mapped_column(String(50))
     payload: Mapped[str] = mapped_column(Text)  # JSON
     status: Mapped[str] = mapped_column(String(50), default="completed")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    analysis: Mapped["Analysis"] = relationship(back_populates="actions")
+    session: Mapped["Session"] = relationship(back_populates="actions")
 
 
 class Tag(Base):

@@ -1,7 +1,7 @@
 """
-Headless analysis routes using Claude Code's -p (non-interactive) mode.
+Headless session routes using Claude Code's -p (non-interactive) mode.
 
-Provides structured JSON output and streaming for programmatic analysis.
+Provides structured JSON output and streaming for programmatic sessions.
 """
 
 import asyncio
@@ -13,20 +13,20 @@ import json
 
 from app.database import get_db
 from app.db_helpers import get_repo_or_404
-from app.models import Analysis, AnalysisStatus
-from app.services.headless_analyzer import headless_analyzer, AnalysisMessage
+from app.models import Session, SessionStatus
+from app.services.headless_analyzer import headless_analyzer, SessionMessage
 
 router = APIRouter()
 
 
-class HeadlessAnalysisCreate(BaseModel):
-    """Request to create a headless analysis."""
+class HeadlessSessionCreate(BaseModel):
+    """Request to create a headless session."""
 
     repo_id: int
     prompt: str
-    analysis_type: str = "custom"
+    kind: str = "custom"
     entity_id: str | None = None
-    title: str = "Headless Analysis"
+    title: str = "Headless Session"
 
     # Claude Code configuration
     permission_mode: str | None = None
@@ -40,11 +40,11 @@ class HeadlessAnalysisCreate(BaseModel):
     resume_session: str | None = None
 
 
-class HeadlessAnalysisResponse(BaseModel):
-    """Response from a completed headless analysis."""
+class HeadlessSessionResponse(BaseModel):
+    """Response from a completed headless session."""
 
-    analysis_id: int
-    session_id: str
+    session_id: int
+    claude_session_id: str
     result: str
     success: bool
     cost_usd: float
@@ -52,34 +52,34 @@ class HeadlessAnalysisResponse(BaseModel):
     error: str | None = None
 
 
-@router.post("/headless/analyze", response_model=HeadlessAnalysisResponse)
-async def run_headless_analysis(
-    data: HeadlessAnalysisCreate,
+@router.post("/headless/run", response_model=HeadlessSessionResponse)
+async def run_headless_session(
+    data: HeadlessSessionCreate,
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Run a headless Claude Code analysis and return the complete result.
+    Run a headless Claude Code session and return the complete result.
 
-    This is a blocking endpoint that waits for the analysis to complete.
-    For streaming results, use POST /headless/analyze/stream instead.
+    This is a blocking endpoint that waits for the session to complete.
+    For streaming results, use POST /headless/run/stream instead.
     """
     repo = await get_repo_or_404(db, data.repo_id)
 
-    # Create analysis record
-    analysis = Analysis(
+    # Create session record
+    session = Session(
         repo_id=repo.id,
-        type=data.analysis_type,
+        kind=data.kind,
         entity_id=data.entity_id,
         title=data.title,
         prompt=data.prompt,
-        status=AnalysisStatus.RUNNING.value,
+        status=SessionStatus.RUNNING.value,
     )
-    db.add(analysis)
+    db.add(session)
     await db.commit()
-    await db.refresh(analysis)
+    await db.refresh(session)
 
     try:
-        # Run headless analysis
+        # Run headless session
         result = await headless_analyzer.analyze(
             prompt=data.prompt,
             working_dir=repo.local_path,
@@ -92,17 +92,17 @@ async def run_headless_analysis(
             resume_session=data.resume_session,
         )
 
-        # Update analysis record
-        analysis.status = (
-            AnalysisStatus.COMPLETED.value if result.success else AnalysisStatus.FAILED.value
+        # Update session record
+        session.status = (
+            SessionStatus.COMPLETED.value if result.success else SessionStatus.FAILED.value
         )
-        analysis.transcript = result.result
-        analysis.session_id = result.session_id
+        session.transcript = result.result
+        session.claude_session_id = result.session_id
         await db.commit()
 
-        return HeadlessAnalysisResponse(
-            analysis_id=analysis.id,
-            session_id=result.session_id,
+        return HeadlessSessionResponse(
+            session_id=session.id,
+            claude_session_id=result.session_id,
             result=result.result,
             success=result.success,
             cost_usd=result.cost_usd,
@@ -111,41 +111,41 @@ async def run_headless_analysis(
         )
 
     except Exception as e:
-        analysis.status = AnalysisStatus.FAILED.value
+        session.status = SessionStatus.FAILED.value
         await db.commit()
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/headless/analyze/stream")
-async def run_headless_analysis_stream(
-    data: HeadlessAnalysisCreate,
+@router.post("/headless/run/stream")
+async def run_headless_session_stream(
+    data: HeadlessSessionCreate,
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Run a headless Claude Code analysis with streaming results.
+    Run a headless Claude Code session with streaming results.
 
-    Returns a stream of newline-delimited JSON messages as the analysis progresses.
-    Each message is an AnalysisMessage with type, content, and metadata.
+    Returns a stream of newline-delimited JSON messages as the session progresses.
+    Each message is a SessionMessage with type, content, and metadata.
     """
     repo = await get_repo_or_404(db, data.repo_id)
 
-    # Create analysis record
-    analysis = Analysis(
+    # Create session record
+    session = Session(
         repo_id=repo.id,
-        type=data.analysis_type,
+        kind=data.kind,
         entity_id=data.entity_id,
         title=data.title,
         prompt=data.prompt,
-        status=AnalysisStatus.RUNNING.value,
+        status=SessionStatus.RUNNING.value,
     )
-    db.add(analysis)
+    db.add(session)
     await db.commit()
-    await db.refresh(analysis)
+    await db.refresh(session)
 
     async def generate():
         """Generate streaming response."""
         full_result = ""
-        session_id = ""
+        claude_session_id = ""
         success = False
 
         try:
@@ -162,7 +162,7 @@ async def run_headless_analysis_stream(
             ):
                 # Track session ID and result
                 if msg.session_id:
-                    session_id = msg.session_id
+                    claude_session_id = msg.session_id
                 if msg.type == "result" and msg.subtype == "success":
                     full_result = msg.content or ""
                     success = True
@@ -177,13 +177,13 @@ async def run_headless_analysis_stream(
                     "duration_ms": msg.duration_ms,
                 }) + "\n"
 
-            # Update analysis record
+            # Update session record
             async with db.begin():
-                analysis.status = (
-                    AnalysisStatus.COMPLETED.value if success else AnalysisStatus.FAILED.value
+                session.status = (
+                    SessionStatus.COMPLETED.value if success else SessionStatus.FAILED.value
                 )
-                analysis.transcript = full_result
-                analysis.session_id = session_id
+                session.transcript = full_result
+                session.claude_session_id = claude_session_id
 
         except Exception as e:
             yield json.dumps({
@@ -192,7 +192,7 @@ async def run_headless_analysis_stream(
             }) + "\n"
 
             async with db.begin():
-                analysis.status = AnalysisStatus.FAILED.value
+                session.status = SessionStatus.FAILED.value
 
     return StreamingResponse(
         generate(),
@@ -205,15 +205,15 @@ async def run_headless_analysis_stream(
 
 
 @router.get("/headless/running")
-async def list_running_analyses():
-    """List currently running headless analyses."""
+async def list_running_sessions():
+    """List currently running headless sessions."""
     return {"running": headless_analyzer.list_running()}
 
 
-@router.delete("/headless/{analysis_id}")
-async def cancel_headless_analysis(analysis_id: str):
-    """Cancel a running headless analysis."""
-    cancelled = await headless_analyzer.cancel(analysis_id)
+@router.delete("/headless/{session_id}")
+async def cancel_headless_session(session_id: str):
+    """Cancel a running headless session."""
+    cancelled = await headless_analyzer.cancel(session_id)
     if not cancelled:
-        raise HTTPException(status_code=404, detail="Analysis not found or already completed")
+        raise HTTPException(status_code=404, detail="Session not found or already completed")
     return {"status": "cancelled"}

@@ -1,17 +1,17 @@
 import { useState, useRef, useEffect } from 'react';
-import { PR_ANALYSIS_TYPES, DEFAULT_PR_ANALYSIS_TYPE, type PRAnalysisTypeConfig } from '../constants/prAnalysisTypes';
+import { PR_SESSION_TYPES, DEFAULT_PR_SESSION_TYPE, type PRSessionTypeConfig } from '../constants/prSessionTypes';
 import type { PR } from '../types';
 
-interface PRAnalyzeButtonProps {
+interface PRStartSessionButtonProps {
   pr: PR;
-  onAnalyze: (pr: PR, analysisType: PRAnalysisTypeConfig) => void;
+  onStart: (pr: PR, sessionType: PRSessionTypeConfig) => void;
   size?: 'sm' | 'md';
   className?: string;
 }
 
-export function PRAnalyzeButton({ pr, onAnalyze, size = 'md', className = '' }: PRAnalyzeButtonProps) {
+export function PRStartSessionButton({ pr, onStart, size = 'md', className = '' }: PRStartSessionButtonProps) {
   const [showDropdown, setShowDropdown] = useState(false);
-  const [selectedType, setSelectedType] = useState<PRAnalysisTypeConfig>(DEFAULT_PR_ANALYSIS_TYPE);
+  const [selectedType, setSelectedType] = useState<PRSessionTypeConfig>(DEFAULT_PR_SESSION_TYPE);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
@@ -26,13 +26,13 @@ export function PRAnalyzeButton({ pr, onAnalyze, size = 'md', className = '' }: 
   }, []);
 
   const handleMainClick = () => {
-    onAnalyze(pr, selectedType);
+    onStart(pr, selectedType);
   };
 
-  const handleTypeSelect = (type: PRAnalysisTypeConfig) => {
+  const handleTypeSelect = (type: PRSessionTypeConfig) => {
     setSelectedType(type);
     setShowDropdown(false);
-    onAnalyze(pr, type);
+    onStart(pr, type);
   };
 
   const sizeClasses = size === 'sm'
@@ -59,7 +59,7 @@ export function PRAnalyzeButton({ pr, onAnalyze, size = 'md', className = '' }: 
           setShowDropdown(!showDropdown);
         }}
         className={`px-2 ${sizeClasses} bg-purple-600 hover:bg-purple-700 text-white rounded-r-lg focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-1 focus:ring-offset-gray-900`}
-        aria-label="Select PR analysis type"
+        aria-label="Select PR session type"
         aria-expanded={showDropdown}
         aria-haspopup="listbox"
       >
@@ -76,7 +76,7 @@ export function PRAnalyzeButton({ pr, onAnalyze, size = 'md', className = '' }: 
             : 'opacity-0 scale-95 pointer-events-none'
         }`}
       >
-        {PR_ANALYSIS_TYPES.map((type) => (
+        {PR_SESSION_TYPES.map((type) => (
             <button
               key={type.id}
               onClick={(e) => {

@@ -56,26 +56,26 @@ export interface PR {
   url: string;
 }
 
-export interface Session {
+export interface Process {
   id: string;
   working_dir: string;
   created_at: string;
-  analysis_id: number | null;
+  session_id: number | null;  // Links to Session (formerly Analysis) record
   claude_session_id: string | null;
 }
 
-export interface Analysis {
+export interface Session {
   id: number;
   repo_id: number;
   repo_name: string | null;
-  type: string;
+  kind: string;
   entity_id: string | null;
   title: string;
   prompt: string;
   transcript: string;
   summary: string | null;
   status: string;
-  session_id: string | null;
+  process_id: string | null;
   claude_session_id?: string | null;
   created_at: string;
   completed_at: string | null;
@@ -97,7 +97,7 @@ export interface ClaudeCodeSettings {
   default_allowed_tools: string[];
 }
 
-export interface SessionCreateOptions {
+export interface ProcessCreateOptions {
   permission_mode?: PermissionMode;
   allowed_tools?: string[];
   disallowed_tools?: string[];

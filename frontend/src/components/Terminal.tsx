@@ -12,7 +12,7 @@ interface RelatedEntity {
 }
 
 interface TerminalProps {
-  sessionId: string;
+  processId: string;
   onClose?: () => void;
   relatedEntity?: RelatedEntity | null;
   onShowRelated?: () => void;
@@ -22,14 +22,14 @@ interface TerminalProps {
   onConnectionChange?: (isConnected: boolean) => void;
 }
 
-export function Terminal({ sessionId, onClose, relatedEntity, onShowRelated, showHeader = true, onConnectionChange }: TerminalProps) {
+export function Terminal({ processId, onClose, relatedEntity, onShowRelated, showHeader = true, onConnectionChange }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const sendInputRef = useRef<(data: string) => void>(() => {});
   const sendResizeRef = useRef<(rows: number, cols: number) => void>(() => {});
 
-  const { isConnected, sendInput, sendResize } = useWebSocket(sessionId, {
+  const { isConnected, sendInput, sendResize } = useWebSocket(processId, {
     onMessage: (data) => {
       if (terminalRef.current) {
         // Write raw bytes directly to preserve ANSI escape sequences
@@ -174,7 +174,7 @@ export function Terminal({ sessionId, onClose, relatedEntity, onShowRelated, sho
         // Ignore disposal errors
       }
     };
-  }, [sessionId]); // Only re-run when sessionId changes
+  }, [processId]); // Only re-run when processId changes
 
   return (
     <div className={`flex flex-col h-full bg-[#0d1117] overflow-hidden ${showHeader ? 'rounded-lg border border-gray-700' : ''}`}>
@@ -194,7 +194,7 @@ export function Terminal({ sessionId, onClose, relatedEntity, onShowRelated, sho
               {isConnected ? 'Connected' : 'Disconnected'}
             </div>
             <span className="text-sm text-gray-500">|</span>
-            <span className="text-sm text-gray-400">{sessionId.slice(0, 8)}</span>
+            <span className="text-sm text-gray-400">{processId.slice(0, 8)}</span>
             {relatedEntity && onShowRelated && (
               <>
                 <span className="text-sm text-gray-500">|</span>

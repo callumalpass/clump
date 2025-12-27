@@ -1,28 +1,28 @@
-import type { PR, Analysis, Session } from '../types';
-import type { PRAnalysisTypeConfig } from '../constants/prAnalysisTypes';
+import type { PR, Session, Process } from '../types';
+import type { PRSessionTypeConfig } from '../constants/prSessionTypes';
 import { Markdown } from './Markdown';
-import { PRAnalyzeButton } from './PRAnalyzeButton';
+import { PRStartSessionButton } from './PRStartSessionButton';
 
 interface PRDetailProps {
   pr: PR;
-  onAnalyze: (analysisType: PRAnalysisTypeConfig) => void;
-  analyses?: Analysis[];
+  onStartSession: (sessionType: PRSessionTypeConfig) => void;
   sessions?: Session[];
-  onSelectAnalysis?: (analysis: Analysis) => void;
-  onDeleteAnalysis?: (analysis: Analysis) => void;
+  processes?: Process[];
+  onSelectSession?: (session: Session) => void;
+  onDeleteSession?: (session: Session) => void;
 }
 
 export function PRDetail({
   pr,
-  onAnalyze,
-  analyses = [],
+  onStartSession,
   sessions = [],
-  onSelectAnalysis,
-  onDeleteAnalysis,
+  processes = [],
+  onSelectSession,
+  onDeleteSession,
 }: PRDetailProps) {
-  // Filter analyses for this specific PR
-  const prAnalyses = analyses.filter(
-    a => a.type === 'pr' && a.entity_id === pr.number.toString()
+  // Filter sessions for this specific PR
+  const prSessions = sessions.filter(
+    s => s.kind === 'pr' && s.entity_id === pr.number.toString()
   ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   return (
@@ -78,9 +78,9 @@ export function PRDetail({
             <span>{pr.changed_files} file{pr.changed_files !== 1 ? 's' : ''} changed</span>
           </div>
         </div>
-        <PRAnalyzeButton
+        <PRStartSessionButton
           pr={pr}
-          onAnalyze={(_, type) => onAnalyze(type)}
+          onStart={(_, type) => onStartSession(type)}
           size="md"
           className="shrink-0"
         />
@@ -100,25 +100,25 @@ export function PRDetail({
         </div>
       </div>
 
-      {/* Related Analysis Sessions */}
-      {prAnalyses.length > 0 && (
+      {/* Related Sessions */}
+      {prSessions.length > 0 && (
         <div className="mb-6">
           <h3 className="text-lg font-medium text-white mb-3">
-            Analysis Sessions ({prAnalyses.length})
+            Sessions ({prSessions.length})
           </h3>
           <div className="space-y-2">
-            {prAnalyses.map((analysis) => {
-              // Check if this analysis has an actually running session
-              const hasActiveSession = sessions.some(s => s.id === analysis.session_id);
-              const isActuallyRunning = analysis.status === 'running' && hasActiveSession;
-              // Show as completed if DB says running but session is gone
+            {prSessions.map((session) => {
+              // Check if this session has an actually running process
+              const hasActiveProcess = processes.some(p => p.id === session.process_id);
+              const isActuallyRunning = session.status === 'running' && hasActiveProcess;
+              // Show as completed if DB says running but process is gone
               const effectiveStatus = isActuallyRunning ? 'running' :
-                (analysis.status === 'running' ? 'completed' : analysis.status);
+                (session.status === 'running' ? 'completed' : session.status);
 
               return (
                 <div
-                  key={analysis.id}
-                  onClick={() => onSelectAnalysis?.(analysis)}
+                  key={session.id}
+                  onClick={() => onSelectSession?.(session)}
                   className="group bg-gray-800 rounded-lg border border-gray-700 hover:border-gray-600 p-3 cursor-pointer hover:bg-gray-750 transition-colors"
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -128,7 +128,7 @@ export function PRDetail({
                         effectiveStatus === 'completed' ? 'bg-green-500' : 'bg-red-500'
                       }`} />
                       <span className="text-sm font-medium text-white truncate">
-                        {analysis.title}
+                        {session.title}
                       </span>
                       {/* Arrow to indicate opens in panel */}
                       <svg
@@ -142,17 +142,17 @@ export function PRDetail({
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {/* Delete button - show if not actively running */}
-                      {!isActuallyRunning && onDeleteAnalysis && (
+                      {!isActuallyRunning && onDeleteSession && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (confirm('Delete this analysis?')) {
-                              onDeleteAnalysis(analysis);
+                            if (confirm('Delete this session?')) {
+                              onDeleteSession(session);
                             }
                           }}
                           className="p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                          title="Delete analysis"
-                          aria-label={`Delete analysis: ${analysis.title}`}
+                          title="Delete session"
+                          aria-label={`Delete session: ${session.title}`}
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -160,15 +160,15 @@ export function PRDetail({
                         </button>
                       )}
                       <span className="text-xs text-gray-400 hidden sm:inline">
-                        {new Date(analysis.created_at).toLocaleDateString()}
+                        {new Date(session.created_at).toLocaleDateString()}
                       </span>
                     </div>
                   </div>
-                  {analysis.summary && (
-                    <p className="text-sm text-gray-400 mt-2 line-clamp-2">{analysis.summary}</p>
+                  {session.summary && (
+                    <p className="text-sm text-gray-400 mt-2 line-clamp-2">{session.summary}</p>
                   )}
                   {isActuallyRunning && (
-                    <p className="text-xs text-yellow-400 mt-2">Session in progress - click to view</p>
+                    <p className="text-xs text-yellow-400 mt-2">Process running - click to view</p>
                   )}
                 </div>
               );

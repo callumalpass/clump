@@ -1,4 +1,4 @@
-export interface AnalysisTypeConfig {
+export interface SessionTypeConfig {
   id: string;
   name: string;
   shortName: string;
@@ -6,7 +6,7 @@ export interface AnalysisTypeConfig {
   buildPrompt: (issue: { number: number; title: string; body: string }) => string;
 }
 
-export const ANALYSIS_TYPES: AnalysisTypeConfig[] = [
+export const SESSION_TYPES: SessionTypeConfig[] = [
   {
     id: 'fix-suggestion',
     name: 'Fix Suggestion',
@@ -113,8 +113,8 @@ Please:
   },
 ];
 
-export const DEFAULT_ANALYSIS_TYPE: AnalysisTypeConfig = ANALYSIS_TYPES[0]!;
+export const DEFAULT_SESSION_TYPE: SessionTypeConfig = SESSION_TYPES[0]!;
 
-export function getAnalysisType(id: string): AnalysisTypeConfig | undefined {
-  return ANALYSIS_TYPES.find(t => t.id === id);
+export function getSessionType(id: string): SessionTypeConfig | undefined {
+  return SESSION_TYPES.find(t => t.id === id);
 }

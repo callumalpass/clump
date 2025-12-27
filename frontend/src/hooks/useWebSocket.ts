@@ -8,17 +8,17 @@ interface UseWebSocketOptions {
 }
 
 export function useWebSocket(
-  sessionId: string | null,
+  processId: string | null,
   options: UseWebSocketOptions = {}
 ) {
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    if (!sessionId) return;
+    if (!processId) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/sessions/${sessionId}/ws`;
+    const wsUrl = `${protocol}//${window.location.host}/api/processes/${processId}/ws`;
 
     const ws = new WebSocket(wsUrl);
     ws.binaryType = 'arraybuffer';
@@ -45,7 +45,7 @@ export function useWebSocket(
     return () => {
       ws.close();
     };
-  }, [sessionId]);
+  }, [processId]);
 
   const send = useCallback((type: string, data: Record<string, unknown>) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {

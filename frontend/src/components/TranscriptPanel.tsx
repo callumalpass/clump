@@ -1,17 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Analysis, TranscriptResponse, ParsedTranscript } from '../types';
+import type { Session, TranscriptResponse, ParsedTranscript } from '../types';
 import { fetchTranscript } from '../hooks/useApi';
 import { ConversationView, RawTranscriptView } from './ConversationView';
 
 // Format transcript as markdown for export
-function formatTranscriptAsMarkdown(transcript: ParsedTranscript, analysis: Analysis): string {
+function formatTranscriptAsMarkdown(transcript: ParsedTranscript, session: Session): string {
   const lines: string[] = [];
 
   // Header with metadata
-  lines.push(`# ${analysis.title}`);
+  lines.push(`# ${session.title}`);
   lines.push('');
-  lines.push(`**Analysis Type:** ${analysis.type}`);
-  lines.push(`**Date:** ${new Date(analysis.created_at).toLocaleString()}`);
+  lines.push(`**Session Type:** ${session.kind}`);
+  lines.push(`**Date:** ${new Date(session.created_at).toLocaleString()}`);
   if (transcript.model) {
     lines.push(`**Model:** ${transcript.model}`);
   }
@@ -62,14 +62,14 @@ function formatTranscriptAsMarkdown(transcript: ParsedTranscript, analysis: Anal
 }
 
 // Format transcript as plain text
-function formatTranscriptAsText(transcript: ParsedTranscript, analysis: Analysis): string {
+function formatTranscriptAsText(transcript: ParsedTranscript, session: Session): string {
   const lines: string[] = [];
 
-  lines.push(analysis.title);
-  lines.push('='.repeat(analysis.title.length));
+  lines.push(session.title);
+  lines.push('='.repeat(session.title.length));
   lines.push('');
-  lines.push(`Analysis Type: ${analysis.type}`);
-  lines.push(`Date: ${new Date(analysis.created_at).toLocaleString()}`);
+  lines.push(`Session Type: ${session.kind}`);
+  lines.push(`Date: ${new Date(session.created_at).toLocaleString()}`);
   if (transcript.model) {
     lines.push(`Model: ${transcript.model}`);
   }
@@ -105,14 +105,14 @@ interface RelatedEntity {
 }
 
 interface TranscriptPanelProps {
-  analysis: Analysis;
+  session: Session;
   onContinue?: () => void;
   onClose: () => void;
   relatedEntity?: RelatedEntity | null;
   onShowRelated?: () => void;
 }
 
-export function TranscriptPanel({ analysis, onContinue, onClose, relatedEntity, onShowRelated }: TranscriptPanelProps) {
+export function TranscriptPanel({ session, onContinue, onClose, relatedEntity, onShowRelated }: TranscriptPanelProps) {
   const [transcript, setTranscript] = useState<TranscriptResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -138,15 +138,15 @@ export function TranscriptPanel({ analysis, onContinue, onClose, relatedEntity, 
     const parsed = transcript.transcript;
     switch (format) {
       case 'markdown':
-        return formatTranscriptAsMarkdown(parsed, analysis);
+        return formatTranscriptAsMarkdown(parsed, session);
       case 'text':
-        return formatTranscriptAsText(parsed, analysis);
+        return formatTranscriptAsText(parsed, session);
       case 'json':
         return JSON.stringify(parsed, null, 2);
       default:
         return null;
     }
-  }, [transcript, analysis]);
+  }, [transcript, session]);
 
   // Copy to clipboard
   const handleCopy = useCallback(async (format: 'markdown' | 'text' | 'json' = 'markdown') => {
@@ -175,29 +175,29 @@ export function TranscriptPanel({ analysis, onContinue, onClose, relatedEntity, 
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${analysis.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.${extensions[format]}`;
+    a.download = `${session.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.${extensions[format]}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     setShowExportMenu(false);
-  }, [getExportContent, analysis.title]);
+  }, [getExportContent, session.title]);
 
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetchTranscript(analysis.id)
+    fetchTranscript(session.id)
       .then(setTranscript)
       .catch((err) => setError(err.message || 'Failed to load transcript'))
       .finally(() => setLoading(false));
-  }, [analysis.id]);
+  }, [session.id]);
 
-  // Reset search when analysis changes
+  // Reset search when session changes
   useEffect(() => {
     setSearchQuery('');
     setCurrentMatchIndex(0);
     setTotalMatches(0);
-  }, [analysis.id]);
+  }, [session.id]);
 
   const handleMatchesFound = useCallback((count: number) => {
     setTotalMatches(count);
@@ -277,7 +277,7 @@ export function TranscriptPanel({ analysis, onContinue, onClose, relatedEntity, 
       <div className="flex items-center justify-between px-4 py-2 bg-gray-800/50 border-b border-gray-700">
         <div className="flex items-center gap-3 min-w-0">
           <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-          <h3 className="text-sm font-medium text-white truncate">{analysis.title}</h3>
+          <h3 className="text-sm font-medium text-white truncate">{session.title}</h3>
           {relatedEntity && onShowRelated && (
             <>
               <span className="text-sm text-gray-500">|</span>
@@ -381,7 +381,7 @@ export function TranscriptPanel({ analysis, onContinue, onClose, relatedEntity, 
           )}
 
           {/* Continue button */}
-          {analysis.claude_session_id && onContinue && (
+          {session.claude_session_id && onContinue && (
             <button
               onClick={onContinue}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900"
@@ -573,7 +573,7 @@ export function TranscriptPanel({ analysis, onContinue, onClose, relatedEntity, 
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
             <p className="text-gray-400 font-medium mb-1">No transcript available</p>
-            <p className="text-gray-500 text-sm">The analysis session didn't produce a transcript</p>
+            <p className="text-gray-500 text-sm">This session didn't produce a transcript</p>
           </div>
         )}
       </div>
@@ -582,11 +582,11 @@ export function TranscriptPanel({ analysis, onContinue, onClose, relatedEntity, 
       <div className="px-4 py-2 border-t border-gray-700 bg-gray-800/30">
         <div className="flex items-center justify-between text-xs text-gray-500">
           <span>
-            {new Date(analysis.created_at).toLocaleString()}
+            {new Date(session.created_at).toLocaleString()}
           </span>
-          {analysis.claude_session_id && (
-            <span className="text-gray-600" title={analysis.claude_session_id}>
-              Session: {analysis.claude_session_id.slice(0, 8)}...
+          {session.claude_session_id && (
+            <span className="text-gray-600" title={session.claude_session_id}>
+              Session: {session.claude_session_id.slice(0, 8)}...
             </span>
           )}
         </div>

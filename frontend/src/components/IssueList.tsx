@@ -1,22 +1,22 @@
-import type { Issue, Analysis, Tag, IssueTagsMap, Session } from '../types';
+import type { Issue, Session, Tag, IssueTagsMap, Process } from '../types';
 import type { IssueFilters as IssueFiltersType } from '../hooks/useApi';
-import type { AnalysisTypeConfig } from '../constants/analysisTypes';
+import type { SessionTypeConfig } from '../constants/sessionTypes';
 import { IssueFilters } from './IssueFilters';
-import { AnalyzeButton } from './AnalyzeButton';
+import { StartSessionButton } from './StartSessionButton';
 import { getContrastColor } from '../utils/colors';
 
 interface IssueListProps {
   issues: Issue[];
   selectedIssue: number | null;
   onSelectIssue: (issueNumber: number) => void;
-  onAnalyzeIssue: (issue: Issue, analysisType: AnalysisTypeConfig) => void;
+  onStartSession: (issue: Issue, sessionType: SessionTypeConfig) => void;
   loading: boolean;
   page: number;
   totalPages: number;
   total: number;
   onPageChange: (page: number) => void;
-  analyses?: Analysis[];
   sessions?: Session[];
+  processes?: Process[];
   tags?: Tag[];
   issueTagsMap?: IssueTagsMap;
   selectedTagId?: number | null;
@@ -29,14 +29,14 @@ export function IssueList({
   issues,
   selectedIssue,
   onSelectIssue,
-  onAnalyzeIssue,
+  onStartSession,
   loading,
   page,
   totalPages,
   total,
   onPageChange,
-  analyses = [],
   sessions = [],
+  processes = [],
   tags = [],
   issueTagsMap = {},
   selectedTagId,
@@ -44,15 +44,15 @@ export function IssueList({
   filters = {},
   onFiltersChange,
 }: IssueListProps) {
-  // Group analyses by issue number
-  const analysesByIssue = analyses.reduce((acc, analysis) => {
-    if (analysis.type === 'issue' && analysis.entity_id) {
-      const issueNum = analysis.entity_id;
+  // Group sessions by issue number
+  const sessionsByIssue = sessions.reduce((acc, session) => {
+    if (session.kind === 'issue' && session.entity_id) {
+      const issueNum = session.entity_id;
       if (!acc[issueNum]) acc[issueNum] = [];
-      acc[issueNum].push(analysis);
+      acc[issueNum].push(session);
     }
     return acc;
-  }, {} as Record<string, Analysis[]>);
+  }, {} as Record<string, Session[]>);
 
   // Filter issues by selected tag
   const filteredIssues = selectedTagId
@@ -148,14 +148,14 @@ export function IssueList({
       {!loading && issues.length > 0 && (
         <div className="flex-1 overflow-auto min-h-0 divide-y divide-gray-700">
           {filteredIssues.map((issue) => {
-          const issueAnalyses = analysesByIssue[issue.number.toString()] || [];
-          // Check if any analysis has an actually running session (not just DB status)
-          const hasRunning = issueAnalyses.some(a =>
-            a.status === 'running' && sessions.some(s => s.id === a.session_id)
+          const issueSessions = sessionsByIssue[issue.number.toString()] || [];
+          // Check if any session has an actually running process (not just DB status)
+          const hasRunning = issueSessions.some(s =>
+            s.status === 'running' && processes.some(p => p.id === s.process_id)
           );
-          const hasCompleted = issueAnalyses.some(a => a.status === 'completed') ||
-            // Also count as completed if DB says running but session is gone
-            issueAnalyses.some(a => a.status === 'running' && !sessions.some(s => s.id === a.session_id));
+          const hasCompleted = issueSessions.some(s => s.status === 'completed') ||
+            // Also count as completed if DB says running but process is gone
+            issueSessions.some(s => s.status === 'running' && !processes.some(p => p.id === s.process_id));
           const issueTags = issueTagsMap[issue.number] || [];
 
           return (
@@ -176,10 +176,10 @@ export function IssueList({
                       {issue.title}
                     </h3>
                     {hasRunning && (
-                      <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse shrink-0" title="Analysis running" />
+                      <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse shrink-0" title="Session running" />
                     )}
                     {!hasRunning && hasCompleted && (
-                      <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" title={`${issueAnalyses.length} analysis session(s)`} />
+                      <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" title={`${issueSessions.length} session(s)`} />
                     )}
                   </div>
                   {(issue.labels.length > 0 || issueTags.length > 0) && (
@@ -208,15 +208,15 @@ export function IssueList({
                   )}
                   <div className="text-xs text-gray-500 mt-1">
                     by {issue.author} · {issue.comments_count} comments
-                    {issueAnalyses.length > 0 && (
-                      <span className="text-purple-400"> · {issueAnalyses.length} session{issueAnalyses.length !== 1 ? 's' : ''}</span>
+                    {issueSessions.length > 0 && (
+                      <span className="text-purple-400"> · {issueSessions.length} session{issueSessions.length !== 1 ? 's' : ''}</span>
                     )}
                   </div>
                 </div>
-                <AnalyzeButton
+                <StartSessionButton
                   issue={issue}
-                  onAnalyze={(_, type) => {
-                    onAnalyzeIssue(issue, type);
+                  onStart={(_, type) => {
+                    onStartSession(issue, type);
                   }}
                   size="sm"
                   className="shrink-0"

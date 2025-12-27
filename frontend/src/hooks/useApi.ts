@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Repo, Issue, IssueDetail, PR, Session, Analysis, ClaudeCodeSettings, SessionCreateOptions, Tag, IssueTagsMap, TranscriptResponse } from '../types';
+import type { Repo, Issue, IssueDetail, PR, Process, Session, ClaudeCodeSettings, ProcessCreateOptions, Tag, IssueTagsMap, TranscriptResponse } from '../types';
 
 const API_BASE = '/api';
 
@@ -182,17 +182,17 @@ export function usePRs(repoId: number | null, state: string = 'open') {
   return { prs, loading, error, refresh };
 }
 
-// Sessions
-export function useSessions() {
-  const [sessions, setSessions] = useState<Session[]>([]);
+// Processes (PTY processes running Claude Code)
+export function useProcesses() {
+  const [processes, setProcesses] = useState<Process[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     try {
-      const data = await fetchJson<{ sessions: Session[] }>(`${API_BASE}/sessions`);
-      setSessions(data.sessions);
+      const data = await fetchJson<{ processes: Process[] }>(`${API_BASE}/processes`);
+      setProcesses(data.processes);
     } catch (e) {
-      console.error('Failed to fetch sessions:', e);
+      console.error('Failed to fetch processes:', e);
     } finally {
       setLoading(false);
     }
@@ -204,20 +204,20 @@ export function useSessions() {
     return () => clearInterval(interval);
   }, [refresh]);
 
-  const createSession = async (
+  const createProcess = async (
     repoId: number,
     prompt?: string,
-    analysisType: string = 'custom',
+    kind: string = 'custom',
     entityId?: string,
-    title: string = 'New Analysis',
-    options?: SessionCreateOptions
+    title: string = 'New Session',
+    options?: ProcessCreateOptions
   ) => {
-    const session = await fetchJson<Session>(`${API_BASE}/sessions`, {
+    const process = await fetchJson<Process>(`${API_BASE}/processes`, {
       method: 'POST',
       body: JSON.stringify({
         repo_id: repoId,
         prompt,
-        analysis_type: analysisType,
+        kind,
         entity_id: entityId,
         title,
         // Claude Code options
@@ -229,37 +229,37 @@ export function useSessions() {
         resume_session: options?.resume_session,
       }),
     });
-    setSessions((prev) => [...prev, session]);
-    return session;
+    setProcesses((prev) => [...prev, process]);
+    return process;
   };
 
-  const resumeSession = async (
+  const resumeProcess = async (
     repoId: number,
     claudeSessionId: string,
     title: string = 'Continued Session'
   ) => {
-    return createSession(repoId, undefined, 'custom', undefined, title, {
+    return createProcess(repoId, undefined, 'custom', undefined, title, {
       resume_session: claudeSessionId,
     });
   };
 
-  const killSession = async (sessionId: string) => {
-    await fetchJson(`${API_BASE}/sessions/${sessionId}`, { method: 'DELETE' });
-    setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+  const killProcess = async (processId: string) => {
+    await fetchJson(`${API_BASE}/processes/${processId}`, { method: 'DELETE' });
+    setProcesses((prev) => prev.filter((p) => p.id !== processId));
   };
 
-  const addSession = (session: Session) => {
-    setSessions((prev) => [...prev, session]);
+  const addProcess = (process: Process) => {
+    setProcesses((prev) => [...prev, process]);
   };
 
-  return { sessions, loading, refresh, createSession, resumeSession, killSession, addSession };
+  return { processes, loading, refresh, createProcess, resumeProcess, killProcess, addProcess };
 }
 
-// Analyses
-export type AnalysisStatusFilter = 'all' | 'running' | 'completed' | 'failed';
+// Sessions
+export type SessionStatusFilter = 'all' | 'running' | 'completed' | 'failed';
 
-export function useAnalyses(repoId?: number, search?: string, statusFilter?: AnalysisStatusFilter) {
-  const [analyses, setAnalyses] = useState<Analysis[]>([]);
+export function useSessions(repoId?: number, search?: string, statusFilter?: SessionStatusFilter) {
+  const [sessions, setSessions] = useState<Session[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -271,13 +271,13 @@ export function useAnalyses(repoId?: number, search?: string, statusFilter?: Ana
       if (search) params.set('search', search);
       if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter);
 
-      const data = await fetchJson<{ analyses: Analysis[]; total: number }>(
-        `${API_BASE}/analyses?${params}`
+      const data = await fetchJson<{ sessions: Session[]; total: number }>(
+        `${API_BASE}/sessions?${params}`
       );
-      setAnalyses(data.analyses);
+      setSessions(data.sessions);
       setTotal(data.total);
     } catch (e) {
-      console.error('Failed to fetch analyses:', e);
+      console.error('Failed to fetch sessions:', e);
     } finally {
       setLoading(false);
     }
@@ -287,27 +287,27 @@ export function useAnalyses(repoId?: number, search?: string, statusFilter?: Ana
     refresh();
   }, [refresh]);
 
-  const deleteAnalysis = async (analysisId: number) => {
-    await fetchJson(`${API_BASE}/analyses/${analysisId}`, { method: 'DELETE' });
-    setAnalyses((prev) => prev.filter((a) => a.id !== analysisId));
+  const deleteSession = async (sessionId: number) => {
+    await fetchJson(`${API_BASE}/sessions/${sessionId}`, { method: 'DELETE' });
+    setSessions((prev) => prev.filter((s) => s.id !== sessionId));
     setTotal((prev) => prev - 1);
   };
 
-  const continueAnalysis = async (analysisId: number): Promise<Session> => {
-    const result = await fetchJson<Session>(
-      `${API_BASE}/analyses/${analysisId}/continue`,
+  const continueSession = async (sessionId: number): Promise<Process> => {
+    const result = await fetchJson<Process>(
+      `${API_BASE}/sessions/${sessionId}/continue`,
       { method: 'POST' }
     );
-    // Update the analysis status to running in local state
-    setAnalyses((prev) =>
-      prev.map((a) =>
-        a.id === analysisId ? { ...a, status: 'running', session_id: result.id } : a
+    // Update the session status to running in local state
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id === sessionId ? { ...s, status: 'running', process_id: result.id } : s
       )
     );
     return result;
   };
 
-  return { analyses, total, loading, refresh, deleteAnalysis, continueAnalysis };
+  return { sessions, total, loading, refresh, deleteSession, continueSession };
 }
 
 // Claude Code Settings
@@ -485,6 +485,6 @@ export function useIssueTags(repoId: number | null) {
 }
 
 // Transcripts
-export async function fetchTranscript(analysisId: number): Promise<TranscriptResponse> {
-  return fetchJson<TranscriptResponse>(`${API_BASE}/analyses/${analysisId}/transcript`);
+export async function fetchTranscript(sessionId: number): Promise<TranscriptResponse> {
+  return fetchJson<TranscriptResponse>(`${API_BASE}/sessions/${sessionId}/transcript`);
 }

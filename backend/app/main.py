@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
-from app.routers import github, sessions, analyses, settings, headless, tags
+from app.routers import github, processes, sessions, settings, headless, tags
 
 
 @asynccontextmanager
@@ -31,8 +31,8 @@ app.add_middleware(
 
 # Include routers
 app.include_router(github.router, prefix="/api", tags=["github"])
+app.include_router(processes.router, prefix="/api", tags=["processes"])
 app.include_router(sessions.router, prefix="/api", tags=["sessions"])
-app.include_router(analyses.router, prefix="/api", tags=["analyses"])
 app.include_router(settings.router, prefix="/api", tags=["settings"])
 app.include_router(headless.router, prefix="/api", tags=["headless"])
 app.include_router(tags.router, prefix="/api", tags=["tags"])

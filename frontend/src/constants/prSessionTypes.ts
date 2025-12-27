@@ -1,4 +1,4 @@
-export interface PRAnalysisTypeConfig {
+export interface PRSessionTypeConfig {
   id: string;
   name: string;
   shortName: string;
@@ -6,7 +6,7 @@ export interface PRAnalysisTypeConfig {
   buildPrompt: (pr: { number: number; title: string; body: string; head_ref: string; base_ref: string }) => string;
 }
 
-export const PR_ANALYSIS_TYPES: PRAnalysisTypeConfig[] = [
+export const PR_SESSION_TYPES: PRSessionTypeConfig[] = [
   {
     id: 'review-changes',
     name: 'Review Changes',
@@ -85,8 +85,8 @@ Please:
   },
 ];
 
-export const DEFAULT_PR_ANALYSIS_TYPE: PRAnalysisTypeConfig = PR_ANALYSIS_TYPES[0]!;
+export const DEFAULT_PR_SESSION_TYPE: PRSessionTypeConfig = PR_SESSION_TYPES[0]!;
 
-export function getPRAnalysisType(id: string): PRAnalysisTypeConfig | undefined {
-  return PR_ANALYSIS_TYPES.find(t => t.id === id);
+export function getPRSessionType(id: string): PRSessionTypeConfig | undefined {
+  return PR_SESSION_TYPES.find(t => t.id === id);
 }

@@ -1,7 +1,7 @@
 """
-PTY Session Manager for Claude Code terminals.
+PTY Process Manager for Claude Code terminals.
 
-Manages multiple pseudo-terminal sessions running Claude Code,
+Manages multiple pseudo-terminal processes running Claude Code,
 with WebSocket streaming for real-time output.
 
 Uses Claude Code CLI flags for fine-grained permission control:
@@ -41,15 +41,15 @@ from uuid import uuid4
 
 
 @dataclass
-class Session:
-    """Represents an active terminal session."""
+class Process:
+    """Represents an active PTY process running Claude Code."""
 
     id: str
     pid: int
     fd: int
     working_dir: str
     created_at: datetime = field(default_factory=datetime.utcnow)
-    analysis_id: int | None = None
+    session_id: int | None = None  # Links to Session (formerly Analysis) record
     transcript: str = ""
     subscribers: list[Callable[[bytes], None]] = field(default_factory=list)
     _read_task: asyncio.Task | None = field(default=None, repr=False)
@@ -57,29 +57,29 @@ class Session:
     # Claude Code session ID (extracted from output for resume support)
     claude_session_id: str | None = None
 
-    # Session configuration
+    # Process configuration
     allowed_tools: list[str] = field(default_factory=list)
     permission_mode: str = "default"
     max_turns: int = 0
     model: str = ""
 
 
-class SessionManager:
-    """Manages multiple PTY sessions running Claude Code."""
+class ProcessManager:
+    """Manages multiple PTY processes running Claude Code."""
 
     def __init__(self):
-        self._sessions: dict[str, Session] = {}
+        self._processes: dict[str, Process] = {}
         self._lock = asyncio.Lock()
 
     @property
-    def sessions(self) -> dict[str, Session]:
-        return self._sessions
+    def processes(self) -> dict[str, Process]:
+        return self._processes
 
-    async def create_session(
+    async def create_process(
         self,
         working_dir: str,
         initial_prompt: str | None = None,
-        analysis_id: int | None = None,
+        session_id: int | None = None,
         *,
         allowed_tools: list[str] | None = None,
         disallowed_tools: list[str] | None = None,
@@ -87,14 +87,14 @@ class SessionManager:
         max_turns: int | None = None,
         model: str | None = None,
         resume_session: str | None = None,
-    ) -> Session:
+    ) -> Process:
         """
-        Create a new terminal session running Claude Code.
+        Create a new PTY process running Claude Code.
 
         Args:
             working_dir: Directory to run Claude Code in
             initial_prompt: Optional prompt to send after startup
-            analysis_id: Optional linked analysis ID
+            session_id: Optional linked Session ID
             allowed_tools: Tools to auto-approve (overrides config)
             disallowed_tools: Tools to disable (overrides config)
             permission_mode: Permission mode (overrides config)
@@ -102,7 +102,7 @@ class SessionManager:
             model: Model to use (overrides config)
             resume_session: Claude Code session ID to resume
         """
-        session_id = str(uuid4())[:8]
+        process_id = str(uuid4())[:8]
 
         # Generate a Claude Code session ID (full UUID) that we can use to resume later
         # We pass this to Claude Code via --session-id so we know it from the start
@@ -151,12 +151,12 @@ class SessionManager:
             # Set initial terminal size (frontend will send actual size once mounted)
             self._resize_pty(fd, INITIAL_PTY_ROWS, INITIAL_PTY_COLS)
 
-            session = Session(
-                id=session_id,
+            process = Process(
+                id=process_id,
                 pid=pid,
                 fd=fd,
                 working_dir=working_dir,
-                analysis_id=analysis_id,
+                session_id=session_id,
                 allowed_tools=allowed_tools or settings.get_allowed_tools(),
                 permission_mode=permission_mode or settings.claude_permission_mode,
                 max_turns=max_turns if max_turns is not None else settings.claude_max_turns,
@@ -166,16 +166,16 @@ class SessionManager:
             )
 
             async with self._lock:
-                self._sessions[session_id] = session
+                self._processes[process_id] = process
 
             # Start reading output
-            session._read_task = asyncio.create_task(self._read_loop(session))
+            process._read_task = asyncio.create_task(self._read_loop(process))
 
             # Send initial prompt after Claude starts
             if initial_prompt:
-                asyncio.create_task(self._send_initial_prompt(session, initial_prompt))
+                asyncio.create_task(self._send_initial_prompt(process, initial_prompt))
 
-            return session
+            return process
 
     def _build_command_args(
         self,
@@ -237,17 +237,17 @@ class SessionManager:
 
         return args
 
-    async def _send_initial_prompt(self, session: Session, prompt: str):
+    async def _send_initial_prompt(self, process: Process, prompt: str):
         """Send initial prompt after Claude Code starts and is ready."""
         # Wait for Claude to initialize and show the prompt
         await asyncio.sleep(CLAUDE_INIT_DELAY_SECS)
 
         # Send the prompt as if user typed it, then press Enter
-        await self.write(session.id, prompt)
+        await self.write(process.id, prompt)
         await asyncio.sleep(PROMPT_ENTER_DELAY_SECS)
-        await self.write(session.id, "\n")
+        await self.write(process.id, "\n")
 
-    async def _read_loop(self, session: Session):
+    async def _read_loop(self, process: Process):
         """Continuously read from PTY and broadcast to subscribers."""
         loop = asyncio.get_event_loop()
 
@@ -255,15 +255,15 @@ class SessionManager:
             try:
                 # Read from PTY in executor to not block
                 data = await loop.run_in_executor(
-                    None, self._read_pty, session.fd
+                    None, self._read_pty, process.fd
                 )
 
                 if data:
                     decoded = data.decode("utf-8", errors="replace")
-                    session.transcript += decoded
+                    process.transcript += decoded
 
                     # Notify all subscribers
-                    for callback in session.subscribers:
+                    for callback in process.subscribers:
                         try:
                             callback(data)
                         except Exception:
@@ -289,78 +289,78 @@ class SessionManager:
         winsize = struct.pack("HHHH", rows, cols, 0, 0)
         fcntl.ioctl(fd, termios.TIOCSWINSZ, winsize)
 
-    async def write(self, session_id: str, data: str) -> bool:
-        """Write input to a session."""
-        session = self._sessions.get(session_id)
-        if not session:
+    async def write(self, process_id: str, data: str) -> bool:
+        """Write input to a process."""
+        process = self._processes.get(process_id)
+        if not process:
             return False
 
         try:
-            os.write(session.fd, data.encode())
+            os.write(process.fd, data.encode())
             return True
         except OSError:
             return False
 
-    async def resize(self, session_id: str, rows: int, cols: int) -> bool:
-        """Resize a session's terminal."""
-        session = self._sessions.get(session_id)
-        if not session:
+    async def resize(self, process_id: str, rows: int, cols: int) -> bool:
+        """Resize a process's terminal."""
+        process = self._processes.get(process_id)
+        if not process:
             return False
 
         try:
-            self._resize_pty(session.fd, rows, cols)
+            self._resize_pty(process.fd, rows, cols)
             return True
         except OSError:
             return False
 
-    def subscribe(self, session_id: str, callback: Callable[[bytes], None]) -> bool:
-        """Subscribe to session output."""
-        session = self._sessions.get(session_id)
-        if not session:
+    def subscribe(self, process_id: str, callback: Callable[[bytes], None]) -> bool:
+        """Subscribe to process output."""
+        process = self._processes.get(process_id)
+        if not process:
             return False
 
-        session.subscribers.append(callback)
+        process.subscribers.append(callback)
         return True
 
-    def unsubscribe(self, session_id: str, callback: Callable[[bytes], None]) -> bool:
-        """Unsubscribe from session output."""
-        session = self._sessions.get(session_id)
-        if not session:
+    def unsubscribe(self, process_id: str, callback: Callable[[bytes], None]) -> bool:
+        """Unsubscribe from process output."""
+        process = self._processes.get(process_id)
+        if not process:
             return False
 
         try:
-            session.subscribers.remove(callback)
+            process.subscribers.remove(callback)
             return True
         except ValueError:
             return False
 
-    async def kill(self, session_id: str) -> bool:
-        """Kill a session."""
+    async def kill(self, process_id: str) -> bool:
+        """Kill a process."""
         async with self._lock:
-            session = self._sessions.pop(session_id, None)
+            process = self._processes.pop(process_id, None)
 
-        if not session:
+        if not process:
             return False
 
         # Cancel read task
-        if session._read_task:
-            session._read_task.cancel()
+        if process._read_task:
+            process._read_task.cancel()
             try:
-                await session._read_task
+                await process._read_task
             except asyncio.CancelledError:
                 pass
 
         # Kill process
         try:
-            os.kill(session.pid, signal.SIGTERM)
+            os.kill(process.pid, signal.SIGTERM)
             await asyncio.sleep(SIGTERM_SIGKILL_DELAY_SECS)
-            os.kill(session.pid, signal.SIGKILL)
+            os.kill(process.pid, signal.SIGKILL)
         except OSError:
             pass
 
         # Close file descriptor
         try:
-            os.close(session.fd)
+            os.close(process.fd)
         except OSError:
             pass
 
@@ -374,78 +374,78 @@ class SessionManager:
         except OSError:
             return False
 
-    async def get_session(self, session_id: str) -> Session | None:
-        """Get a session by ID."""
-        session = self._sessions.get(session_id)
-        if session and not self._is_process_alive(session.pid):
-            # Session process died - clean it up
-            await self._cleanup_dead_session(session_id)
+    async def get_process(self, process_id: str) -> Process | None:
+        """Get a process by ID."""
+        process = self._processes.get(process_id)
+        if process and not self._is_process_alive(process.pid):
+            # Process died - clean it up
+            await self._cleanup_dead_process(process_id)
             return None
-        return session
+        return process
 
-    async def list_sessions(self) -> list[Session]:
-        """List all active sessions, cleaning up dead ones."""
-        dead_sessions = []
-        alive_sessions = []
+    async def list_processes(self) -> list[Process]:
+        """List all active processes, cleaning up dead ones."""
+        dead_processes = []
+        alive_processes = []
 
-        for session_id, session in self._sessions.items():
-            if self._is_process_alive(session.pid):
-                alive_sessions.append(session)
+        for process_id, process in self._processes.items():
+            if self._is_process_alive(process.pid):
+                alive_processes.append(process)
             else:
-                dead_sessions.append(session_id)
+                dead_processes.append(process_id)
 
-        # Clean up dead sessions
-        for session_id in dead_sessions:
-            await self._cleanup_dead_session(session_id)
+        # Clean up dead processes
+        for process_id in dead_processes:
+            await self._cleanup_dead_process(process_id)
 
-        return alive_sessions
+        return alive_processes
 
-    async def _cleanup_dead_session(self, session_id: str):
-        """Clean up a session whose process has died."""
+    async def _cleanup_dead_process(self, process_id: str):
+        """Clean up a process that has died."""
         async with self._lock:
-            session = self._sessions.pop(session_id, None)
+            process = self._processes.pop(process_id, None)
 
-        if not session:
+        if not process:
             return
 
         # Cancel read task
-        if session._read_task:
-            session._read_task.cancel()
+        if process._read_task:
+            process._read_task.cancel()
             try:
-                await session._read_task
+                await process._read_task
             except asyncio.CancelledError:
                 pass
 
         # Close file descriptor
         try:
-            os.close(session.fd)
+            os.close(process.fd)
         except OSError:
             pass
 
-    async def get_dead_session_info(self) -> list[tuple[int, str, str | None]]:
+    async def get_dead_process_info(self) -> list[tuple[int, str, str | None]]:
         """
-        Check for and return info about dead sessions for database cleanup.
-        Returns list of (analysis_id, transcript, claude_session_id) for dead sessions.
+        Check for and return info about dead processes for database cleanup.
+        Returns list of (session_id, transcript, claude_session_id) for dead processes.
         """
         dead_info = []
-        dead_sessions = []
+        dead_processes = []
 
-        for session_id, session in self._sessions.items():
-            if not self._is_process_alive(session.pid):
-                if session.analysis_id:
+        for process_id, process in self._processes.items():
+            if not self._is_process_alive(process.pid):
+                if process.session_id:
                     dead_info.append((
-                        session.analysis_id,
-                        session.transcript,
-                        session.claude_session_id
+                        process.session_id,
+                        process.transcript,
+                        process.claude_session_id
                     ))
-                dead_sessions.append(session_id)
+                dead_processes.append(process_id)
 
-        # Clean up dead sessions
-        for session_id in dead_sessions:
-            await self._cleanup_dead_session(session_id)
+        # Clean up dead processes
+        for process_id in dead_processes:
+            await self._cleanup_dead_process(process_id)
 
         return dead_info
 
 
-# Global session manager instance
-session_manager = SessionManager()
+# Global process manager instance
+process_manager = ProcessManager()
