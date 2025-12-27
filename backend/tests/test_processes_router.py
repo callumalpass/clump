@@ -286,7 +286,7 @@ class TestListProcesses:
         mock_session.status = SessionStatus.RUNNING.value
 
         with patch("app.routers.processes.process_manager") as mock_pm, \
-             patch("app.routers.processes.load_repos", return_value=[mock_repo]), \
+             patch("app.routers.processes.get_repo_by_path", return_value=mock_repo), \
              patch("app.routers.processes.get_repo_db") as mock_db_ctx:
 
             mock_pm.get_dead_process_info = AsyncMock(return_value=dead_process_info)
@@ -317,7 +317,7 @@ class TestKillProcess:
     def test_kill_process_success(self, client, mock_process, mock_repo):
         """Test killing a process successfully."""
         with patch("app.routers.processes.process_manager") as mock_pm, \
-             patch("app.routers.processes.load_repos", return_value=[mock_repo]), \
+             patch("app.routers.processes.get_repo_by_path", return_value=mock_repo), \
              patch("app.routers.processes.get_repo_db") as mock_db_ctx:
 
             mock_pm.get_process = AsyncMock(return_value=mock_process)
@@ -352,7 +352,7 @@ class TestKillProcess:
     def test_kill_process_updates_session(self, client, mock_process, mock_repo):
         """Test that killing updates the linked session."""
         with patch("app.routers.processes.process_manager") as mock_pm, \
-             patch("app.routers.processes.load_repos", return_value=[mock_repo]), \
+             patch("app.routers.processes.get_repo_by_path", return_value=mock_repo), \
              patch("app.routers.processes.get_repo_db") as mock_db_ctx:
 
             mock_pm.get_process = AsyncMock(return_value=mock_process)

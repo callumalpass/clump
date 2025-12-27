@@ -21,8 +21,7 @@ from app.db_helpers import get_repo_or_404
 from app.models import Session, SessionStatus, SessionEntity
 from app.services.session_manager import process_manager
 from app.storage import (
-    load_repos,
-    get_repo_by_id,
+    get_repo_by_path,
     encode_path,
     save_session_metadata,
     SessionMetadata,
@@ -151,12 +150,7 @@ async def list_processes():
     dead_process_info = await process_manager.get_dead_process_info()
 
     for session_id, transcript, claude_session_id, working_dir in dead_process_info:
-        # Find the repo by working_dir
-        repo = None
-        for r in load_repos():
-            if r["local_path"] == working_dir:
-                repo = r
-                break
+        repo = get_repo_by_path(working_dir)
 
         if repo and session_id:
             async with get_repo_db(repo["local_path"]) as db:
@@ -197,12 +191,7 @@ async def kill_process(process_id: str):
 
     # Update session status if linked
     if process.session_id and process.working_dir:
-        # Find the repo by working_dir
-        repo = None
-        for r in load_repos():
-            if r["local_path"] == process.working_dir:
-                repo = r
-                break
+        repo = get_repo_by_path(process.working_dir)
 
         if repo:
             async with get_repo_db(repo["local_path"]) as db:
