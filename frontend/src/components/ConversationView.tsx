@@ -1074,16 +1074,30 @@ interface MessageBubbleProps {
   searchQuery?: string;
   matchIndices?: number[];
   currentMatchIndex?: number;
+  onCopy?: (text: string) => void;
 }
 
-function MessageBubble({ message, parentSessionId, searchQuery = '', matchIndices = [], currentMatchIndex }: MessageBubbleProps) {
+function MessageBubble({ message, parentSessionId, searchQuery = '', matchIndices = [], currentMatchIndex, onCopy }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const hasMatch = matchIndices.length > 0;
   const hasCurrentMatch = currentMatchIndex !== undefined && matchIndices.includes(currentMatchIndex);
+  const [showCopied, setShowCopied] = useState(false);
+
+  const handleCopyMessage = async () => {
+    if (!message.content) return;
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setShowCopied(true);
+      onCopy?.(message.content);
+      setTimeout(() => setShowCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
 
   return (
     <div
-      className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
+      className={`flex ${isUser ? 'justify-end' : 'justify-start'} group/bubble`}
       data-has-match={hasMatch}
       data-message-uuid={message.uuid}
     >
@@ -1114,6 +1128,24 @@ function MessageBubble({ message, parentSessionId, searchQuery = '', matchIndice
             <span className="text-yellow-500 text-xs">
               {matchIndices.length} match{matchIndices.length !== 1 ? 'es' : ''}
             </span>
+          )}
+          {/* Copy button */}
+          {message.content && (
+            <button
+              onClick={handleCopyMessage}
+              className="opacity-0 group-hover/bubble:opacity-70 hover:!opacity-100 p-0.5 rounded transition-opacity text-gray-400 hover:text-white"
+              title={showCopied ? 'Copied!' : 'Copy message'}
+            >
+              {showCopied ? (
+                <svg className="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              )}
+            </button>
           )}
         </div>
 
