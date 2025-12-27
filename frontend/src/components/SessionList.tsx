@@ -121,9 +121,9 @@ export function SessionList({
   };
 
   return (
-    <div className="flex flex-col flex-1">
+    <div className="flex flex-col flex-1 min-h-0">
       {filterTabs}
-      <div className="divide-y divide-gray-700 overflow-auto flex-1">
+      <div className="divide-y divide-gray-700 overflow-auto flex-1 min-h-0">
         {sessions.map((session) => (
           <div
             key={session.session_id}
