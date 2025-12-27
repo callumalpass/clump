@@ -20,3 +20,9 @@ dist/
 
 # Database
 *.db
+
+# Build artifacts
+*.tsbuildinfo
+
+# Tools
+.claude/
