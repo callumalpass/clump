@@ -84,8 +84,7 @@ export function IssueList({
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="border-t border-gray-700 p-2 flex items-center justify-between text-sm">
+      <div className="shrink-0 border-t border-gray-700 p-2 flex items-center justify-between text-sm">
           <span className="text-gray-400">
             {total} issues
           </span>
@@ -108,8 +107,7 @@ export function IssueList({
               →
             </button>
           </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }

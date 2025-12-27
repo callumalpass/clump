@@ -66,6 +66,13 @@ class SessionManager:
         working_dir: str,
         initial_prompt: str | None = None,
         analysis_id: int | None = None,
+        *,
+        allowed_tools: list[str] | None = None,
+        disallowed_tools: list[str] | None = None,
+        permission_mode: str | None = None,
+        max_turns: int | None = None,
+        model: str | None = None,
+        resume_session: str | None = None,
     ) -> Session:
         """
         Create a new terminal session running Claude Code.
@@ -74,8 +81,28 @@ class SessionManager:
             working_dir: Directory to run Claude Code in
             initial_prompt: Optional prompt to send after startup
             analysis_id: Optional linked analysis ID
+            allowed_tools: Tools to auto-approve (overrides config)
+            disallowed_tools: Tools to disable (overrides config)
+            permission_mode: Permission mode (overrides config)
+            max_turns: Max agentic turns (overrides config)
+            model: Model to use (overrides config)
+            resume_session: Claude Code session ID to resume
         """
         session_id = str(uuid4())[:8]
+
+        # Import here to avoid circular imports
+        from app.config import settings
+
+        # Build command args with proper flags
+        args = self._build_command_args(
+            settings,
+            allowed_tools=allowed_tools,
+            disallowed_tools=disallowed_tools,
+            permission_mode=permission_mode,
+            max_turns=max_turns,
+            model=model,
+            resume_session=resume_session,
+        )
 
         # Create pseudo-terminal
         pid, fd = pty.fork()
@@ -84,15 +111,6 @@ class SessionManager:
             # Child process
             os.chdir(working_dir)
             os.environ["TERM"] = "xterm-256color"
-
-            # Import here to avoid circular imports
-            from app.config import settings
-
-            # Build command args
-            args = ["claude"]
-            if settings.claude_skip_permissions:
-                args.append("--dangerously-skip-permissions")
-
             os.execvp("claude", args)
         else:
             # Parent process
@@ -109,6 +127,10 @@ class SessionManager:
                 fd=fd,
                 working_dir=working_dir,
                 analysis_id=analysis_id,
+                allowed_tools=allowed_tools or settings.get_allowed_tools(),
+                permission_mode=permission_mode or settings.claude_permission_mode,
+                max_turns=max_turns if max_turns is not None else settings.claude_max_turns,
+                model=model or settings.claude_model,
             )
 
             async with self._lock:
@@ -122,6 +144,54 @@ class SessionManager:
                 asyncio.create_task(self._send_initial_prompt(session, initial_prompt))
 
             return session
+
+    def _build_command_args(
+        self,
+        settings,
+        *,
+        allowed_tools: list[str] | None = None,
+        disallowed_tools: list[str] | None = None,
+        permission_mode: str | None = None,
+        max_turns: int | None = None,
+        model: str | None = None,
+        resume_session: str | None = None,
+    ) -> list[str]:
+        """Build Claude Code command arguments with proper flags."""
+        args = [settings.claude_command]
+
+        # Resume session if specified
+        if resume_session:
+            args.extend(["--resume", resume_session])
+
+        # Permission mode
+        mode = permission_mode or settings.claude_permission_mode
+        if mode == "bypassPermissions":
+            args.append("--dangerously-skip-permissions")
+        elif mode in ("plan", "acceptEdits"):
+            args.extend(["--permission-mode", mode])
+
+        # Allowed tools (only if not bypassing permissions)
+        if mode != "bypassPermissions":
+            tools = allowed_tools or settings.get_allowed_tools()
+            if tools:
+                args.extend(["--allowedTools", ",".join(tools)])
+
+            # Disallowed tools
+            disabled = disallowed_tools or settings.get_disallowed_tools()
+            if disabled:
+                args.extend(["--disallowedTools", ",".join(disabled)])
+
+        # Max turns
+        turns = max_turns if max_turns is not None else settings.claude_max_turns
+        if turns > 0:
+            args.extend(["--max-turns", str(turns)])
+
+        # Model
+        m = model or settings.claude_model
+        if m:
+            args.extend(["--model", m])
+
+        return args
 
     async def _send_initial_prompt(self, session: Session, prompt: str):
         """Send initial prompt after Claude Code starts and is ready."""
@@ -137,6 +207,10 @@ class SessionManager:
         """Continuously read from PTY and broadcast to subscribers."""
         loop = asyncio.get_event_loop()
 
+        # Pattern to extract Claude Code session ID from output
+        # Claude Code displays session info like "Session: abc123..." on start
+        session_id_pattern = re.compile(r"Session:\s*([a-f0-9-]{36})", re.IGNORECASE)
+
         while True:
             try:
                 # Read from PTY in executor to not block
@@ -145,7 +219,14 @@ class SessionManager:
                 )
 
                 if data:
-                    session.transcript += data.decode("utf-8", errors="replace")
+                    decoded = data.decode("utf-8", errors="replace")
+                    session.transcript += decoded
+
+                    # Try to extract Claude Code session ID if not already found
+                    if not session.claude_session_id:
+                        match = session_id_pattern.search(decoded)
+                        if match:
+                            session.claude_session_id = match.group(1)
 
                     # Notify all subscribers
                     for callback in session.subscribers:

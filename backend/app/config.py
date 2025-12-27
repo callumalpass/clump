@@ -61,6 +61,14 @@ class Settings(BaseSettings):
     # Output format for headless mode: "text", "json", "stream-json"
     claude_output_format: Literal["text", "json", "stream-json"] = "stream-json"
 
+    # Claude Code - MCP Servers
+    # Enable GitHub MCP server for direct GitHub integration
+    claude_mcp_github: bool = False
+
+    # Additional MCP servers (JSON string)
+    # Example: '{"sentry": {"type": "sse", "url": "https://mcp.sentry.dev/mcp"}}'
+    claude_mcp_servers: str = ""
+
     # Paths
     base_dir: Path = Path(__file__).parent.parent.parent
 
