@@ -99,11 +99,72 @@ function getDuration(startTime?: string, endTime?: string): string {
   return `${(diffMs / 3600000).toFixed(1)}h`;
 }
 
+// Estimate cost based on model and token counts (prices per million tokens as of Dec 2024)
+function estimateCost(
+  model: string | undefined,
+  inputTokens: number,
+  outputTokens: number,
+  cacheReadTokens: number,
+  cacheCreationTokens: number
+): number | null {
+  if (!model) return null;
+
+  // Pricing per million tokens (December 2024)
+  let inputPrice: number;
+  let outputPrice: number;
+  let cacheReadPrice: number;
+  let cacheCreationPrice: number;
+
+  if (model.includes('opus')) {
+    // Claude Opus 4.5
+    inputPrice = 15.0;      // $15/MTok input
+    outputPrice = 75.0;     // $75/MTok output
+    cacheReadPrice = 1.5;   // $1.50/MTok cache read
+    cacheCreationPrice = 18.75; // $18.75/MTok cache creation
+  } else if (model.includes('haiku')) {
+    // Claude Haiku
+    inputPrice = 0.25;      // $0.25/MTok input
+    outputPrice = 1.25;     // $1.25/MTok output
+    cacheReadPrice = 0.025; // $0.025/MTok cache read
+    cacheCreationPrice = 0.3125; // $0.3125/MTok cache creation
+  } else {
+    // Default to Sonnet pricing
+    inputPrice = 3.0;       // $3/MTok input
+    outputPrice = 15.0;     // $15/MTok output
+    cacheReadPrice = 0.3;   // $0.30/MTok cache read
+    cacheCreationPrice = 3.75; // $3.75/MTok cache creation
+  }
+
+  // Calculate cost: (tokens / 1M) * price
+  const inputCost = (inputTokens / 1_000_000) * inputPrice;
+  const outputCost = (outputTokens / 1_000_000) * outputPrice;
+  const cacheReadCost = (cacheReadTokens / 1_000_000) * cacheReadPrice;
+  const cacheCreationCost = (cacheCreationTokens / 1_000_000) * cacheCreationPrice;
+
+  return inputCost + outputCost + cacheReadCost + cacheCreationCost;
+}
+
+// Format cost for display
+function formatCost(cost: number | null): string {
+  if (cost === null) return '';
+  if (cost < 0.01) return '<$0.01';
+  if (cost < 1) return `$${cost.toFixed(2)}`;
+  return `$${cost.toFixed(2)}`;
+}
+
 function SessionStats({ transcript }: { transcript: ParsedTranscript }) {
   const totalInput = transcript.total_input_tokens ?? 0;
   const totalOutput = transcript.total_output_tokens ?? 0;
   const totalCacheRead = transcript.total_cache_read_tokens ?? 0;
+  const totalCacheCreation = transcript.total_cache_creation_tokens ?? 0;
   const totalTokens = totalInput + totalOutput;
+  const estimatedCost = estimateCost(
+    transcript.model,
+    totalInput,
+    totalOutput,
+    totalCacheRead,
+    totalCacheCreation
+  );
 
   return (
     <div className="bg-gray-850 border-b border-gray-700 px-3 py-2">
@@ -146,6 +207,19 @@ function SessionStats({ transcript }: { transcript: ParsedTranscript }) {
           <span className="text-gray-500">
             {transcript.messages.length} messages
           </span>
+
+          {/* Estimated cost */}
+          {estimatedCost !== null && (
+            <div
+              className="flex items-center gap-1 text-amber-400"
+              title={`Estimated cost based on ${getModelName(transcript.model)} pricing (Dec 2024)\nInput: ${formatTokens(totalInput)} tokens\nOutput: ${formatTokens(totalOutput)} tokens\nCache read: ${formatTokens(totalCacheRead)} tokens`}
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{formatCost(estimatedCost)}</span>
+            </div>
+          )}
         </div>
 
         {/* Git branch */}
