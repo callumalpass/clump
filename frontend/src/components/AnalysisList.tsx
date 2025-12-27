@@ -10,7 +10,23 @@ interface AnalysisListProps {
 
 export function AnalysisList({ analyses, onSelectAnalysis, onContinueAnalysis, onDeleteAnalysis, loading }: AnalysisListProps) {
   if (loading) {
-    return <div className="p-4 text-gray-400">Loading analyses...</div>;
+    return (
+      <div className="divide-y divide-gray-700">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="p-3 animate-pulse">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-2 h-2 rounded-full bg-gray-700" />
+              <div className="h-4 w-40 bg-gray-700 rounded" />
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-4 w-14 bg-gray-700 rounded" />
+              <div className="h-4 w-8 bg-gray-700 rounded" />
+              <div className="h-4 w-20 bg-gray-700 rounded" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
   }
 
   if (analyses.length === 0) {

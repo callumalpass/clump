@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Analysis, AnalysisStatus, Repo
+from app.services.session_manager import session_manager
 
 router = APIRouter()
 
@@ -186,6 +187,67 @@ async def update_analysis(
         claude_session_id=analysis.claude_session_id,
         created_at=analysis.created_at.isoformat(),
         completed_at=analysis.completed_at.isoformat() if analysis.completed_at else None,
+    )
+
+
+class ContinueResponse(BaseModel):
+    """Response from continuing an analysis - includes full session data."""
+    id: str
+    working_dir: str
+    created_at: str
+    analysis_id: int
+    claude_session_id: str | None = None
+
+
+@router.post("/analyses/{analysis_id}/continue", response_model=ContinueResponse)
+async def continue_analysis(
+    analysis_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Continue an existing analysis by resuming its Claude session.
+
+    This creates a new PTY session that resumes the Claude conversation,
+    but keeps the same analysis record (no duplicates).
+    """
+    result = await db.execute(select(Analysis).where(Analysis.id == analysis_id))
+    analysis = result.scalar_one_or_none()
+    if not analysis:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    if not analysis.claude_session_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot continue: no Claude session ID available"
+        )
+
+    # Get the repo for the working directory
+    repo_result = await db.execute(select(Repo).where(Repo.id == analysis.repo_id))
+    repo = repo_result.scalar_one_or_none()
+    if not repo:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    # Create new PTY session that resumes the Claude conversation
+    session = await session_manager.create_session(
+        working_dir=repo.local_path,
+        initial_prompt=None,  # No new prompt, just resuming
+        analysis_id=analysis.id,
+        resume_session=analysis.claude_session_id,
+    )
+
+    # Update the analysis to link to this new session and set status to running
+    analysis.session_id = session.id
+    analysis.status = AnalysisStatus.RUNNING.value
+    analysis.completed_at = None  # Clear completed time since we're resuming
+    await db.commit()
+
+    # Return full session data so frontend can add it directly to state
+    return ContinueResponse(
+        id=session.id,
+        working_dir=session.working_dir,
+        created_at=session.created_at.isoformat(),
+        analysis_id=analysis.id,
+        claude_session_id=session.claude_session_id,
     )
 
 

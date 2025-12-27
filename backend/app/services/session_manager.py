@@ -352,13 +352,85 @@ class SessionManager:
 
         return True
 
+    def _is_process_alive(self, pid: int) -> bool:
+        """Check if a process is still running."""
+        try:
+            os.kill(pid, 0)  # Signal 0 doesn't kill, just checks
+            return True
+        except OSError:
+            return False
+
     async def get_session(self, session_id: str) -> Session | None:
         """Get a session by ID."""
-        return self._sessions.get(session_id)
+        session = self._sessions.get(session_id)
+        if session and not self._is_process_alive(session.pid):
+            # Session process died - clean it up
+            await self._cleanup_dead_session(session_id)
+            return None
+        return session
 
     async def list_sessions(self) -> list[Session]:
-        """List all active sessions."""
-        return list(self._sessions.values())
+        """List all active sessions, cleaning up dead ones."""
+        dead_sessions = []
+        alive_sessions = []
+
+        for session_id, session in self._sessions.items():
+            if self._is_process_alive(session.pid):
+                alive_sessions.append(session)
+            else:
+                dead_sessions.append(session_id)
+
+        # Clean up dead sessions
+        for session_id in dead_sessions:
+            await self._cleanup_dead_session(session_id)
+
+        return alive_sessions
+
+    async def _cleanup_dead_session(self, session_id: str):
+        """Clean up a session whose process has died."""
+        async with self._lock:
+            session = self._sessions.pop(session_id, None)
+
+        if not session:
+            return
+
+        # Cancel read task
+        if session._read_task:
+            session._read_task.cancel()
+            try:
+                await session._read_task
+            except asyncio.CancelledError:
+                pass
+
+        # Close file descriptor
+        try:
+            os.close(session.fd)
+        except OSError:
+            pass
+
+    async def get_dead_session_info(self) -> list[tuple[int, str, str | None]]:
+        """
+        Check for and return info about dead sessions for database cleanup.
+        Returns list of (analysis_id, transcript, claude_session_id) for dead sessions.
+        """
+        dead_info = []
+        dead_sessions = []
+
+        for session_id, session in self._sessions.items():
+            if not self._is_process_alive(session.pid):
+                if session.analysis_id:
+                    dead_info.append((
+                        session.analysis_id,
+                        session.transcript,
+                        session.claude_session_id
+                    ))
+                dead_sessions.append(session_id)
+
+        # Clean up dead sessions
+        for session_id in dead_sessions:
+            await self._cleanup_dead_session(session_id)
+
+        return dead_info
 
 
 # Global session manager instance

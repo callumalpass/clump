@@ -45,8 +45,8 @@ export default function App() {
     total: issuesTotal,
     goToPage: goToIssuesPage,
   } = useIssues(selectedRepo?.id ?? null, issueFilters);
-  const { sessions, createSession, resumeSession, killSession } = useSessions();
-  const { analyses, loading: analysesLoading, refresh: refreshAnalyses, deleteAnalysis } = useAnalyses(
+  const { sessions, createSession, killSession, addSession } = useSessions();
+  const { analyses, loading: analysesLoading, refresh: refreshAnalyses, deleteAnalysis, continueAnalysis } = useAnalyses(
     selectedRepo?.id,
     searchQuery || undefined
   );
@@ -96,8 +96,11 @@ Please:
       };
 
       setActiveSessionId(session.id);
+
+      // Trigger immediate refresh to get analysis data sooner
+      setTimeout(refreshAnalyses, 500);
     },
-    [selectedRepo, createSession]
+    [selectedRepo, createSession, refreshAnalyses]
   );
 
   const handleNewSession = useCallback(async () => {
@@ -115,32 +118,52 @@ Please:
   }, [selectedRepo, createSession]);
 
   const handleSelectAnalysis = useCallback((analysis: Analysis) => {
-    if (analysis.session_id) {
-      setActiveSessionId(analysis.session_id);
-      // Also select the related issue if it's an issue analysis
-      if (analysis.type === 'issue' && analysis.entity_id) {
-        setSelectedIssue(parseInt(analysis.entity_id, 10));
-      }
+    // Check if this analysis has an active session we can view
+    const activeSession = sessions.find(s => s.id === analysis.session_id);
+
+    // If it's an issue analysis, always select the issue for context
+    if (analysis.type === 'issue' && analysis.entity_id) {
+      setSelectedIssue(parseInt(analysis.entity_id, 10));
     }
-  }, []);
+
+    if (activeSession) {
+      // Session is still running - open the terminal
+      setActiveSessionId(analysis.session_id);
+
+      // Store pending context for immediate side-by-side view
+      if (analysis.type === 'issue' && analysis.entity_id) {
+        pendingIssueContextRef.current = {
+          sessionId: analysis.session_id!,
+          issueNumber: parseInt(analysis.entity_id, 10),
+        };
+      }
+    } else {
+      // Session ended - just show issue details (user can click Continue to resume)
+      setActiveSessionId(null);
+    }
+  }, [sessions]);
 
   const handleContinueAnalysis = useCallback(
     async (analysis: Analysis) => {
-      if (!analysis.claude_session_id || !analysis.repo_id) return;
+      if (!analysis.claude_session_id) return;
 
-      // Find the repo for this analysis
-      const repo = repos.find((r) => r.id === analysis.repo_id);
-      if (!repo) return;
+      // Use the new continue endpoint - this reuses the existing analysis record
+      const session = await continueAnalysis(analysis.id);
 
-      const session = await resumeSession(
-        repo.id,
-        analysis.claude_session_id,
-        `Continue: ${analysis.title}`
-      );
+      // Add the new session to state immediately
+      addSession(session);
+
+      // Store pending context for issue analyses so side-by-side shows immediately
+      if (analysis.type === 'issue' && analysis.entity_id) {
+        pendingIssueContextRef.current = {
+          sessionId: session.id,
+          issueNumber: parseInt(analysis.entity_id, 10),
+        };
+      }
 
       setActiveSessionId(session.id);
     },
-    [repos, resumeSession]
+    [continueAnalysis, addSession]
   );
 
   const handleDeleteAnalysis = useCallback(
@@ -331,23 +354,25 @@ Please:
                         </button>
                       </div>
                       <div className="flex-1 overflow-auto">
-                        <IssueDetail
-                          repoId={selectedRepo.id}
-                          issueNumber={parseInt(activeAnalysis.entity_id!, 10)}
-                          onAnalyze={() => {
-                            const issue = issues.find((i) => i.number === parseInt(activeAnalysis.entity_id!, 10));
-                            if (issue) handleAnalyzeIssue(issue);
-                          }}
-                          analyses={analyses}
-                          onSelectAnalysis={handleSelectAnalysis}
-                          onContinueAnalysis={handleContinueAnalysis}
-                          onDeleteAnalysis={handleDeleteAnalysis}
-                          tags={tags}
-                          issueTags={issueTagsMap[parseInt(activeAnalysis.entity_id!, 10)] || []}
-                          onAddTag={(tagId) => addTagToIssue(parseInt(activeAnalysis.entity_id!, 10), tagId)}
-                          onRemoveTag={(tagId) => removeTagFromIssue(parseInt(activeAnalysis.entity_id!, 10), tagId)}
-                          onCreateTag={createTag}
-                        />
+                        {activeIssueNumber && (
+                          <IssueDetail
+                            repoId={selectedRepo.id}
+                            issueNumber={activeIssueNumber}
+                            onAnalyze={() => {
+                              const issue = issues.find((i) => i.number === activeIssueNumber);
+                              if (issue) handleAnalyzeIssue(issue);
+                            }}
+                            analyses={analyses}
+                            onSelectAnalysis={handleSelectAnalysis}
+                            onContinueAnalysis={handleContinueAnalysis}
+                            onDeleteAnalysis={handleDeleteAnalysis}
+                            tags={tags}
+                            issueTags={issueTagsMap[activeIssueNumber] || []}
+                            onAddTag={(tagId) => addTagToIssue(activeIssueNumber, tagId)}
+                            onRemoveTag={(tagId) => removeTagFromIssue(activeIssueNumber, tagId)}
+                            onCreateTag={createTag}
+                          />
+                        )}
                       </div>
                     </>
                   )}

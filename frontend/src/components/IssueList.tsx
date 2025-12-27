@@ -78,9 +78,28 @@ export function IssueList({
         />
       )}
 
-      {/* Loading state */}
+      {/* Loading state - show skeleton items */}
       {loading && (
-        <div className="p-4 text-gray-400">Loading issues...</div>
+        <div className="divide-y divide-gray-700">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="p-3 animate-pulse">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <div className="h-4 w-8 bg-gray-700 rounded" />
+                    <div className="h-4 w-48 bg-gray-700 rounded" />
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-2">
+                    <div className="h-5 w-16 bg-gray-700 rounded-full" />
+                    <div className="h-5 w-12 bg-gray-700 rounded-full" />
+                  </div>
+                  <div className="h-3 w-32 bg-gray-700 rounded mt-2" />
+                </div>
+                <div className="h-7 w-16 bg-gray-700 rounded shrink-0" />
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Empty state */}
@@ -198,9 +217,19 @@ export function IssueList({
         </div>
       )}
 
-      {/* Pagination */}
-      {!loading && (
-        <div className="shrink-0 border-t border-gray-700 p-2 flex items-center justify-between text-sm">
+      {/* Pagination - always visible to prevent layout shift */}
+      <div className="shrink-0 border-t border-gray-700 p-2 flex items-center justify-between text-sm">
+        {loading ? (
+          <>
+            <div className="h-4 w-16 bg-gray-700 rounded animate-pulse" />
+            <div className="flex items-center gap-1">
+              <div className="h-7 w-8 bg-gray-700 rounded" />
+              <div className="h-4 w-12 bg-gray-700 rounded mx-1" />
+              <div className="h-7 w-8 bg-gray-700 rounded" />
+            </div>
+          </>
+        ) : (
+          <>
             <span className="text-gray-400">
               {total} issues
             </span>
@@ -223,8 +252,9 @@ export function IssueList({
                 →
               </button>
             </div>
-        </div>
-      )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

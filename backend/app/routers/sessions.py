@@ -3,6 +3,7 @@ Terminal session routes with WebSocket support.
 """
 
 import asyncio
+from datetime import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -95,8 +96,26 @@ async def create_session(
 
 
 @router.get("/sessions", response_model=SessionListResponse)
-async def list_sessions():
+async def list_sessions(db: AsyncSession = Depends(get_db)):
     """List all active terminal sessions."""
+    # First, check for dead sessions and update their analysis status
+    dead_session_info = await session_manager.get_dead_session_info()
+    for analysis_id, transcript, claude_session_id in dead_session_info:
+        result = await db.execute(
+            select(Analysis).where(Analysis.id == analysis_id)
+        )
+        analysis = result.scalar_one_or_none()
+        if analysis and analysis.status == AnalysisStatus.RUNNING.value:
+            analysis.status = AnalysisStatus.COMPLETED.value
+            analysis.transcript = transcript
+            analysis.completed_at = datetime.utcnow()
+            if claude_session_id:
+                analysis.claude_session_id = claude_session_id
+
+    if dead_session_info:
+        await db.commit()
+
+    # Now list only actually running sessions
     sessions = await session_manager.list_sessions()
     return SessionListResponse(
         sessions=[

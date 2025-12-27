@@ -80,7 +80,8 @@ export function useIssues(repoId: number | null, filters: IssueFilters = {}) {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [perPage] = useState(30);
-  const [loading, setLoading] = useState(false);
+  // Start with loading=true if we have a repoId to prevent "No issues found" flash
+  const [loading, setLoading] = useState(repoId !== null);
   const [error, setError] = useState<string | null>(null);
 
   // Extract filter values with defaults
@@ -130,8 +131,16 @@ export function useIssues(repoId: number | null, filters: IssueFilters = {}) {
 
   // Reset to page 1 when filters change
   useEffect(() => {
-    setPage(1);
-    fetchPage(1);
+    if (repoId) {
+      setLoading(true);
+      setPage(1);
+      fetchPage(1);
+    } else {
+      // Clear issues and reset loading when no repo selected
+      setIssues([]);
+      setTotal(0);
+      setLoading(false);
+    }
   }, [repoId, state, search, JSON.stringify(labels), sort, order]);
 
   const totalPages = Math.ceil(total / perPage);
@@ -239,7 +248,11 @@ export function useSessions() {
     setSessions((prev) => prev.filter((s) => s.id !== sessionId));
   };
 
-  return { sessions, loading, refresh, createSession, resumeSession, killSession };
+  const addSession = (session: Session) => {
+    setSessions((prev) => [...prev, session]);
+  };
+
+  return { sessions, loading, refresh, createSession, resumeSession, killSession, addSession };
 }
 
 // Analyses
@@ -277,7 +290,21 @@ export function useAnalyses(repoId?: number, search?: string) {
     setTotal((prev) => prev - 1);
   };
 
-  return { analyses, total, loading, refresh, deleteAnalysis };
+  const continueAnalysis = async (analysisId: number): Promise<Session> => {
+    const result = await fetchJson<Session>(
+      `${API_BASE}/analyses/${analysisId}/continue`,
+      { method: 'POST' }
+    );
+    // Update the analysis status to running in local state
+    setAnalyses((prev) =>
+      prev.map((a) =>
+        a.id === analysisId ? { ...a, status: 'running', session_id: result.id } : a
+      )
+    );
+    return result;
+  };
+
+  return { analyses, total, loading, refresh, deleteAnalysis, continueAnalysis };
 }
 
 // Claude Code Settings

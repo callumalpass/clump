@@ -125,7 +125,37 @@ export function IssueDetail({
   };
 
   if (loading) {
-    return <div className="p-4 text-gray-400">Loading issue...</div>;
+    return (
+      <div className="p-4 animate-pulse">
+        {/* Title skeleton */}
+        <div className="mb-4">
+          <div className="h-6 w-3/4 bg-gray-700 rounded mb-3" />
+          <div className="flex items-center gap-2">
+            <div className="h-5 w-14 bg-gray-700 rounded-full" />
+            <div className="h-5 w-20 bg-gray-700 rounded-full" />
+            <div className="h-4 w-32 bg-gray-700 rounded" />
+          </div>
+        </div>
+        {/* Body skeleton */}
+        <div className="bg-gray-800 rounded-lg p-4 mb-6">
+          <div className="h-4 w-full bg-gray-700 rounded mb-2" />
+          <div className="h-4 w-5/6 bg-gray-700 rounded mb-2" />
+          <div className="h-4 w-4/6 bg-gray-700 rounded mb-2" />
+          <div className="h-4 w-3/4 bg-gray-700 rounded" />
+        </div>
+        {/* Comments skeleton */}
+        <div className="h-5 w-32 bg-gray-700 rounded mb-3" />
+        <div className="space-y-3">
+          {[1, 2].map((i) => (
+            <div key={i} className="bg-gray-800 rounded-lg p-4">
+              <div className="h-3 w-40 bg-gray-700 rounded mb-2" />
+              <div className="h-4 w-full bg-gray-700 rounded mb-1" />
+              <div className="h-4 w-2/3 bg-gray-700 rounded" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   if (!issue) {
