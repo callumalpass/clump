@@ -8,7 +8,8 @@ from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Tag, IssueTag, Repo
+from app.db_helpers import get_repo_or_404
+from app.models import Tag, IssueTag
 
 router = APIRouter()
 
@@ -51,10 +52,7 @@ async def list_tags(
     db: AsyncSession = Depends(get_db),
 ):
     """List all tags for a repository."""
-    # Verify repo exists
-    repo_result = await db.execute(select(Repo).where(Repo.id == repo_id))
-    if not repo_result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Repository not found")
+    await get_repo_or_404(db, repo_id)
 
     result = await db.execute(
         select(Tag).where(Tag.repo_id == repo_id).order_by(Tag.name)
@@ -82,10 +80,7 @@ async def create_tag(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new tag for a repository."""
-    # Verify repo exists
-    repo_result = await db.execute(select(Repo).where(Repo.id == repo_id))
-    if not repo_result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Repository not found")
+    await get_repo_or_404(db, repo_id)
 
     # Check for duplicate name
     existing = await db.execute(
