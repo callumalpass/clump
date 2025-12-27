@@ -14,7 +14,7 @@ e.g., /home/user/projects/myapp -> -home-user-projects-myapp
 import json
 from pathlib import Path
 from datetime import datetime
-from typing import TypedDict, Optional
+from typing import Any, TypedDict, Optional
 from dataclasses import dataclass, field
 
 
@@ -460,13 +460,13 @@ def save_config(config: dict) -> None:
         json.dump(config, f, indent=2)
 
 
-def get_config_value(key: str, default=None):
+def get_config_value(key: str, default: Any = None) -> Any:
     """Get a config value by key."""
     config = load_config()
     return config.get(key, default)
 
 
-def set_config_value(key: str, value) -> None:
+def set_config_value(key: str, value: Any) -> None:
     """Set a config value."""
     config = load_config()
     config[key] = value
