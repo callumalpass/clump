@@ -104,10 +104,10 @@ export function IssueFilters({ filters, onFiltersChange, issues }: IssueFiltersP
             <button
               key={state}
               onClick={() => setState(state)}
-              className={`px-2 py-1 text-xs capitalize focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset focus:z-10 ${
+              className={`toggle-btn px-2 py-1 text-xs capitalize focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset focus:z-10 ${
                 filters.state === state
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white'
               }`}
             >
               {state}
@@ -128,7 +128,7 @@ export function IssueFilters({ filters, onFiltersChange, issues }: IssueFiltersP
           </select>
           <button
             onClick={toggleOrder}
-            className="p-1 bg-gray-800 border border-gray-600 rounded hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="p-1 bg-gray-800 border border-gray-600 rounded hover:bg-gray-700 hover:border-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
             title={filters.order === 'asc' ? 'Oldest first' : 'Newest first'}
           >
             {filters.order === 'asc' ? (

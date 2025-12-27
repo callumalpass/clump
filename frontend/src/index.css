@@ -119,3 +119,34 @@ body {
   transform: translateX(2px);
   box-shadow: -2px 0 8px rgba(59, 130, 246, 0.15);
 }
+
+/* Enhanced select element styling */
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  background-size: 1rem;
+  padding-right: 2rem;
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+select:hover:not(:focus):not(:disabled) {
+  border-color: #4b5563;
+  background-color: #1f2937;
+}
+
+select:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Toggle button group styling */
+.toggle-btn {
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.toggle-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}

@@ -42,7 +42,7 @@ export function SessionList({
         <button
           key={f.value}
           onClick={() => onFilterChange(f.value)}
-          className={`px-2.5 py-1 text-xs rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+          className={`toggle-btn px-2.5 py-1 text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
             filter === f.value
               ? 'bg-blue-600 text-white'
               : 'text-gray-400 hover:text-white hover:bg-gray-700'
