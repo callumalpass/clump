@@ -60,33 +60,55 @@ export function useRepos() {
 }
 
 // Issues
+interface IssueListResponse {
+  issues: Issue[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
 export function useIssues(repoId: number | null, state: string = 'open') {
   const [issues, setIssues] = useState<Issue[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [perPage] = useState(30);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  const fetchPage = useCallback(async (pageNum: number) => {
     if (!repoId) return;
 
     try {
       setLoading(true);
-      const data = await fetchJson<Issue[]>(
-        `${API_BASE}/repos/${repoId}/issues?state=${state}`
+      const data = await fetchJson<IssueListResponse>(
+        `${API_BASE}/repos/${repoId}/issues?state=${state}&page=${pageNum}&per_page=${perPage}`
       );
-      setIssues(data);
+      setIssues(data.issues);
+      setTotal(data.total);
+      setPage(data.page);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to fetch issues');
     } finally {
       setLoading(false);
     }
-  }, [repoId, state]);
+  }, [repoId, state, perPage]);
+
+  const refresh = useCallback(() => fetchPage(page), [fetchPage, page]);
+
+  const goToPage = useCallback((pageNum: number) => {
+    setPage(pageNum);
+    fetchPage(pageNum);
+  }, [fetchPage]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    setPage(1);
+    fetchPage(1);
+  }, [repoId, state]);
 
-  return { issues, loading, error, refresh };
+  const totalPages = Math.ceil(total / perPage);
+
+  return { issues, loading, error, refresh, page, totalPages, total, goToPage };
 }
 
 export async function fetchIssue(repoId: number, issueNumber: number): Promise<IssueDetail> {

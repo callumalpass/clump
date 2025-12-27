@@ -19,7 +19,15 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const { repos, addRepo } = useRepos();
-  const { issues, loading: issuesLoading, refresh: refreshIssues } = useIssues(selectedRepo?.id ?? null);
+  const {
+    issues,
+    loading: issuesLoading,
+    refresh: refreshIssues,
+    page: issuesPage,
+    totalPages: issuesTotalPages,
+    total: issuesTotal,
+    goToPage: goToIssuesPage,
+  } = useIssues(selectedRepo?.id ?? null);
   const { sessions, createSession, killSession } = useSessions();
   const { analyses, loading: analysesLoading } = useAnalyses(
     selectedRepo?.id,
@@ -135,6 +143,10 @@ Please:
                 onSelectIssue={setSelectedIssue}
                 onAnalyzeIssue={handleAnalyzeIssue}
                 loading={issuesLoading}
+                page={issuesPage}
+                totalPages={issuesTotalPages}
+                total={issuesTotal}
+                onPageChange={goToIssuesPage}
               />
             )}
             {activeTab === 'analyses' && (

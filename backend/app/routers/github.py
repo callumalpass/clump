@@ -44,6 +44,13 @@ class IssueResponse(BaseModel):
     url: str
 
 
+class IssueListResponse(BaseModel):
+    issues: list[IssueResponse]
+    total: int
+    page: int
+    per_page: int
+
+
 class IssueDetailResponse(IssueResponse):
     comments: list[dict]
 
@@ -103,21 +110,29 @@ async def delete_repo(repo_id: int, db: AsyncSession = Depends(get_db)):
 
 
 # Issue endpoints
-@router.get("/repos/{repo_id}/issues", response_model=list[IssueResponse])
+@router.get("/repos/{repo_id}/issues", response_model=IssueListResponse)
 async def list_issues(
     repo_id: int,
     state: str = "open",
-    limit: int = 100,
+    page: int = 1,
+    per_page: int = 30,
     db: AsyncSession = Depends(get_db),
 ):
-    """List issues for a repository."""
+    """List issues for a repository with pagination."""
     result = await db.execute(select(Repo).where(Repo.id == repo_id))
     repo = result.scalar_one_or_none()
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
 
-    issues = github_client.list_issues(repo.owner, repo.name, state=state, limit=limit)
-    return [_issue_to_response(i) for i in issues]
+    issues, total = github_client.list_issues(
+        repo.owner, repo.name, state=state, page=page, per_page=per_page
+    )
+    return IssueListResponse(
+        issues=[_issue_to_response(i) for i in issues],
+        total=total,
+        page=page,
+        per_page=per_page,
+    )
 
 
 @router.get("/repos/{repo_id}/issues/{issue_number}", response_model=IssueDetailResponse)

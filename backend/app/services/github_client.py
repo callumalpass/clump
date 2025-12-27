@@ -73,24 +73,34 @@ class GitHubClient:
         name: str,
         state: str = "open",
         labels: list[str] | None = None,
-        limit: int = 100,
-    ) -> list[IssueData]:
-        """List issues for a repository."""
+        page: int = 1,
+        per_page: int = 30,
+    ) -> tuple[list[IssueData], int]:
+        """List issues for a repository with pagination.
+
+        Returns a tuple of (issues, total_count).
+        """
         repo = self.get_repo(owner, name)
 
         kwargs = {"state": state}
         if labels:
             kwargs["labels"] = labels
 
+        all_issues = repo.get_issues(**kwargs)
+        total_count = all_issues.totalCount
+
+        # Calculate start/end indices for pagination
+        start = (page - 1) * per_page
+        end = start + per_page
+
         issues = []
-        for issue in repo.get_issues(**kwargs)[:limit]:
+        for issue in all_issues[start:end]:
             # Skip pull requests (GitHub API returns them as issues)
             if issue.pull_request:
                 continue
-
             issues.append(self._issue_to_data(issue))
 
-        return issues
+        return issues, total_count
 
     def get_issue(self, owner: str, name: str, number: int) -> IssueData:
         """Get a single issue with comments."""
