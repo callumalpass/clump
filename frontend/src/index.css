@@ -150,9 +150,14 @@ textarea:disabled {
 
 /* Toggle button group styling */
 .toggle-btn {
-  transition: background-color 150ms ease, color 150ms ease;
+  transition: background-color 150ms ease, color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+
+.toggle-btn:hover:not(:disabled) {
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3);
 }
 
 .toggle-btn:active:not(:disabled) {
-  transform: scale(0.98);
+  transform: scale(0.97);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5);
 }
