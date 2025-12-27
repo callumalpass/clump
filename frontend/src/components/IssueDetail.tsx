@@ -375,7 +375,7 @@ export function IssueDetail({
                               onDeleteAnalysis(analysis);
                             }
                           }}
-                          className="p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-70 hover:!opacity-100 transition-opacity duration-150"
                           title="Delete analysis"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
