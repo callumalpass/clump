@@ -319,6 +319,7 @@ Please:
               onSelectSession={setActiveSessionId}
               onCloseSession={killSession}
               onNewSession={handleNewSession}
+              analyses={analyses}
             />
           )}
 
