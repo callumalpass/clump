@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Terminal } from './Terminal';
 import { ConversationView, RawTranscriptView } from './ConversationView';
-import type { Session, TranscriptResponse, ParsedTranscript } from '../types';
-import { fetchTranscript } from '../hooks/useApi';
+import { EntityPicker } from './EntityPicker';
+import type { Session, SessionEntity, Issue, PR, TranscriptResponse, ParsedTranscript } from '../types';
+import { fetchTranscript, addEntityToSession, removeEntityFromSession } from '../hooks/useApi';
 
 // Format transcript as markdown for export
 function formatTranscriptAsMarkdown(transcript: ParsedTranscript, session: Session): string {
@@ -98,11 +99,6 @@ function formatTranscriptAsText(transcript: ParsedTranscript, session: Session):
   return lines.join('\n');
 }
 
-interface RelatedEntity {
-  type: 'issue' | 'pr';
-  number: number;
-}
-
 type ViewMode = 'transcript' | 'terminal';
 
 interface SessionViewProps {
@@ -114,10 +110,16 @@ interface SessionViewProps {
   onClose: () => void;
   /** Callback to continue a finished session */
   onContinue?: () => void;
-  /** Related issue/PR for context display */
-  relatedEntity?: RelatedEntity | null;
-  /** Callback to show the related issue/PR */
-  onShowRelated?: () => void;
+  /** Navigate to an issue */
+  onShowIssue?: (issueNumber: number) => void;
+  /** Navigate to a PR */
+  onShowPR?: (prNumber: number) => void;
+  /** Available issues for linking */
+  issues?: Issue[];
+  /** Available PRs for linking */
+  prs?: PR[];
+  /** Callback when entities change */
+  onEntitiesChange?: () => void;
 }
 
 export function SessionView({
@@ -125,8 +127,11 @@ export function SessionView({
   processId,
   onClose,
   onContinue,
-  relatedEntity,
-  onShowRelated,
+  onShowIssue,
+  onShowPR,
+  issues = [],
+  prs = [],
+  onEntitiesChange,
 }: SessionViewProps) {
   // Determine if process is active (has a running PTY)
   const isActiveProcess = !!processId;
@@ -151,6 +156,45 @@ export function SessionView({
   // Export state
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
   const [showExportMenu, setShowExportMenu] = useState(false);
+
+  // Entity management state
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [entityPickerType, setEntityPickerType] = useState<'issue' | 'pr' | null>(null);
+  const [entities, setEntities] = useState<SessionEntity[]>(session.entities || []);
+
+  // Sync entities when session changes
+  useEffect(() => {
+    setEntities(session.entities || []);
+  }, [session.entities]);
+
+  // Handle adding entity
+  const handleAddEntity = useCallback(async (kind: string, number: number) => {
+    const newEntity = await addEntityToSession(session.id, kind, number);
+    setEntities(prev => [...prev, newEntity]);
+    onEntitiesChange?.();
+  }, [session.id, onEntitiesChange]);
+
+  // Handle removing entity
+  const handleRemoveEntity = useCallback(async (entityId: number) => {
+    await removeEntityFromSession(session.id, entityId);
+    setEntities(prev => prev.filter(e => e.id !== entityId));
+    onEntitiesChange?.();
+  }, [session.id, onEntitiesChange]);
+
+  // Close actions menu when clicking outside
+  useEffect(() => {
+    if (!showActionsMenu) return;
+
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-actions-menu]')) {
+        setShowActionsMenu(false);
+      }
+    };
+
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [showActionsMenu]);
 
   // Fetch transcript (with polling for active sessions)
   useEffect(() => {
@@ -349,15 +393,24 @@ export function SessionView({
             </div>
             <span className="text-sm text-gray-500">|</span>
             <span className="text-sm text-gray-400 shrink-0">{processId.slice(0, 8)}</span>
-            {relatedEntity && onShowRelated && (
+            {entities.length > 0 && (
               <>
                 <span className="text-sm text-gray-500">|</span>
-                <button
-                  onClick={onShowRelated}
-                  className="text-sm text-blue-400 hover:text-blue-300 transition-colors shrink-0"
-                >
-                  {relatedEntity.type === 'issue' ? 'Issue' : 'PR'} #{relatedEntity.number}
-                </button>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {entities.map((entity) => (
+                    <button
+                      key={entity.id}
+                      onClick={() => entity.kind === 'issue' ? onShowIssue?.(entity.number) : onShowPR?.(entity.number)}
+                      className={`text-xs px-1.5 py-0.5 rounded transition-colors ${
+                        entity.kind === 'issue'
+                          ? 'bg-green-900/30 text-green-400 hover:bg-green-900/50'
+                          : 'bg-purple-900/30 text-purple-400 hover:bg-purple-900/50'
+                      }`}
+                    >
+                      #{entity.number}
+                    </button>
+                  ))}
+                </div>
               </>
             )}
           </div>
@@ -408,19 +461,41 @@ export function SessionView({
     <div className="h-full flex flex-col bg-[#0d1117] rounded-lg border border-gray-700 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 px-4 py-2 bg-gray-800/50 border-b border-gray-700">
-        {/* Left: Title (truncates) */}
+        {/* Left: Title + Entity chips */}
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {!isActiveProcess && (
             <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
           )}
           <h3 className="text-sm font-medium text-white truncate">{session.title}</h3>
-          {relatedEntity && onShowRelated && (
-            <button
-              onClick={onShowRelated}
-              className="text-xs text-blue-400 hover:text-blue-300 transition-colors shrink-0"
-            >
-              #{relatedEntity.number}
-            </button>
+          {entities.length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap shrink-0">
+              {entities.map((entity) => (
+                <span
+                  key={entity.id}
+                  className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded ${
+                    entity.kind === 'issue'
+                      ? 'bg-green-900/30 text-green-400'
+                      : 'bg-purple-900/30 text-purple-400'
+                  }`}
+                >
+                  <button
+                    onClick={() => entity.kind === 'issue' ? onShowIssue?.(entity.number) : onShowPR?.(entity.number)}
+                    className="hover:underline"
+                  >
+                    #{entity.number}
+                  </button>
+                  <button
+                    onClick={() => handleRemoveEntity(entity.id)}
+                    className="opacity-60 hover:opacity-100 transition-opacity"
+                    title="Unlink"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </span>
+              ))}
+            </div>
           )}
         </div>
 
@@ -557,6 +632,53 @@ export function SessionView({
               Continue
             </button>
           )}
+
+          {/* Actions dropdown */}
+          <div className="relative" data-actions-menu>
+            <button
+              onClick={() => setShowActionsMenu(!showActionsMenu)}
+              className={`p-1.5 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                showActionsMenu ? 'bg-gray-700 text-white' : 'hover:bg-gray-700 text-gray-400 hover:text-white'
+              }`}
+              title="Actions"
+              aria-label="Actions"
+              aria-expanded={showActionsMenu}
+              aria-haspopup="menu"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+              </svg>
+            </button>
+
+            {showActionsMenu && (
+              <div className="absolute right-0 top-full mt-1 w-40 bg-gray-800 border border-gray-700 rounded-lg shadow-lg py-1 z-50 origin-top-right animate-in fade-in zoom-in-95 duration-100">
+                <button
+                  onClick={() => {
+                    setEntityPickerType('issue');
+                    setShowActionsMenu(false);
+                  }}
+                  className="w-full px-3 py-1.5 text-sm text-left hover:bg-gray-700 text-gray-300 flex items-center gap-2 transition-colors focus:outline-none focus:bg-gray-700"
+                >
+                  <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Link Issue
+                </button>
+                <button
+                  onClick={() => {
+                    setEntityPickerType('pr');
+                    setShowActionsMenu(false);
+                  }}
+                  className="w-full px-3 py-1.5 text-sm text-left hover:bg-gray-700 text-gray-300 flex items-center gap-2 transition-colors focus:outline-none focus:bg-gray-700"
+                >
+                  <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Link PR
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Close button */}
           <button
@@ -728,6 +850,17 @@ export function SessionView({
           )}
         </div>
       </div>
+
+      {/* Entity Picker Modal */}
+      <EntityPicker
+        isOpen={entityPickerType !== null}
+        onClose={() => setEntityPickerType(null)}
+        entityType={entityPickerType || 'issue'}
+        issues={issues}
+        prs={prs}
+        linkedEntities={entities}
+        onAdd={handleAddEntity}
+      />
     </div>
   );
 }

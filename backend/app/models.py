@@ -46,7 +46,6 @@ class Session(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     repo_id: Mapped[int] = mapped_column(ForeignKey("repos.id"))
     kind: Mapped[str] = mapped_column(String(50))
-    entity_id: Mapped[str | None] = mapped_column(String(255), nullable=True)  # issue/PR number
     title: Mapped[str] = mapped_column(String(500))
     prompt: Mapped[str] = mapped_column(Text)
     transcript: Mapped[str] = mapped_column(Text, default="")
@@ -59,6 +58,7 @@ class Session(Base):
 
     repo: Mapped["Repo"] = relationship(back_populates="sessions")
     actions: Mapped[list["Action"]] = relationship(back_populates="session")
+    entities: Mapped[list["SessionEntity"]] = relationship(back_populates="session", cascade="all, delete-orphan")
 
 
 class Action(Base):
@@ -97,3 +97,17 @@ class IssueTag(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     tag: Mapped["Tag"] = relationship(back_populates="issue_tags")
+
+
+class SessionEntity(Base):
+    """Junction table linking sessions to issues/PRs (many-to-many)."""
+    __tablename__ = "session_entities"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"))
+    repo_id: Mapped[int] = mapped_column(ForeignKey("repos.id"))
+    entity_kind: Mapped[str] = mapped_column(String(50))  # "issue" or "pr"
+    entity_number: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    session: Mapped["Session"] = relationship(back_populates="entities")

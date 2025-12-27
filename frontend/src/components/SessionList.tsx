@@ -159,9 +159,18 @@ export function SessionList({ sessions, processes = [], onSelectSession, onConti
               <span className="px-1.5 py-0.5 bg-gray-700 rounded">
                 {session.kind}
               </span>
-              {session.entity_id && (
-                <span>#{session.entity_id}</span>
-              )}
+              {session.entities?.map((entity) => (
+                <span
+                  key={entity.id}
+                  className={`px-1 py-0.5 rounded ${
+                    entity.kind === 'issue'
+                      ? 'bg-green-900/30 text-green-400'
+                      : 'bg-purple-900/30 text-purple-400'
+                  }`}
+                >
+                  #{entity.number}
+                </span>
+              ))}
               <span>{new Date(session.created_at).toLocaleDateString()}</span>
               {/* Duration display */}
               {isActuallyRunning ? (

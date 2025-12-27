@@ -5,6 +5,7 @@ Database helper functions for common query patterns.
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models import Session, Repo
 
@@ -34,17 +35,23 @@ async def get_session_or_404(db: AsyncSession, session_id: int) -> Session:
     """
     Fetch a session by ID or raise HTTP 404 if not found.
 
+    Eager loads the session's entities relationship.
+
     Args:
         db: Database session
         session_id: Session ID to look up
 
     Returns:
-        The Session model instance
+        The Session model instance with entities loaded
 
     Raises:
         HTTPException: 404 if session not found
     """
-    result = await db.execute(select(Session).where(Session.id == session_id))
+    result = await db.execute(
+        select(Session)
+        .options(selectinload(Session.entities))
+        .where(Session.id == session_id)
+    )
     session = result.scalar_one_or_none()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")

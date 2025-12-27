@@ -20,9 +20,9 @@ export function PRDetail({
   onSelectSession,
   onDeleteSession,
 }: PRDetailProps) {
-  // Filter sessions for this specific PR
+  // Filter sessions that have this PR linked
   const prSessions = sessions.filter(
-    s => s.kind === 'pr' && s.entity_id === pr.number.toString()
+    s => s.entities?.some(e => e.kind === 'pr' && e.number === pr.number)
   ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   return (

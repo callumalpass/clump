@@ -44,12 +44,15 @@ export function IssueList({
   filters = {},
   onFiltersChange,
 }: IssueListProps) {
-  // Group sessions by issue number
+  // Group sessions by issue number (a session can appear under multiple issues)
   const sessionsByIssue = sessions.reduce((acc, session) => {
-    if (session.kind === 'issue' && session.entity_id) {
-      const issueNum = session.entity_id;
+    const issueEntities = session.entities?.filter(e => e.kind === 'issue') || [];
+    for (const entity of issueEntities) {
+      const issueNum = entity.number.toString();
       if (!acc[issueNum]) acc[issueNum] = [];
-      acc[issueNum].push(session);
+      if (!acc[issueNum].includes(session)) {
+        acc[issueNum].push(session);
+      }
     }
     return acc;
   }, {} as Record<string, Session[]>);

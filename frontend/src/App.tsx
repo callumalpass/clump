@@ -149,7 +149,7 @@ export default function App() {
         selectedRepo.id,
         prompt,
         'issue',
-        issue.number.toString(),
+        [{ kind: 'issue', number: issue.number }],
         `${sessionType.name}: Issue #${issue.number}`
       );
 
@@ -190,7 +190,7 @@ export default function App() {
         selectedRepo.id,
         prompt,
         'pr',
-        pr.number.toString(),
+        [{ kind: 'pr', number: pr.number }],
         `${sessionType.name}: PR #${pr.number}`
       );
 
@@ -221,7 +221,7 @@ export default function App() {
       selectedRepo.id,
       undefined,
       'custom',
-      undefined,
+      [],
       'New Session'
     );
 
@@ -288,15 +288,15 @@ export default function App() {
     // Check if this session has an active process we can view
     const activeProcess = processes.find(p => p.id === session.process_id);
 
-    // If it's an issue session, select the issue for context
-    if (session.kind === 'issue' && session.entity_id) {
-      setSelectedIssue(parseInt(session.entity_id, 10));
-      setSelectedPR(null);
-    }
+    // Select the first linked issue or PR for context
+    const firstIssue = session.entities?.find(e => e.kind === 'issue');
+    const firstPR = session.entities?.find(e => e.kind === 'pr');
 
-    // If it's a PR session, select the PR for context
-    if (session.kind === 'pr' && session.entity_id) {
-      setSelectedPR(parseInt(session.entity_id, 10));
+    if (firstIssue) {
+      setSelectedIssue(firstIssue.number);
+      setSelectedPR(null);
+    } else if (firstPR) {
+      setSelectedPR(firstPR.number);
       setSelectedIssue(null);
     }
 
@@ -311,16 +311,16 @@ export default function App() {
       setExpandedSessionId(null);
 
       // Store pending context for immediate side-by-side view
-      if (session.kind === 'issue' && session.entity_id) {
+      if (firstIssue) {
         pendingIssueContextRef.current = {
           processId: session.process_id!,
-          issueNumber: parseInt(session.entity_id, 10),
+          issueNumber: firstIssue.number,
         };
       }
-      if (session.kind === 'pr' && session.entity_id) {
+      if (firstPR) {
         pendingPRContextRef.current = {
           processId: session.process_id!,
-          prNumber: parseInt(session.entity_id, 10),
+          prNumber: firstPR.number,
         };
       }
     } else {
@@ -341,19 +341,21 @@ export default function App() {
       // Add the new process to state immediately
       addProcess(process);
 
-      // Store pending context for issue sessions so side-by-side shows immediately
-      if (session.kind === 'issue' && session.entity_id) {
+      // Store pending context for first linked issue/PR so side-by-side shows immediately
+      const firstIssue = session.entities?.find(e => e.kind === 'issue');
+      const firstPR = session.entities?.find(e => e.kind === 'pr');
+
+      if (firstIssue) {
         pendingIssueContextRef.current = {
           processId: process.id,
-          issueNumber: parseInt(session.entity_id, 10),
+          issueNumber: firstIssue.number,
         };
       }
 
-      // Store pending context for PR sessions so side-by-side shows immediately
-      if (session.kind === 'pr' && session.entity_id) {
+      if (firstPR) {
         pendingPRContextRef.current = {
           processId: process.id,
-          prNumber: parseInt(session.entity_id, 10),
+          prNumber: firstPR.number,
         };
       }
 
@@ -414,12 +416,15 @@ export default function App() {
       setViewingSessionId(sessionId);
     }
 
-    // Update issue/PR selection for context
-    if (session.kind === 'issue' && session.entity_id) {
-      setSelectedIssue(parseInt(session.entity_id, 10));
+    // Update issue/PR selection for context (use first linked entity)
+    const firstIssue = session.entities?.find(e => e.kind === 'issue');
+    const firstPR = session.entities?.find(e => e.kind === 'pr');
+
+    if (firstIssue) {
+      setSelectedIssue(firstIssue.number);
       setSelectedPR(null);
-    } else if (session.kind === 'pr' && session.entity_id) {
-      setSelectedPR(parseInt(session.entity_id, 10));
+    } else if (firstPR) {
+      setSelectedPR(firstPR.number);
       setSelectedIssue(null);
     }
   }, [sessions, processes]);
@@ -451,25 +456,25 @@ export default function App() {
   }
 
   // Determine the issue number to display - prefer user selection, fallback to session context
+  const sessionIssue = activeSession?.entities?.find(e => e.kind === 'issue')
+    ?? viewingSession?.entities?.find(e => e.kind === 'issue');
   const activeIssueNumber = selectedIssue ?? (
-    activeSession?.kind === 'issue' && activeSession?.entity_id
-      ? parseInt(activeSession.entity_id, 10)
-      : viewingSession?.kind === 'issue' && viewingSession?.entity_id
-        ? parseInt(viewingSession.entity_id, 10)
-        : hasPendingIssue
-          ? pendingIssueContext.issueNumber
-          : null
+    sessionIssue
+      ? sessionIssue.number
+      : hasPendingIssue
+        ? pendingIssueContext.issueNumber
+        : null
   );
 
   // Determine the PR number to display - prefer user selection, fallback to session context
+  const sessionPR = activeSession?.entities?.find(e => e.kind === 'pr')
+    ?? viewingSession?.entities?.find(e => e.kind === 'pr');
   const activePRNumber = selectedPR ?? (
-    activeSession?.kind === 'pr' && activeSession?.entity_id
-      ? parseInt(activeSession.entity_id, 10)
-      : viewingSession?.kind === 'pr' && viewingSession?.entity_id
-        ? parseInt(viewingSession.entity_id, 10)
-        : hasPendingPR
-          ? pendingPRContext.prNumber
-          : null
+    sessionPR
+      ? sessionPR.number
+      : hasPendingPR
+        ? pendingPRContext.prNumber
+        : null
   );
 
   // Show side-by-side when we have sessions AND any issue/PR context
@@ -496,24 +501,16 @@ export default function App() {
   // Find the selected PR data (for standalone PR detail view)
   const selectedPRData = selectedPR ? prs.find(p => p.number === selectedPR) : null;
 
-  // Get related entity from current session (for "show related" button)
-  const currentSession = activeSession || viewingSession;
-  const relatedEntity = currentSession?.entity_id ? {
-    type: currentSession.kind as 'issue' | 'pr',
-    number: parseInt(currentSession.entity_id, 10),
-  } : null;
+  // Handlers for navigating to issues/PRs from SessionView
+  const handleShowIssue = useCallback((issueNumber: number) => {
+    setSelectedIssue(issueNumber);
+    setSelectedPR(null);
+  }, []);
 
-  // Handler to show related issue/PR
-  const handleShowRelated = () => {
-    if (!relatedEntity) return;
-    if (relatedEntity.type === 'issue') {
-      setSelectedIssue(relatedEntity.number);
-      setSelectedPR(null);
-    } else if (relatedEntity.type === 'pr') {
-      setSelectedPR(relatedEntity.number);
-      setSelectedIssue(null);
-    }
-  };
+  const handleShowPR = useCallback((prNumber: number) => {
+    setSelectedPR(prNumber);
+    setSelectedIssue(null);
+  }, []);
 
   return (
     <div className="h-screen flex flex-col bg-[#0d1117] text-white">
@@ -777,11 +774,11 @@ export default function App() {
                           killProcess(activeProcessId);
                           setActiveProcessId(null);
                         }}
-                        relatedEntity={relatedEntity && (
-                          (relatedEntity.type === 'issue' && selectedIssue !== relatedEntity.number) ||
-                          (relatedEntity.type === 'pr' && selectedPR !== relatedEntity.number)
-                        ) ? relatedEntity : null}
-                        onShowRelated={handleShowRelated}
+                        onShowIssue={handleShowIssue}
+                        onShowPR={handleShowPR}
+                        issues={issues}
+                        prs={prs}
+                        onEntitiesChange={refreshSessions}
                       />
                     ) : activeProcessId ? (
                       // Fallback to terminal-only if no analysis found yet
@@ -791,22 +788,17 @@ export default function App() {
                           killProcess(activeProcessId);
                           setActiveProcessId(null);
                         }}
-                        relatedEntity={relatedEntity && (
-                          (relatedEntity.type === 'issue' && selectedIssue !== relatedEntity.number) ||
-                          (relatedEntity.type === 'pr' && selectedPR !== relatedEntity.number)
-                        ) ? relatedEntity : null}
-                        onShowRelated={handleShowRelated}
                       />
                     ) : viewingSession ? (
                       <SessionView
                         session={viewingSession}
                         onContinue={viewingSession.claude_session_id ? () => handleContinueSession(viewingSession) : undefined}
                         onClose={() => setViewingSessionId(null)}
-                        relatedEntity={relatedEntity && (
-                          (relatedEntity.type === 'issue' && selectedIssue !== relatedEntity.number) ||
-                          (relatedEntity.type === 'pr' && selectedPR !== relatedEntity.number)
-                        ) ? relatedEntity : null}
-                        onShowRelated={handleShowRelated}
+                        onShowIssue={handleShowIssue}
+                        onShowPR={handleShowPR}
+                        issues={issues}
+                        prs={prs}
+                        onEntitiesChange={refreshSessions}
                       />
                     ) : (
                       <div className="h-full flex items-center justify-center">
@@ -881,8 +873,11 @@ export default function App() {
                         killProcess(activeProcessId);
                         setActiveProcessId(null);
                       }}
-                      relatedEntity={relatedEntity}
-                      onShowRelated={handleShowRelated}
+                      onShowIssue={handleShowIssue}
+                      onShowPR={handleShowPR}
+                      issues={issues}
+                      prs={prs}
+                      onEntitiesChange={refreshSessions}
                     />
                   ) : activeProcessId ? (
                     // Fallback to terminal-only if no analysis found yet
@@ -892,16 +887,17 @@ export default function App() {
                         killProcess(activeProcessId);
                         setActiveProcessId(null);
                       }}
-                      relatedEntity={relatedEntity}
-                      onShowRelated={handleShowRelated}
                     />
                   ) : viewingSession ? (
                     <SessionView
                       session={viewingSession}
                       onContinue={viewingSession.claude_session_id ? () => handleContinueSession(viewingSession) : undefined}
                       onClose={() => setViewingSessionId(null)}
-                      relatedEntity={relatedEntity}
-                      onShowRelated={handleShowRelated}
+                      onShowIssue={handleShowIssue}
+                      onShowPR={handleShowPR}
+                      issues={issues}
+                      prs={prs}
+                      onEntitiesChange={refreshSessions}
                     />
                   ) : (
                     <div className="h-full flex items-center justify-center">

@@ -64,9 +64,9 @@ export function IssueDetail({
     }
   };
 
-  // Filter sessions for this specific issue
+  // Filter sessions that have this issue linked
   const issueSessions = sessions.filter(
-    s => s.kind === 'issue' && s.entity_id === issueNumber.toString()
+    s => s.entities?.some(e => e.kind === 'issue' && e.number === issueNumber)
   ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   const [commentBody, setCommentBody] = useState('');
   const [submitting, setSubmitting] = useState(false);

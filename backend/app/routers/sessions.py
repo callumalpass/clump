@@ -11,11 +11,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.db_helpers import get_session_or_404
-from app.models import Session, SessionStatus, Repo
+from app.models import Session, SessionStatus, Repo, SessionEntity
 from app.services.session_manager import process_manager
 from app.services.transcript_parser import parse_transcript, transcript_to_dict
+from sqlalchemy.orm import selectinload
 
 router = APIRouter()
+
+
+class SessionEntityResponse(BaseModel):
+    id: int
+    kind: str
+    number: int
+
+    class Config:
+        from_attributes = True
 
 
 class SessionResponse(BaseModel):
@@ -23,7 +33,7 @@ class SessionResponse(BaseModel):
     repo_id: int
     repo_name: str | None = None
     kind: str
-    entity_id: str | None
+    entities: list[SessionEntityResponse] = []
     title: str
     prompt: str
     transcript: str
@@ -45,7 +55,10 @@ def _session_to_response(session: Session, repo: Repo | None) -> SessionResponse
         repo_id=session.repo_id,
         repo_name=f"{repo.owner}/{repo.name}" if repo else None,
         kind=session.kind,
-        entity_id=session.entity_id,
+        entities=[
+            SessionEntityResponse(id=e.id, kind=e.entity_kind, number=e.entity_number)
+            for e in session.entities
+        ],
         title=session.title,
         prompt=session.prompt,
         transcript=session.transcript,
@@ -79,7 +92,7 @@ async def list_sessions(
     db: AsyncSession = Depends(get_db),
 ):
     """List sessions with optional filtering and search."""
-    query = select(Session).order_by(Session.created_at.desc())
+    query = select(Session).options(selectinload(Session.entities)).order_by(Session.created_at.desc())
 
     if repo_id:
         query = query.where(Session.repo_id == repo_id)
@@ -300,3 +313,64 @@ async def get_session_transcript(
             "type": "raw",
             "transcript": session.transcript or "",
         }
+
+
+class AddEntityRequest(BaseModel):
+    kind: str  # "issue" or "pr"
+    number: int
+
+
+@router.post("/sessions/{session_id}/entities", response_model=SessionEntityResponse)
+async def add_entity_to_session(
+    session_id: int,
+    data: AddEntityRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Add an issue or PR to a session."""
+    session = await get_session_or_404(db, session_id)
+
+    # Check if already linked
+    for entity in session.entities:
+        if entity.entity_kind == data.kind and entity.entity_number == data.number:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{data.kind.capitalize()} #{data.number} is already linked to this session"
+            )
+
+    # Create the link
+    entity = SessionEntity(
+        session_id=session.id,
+        repo_id=session.repo_id,
+        entity_kind=data.kind,
+        entity_number=data.number,
+    )
+    db.add(entity)
+    await db.commit()
+    await db.refresh(entity)
+
+    return SessionEntityResponse(id=entity.id, kind=entity.entity_kind, number=entity.entity_number)
+
+
+@router.delete("/sessions/{session_id}/entities/{entity_id}")
+async def remove_entity_from_session(
+    session_id: int,
+    entity_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove an issue or PR link from a session."""
+    session = await get_session_or_404(db, session_id)
+
+    # Find the entity
+    entity = None
+    for e in session.entities:
+        if e.id == entity_id:
+            entity = e
+            break
+
+    if not entity:
+        raise HTTPException(status_code=404, detail="Entity link not found")
+
+    await db.delete(entity)
+    await db.commit()
+
+    return {"status": "deleted"}

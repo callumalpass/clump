@@ -64,12 +64,18 @@ export interface Process {
   claude_session_id: string | null;
 }
 
+export interface SessionEntity {
+  id: number;
+  kind: string;  // "issue" or "pr"
+  number: number;
+}
+
 export interface Session {
   id: number;
   repo_id: number;
   repo_name: string | null;
   kind: string;
-  entity_id: string | null;
+  entities: SessionEntity[];
   title: string;
   prompt: string;
   transcript: string;

@@ -16,17 +16,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.db_helpers import get_repo_or_404
-from app.models import Session, SessionStatus
+from app.models import Session, SessionStatus, SessionEntity
 from app.services.session_manager import process_manager
 
 router = APIRouter()
+
+
+class EntityInput(BaseModel):
+    kind: str  # "issue" or "pr"
+    number: int
 
 
 class ProcessCreate(BaseModel):
     repo_id: int
     prompt: str | None = None
     kind: str = "custom"
-    entity_id: str | None = None
+    entities: list[EntityInput] = []  # Linked issues/PRs
     title: str = "New Session"
 
     # Claude Code configuration overrides
@@ -62,7 +67,6 @@ async def create_process(
     session = Session(
         repo_id=repo.id,
         kind=data.kind,
-        entity_id=data.entity_id,
         title=data.title,
         prompt=data.prompt or "",
         status=SessionStatus.RUNNING.value,
@@ -70,6 +74,19 @@ async def create_process(
     db.add(session)
     await db.commit()
     await db.refresh(session)
+
+    # Create entity links
+    for entity in data.entities:
+        session_entity = SessionEntity(
+            session_id=session.id,
+            repo_id=repo.id,
+            entity_kind=entity.kind,
+            entity_number=entity.number,
+        )
+        db.add(session_entity)
+
+    if data.entities:
+        await db.commit()
 
     # Create PTY process with Claude Code configuration
     process = await process_manager.create_process(

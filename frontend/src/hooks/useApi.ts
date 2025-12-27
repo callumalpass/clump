@@ -1,5 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Repo, Issue, IssueDetail, PR, Process, Session, ClaudeCodeSettings, ProcessCreateOptions, Tag, IssueTagsMap, TranscriptResponse } from '../types';
+import type { Repo, Issue, IssueDetail, PR, Process, Session, SessionEntity, ClaudeCodeSettings, ProcessCreateOptions, Tag, IssueTagsMap, TranscriptResponse } from '../types';
+
+export interface EntityInput {
+  kind: string;  // "issue" or "pr"
+  number: number;
+}
 
 const API_BASE = '/api';
 
@@ -208,7 +213,7 @@ export function useProcesses() {
     repoId: number,
     prompt?: string,
     kind: string = 'custom',
-    entityId?: string,
+    entities: EntityInput[] = [],
     title: string = 'New Session',
     options?: ProcessCreateOptions
   ) => {
@@ -218,7 +223,7 @@ export function useProcesses() {
         repo_id: repoId,
         prompt,
         kind,
-        entity_id: entityId,
+        entities,
         title,
         // Claude Code options
         permission_mode: options?.permission_mode,
@@ -238,7 +243,7 @@ export function useProcesses() {
     claudeSessionId: string,
     title: string = 'Continued Session'
   ) => {
-    return createProcess(repoId, undefined, 'custom', undefined, title, {
+    return createProcess(repoId, undefined, 'custom', [], title, {
       resume_session: claudeSessionId,
     });
   };
@@ -487,4 +492,25 @@ export function useIssueTags(repoId: number | null) {
 // Transcripts
 export async function fetchTranscript(sessionId: number): Promise<TranscriptResponse> {
   return fetchJson<TranscriptResponse>(`${API_BASE}/sessions/${sessionId}/transcript`);
+}
+
+// Session Entity Management
+export async function addEntityToSession(
+  sessionId: number,
+  kind: string,
+  number: number
+): Promise<SessionEntity> {
+  return fetchJson<SessionEntity>(`${API_BASE}/sessions/${sessionId}/entities`, {
+    method: 'POST',
+    body: JSON.stringify({ kind, number }),
+  });
+}
+
+export async function removeEntityFromSession(
+  sessionId: number,
+  entityId: number
+): Promise<void> {
+  await fetchJson(`${API_BASE}/sessions/${sessionId}/entities/${entityId}`, {
+    method: 'DELETE',
+  });
 }

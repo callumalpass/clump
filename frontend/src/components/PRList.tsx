@@ -31,12 +31,15 @@ export function PRList({
   sessions = [],
   processes = [],
 }: PRListProps) {
-  // Group sessions by PR number
+  // Group sessions by PR number (a session can appear under multiple PRs)
   const sessionsByPR = sessions.reduce((acc, session) => {
-    if (session.kind === 'pr' && session.entity_id) {
-      const prNum = session.entity_id;
+    const prEntities = session.entities?.filter(e => e.kind === 'pr') || [];
+    for (const entity of prEntities) {
+      const prNum = entity.number.toString();
       if (!acc[prNum]) acc[prNum] = [];
-      acc[prNum].push(session);
+      if (!acc[prNum].includes(session)) {
+        acc[prNum].push(session);
+      }
     }
     return acc;
   }, {} as Record<string, Session[]>);
