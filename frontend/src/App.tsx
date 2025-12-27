@@ -6,6 +6,7 @@ import { RepoSelector } from './components/RepoSelector';
 import { IssueList } from './components/IssueList';
 import { IssueDetail } from './components/IssueDetail';
 import { PRList } from './components/PRList';
+import { PRDetail } from './components/PRDetail';
 import { Terminal } from './components/Terminal';
 import { TranscriptPanel } from './components/TranscriptPanel';
 import { SessionTabs } from './components/SessionTabs';
@@ -28,12 +29,17 @@ function ResizeHandle() {
 
 type Tab = 'issues' | 'prs' | 'analyses';
 
-// Track pending issue context for sessions being created
-// This fixes the race condition where the sidepane doesn't show the issue
+// Track pending issue/PR context for sessions being created
+// This fixes the race condition where the sidepane doesn't show the issue/PR
 // until the analysis is created and fetched via polling
 interface PendingIssueContext {
   sessionId: string;
   issueNumber: number;
+}
+
+interface PendingPRContext {
+  sessionId: string;
+  prNumber: number;
 }
 
 export default function App() {
@@ -53,8 +59,9 @@ export default function App() {
   const [selectedPR, setSelectedPR] = useState<number | null>(null);
   const [prStateFilter, setPRStateFilter] = useState<'open' | 'closed' | 'all'>('open');
 
-  // Track pending issue context to show side-by-side view immediately
+  // Track pending issue/PR context to show side-by-side view immediately
   const pendingIssueContextRef = useRef<PendingIssueContext | null>(null);
+  const pendingPRContextRef = useRef<PendingPRContext | null>(null);
 
   const { repos, addRepo } = useRepos();
   const {
@@ -77,15 +84,39 @@ export default function App() {
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
   const { prs, loading: prsLoading } = usePRs(selectedRepo?.id ?? null, prStateFilter);
 
-  // Clear filters when repo changes
+  // Clear all UI state when repo changes
   useEffect(() => {
+    // Clear filters
     setSelectedTagId(null);
     setIssueFilters({ state: 'open' });
+
+    // Clear selections (issues/PRs belong to specific repos)
+    setSelectedIssue(null);
+    setSelectedPR(null);
+
+    // Clear active session (sessions are repo-specific)
+    setActiveSessionId(null);
+
+    // Clear analysis viewing state
+    setViewingAnalysisId(null);
+    setExpandedAnalysisId(null);
+
+    // Clear pending context refs
+    pendingIssueContextRef.current = null;
+    pendingPRContextRef.current = null;
   }, [selectedRepo?.id]);
 
-  // Handle issue selection from list - clears expanded analysis
+  // Handle issue selection from list - clears expanded analysis and PR selection
   const handleSelectIssue = useCallback((issueNumber: number) => {
     setSelectedIssue(issueNumber);
+    setSelectedPR(null);
+    setExpandedAnalysisId(null);
+  }, []);
+
+  // Handle PR selection from list - clears issue selection
+  const handleSelectPR = useCallback((prNumber: number) => {
+    setSelectedPR(prNumber);
+    setSelectedIssue(null);
     setExpandedAnalysisId(null);
   }, []);
 
@@ -148,6 +179,12 @@ export default function App() {
         `${analysisType.name}: PR #${pr.number}`
       );
 
+      // Store pending context so side-by-side view shows immediately
+      pendingPRContextRef.current = {
+        sessionId: session.id,
+        prNumber: pr.number,
+      };
+
       setActiveSessionId(session.id);
 
       // Trigger immediate refresh to get analysis data sooner
@@ -199,7 +236,7 @@ export default function App() {
         return;
       }
 
-      // Escape: Close modals, deselect issue, or close terminal
+      // Escape: Close modals, deselect issue/PR, or close terminal
       if (e.key === 'Escape') {
         if (shortcutsOpen) {
           setShortcutsOpen(false);
@@ -209,6 +246,8 @@ export default function App() {
           setActiveSessionId(null);
         } else if (selectedIssue) {
           setSelectedIssue(null);
+        } else if (selectedPR) {
+          setSelectedPR(null);
         }
         return;
       }
@@ -216,15 +255,22 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [settingsOpen, shortcutsOpen, activeSessionId, selectedIssue]);
+  }, [settingsOpen, shortcutsOpen, activeSessionId, selectedIssue, selectedPR]);
 
   const handleSelectAnalysis = useCallback((analysis: Analysis) => {
     // Check if this analysis has an active session we can view
     const activeSession = sessions.find(s => s.id === analysis.session_id);
 
-    // If it's an issue analysis, always select the issue for context
+    // If it's an issue analysis, select the issue for context
     if (analysis.type === 'issue' && analysis.entity_id) {
       setSelectedIssue(parseInt(analysis.entity_id, 10));
+      setSelectedPR(null);
+    }
+
+    // If it's a PR analysis, select the PR for context
+    if (analysis.type === 'pr' && analysis.entity_id) {
+      setSelectedPR(parseInt(analysis.entity_id, 10));
+      setSelectedIssue(null);
     }
 
     if (activeSession) {
@@ -238,6 +284,12 @@ export default function App() {
         pendingIssueContextRef.current = {
           sessionId: analysis.session_id!,
           issueNumber: parseInt(analysis.entity_id, 10),
+        };
+      }
+      if (analysis.type === 'pr' && analysis.entity_id) {
+        pendingPRContextRef.current = {
+          sessionId: analysis.session_id!,
+          prNumber: parseInt(analysis.entity_id, 10),
         };
       }
     } else {
@@ -263,6 +315,14 @@ export default function App() {
         pendingIssueContextRef.current = {
           sessionId: session.id,
           issueNumber: parseInt(analysis.entity_id, 10),
+        };
+      }
+
+      // Store pending context for PR analyses so side-by-side shows immediately
+      if (analysis.type === 'pr' && analysis.entity_id) {
+        pendingPRContextRef.current = {
+          sessionId: session.id,
+          prNumber: parseInt(analysis.entity_id, 10),
         };
       }
 
@@ -293,32 +353,78 @@ export default function App() {
     : null;
 
   // Check pending context for newly created sessions (before analysis is fetched)
-  const pendingContext = pendingIssueContextRef.current;
-  const hasPendingIssue = pendingContext && pendingContext.sessionId === activeSessionId;
+  const pendingIssueContext = pendingIssueContextRef.current;
+  const hasPendingIssue = pendingIssueContext && pendingIssueContext.sessionId === activeSessionId;
+  const pendingPRContext = pendingPRContextRef.current;
+  const hasPendingPR = pendingPRContext && pendingPRContext.sessionId === activeSessionId;
 
   // Clear pending context once analysis is loaded
   if (activeAnalysis && hasPendingIssue) {
     pendingIssueContextRef.current = null;
   }
-
-  // Show side-by-side if we have an active session/transcript AND any issue context
-  const showSideBySide = (activeSessionId || viewingAnalysis) && (
-    (activeAnalysis?.type === 'issue' && activeAnalysis?.entity_id) ||
-    (viewingAnalysis?.type === 'issue' && viewingAnalysis?.entity_id) ||
-    hasPendingIssue ||
-    selectedIssue
-  );
+  if (activeAnalysis && hasPendingPR) {
+    pendingPRContextRef.current = null;
+  }
 
   // Determine the issue number to display - prefer user selection, fallback to analysis context
   const activeIssueNumber = selectedIssue ?? (
-    activeAnalysis?.entity_id
+    activeAnalysis?.type === 'issue' && activeAnalysis?.entity_id
       ? parseInt(activeAnalysis.entity_id, 10)
-      : viewingAnalysis?.entity_id
+      : viewingAnalysis?.type === 'issue' && viewingAnalysis?.entity_id
         ? parseInt(viewingAnalysis.entity_id, 10)
         : hasPendingIssue
-          ? pendingContext.issueNumber
+          ? pendingIssueContext.issueNumber
           : null
   );
+
+  // Determine the PR number to display - prefer user selection, fallback to analysis context
+  const activePRNumber = selectedPR ?? (
+    activeAnalysis?.type === 'pr' && activeAnalysis?.entity_id
+      ? parseInt(activeAnalysis.entity_id, 10)
+      : viewingAnalysis?.type === 'pr' && viewingAnalysis?.entity_id
+        ? parseInt(viewingAnalysis.entity_id, 10)
+        : hasPendingPR
+          ? pendingPRContext.prNumber
+          : null
+  );
+
+  // Show side-by-side when we have sessions AND any issue/PR context
+  // This keeps the session panel always visible when sessions exist
+  const hasIssueContext = !!activeIssueNumber;
+  const hasPRContext = !!activePRNumber;
+
+  // Show side-by-side if we have sessions and any issue/PR selected
+  const showSideBySide = sessions.length > 0 && (hasIssueContext || hasPRContext);
+
+  // Determine which context to show in side-by-side (issue vs PR)
+  // Prioritize user's explicit selection over analysis context
+  const showIssueSideBySide = selectedIssue ? true : (hasIssueContext && !hasPRContext);
+  const showPRSideBySide = selectedPR ? true : (!selectedIssue && hasPRContext);
+
+  // Find the active PR data (for side-by-side with terminal/transcript)
+  const activePR = activePRNumber ? prs.find(p => p.number === activePRNumber) : null;
+
+  // Find the selected PR data (for standalone PR detail view)
+  const selectedPRData = selectedPR ? prs.find(p => p.number === selectedPR) : null;
+
+  // Get related entity from current analysis (for "show related" button)
+  const currentAnalysis = activeAnalysis || viewingAnalysis;
+  const relatedEntity = currentAnalysis?.entity_id ? {
+    type: currentAnalysis.type as 'issue' | 'pr',
+    number: parseInt(currentAnalysis.entity_id, 10),
+  } : null;
+
+  // Handler to show related issue/PR
+  const handleShowRelated = () => {
+    if (!relatedEntity) return;
+    if (relatedEntity.type === 'issue') {
+      setSelectedIssue(relatedEntity.number);
+      setSelectedPR(null);
+    } else if (relatedEntity.type === 'pr') {
+      setSelectedPR(relatedEntity.number);
+      setSelectedIssue(null);
+    }
+  };
 
   return (
     <div className="h-screen flex flex-col bg-[#0d1117] text-white">
@@ -369,19 +475,41 @@ export default function App() {
 
           {/* Tabs */}
           <div className="flex border-b border-gray-700">
-            {(['issues', 'prs', 'analyses'] as Tab[]).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`flex-1 px-4 py-2 text-sm capitalize focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset ${
-                  activeTab === tab
-                    ? 'text-white border-b-2 border-blue-500'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
+            {(['issues', 'prs', 'analyses'] as Tab[]).map((tab) => {
+              // Get count for each tab
+              const count = tab === 'issues' ? issuesTotal
+                : tab === 'prs' ? prs.length
+                : analysesTotal;
+              const hasRunning = tab === 'analyses' && analyses.some(a =>
+                a.status === 'running' && sessions.some(s => s.id === a.session_id)
+              );
+
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`flex-1 px-4 py-2 text-sm capitalize focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset flex items-center justify-center gap-1.5 ${
+                    activeTab === tab
+                      ? 'text-white border-b-2 border-blue-500'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {tab}
+                  {selectedRepo && count > 0 && (
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center ${
+                      activeTab === tab
+                        ? hasRunning ? 'bg-yellow-500/20 text-yellow-400' : 'bg-blue-500/20 text-blue-400'
+                        : hasRunning ? 'bg-yellow-500/20 text-yellow-400' : 'bg-gray-700 text-gray-400'
+                    }`}>
+                      {hasRunning && (
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse mr-1" />
+                      )}
+                      {count > 999 ? '999+' : count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {/* Search (for analyses) */}
@@ -437,7 +565,7 @@ export default function App() {
               <PRList
                 prs={prs}
                 selectedPR={selectedPR}
-                onSelectPR={setSelectedPR}
+                onSelectPR={handleSelectPR}
                 onAnalyzePR={handleAnalyzePR}
                 loading={prsLoading}
                 stateFilter={prStateFilter}
@@ -456,24 +584,12 @@ export default function App() {
 
         {/* Main content */}
         <Panel minSize="400px" className="flex flex-col min-w-0">
-          {/* Session tabs */}
-          {sessions.length > 0 && (
-            <SessionTabs
-              sessions={sessions}
-              activeSession={activeSessionId}
-              onSelectSession={setActiveSessionId}
-              onCloseSession={killSession}
-              onNewSession={handleNewSession}
-              analyses={analyses}
-            />
-          )}
-
           {/* Content area */}
           <div className="flex-1 flex min-h-0">
-            {/* Side-by-side view: Issue + Terminal */}
+            {/* Side-by-side view: Issue/PR + Terminal */}
             {showSideBySide && selectedRepo && (
               <Group orientation="horizontal" className="flex-1">
-                {/* Collapsible issue panel */}
+                {/* Collapsible context panel (issue or PR) */}
                 <Panel
                   defaultSize="400px"
                   minSize="40px"
@@ -486,7 +602,7 @@ export default function App() {
                     <button
                       onClick={() => setIssuePanelCollapsed(false)}
                       className="h-full w-full flex items-center justify-center hover:bg-gray-800 text-gray-400 hover:text-white"
-                      title="Show issue details"
+                      title={showIssueSideBySide ? "Show issue details" : "Show PR details"}
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -495,7 +611,9 @@ export default function App() {
                   ) : (
                     <>
                       <div className="flex items-center justify-between p-2 border-b border-gray-700 bg-gray-800/50">
-                        <span className="text-sm font-medium text-gray-300">Issue Context</span>
+                        <span className="text-sm font-medium text-gray-300">
+                          {showIssueSideBySide ? 'Issue Context' : 'PR Context'}
+                        </span>
                         <button
                           onClick={() => setIssuePanelCollapsed(true)}
                           className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white"
@@ -507,7 +625,7 @@ export default function App() {
                         </button>
                       </div>
                       <div className="flex-1 overflow-auto">
-                        {activeIssueNumber && (
+                        {showIssueSideBySide && activeIssueNumber && (
                           <IssueDetail
                             repoId={selectedRepo.id}
                             issueNumber={activeIssueNumber}
@@ -529,33 +647,73 @@ export default function App() {
                             onCreateTag={createTag}
                           />
                         )}
+                        {showPRSideBySide && activePR && (
+                          <PRDetail
+                            pr={activePR}
+                            onAnalyze={(analysisType) => handleAnalyzePR(activePR, analysisType)}
+                            analyses={analyses}
+                            sessions={sessions}
+                            onSelectAnalysis={handleSelectAnalysis}
+                            onDeleteAnalysis={handleDeleteAnalysis}
+                          />
+                        )}
                       </div>
                     </>
                   )}
                 </Panel>
                 <ResizeHandle />
-                <Panel minSize="300px" className="p-2">
-                  {activeSessionId ? (
-                    <Terminal
-                      sessionId={activeSessionId}
-                      onClose={() => {
-                        killSession(activeSessionId);
-                        setActiveSessionId(null);
-                      }}
+                <Panel minSize="300px" className="flex flex-col">
+                  {/* Session tabs */}
+                  {sessions.length > 0 && (
+                    <SessionTabs
+                      sessions={sessions}
+                      activeSession={activeSessionId}
+                      onSelectSession={setActiveSessionId}
+                      onCloseSession={killSession}
+                      onNewSession={handleNewSession}
+                      analyses={analyses}
                     />
-                  ) : viewingAnalysis ? (
-                    <TranscriptPanel
-                      analysis={viewingAnalysis}
-                      onContinue={viewingAnalysis.claude_session_id ? () => handleContinueAnalysis(viewingAnalysis) : undefined}
-                      onClose={() => setViewingAnalysisId(null)}
-                    />
-                  ) : null}
+                  )}
+                  <div className="flex-1 min-h-0 p-2">
+                    {activeSessionId ? (
+                      <Terminal
+                        sessionId={activeSessionId}
+                        onClose={() => {
+                          killSession(activeSessionId);
+                          setActiveSessionId(null);
+                        }}
+                        relatedEntity={relatedEntity && (
+                          (relatedEntity.type === 'issue' && selectedIssue !== relatedEntity.number) ||
+                          (relatedEntity.type === 'pr' && selectedPR !== relatedEntity.number)
+                        ) ? relatedEntity : null}
+                        onShowRelated={handleShowRelated}
+                      />
+                    ) : viewingAnalysis ? (
+                      <TranscriptPanel
+                        analysis={viewingAnalysis}
+                        onContinue={viewingAnalysis.claude_session_id ? () => handleContinueAnalysis(viewingAnalysis) : undefined}
+                        onClose={() => setViewingAnalysisId(null)}
+                        relatedEntity={relatedEntity && (
+                          (relatedEntity.type === 'issue' && selectedIssue !== relatedEntity.number) ||
+                          (relatedEntity.type === 'pr' && selectedPR !== relatedEntity.number)
+                        ) ? relatedEntity : null}
+                        onShowRelated={handleShowRelated}
+                      />
+                    ) : (
+                      <div className="h-full flex items-center justify-center">
+                        <div className="text-center text-gray-500">
+                          <p className="text-sm">Select a session above</p>
+                          <p className="text-xs mt-1">or click a tab to view</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </Panel>
               </Group>
             )}
 
-            {/* Issue detail panel only (when issue selected but no terminal/transcript) */}
-            {selectedIssue && selectedRepo && !activeSessionId && !viewingAnalysis && (
+            {/* Issue detail panel only (when issue selected but no sessions) */}
+            {selectedIssue && selectedRepo && !showSideBySide && !selectedPR && (
               <div className="flex-1 border-r border-gray-700 overflow-auto">
                 <IssueDetail
                   repoId={selectedRepo.id}
@@ -580,38 +738,72 @@ export default function App() {
               </div>
             )}
 
-            {/* Terminal only (for non-issue sessions) */}
-            {activeSessionId && !showSideBySide && (
-              <div className="flex-1 p-2">
-                <Terminal
-                  sessionId={activeSessionId}
-                  onClose={() => {
-                    killSession(activeSessionId);
-                    setActiveSessionId(null);
-                  }}
+            {/* PR detail panel only (when PR selected but no sessions) */}
+            {selectedPRData && selectedRepo && !showSideBySide && (
+              <div className="flex-1 border-r border-gray-700 overflow-auto">
+                <PRDetail
+                  pr={selectedPRData}
+                  onAnalyze={(analysisType) => handleAnalyzePR(selectedPRData, analysisType)}
+                  analyses={analyses}
+                  sessions={sessions}
+                  onSelectAnalysis={handleSelectAnalysis}
+                  onDeleteAnalysis={handleDeleteAnalysis}
                 />
               </div>
             )}
 
-            {/* Transcript only (for non-issue completed analyses) */}
-            {viewingAnalysis && !showSideBySide && (
-              <div className="flex-1 p-2">
-                <TranscriptPanel
-                  analysis={viewingAnalysis}
-                  onContinue={viewingAnalysis.claude_session_id ? () => handleContinueAnalysis(viewingAnalysis) : undefined}
-                  onClose={() => setViewingAnalysisId(null)}
+            {/* Sessions panel (no issue/PR context but sessions exist) */}
+            {sessions.length > 0 && !hasIssueContext && !hasPRContext && (
+              <div className="flex-1 flex flex-col">
+                <SessionTabs
+                  sessions={sessions}
+                  activeSession={activeSessionId}
+                  onSelectSession={setActiveSessionId}
+                  onCloseSession={killSession}
+                  onNewSession={handleNewSession}
+                  analyses={analyses}
                 />
+                <div className="flex-1 min-h-0 p-2">
+                  {activeSessionId ? (
+                    <Terminal
+                      sessionId={activeSessionId}
+                      onClose={() => {
+                        killSession(activeSessionId);
+                        setActiveSessionId(null);
+                      }}
+                      relatedEntity={relatedEntity}
+                      onShowRelated={handleShowRelated}
+                    />
+                  ) : viewingAnalysis ? (
+                    <TranscriptPanel
+                      analysis={viewingAnalysis}
+                      onContinue={viewingAnalysis.claude_session_id ? () => handleContinueAnalysis(viewingAnalysis) : undefined}
+                      onClose={() => setViewingAnalysisId(null)}
+                      relatedEntity={relatedEntity}
+                      onShowRelated={handleShowRelated}
+                    />
+                  ) : (
+                    <div className="h-full flex items-center justify-center">
+                      <div className="text-center text-gray-500">
+                        <p className="text-sm">Select a session above</p>
+                        <p className="text-xs mt-1">or select an issue/PR from the sidebar</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
-            {/* Empty state */}
-            {!selectedIssue && !activeSessionId && !viewingAnalysis && (
-              <div className="flex-1 flex items-center justify-center">
-                <div className="text-center p-8">
-                  <svg className="w-16 h-16 text-gray-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
-                  </svg>
-                  <p className="text-gray-400 font-medium mb-2">Select an issue to view details</p>
+            {/* Empty state (no sessions and no issue/PR selected) */}
+            {sessions.length === 0 && !selectedIssue && !selectedPR && (
+              <div className="flex-1 flex items-center justify-center p-8">
+                <div className="text-center p-8 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-sm">
+                  <div className="w-16 h-16 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-5">
+                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+                    </svg>
+                  </div>
+                  <p className="text-gray-300 font-medium mb-2">Select an issue or PR to view details</p>
                   <p className="text-gray-500 text-sm">or click "Analyze" to start a Claude Code session</p>
                 </div>
               </div>
