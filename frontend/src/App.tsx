@@ -311,6 +311,9 @@ export default function App() {
       {/* Settings Modal */}
       <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
+      {/* Keyboard Shortcuts Modal */}
+      <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+
       <div className="flex-1 flex min-h-0">
         {/* Left sidebar */}
         <aside className="w-80 border-r border-gray-700 flex flex-col bg-[#0d1117]">
