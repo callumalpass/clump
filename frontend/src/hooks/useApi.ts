@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Repo, Issue, IssueDetail, PR, Session, Analysis, ClaudeCodeSettings, SessionCreateOptions, Tag, IssueTagsMap } from '../types';
+import type { Repo, Issue, IssueDetail, PR, Session, Analysis, ClaudeCodeSettings, SessionCreateOptions, Tag, IssueTagsMap, TranscriptResponse } from '../types';
 
 const API_BASE = '/api';
 
@@ -256,7 +256,9 @@ export function useSessions() {
 }
 
 // Analyses
-export function useAnalyses(repoId?: number, search?: string) {
+export type AnalysisStatusFilter = 'all' | 'running' | 'completed' | 'failed';
+
+export function useAnalyses(repoId?: number, search?: string, statusFilter?: AnalysisStatusFilter) {
   const [analyses, setAnalyses] = useState<Analysis[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -267,6 +269,7 @@ export function useAnalyses(repoId?: number, search?: string) {
       const params = new URLSearchParams();
       if (repoId) params.set('repo_id', repoId.toString());
       if (search) params.set('search', search);
+      if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter);
 
       const data = await fetchJson<{ analyses: Analysis[]; total: number }>(
         `${API_BASE}/analyses?${params}`
@@ -278,7 +281,7 @@ export function useAnalyses(repoId?: number, search?: string) {
     } finally {
       setLoading(false);
     }
-  }, [repoId, search]);
+  }, [repoId, search, statusFilter]);
 
   useEffect(() => {
     refresh();
@@ -479,4 +482,9 @@ export function useIssueTags(repoId: number | null) {
   };
 
   return { issueTagsMap, loading, refresh, addTagToIssue, removeTagFromIssue };
+}
+
+// Transcripts
+export async function fetchTranscript(analysisId: number): Promise<TranscriptResponse> {
+  return fetchJson<TranscriptResponse>(`${API_BASE}/analyses/${analysisId}/transcript`);
 }

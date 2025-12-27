@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRepos, useIssues, useSessions, useAnalyses, useTags, useIssueTags } from './hooks/useApi';
-import type { IssueFilters } from './hooks/useApi';
+import type { IssueFilters, AnalysisStatusFilter } from './hooks/useApi';
 import { RepoSelector } from './components/RepoSelector';
 import { IssueList } from './components/IssueList';
 import { IssueDetail } from './components/IssueDetail';
@@ -10,6 +10,8 @@ import { AnalysisList } from './components/AnalysisList';
 import { GitHubTokenSetup } from './components/GitHubTokenSetup';
 import { Settings } from './components/Settings';
 import type { Repo, Issue, Analysis } from './types';
+import type { AnalysisTypeConfig } from './constants/analysisTypes';
+import { DEFAULT_ANALYSIS_TYPE } from './constants/analysisTypes';
 
 type Tab = 'issues' | 'prs' | 'analyses';
 
@@ -32,6 +34,7 @@ export default function App() {
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const [issueFilters, setIssueFilters] = useState<IssueFilters>({ state: 'open' });
   const [expandedAnalysisId, setExpandedAnalysisId] = useState<number | null>(null);
+  const [analysisStatusFilter, setAnalysisStatusFilter] = useState<AnalysisStatusFilter>('all');
 
   // Track pending issue context to show side-by-side view immediately
   const pendingIssueContextRef = useRef<PendingIssueContext | null>(null);
@@ -47,9 +50,10 @@ export default function App() {
     goToPage: goToIssuesPage,
   } = useIssues(selectedRepo?.id ?? null, issueFilters);
   const { sessions, createSession, killSession, addSession } = useSessions();
-  const { analyses, loading: analysesLoading, refresh: refreshAnalyses, deleteAnalysis, continueAnalysis } = useAnalyses(
+  const { analyses, loading: analysesLoading, refresh: refreshAnalyses, deleteAnalysis, continueAnalysis, total: analysesTotal } = useAnalyses(
     selectedRepo?.id,
-    searchQuery || undefined
+    searchQuery || undefined,
+    analysisStatusFilter
   );
   const { tags, createTag } = useTags(selectedRepo?.id ?? null);
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
@@ -73,26 +77,21 @@ export default function App() {
   }, [refreshAnalyses]);
 
   const handleAnalyzeIssue = useCallback(
-    async (issue: Issue) => {
+    async (issue: Issue, analysisType: AnalysisTypeConfig = DEFAULT_ANALYSIS_TYPE) => {
       if (!selectedRepo) return;
 
-      const prompt = `Please analyze this GitHub issue and suggest a fix approach:
-
-Issue #${issue.number}: ${issue.title}
-
-${issue.body}
-
-Please:
-1. Identify the root cause
-2. Suggest a fix approach
-3. Identify relevant files that may need to be changed`;
+      const prompt = analysisType.buildPrompt({
+        number: issue.number,
+        title: issue.title,
+        body: issue.body,
+      });
 
       const session = await createSession(
         selectedRepo.id,
         prompt,
         'issue',
         issue.number.toString(),
-        `Issue #${issue.number}: ${issue.title}`
+        `${analysisType.name}: Issue #${issue.number}`
       );
 
       // Store pending context so side-by-side view shows immediately
@@ -354,6 +353,9 @@ Please:
                 onContinueAnalysis={handleContinueAnalysis}
                 onDeleteAnalysis={handleDeleteAnalysis}
                 loading={analysesLoading}
+                statusFilter={analysisStatusFilter}
+                onStatusFilterChange={setAnalysisStatusFilter}
+                total={analysesTotal}
               />
             )}
             {activeTab === 'prs' && (
@@ -418,9 +420,9 @@ Please:
                           <IssueDetail
                             repoId={selectedRepo.id}
                             issueNumber={activeIssueNumber}
-                            onAnalyze={() => {
+                            onAnalyze={(analysisType) => {
                               const issue = issues.find((i) => i.number === activeIssueNumber);
-                              if (issue) handleAnalyzeIssue(issue);
+                              if (issue) handleAnalyzeIssue(issue, analysisType);
                             }}
                             analyses={analyses}
                             sessions={sessions}
@@ -458,9 +460,9 @@ Please:
                 <IssueDetail
                   repoId={selectedRepo.id}
                   issueNumber={selectedIssue}
-                  onAnalyze={() => {
+                  onAnalyze={(analysisType) => {
                     const issue = issues.find((i) => i.number === selectedIssue);
-                    if (issue) handleAnalyzeIssue(issue);
+                    if (issue) handleAnalyzeIssue(issue, analysisType);
                   }}
                   analyses={analyses}
                   sessions={sessions}

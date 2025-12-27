@@ -1,4 +1,5 @@
 import type { Analysis, Session } from '../types';
+import type { AnalysisStatusFilter } from '../hooks/useApi';
 
 interface AnalysisListProps {
   analyses: Analysis[];
@@ -7,31 +8,72 @@ interface AnalysisListProps {
   onContinueAnalysis?: (analysis: Analysis) => void;
   onDeleteAnalysis?: (analysis: Analysis) => void;
   loading: boolean;
+  statusFilter: AnalysisStatusFilter;
+  onStatusFilterChange: (filter: AnalysisStatusFilter) => void;
+  total: number;
 }
 
-export function AnalysisList({ analyses, sessions = [], onSelectAnalysis, onContinueAnalysis, onDeleteAnalysis, loading }: AnalysisListProps) {
+const STATUS_FILTERS: { value: AnalysisStatusFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'running', label: 'Running' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'failed', label: 'Failed' },
+];
+
+export function AnalysisList({ analyses, sessions = [], onSelectAnalysis, onContinueAnalysis, onDeleteAnalysis, loading, statusFilter, onStatusFilterChange, total }: AnalysisListProps) {
+  const filterTabs = (
+    <div className="flex gap-1 p-2 border-b border-gray-700 bg-gray-800/30">
+      {STATUS_FILTERS.map((filter) => (
+        <button
+          key={filter.value}
+          onClick={() => onStatusFilterChange(filter.value)}
+          className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
+            statusFilter === filter.value
+              ? 'bg-blue-600 text-white'
+              : 'text-gray-400 hover:text-white hover:bg-gray-700'
+          }`}
+        >
+          {filter.label}
+        </button>
+      ))}
+      <span className="ml-auto text-xs text-gray-500 self-center pr-1">
+        {total} result{total !== 1 ? 's' : ''}
+      </span>
+    </div>
+  );
+
   if (loading) {
     return (
-      <div className="divide-y divide-gray-700">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="p-3 animate-pulse">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-2 h-2 rounded-full bg-gray-700" />
-              <div className="h-4 w-40 bg-gray-700 rounded" />
+      <div className="flex flex-col flex-1">
+        {filterTabs}
+        <div className="divide-y divide-gray-700">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="p-3 animate-pulse">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-2 h-2 rounded-full bg-gray-700" />
+                <div className="h-4 w-40 bg-gray-700 rounded" />
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-4 w-14 bg-gray-700 rounded" />
+                <div className="h-4 w-8 bg-gray-700 rounded" />
+                <div className="h-4 w-20 bg-gray-700 rounded" />
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="h-4 w-14 bg-gray-700 rounded" />
-              <div className="h-4 w-8 bg-gray-700 rounded" />
-              <div className="h-4 w-20 bg-gray-700 rounded" />
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     );
   }
 
   if (analyses.length === 0) {
-    return <div className="p-4 text-gray-400">No analyses yet</div>;
+    return (
+      <div className="flex flex-col flex-1">
+        {filterTabs}
+        <div className="p-4 text-gray-400">
+          {statusFilter === 'all' ? 'No analyses yet' : `No ${statusFilter} analyses`}
+        </div>
+      </div>
+    );
   }
 
   const handleContinue = (e: React.MouseEvent, analysis: Analysis) => {
@@ -47,8 +89,10 @@ export function AnalysisList({ analyses, sessions = [], onSelectAnalysis, onCont
   };
 
   return (
-    <div className="divide-y divide-gray-700 overflow-auto flex-1">
-      {analyses.map((analysis) => {
+    <div className="flex flex-col flex-1">
+      {filterTabs}
+      <div className="divide-y divide-gray-700 overflow-auto flex-1">
+        {analyses.map((analysis) => {
         // Check if this analysis has an actually running session
         const hasActiveSession = sessions.some(s => s.id === analysis.session_id);
         const isActuallyRunning = analysis.status === 'running' && hasActiveSession;
@@ -110,6 +154,7 @@ export function AnalysisList({ analyses, sessions = [], onSelectAnalysis, onCont
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
