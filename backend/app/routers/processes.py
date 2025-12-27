@@ -20,7 +20,14 @@ from app.database import get_repo_db
 from app.db_helpers import get_repo_or_404
 from app.models import Session, SessionStatus, SessionEntity
 from app.services.session_manager import process_manager
-from app.storage import load_repos, get_repo_by_id
+from app.storage import (
+    load_repos,
+    get_repo_by_id,
+    encode_path,
+    save_session_metadata,
+    SessionMetadata,
+    EntityLink,
+)
 
 router = APIRouter()
 
@@ -111,6 +118,22 @@ async def create_process(data: ProcessCreate):
         # Link process to session
         session.process_id = process.id
         await db.commit()
+
+        # Create sidecar metadata with entity links for transcript-first architecture
+        # This ensures the session is linked to issues/PRs immediately
+        if data.entities and process.claude_session_id:
+            encoded = encode_path(repo["local_path"])
+            metadata = SessionMetadata(
+                session_id=process.claude_session_id,
+                title=data.title,
+                repo_path=repo["local_path"],
+                entities=[
+                    EntityLink(kind=e.kind, number=e.number)
+                    for e in data.entities
+                ],
+                created_at=datetime.utcnow().isoformat(),
+            )
+            save_session_metadata(encoded, process.claude_session_id, metadata)
 
         return ProcessResponse(
             id=process.id,
