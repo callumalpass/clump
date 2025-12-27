@@ -144,7 +144,7 @@ export function PRList({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-gray-400 text-sm">#{pr.number}</span>
-                    <h3 className="text-sm font-medium text-white truncate">
+                    <h3 className="text-sm font-medium text-white truncate" title={pr.title}>
                       {pr.title}
                     </h3>
                     {hasRunning && (

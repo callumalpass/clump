@@ -174,7 +174,7 @@ export function IssueList({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-gray-400 text-sm">#{issue.number}</span>
-                    <h3 className="text-sm font-medium text-white truncate">
+                    <h3 className="text-sm font-medium text-white truncate" title={issue.title}>
                       {issue.title}
                     </h3>
                     {hasRunning && (

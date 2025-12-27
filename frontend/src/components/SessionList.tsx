@@ -174,7 +174,7 @@ export function SessionList({
               )}
 
               {/* Title */}
-              <span className="text-sm font-medium text-white truncate flex-1">
+              <span className="text-sm font-medium text-white truncate flex-1" title={session.title || 'Untitled session'}>
                 {session.title || 'Untitled session'}
               </span>
 
