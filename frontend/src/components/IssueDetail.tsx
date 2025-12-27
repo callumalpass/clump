@@ -3,6 +3,22 @@ import type { IssueDetail as IssueDetailType, Analysis, Tag, Session } from '../
 import { fetchIssue } from '../hooks/useApi';
 import { Markdown } from './Markdown';
 
+// Strip ANSI escape codes from terminal output for clean display
+function stripAnsi(text: string): string {
+  // Matches all ANSI escape sequences including:
+  // - CSI sequences: \x1b[...X (colors, cursor, etc.)
+  // - OSC sequences: \x1b]...X (title, hyperlinks, etc.)
+  // - Other escape sequences
+  return text
+    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '') // CSI sequences
+    .replace(/\x1b\][^\x07]*\x07/g, '')     // OSC sequences (bell terminated)
+    .replace(/\x1b\][^\x1b]*\x1b\\/g, '')   // OSC sequences (ST terminated)
+    .replace(/\x1b[PX^_][^\x1b]*\x1b\\/g, '') // DCS, SOS, PM, APC sequences
+    .replace(/\x1b[@-Z\\-_]/g, '')          // Fe sequences
+    .replace(/\x1b\[[\?]?[0-9;]*[hl]/g, '') // Mode sequences
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, ''); // Other control chars (keep \n, \r, \t)
+}
+
 // Helper to determine contrasting text color for a background
 function getContrastColor(hexColor: string): string {
   const hex = hexColor.replace('#', '');
@@ -441,7 +457,7 @@ export function IssueDetail({
                         <h4 className="text-xs font-medium text-gray-400 uppercase mb-1">Transcript</h4>
                         {analysis.transcript ? (
                           <pre className="text-xs text-gray-300 bg-gray-900 rounded p-3 overflow-auto max-h-96 whitespace-pre-wrap font-mono">
-                            {analysis.transcript}
+                            {stripAnsi(analysis.transcript)}
                           </pre>
                         ) : (
                           <p className="text-sm text-gray-500 italic">No transcript available</p>
