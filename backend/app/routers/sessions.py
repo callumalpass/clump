@@ -3,6 +3,11 @@ Terminal session routes with WebSocket support.
 """
 
 import asyncio
+
+# Default terminal dimensions (standard VT100 size)
+# Used as fallback when client doesn't send resize dimensions
+DEFAULT_TERMINAL_ROWS = 24
+DEFAULT_TERMINAL_COLS = 80
 from datetime import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException
 from pydantic import BaseModel
@@ -215,8 +220,8 @@ async def session_websocket(websocket: WebSocket, session_id: str):
                     await session_manager.write(session_id, message.get("data", ""))
 
                 elif message.get("type") == "resize":
-                    rows = message.get("rows", 24)
-                    cols = message.get("cols", 80)
+                    rows = message.get("rows", DEFAULT_TERMINAL_ROWS)
+                    cols = message.get("cols", DEFAULT_TERMINAL_COLS)
                     await session_manager.resize(session_id, rows, cols)
 
             except WebSocketDisconnect:

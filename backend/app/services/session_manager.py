@@ -13,6 +13,11 @@ Uses Claude Code CLI flags for fine-grained permission control:
 """
 
 import asyncio
+
+# Initial PTY dimensions (larger default for modern displays)
+# Frontend will send actual dimensions once terminal component mounts
+INITIAL_PTY_ROWS = 30
+INITIAL_PTY_COLS = 120
 import os
 import pty
 import signal
@@ -133,9 +138,8 @@ class SessionManager:
             flags = fcntl.fcntl(fd, fcntl.F_GETFL)
             fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
-            # Set initial terminal size - use larger default for modern displays
-            # Will be resized by frontend once terminal mounts
-            self._resize_pty(fd, 30, 120)
+            # Set initial terminal size (frontend will send actual size once mounted)
+            self._resize_pty(fd, INITIAL_PTY_ROWS, INITIAL_PTY_COLS)
 
             session = Session(
                 id=session_id,
