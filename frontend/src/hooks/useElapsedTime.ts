@@ -1,6 +1,18 @@
 import { useState, useEffect } from 'react';
 
 /**
+ * Parse a timestamp string, treating naive ISO strings (without timezone) as UTC.
+ * Backend uses datetime.utcnow() which produces naive datetimes, serialized without 'Z'.
+ */
+function parseAsUtc(timestamp: string): Date {
+  // If the string has no timezone indicator, assume UTC by appending 'Z'
+  if (!/([+-]\d{2}:?\d{2}|Z)$/.test(timestamp)) {
+    return new Date(timestamp + 'Z');
+  }
+  return new Date(timestamp);
+}
+
+/**
  * Hook that returns a formatted elapsed time string that updates every second
  * @param startTime - ISO string or Date object representing start time
  * @param isActive - Whether to actively update the timer (set false for completed sessions)
@@ -15,7 +27,7 @@ export function useElapsedTime(startTime: string | Date | null, isActive: boolea
       return;
     }
 
-    const start = typeof startTime === 'string' ? new Date(startTime) : startTime;
+    const start = typeof startTime === 'string' ? parseAsUtc(startTime) : startTime;
 
     const updateElapsed = () => {
       const now = new Date();
@@ -63,7 +75,7 @@ export function formatDuration(ms: number): string {
  * Calculate duration between two times (for completed sessions)
  */
 export function calculateDuration(startTime: string | Date, endTime: string | Date): string {
-  const start = typeof startTime === 'string' ? new Date(startTime) : startTime;
-  const end = typeof endTime === 'string' ? new Date(endTime) : endTime;
+  const start = typeof startTime === 'string' ? parseAsUtc(startTime) : startTime;
+  const end = typeof endTime === 'string' ? parseAsUtc(endTime) : endTime;
   return formatDuration(end.getTime() - start.getTime());
 }

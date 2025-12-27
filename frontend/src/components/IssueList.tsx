@@ -108,12 +108,16 @@ export function IssueList({
 
       {/* Empty state */}
       {!loading && issues.length === 0 && (
-        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-          <svg className="w-12 h-12 text-gray-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-          </svg>
-          <p className="text-gray-400 font-medium mb-1">No issues found</p>
-          <p className="text-gray-500 text-sm">Try adjusting your filters or check the repository</p>
+        <div className="flex-1 flex flex-col items-center justify-center p-8">
+          <div className="text-center p-6 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-xs">
+            <div className="w-14 h-14 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4">
+              <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            </div>
+            <p className="text-gray-300 font-medium mb-1">No issues found</p>
+            <p className="text-gray-500 text-sm">Try adjusting your filters or check the repository</p>
+          </div>
         </div>
       )}
 

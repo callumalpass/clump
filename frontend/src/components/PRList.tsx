@@ -97,16 +97,20 @@ export function PRList({
     return (
       <div className="flex flex-col flex-1 min-h-0">
         {filterTabs}
-        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-          <svg className="w-12 h-12 text-gray-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-          </svg>
-          <p className="text-gray-400 font-medium mb-1">
-            {stateFilter === 'all' ? 'No pull requests' : `No ${stateFilter} pull requests`}
-          </p>
-          <p className="text-gray-500 text-sm">
-            {stateFilter !== 'all' ? 'Try selecting a different filter' : 'This repository has no PRs yet'}
-          </p>
+        <div className="flex-1 flex flex-col items-center justify-center p-8">
+          <div className="text-center p-6 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-xs">
+            <div className="w-14 h-14 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4">
+              <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+            </div>
+            <p className="text-gray-300 font-medium mb-1">
+              {stateFilter === 'all' ? 'No pull requests' : `No ${stateFilter} pull requests`}
+            </p>
+            <p className="text-gray-500 text-sm">
+              {stateFilter !== 'all' ? 'Try selecting a different filter' : 'This repository has no PRs yet'}
+            </p>
+          </div>
         </div>
       </div>
     );
