@@ -25,6 +25,7 @@ from app.storage import (
     discover_sessions,
     get_session_metadata,
     save_session_metadata,
+    encode_path,
     decode_path,
     match_encoded_path_to_repo,
     SessionMetadata,
@@ -36,6 +37,87 @@ from app.services.transcript_parser import parse_transcript, ParsedTranscript
 from app.services.session_manager import process_manager
 
 router = APIRouter()
+
+
+def _get_pending_sessions(
+    active_session_ids: set[str],
+    discovered_session_ids: set[str],
+    repo_path: Optional[str] = None,
+) -> list[SessionSummaryResponse]:
+    """
+    Get synthetic session summaries for active processes that don't have JSONL files yet.
+
+    These are "pending" sessions - the process has started but Claude hasn't created
+    the transcript file yet. We synthesize a minimal session summary from process info
+    and sidecar metadata.
+    """
+    from app.services.session_manager import process_manager
+    from datetime import datetime
+
+    pending = []
+
+    # Get all processes synchronously (we're called from async context but this is safe)
+    for proc in process_manager.processes.values():
+        session_id = proc.claude_session_id
+        if not session_id:
+            continue
+
+        # Skip if already discovered (has JSONL file)
+        if session_id in discovered_session_ids:
+            continue
+
+        # Skip if not active
+        if session_id not in active_session_ids:
+            continue
+
+        # Filter by repo_path if specified
+        if repo_path:
+            encoded_filter = encode_path(repo_path)
+            encoded_proc = encode_path(proc.working_dir)
+            if encoded_filter != encoded_proc:
+                continue
+
+        # Try to get sidecar metadata (saved immediately on process creation)
+        encoded_path = encode_path(proc.working_dir)
+        metadata = get_session_metadata(encoded_path, session_id)
+
+        # Build entities list from metadata
+        entities = []
+        title = None
+        starred = False
+        tags = []
+
+        if metadata:
+            entities = [
+                EntityLinkResponse(kind=e.kind, number=e.number)
+                for e in metadata.entities
+            ]
+            title = metadata.title
+            starred = metadata.starred
+            tags = metadata.tags
+
+        # Get repo name if possible
+        repo_name = _get_repo_name(encoded_path)
+
+        pending.append(SessionSummaryResponse(
+            session_id=session_id,
+            encoded_path=encoded_path,
+            repo_path=proc.working_dir,
+            repo_name=repo_name,
+            title=title or "Starting...",
+            model=proc.model or None,
+            start_time=proc.created_at.isoformat(),
+            end_time=None,
+            message_count=0,
+            modified_at=datetime.utcnow().isoformat(),
+            file_size=0,
+            entities=entities,
+            tags=tags,
+            starred=starred,
+            is_active=True,
+        ))
+
+    return pending
 
 
 def _get_repo_name(encoded_path: str) -> Optional[str]:
@@ -262,6 +344,9 @@ async def list_sessions(
     List all discovered sessions.
 
     Sessions are discovered from Claude's ~/.claude/projects/ directory.
+    Also includes "pending" sessions from active processes that don't have
+    transcript files yet (Claude is still starting up).
+
     Optional filtering by repo path, starred status, or search term.
     """
     sessions = discover_sessions(repo_path=repo_path)
@@ -274,8 +359,18 @@ async def list_sessions(
         if proc.claude_session_id
     }
 
+    # Track which sessions we've discovered (have JSONL files)
+    discovered_session_ids = {s.session_id for s in sessions}
+
     # Convert to summaries
     summaries = [_session_to_summary(s, active_session_ids) for s in sessions]
+
+    # Add pending sessions (active processes without JSONL files yet)
+    pending = _get_pending_sessions(active_session_ids, discovered_session_ids, repo_path)
+    summaries.extend(pending)
+
+    # Re-sort by modified_at (pending sessions are at the top since they're newest)
+    summaries.sort(key=lambda s: s.modified_at or "", reverse=True)
 
     # Apply filters
     if starred is not None:
@@ -314,6 +409,7 @@ async def get_session(session_id: str):
     Get full session detail with transcript.
 
     The session_id is the UUID from the JSONL filename.
+    For pending sessions (no JSONL file yet), returns minimal data from process info.
     """
     # Find the session by scanning all projects
     sessions = discover_sessions()
@@ -323,8 +419,61 @@ async def get_session(session_id: str):
             session = s
             break
 
+    # Check if this is an active process
+    active_processes = await process_manager.list_processes()
+    active_process = None
+    for proc in active_processes:
+        if proc.claude_session_id == session_id:
+            active_process = proc
+            break
+
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        # No JSONL file - check if this is a pending session from an active process
+        if not active_process:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # This is a pending session - return minimal data from process
+        encoded_path = encode_path(active_process.working_dir)
+        metadata = get_session_metadata(encoded_path, session_id)
+
+        # Build minimal response for pending session
+        meta_response = SessionMetadataResponse(session_id=session_id)
+        if metadata:
+            meta_response = SessionMetadataResponse(
+                session_id=session_id,
+                title=metadata.title,
+                summary=metadata.summary,
+                repo_path=metadata.repo_path,
+                entities=[
+                    EntityLinkResponse(kind=e.kind, number=e.number)
+                    for e in metadata.entities
+                ],
+                tags=metadata.tags,
+                starred=metadata.starred,
+                created_at=metadata.created_at,
+            )
+
+        repo_name = _get_repo_name(encoded_path)
+
+        return SessionDetailResponse(
+            session_id=session_id,
+            encoded_path=encoded_path,
+            repo_path=active_process.working_dir,
+            repo_name=repo_name,
+            messages=[],  # No messages yet
+            summary=None,
+            model=active_process.model or None,
+            total_input_tokens=0,
+            total_output_tokens=0,
+            total_cache_read_tokens=0,
+            total_cache_creation_tokens=0,
+            start_time=active_process.created_at.isoformat(),
+            end_time=None,
+            claude_code_version=None,
+            git_branch=None,
+            metadata=meta_response,
+            is_active=True,
+        )
 
     # Parse the full transcript
     repo_path = decode_path(session.encoded_path)
@@ -333,12 +482,7 @@ async def get_session(session_id: str):
     if not parsed:
         raise HTTPException(status_code=500, detail="Failed to parse transcript")
 
-    # Check if active
-    active_processes = await process_manager.list_processes()
-    is_active = any(
-        proc.claude_session_id == session_id
-        for proc in active_processes
-    )
+    is_active = active_process is not None
 
     return _parsed_to_detail(
         session_id=session_id,
