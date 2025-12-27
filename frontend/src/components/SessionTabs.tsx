@@ -69,9 +69,13 @@ export function SessionTabs({
             aria-selected={activeSessionId === session.session_id}
           >
             {/* Status indicator */}
-            <span className={`w-2 h-2 rounded-full shrink-0 ${
-              isRunning ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'
-            }`} />
+            <span
+              className={`w-2 h-2 rounded-full shrink-0 ${
+                isRunning ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'
+              }`}
+              title={isRunning ? 'Session is running' : 'Session completed'}
+              aria-label={isRunning ? 'Running' : 'Completed'}
+            />
             {/* Entity badges - show linked issues/PRs */}
             {session.entities && session.entities.length > 0 && (
               <span className="flex items-center gap-0.5 shrink-0">
