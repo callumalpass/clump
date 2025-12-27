@@ -237,7 +237,7 @@ export function IssueCreateView({ repoId, onCancel, onCreated }: IssueCreateView
         <button
           onClick={onCancel}
           disabled={submitting}
-          className="px-4 py-2 text-gray-300 hover:text-white transition-colors disabled:opacity-50"
+          className="px-4 py-2 text-gray-300 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Cancel
         </button>

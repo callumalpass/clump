@@ -211,7 +211,7 @@ export function IssueDetail({
               <button
                 onClick={handleCloseIssue}
                 disabled={issueActionLoading}
-                className="px-2 py-0.5 text-xs rounded bg-red-900/50 text-red-300 hover:bg-red-900/70 disabled:opacity-50 transition-colors"
+                className="px-2 py-0.5 text-xs rounded bg-red-900/50 text-red-300 hover:bg-red-900/70 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {issueActionLoading ? 'Closing...' : 'Close Issue'}
               </button>
@@ -219,7 +219,7 @@ export function IssueDetail({
               <button
                 onClick={handleReopenIssue}
                 disabled={issueActionLoading}
-                className="px-2 py-0.5 text-xs rounded bg-green-900/50 text-green-300 hover:bg-green-900/70 disabled:opacity-50 transition-colors"
+                className="px-2 py-0.5 text-xs rounded bg-green-900/50 text-green-300 hover:bg-green-900/70 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {issueActionLoading ? 'Reopening...' : 'Reopen Issue'}
               </button>

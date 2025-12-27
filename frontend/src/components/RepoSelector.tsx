@@ -68,7 +68,7 @@ export function RepoSelector({
             placeholder="Local path (e.g., ~/projects/my-repo)"
             value={localPath}
             onChange={(e) => setLocalPath(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             required
             disabled={isLoading}
           />

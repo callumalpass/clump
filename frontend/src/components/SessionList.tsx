@@ -59,7 +59,7 @@ export function SessionList({
           <button
             onClick={onRefresh}
             disabled={loading}
-            className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500"
             title="Refresh sessions"
           >
             <svg
