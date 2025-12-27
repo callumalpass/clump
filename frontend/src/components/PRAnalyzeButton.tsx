@@ -66,9 +66,14 @@ export function PRAnalyzeButton({ pr, onAnalyze, size = 'md', className = '' }: 
       </button>
 
       {/* Dropdown menu */}
-      {showDropdown && (
-        <div className="absolute right-0 top-full mt-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-20">
-          {PR_ANALYSIS_TYPES.map((type) => (
+      <div
+        className={`absolute right-0 top-full mt-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-20 transition-all duration-150 origin-top-right ${
+          showDropdown
+            ? 'opacity-100 scale-100'
+            : 'opacity-0 scale-95 pointer-events-none'
+        }`}
+      >
+        {PR_ANALYSIS_TYPES.map((type) => (
             <button
               key={type.id}
               onClick={(e) => {
@@ -89,9 +94,8 @@ export function PRAnalyzeButton({ pr, onAnalyze, size = 'md', className = '' }: 
               </div>
               <p className="text-xs text-gray-400 mt-0.5">{type.description}</p>
             </button>
-          ))}
-        </div>
-      )}
+        ))}
+      </div>
     </div>
   );
 }
