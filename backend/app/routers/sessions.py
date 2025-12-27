@@ -41,6 +41,11 @@ from app.services.session_manager import process_manager
 router = APIRouter()
 
 
+def _entities_to_response(entities: list[EntityLink]) -> list[EntityLinkResponse]:
+    """Convert a list of EntityLink to EntityLinkResponse objects."""
+    return [EntityLinkResponse(kind=e.kind, number=e.number) for e in entities]
+
+
 def _get_pending_sessions(
     active_session_ids: set[str],
     discovered_session_ids: set[str],
@@ -90,10 +95,7 @@ def _get_pending_sessions(
         tags = []
 
         if metadata:
-            entities = [
-                EntityLinkResponse(kind=e.kind, number=e.number)
-                for e in metadata.entities
-            ]
+            entities = _entities_to_response(metadata.entities)
             title = metadata.title
             starred = metadata.starred
             tags = metadata.tags
@@ -228,10 +230,7 @@ def _session_to_summary(
     tags = []
     starred = False
     if session.metadata:
-        entities = [
-            EntityLinkResponse(kind=e.kind, number=e.number)
-            for e in session.metadata.entities
-        ]
+        entities = _entities_to_response(session.metadata.entities)
         tags = session.metadata.tags
         starred = session.metadata.starred
         # Use metadata title if available
@@ -306,10 +305,7 @@ def _parsed_to_detail(
             title=metadata.title,
             summary=metadata.summary,
             repo_path=metadata.repo_path,
-            entities=[
-                EntityLinkResponse(kind=e.kind, number=e.number)
-                for e in metadata.entities
-            ],
+            entities=_entities_to_response(metadata.entities),
             tags=metadata.tags,
             starred=metadata.starred,
             created_at=metadata.created_at,
@@ -450,10 +446,7 @@ async def get_session(session_id: str):
                 title=metadata.title,
                 summary=metadata.summary,
                 repo_path=metadata.repo_path,
-                entities=[
-                    EntityLinkResponse(kind=e.kind, number=e.number)
-                    for e in metadata.entities
-                ],
+                entities=_entities_to_response(metadata.entities),
                 tags=metadata.tags,
                 starred=metadata.starred,
                 created_at=metadata.created_at,
@@ -618,10 +611,7 @@ async def update_session_metadata(session_id: str, data: SessionMetadataUpdate):
         title=metadata.title,
         summary=metadata.summary,
         repo_path=metadata.repo_path,
-        entities=[
-            EntityLinkResponse(kind=e.kind, number=e.number)
-            for e in metadata.entities
-        ],
+        entities=_entities_to_response(metadata.entities),
         tags=metadata.tags,
         starred=metadata.starred,
         created_at=metadata.created_at,
