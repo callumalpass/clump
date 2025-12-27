@@ -99,13 +99,20 @@ function formatTranscriptAsText(transcript: ParsedTranscript, analysis: Analysis
   return lines.join('\n');
 }
 
+interface RelatedEntity {
+  type: 'issue' | 'pr';
+  number: number;
+}
+
 interface TranscriptPanelProps {
   analysis: Analysis;
   onContinue?: () => void;
   onClose: () => void;
+  relatedEntity?: RelatedEntity | null;
+  onShowRelated?: () => void;
 }
 
-export function TranscriptPanel({ analysis, onContinue, onClose }: TranscriptPanelProps) {
+export function TranscriptPanel({ analysis, onContinue, onClose, relatedEntity, onShowRelated }: TranscriptPanelProps) {
   const [transcript, setTranscript] = useState<TranscriptResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -271,6 +278,17 @@ export function TranscriptPanel({ analysis, onContinue, onClose }: TranscriptPan
         <div className="flex items-center gap-3 min-w-0">
           <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
           <h3 className="text-sm font-medium text-white truncate">{analysis.title}</h3>
+          {relatedEntity && onShowRelated && (
+            <>
+              <span className="text-sm text-gray-500">|</span>
+              <button
+                onClick={onShowRelated}
+                className="text-sm text-blue-400 hover:text-blue-300 transition-colors shrink-0"
+              >
+                {relatedEntity.type === 'issue' ? 'Issue' : 'PR'} #{relatedEntity.number}
+              </button>
+            </>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {/* Search toggle button */}
@@ -455,13 +473,67 @@ export function TranscriptPanel({ analysis, onContinue, onClose }: TranscriptPan
       {/* Content */}
       <div className="flex-1 overflow-auto">
         {loading && (
-          <div className="flex items-center justify-center h-full">
-            <div className="flex items-center gap-2 text-gray-400">
-              <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              Loading transcript...
+          <div className="p-4">
+            {/* Stats bar skeleton */}
+            <div className="bg-gray-850 border-b border-gray-700 px-3 py-2 rounded-t-lg mb-4">
+              <div className="flex items-center gap-4">
+                <div className="h-5 w-16 rounded-full skeleton-shimmer" />
+                <div className="h-4 w-24 rounded skeleton-shimmer" />
+                <div className="h-4 w-20 rounded skeleton-shimmer" />
+              </div>
+            </div>
+            {/* Message bubbles skeleton */}
+            <div className="space-y-4">
+              {/* User message */}
+              <div className="flex justify-end">
+                <div className="max-w-[85%] ml-8">
+                  <div className="flex justify-end mb-1">
+                    <div className="h-3 w-16 rounded skeleton-shimmer" />
+                  </div>
+                  <div className="bg-blue-900/30 border border-blue-800/50 rounded-lg px-3 py-2">
+                    <div className="h-4 w-48 rounded skeleton-shimmer mb-2" />
+                    <div className="h-4 w-32 rounded skeleton-shimmer" />
+                  </div>
+                </div>
+              </div>
+              {/* Assistant message */}
+              <div className="flex justify-start">
+                <div className="max-w-[85%] mr-8">
+                  <div className="flex justify-start mb-1">
+                    <div className="h-3 w-20 rounded skeleton-shimmer" />
+                  </div>
+                  <div className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
+                    <div className="h-4 w-full rounded skeleton-shimmer mb-2" />
+                    <div className="h-4 w-5/6 rounded skeleton-shimmer mb-2" />
+                    <div className="h-4 w-4/6 rounded skeleton-shimmer mb-2" />
+                    <div className="h-4 w-3/4 rounded skeleton-shimmer" />
+                  </div>
+                </div>
+              </div>
+              {/* Another user message */}
+              <div className="flex justify-end">
+                <div className="max-w-[85%] ml-8">
+                  <div className="flex justify-end mb-1">
+                    <div className="h-3 w-16 rounded skeleton-shimmer" />
+                  </div>
+                  <div className="bg-blue-900/30 border border-blue-800/50 rounded-lg px-3 py-2">
+                    <div className="h-4 w-36 rounded skeleton-shimmer" />
+                  </div>
+                </div>
+              </div>
+              {/* Another assistant message */}
+              <div className="flex justify-start">
+                <div className="max-w-[85%] mr-8">
+                  <div className="flex justify-start mb-1">
+                    <div className="h-3 w-20 rounded skeleton-shimmer" />
+                  </div>
+                  <div className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
+                    <div className="h-4 w-full rounded skeleton-shimmer mb-2" />
+                    <div className="h-4 w-5/6 rounded skeleton-shimmer mb-2" />
+                    <div className="h-4 w-2/3 rounded skeleton-shimmer" />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
