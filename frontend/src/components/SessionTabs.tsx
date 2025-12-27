@@ -109,7 +109,7 @@ export function SessionTabs({
                 e.stopPropagation();
                 onCloseSession(session.session_id);
               }}
-              className="ml-1 p-0.5 rounded text-gray-500 opacity-0 group-hover:opacity-70 hover:!opacity-100 hover:bg-red-500/10 hover:text-red-400 focus:opacity-100 focus:outline-none focus:ring-1 focus:ring-red-400/50 transition-opacity duration-150"
+              className="ml-1 p-0.5 rounded text-gray-600 group-hover:text-gray-400 hover:!bg-red-500/10 hover:!text-red-400 focus:outline-none focus:ring-1 focus:ring-red-400/50 transition-colors duration-150"
               title="Close tab"
               aria-label={`Close ${session.title || 'session'}`}
             >

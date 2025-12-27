@@ -185,7 +185,7 @@ export function SessionList({
                   className={`flex-shrink-0 p-1 transition-colors rounded focus:outline-none focus:ring-2 focus:ring-yellow-400 ${
                     session.starred
                       ? 'text-yellow-400'
-                      : 'text-gray-500 opacity-0 group-hover:opacity-70 hover:!opacity-100 hover:text-yellow-400'
+                      : 'text-gray-600 group-hover:text-gray-400 hover:!text-yellow-400'
                   }`}
                   title={session.starred ? 'Unstar' : 'Star'}
                 >
