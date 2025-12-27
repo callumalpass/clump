@@ -116,12 +116,17 @@ body {
 
 /* List item hover lift effect */
 .list-item-hover {
-  transition: transform 150ms ease-out, box-shadow 150ms ease-out;
+  transition: transform 150ms ease-out, box-shadow 150ms ease-out, background-color 150ms ease-out;
 }
 
 .list-item-hover:hover {
   transform: translateX(2px);
-  box-shadow: -2px 0 8px rgba(59, 130, 246, 0.15);
+  box-shadow: -2px 0 12px rgba(59, 130, 246, 0.2), 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Selected list item enhanced state */
+.list-item-selected {
+  box-shadow: -3px 0 16px rgba(59, 130, 246, 0.25), 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 /* Enhanced select element styling */

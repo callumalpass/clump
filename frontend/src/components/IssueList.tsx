@@ -165,7 +165,7 @@ export function IssueList({
               key={issue.number}
               className={`p-3 cursor-pointer border-l-2 transition-all duration-150 ease-out list-item-hover ${
                 selectedIssue === issue.number
-                  ? 'bg-gray-800/80 border-blue-500'
+                  ? 'bg-gray-800/80 border-blue-500 list-item-selected'
                   : 'border-transparent hover:bg-gray-800/60 hover:border-blue-500/50'
               }`}
               onClick={() => onSelectIssue(issue.number)}

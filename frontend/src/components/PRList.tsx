@@ -135,7 +135,7 @@ export function PRList({
               key={pr.number}
               className={`p-3 cursor-pointer border-l-2 transition-all duration-150 ease-out list-item-hover ${
                 selectedPR === pr.number
-                  ? 'bg-gray-800/80 border-blue-500'
+                  ? 'bg-gray-800/80 border-blue-500 list-item-selected'
                   : 'border-transparent hover:bg-gray-800/60 hover:border-blue-500/50'
               }`}
               onClick={() => onSelectPR(pr.number)}
