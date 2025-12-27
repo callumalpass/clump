@@ -188,6 +188,240 @@ function countLines(str: string): number {
   return str.split('\n').length;
 }
 
+// Types for intelligent diffing
+type DiffSegment = { type: 'equal' | 'insert' | 'delete'; text: string };
+type DiffLine =
+  | { type: 'unchanged'; line: string }
+  | { type: 'removed'; line: string; segments?: DiffSegment[] }
+  | { type: 'added'; line: string; segments?: DiffSegment[] }
+  | { type: 'modified'; oldLine: string; newLine: string; oldSegments: DiffSegment[]; newSegments: DiffSegment[] };
+
+// Compute character-level LCS for inline diffing
+function computeCharLCS(a: string, b: string): string {
+  const m = a.length;
+  const n = b.length;
+
+  // For very long strings, fall back to simpler comparison
+  if (m * n > 100000) return '';
+
+  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (a[i - 1] === b[j - 1]) {
+        dp[i]![j] = (dp[i - 1]?.[j - 1] ?? 0) + 1;
+      } else {
+        dp[i]![j] = Math.max(dp[i - 1]?.[j] ?? 0, dp[i]?.[j - 1] ?? 0);
+      }
+    }
+  }
+
+  // Backtrack
+  let lcs = '';
+  let i = m, j = n;
+  while (i > 0 && j > 0) {
+    if (a[i - 1] === b[j - 1]) {
+      lcs = a[i - 1] + lcs;
+      i--; j--;
+    } else if ((dp[i - 1]?.[j] ?? 0) > (dp[i]?.[j - 1] ?? 0)) {
+      i--;
+    } else {
+      j--;
+    }
+  }
+  return lcs;
+}
+
+// Compute word-level diff with inline highlights
+function computeInlineDiff(oldStr: string, newStr: string): { oldSegments: DiffSegment[]; newSegments: DiffSegment[] } {
+  // Tokenize into words and whitespace
+  const tokenize = (s: string) => s.match(/\S+|\s+/g) || [];
+  const oldTokens = tokenize(oldStr);
+  const newTokens = tokenize(newStr);
+
+  // LCS on tokens
+  const m = oldTokens.length;
+  const n = newTokens.length;
+  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (oldTokens[i - 1] === newTokens[j - 1]) {
+        dp[i]![j] = (dp[i - 1]?.[j - 1] ?? 0) + 1;
+      } else {
+        dp[i]![j] = Math.max(dp[i - 1]?.[j] ?? 0, dp[i]?.[j - 1] ?? 0);
+      }
+    }
+  }
+
+  // Backtrack to build segments
+  let i = m, j = n;
+  const oldStack: DiffSegment[] = [];
+  const newStack: DiffSegment[] = [];
+
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldTokens[i - 1] === newTokens[j - 1]) {
+      oldStack.push({ type: 'equal', text: oldTokens[i - 1]! });
+      newStack.push({ type: 'equal', text: newTokens[j - 1]! });
+      i--; j--;
+    } else if (j > 0 && (i === 0 || (dp[i]?.[j - 1] ?? 0) >= (dp[i - 1]?.[j] ?? 0))) {
+      newStack.push({ type: 'insert', text: newTokens[j - 1]! });
+      j--;
+    } else if (i > 0) {
+      oldStack.push({ type: 'delete', text: oldTokens[i - 1]! });
+      i--;
+    }
+  }
+
+  // Reverse and merge adjacent same-type segments
+  const merge = (stack: DiffSegment[]): DiffSegment[] => {
+    const result: DiffSegment[] = [];
+    for (let k = stack.length - 1; k >= 0; k--) {
+      const seg = stack[k]!;
+      if (result.length > 0 && result[result.length - 1]!.type === seg.type) {
+        result[result.length - 1]!.text += seg.text;
+      } else {
+        result.push({ ...seg });
+      }
+    }
+    return result;
+  };
+
+  return { oldSegments: merge(oldStack), newSegments: merge(newStack) };
+}
+
+// Calculate similarity ratio between two strings (0-1)
+function similarity(a: string, b: string): number {
+  if (a === b) return 1;
+  if (a.length === 0 || b.length === 0) return 0;
+
+  const lcs = computeCharLCS(a, b);
+  return (2 * lcs.length) / (a.length + b.length);
+}
+
+// Intelligent line-based diff with inline highlighting for modified lines
+function computeLineDiff(oldStr: string, newStr: string): DiffLine[] {
+  const oldLines = oldStr.split('\n');
+  const newLines = newStr.split('\n');
+
+  // Use Myers-like diff algorithm via LCS
+  const m = oldLines.length;
+  const n = newLines.length;
+  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (oldLines[i - 1] === newLines[j - 1]) {
+        dp[i]![j] = (dp[i - 1]?.[j - 1] ?? 0) + 1;
+      } else {
+        dp[i]![j] = Math.max(dp[i - 1]?.[j] ?? 0, dp[i]?.[j - 1] ?? 0);
+      }
+    }
+  }
+
+  // Backtrack to get edit script
+  type Edit = { type: 'keep' | 'delete' | 'insert'; oldIdx?: number; newIdx?: number };
+  const edits: Edit[] = [];
+  let i = m, j = n;
+
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+      edits.push({ type: 'keep', oldIdx: i - 1, newIdx: j - 1 });
+      i--; j--;
+    } else if (j > 0 && (i === 0 || (dp[i]?.[j - 1] ?? 0) >= (dp[i - 1]?.[j] ?? 0))) {
+      edits.push({ type: 'insert', newIdx: j - 1 });
+      j--;
+    } else {
+      edits.push({ type: 'delete', oldIdx: i - 1 });
+      i--;
+    }
+  }
+
+  edits.reverse();
+
+  // Now process edits, looking for delete+insert pairs that should be "modified"
+  const result: DiffLine[] = [];
+  let idx = 0;
+
+  while (idx < edits.length) {
+    const edit = edits[idx]!;
+
+    if (edit.type === 'keep') {
+      result.push({ type: 'unchanged', line: oldLines[edit.oldIdx!]! });
+      idx++;
+    } else if (edit.type === 'delete') {
+      // Look ahead for inserts that might pair with this delete
+      const deletes: number[] = [];
+      while (idx < edits.length && edits[idx]!.type === 'delete') {
+        deletes.push(edits[idx]!.oldIdx!);
+        idx++;
+      }
+
+      const inserts: number[] = [];
+      while (idx < edits.length && edits[idx]!.type === 'insert') {
+        inserts.push(edits[idx]!.newIdx!);
+        idx++;
+      }
+
+      // Try to pair similar deletes and inserts as modifications
+      const pairedDeletes = new Set<number>();
+      const pairedInserts = new Set<number>();
+
+      for (const delIdx of deletes) {
+        let bestMatch = -1;
+        let bestSim = 0.4; // Minimum similarity threshold
+
+        for (const insIdx of inserts) {
+          if (pairedInserts.has(insIdx)) continue;
+          const sim = similarity(oldLines[delIdx]!, newLines[insIdx]!);
+          if (sim > bestSim) {
+            bestSim = sim;
+            bestMatch = insIdx;
+          }
+        }
+
+        if (bestMatch >= 0) {
+          pairedDeletes.add(delIdx);
+          pairedInserts.add(bestMatch);
+
+          const { oldSegments, newSegments } = computeInlineDiff(
+            oldLines[delIdx]!,
+            newLines[bestMatch]!
+          );
+
+          result.push({
+            type: 'modified',
+            oldLine: oldLines[delIdx]!,
+            newLine: newLines[bestMatch]!,
+            oldSegments,
+            newSegments
+          });
+        }
+      }
+
+      // Add unpaired deletes
+      for (const delIdx of deletes) {
+        if (!pairedDeletes.has(delIdx)) {
+          result.push({ type: 'removed', line: oldLines[delIdx]! });
+        }
+      }
+
+      // Add unpaired inserts
+      for (const insIdx of inserts) {
+        if (!pairedInserts.has(insIdx)) {
+          result.push({ type: 'added', line: newLines[insIdx]! });
+        }
+      }
+    } else {
+      // Standalone insert
+      result.push({ type: 'added', line: newLines[edit.newIdx!]! });
+      idx++;
+    }
+  }
+
+  return result;
+}
+
 // ============ EDIT TOOL ============
 function EditToolDisplay({ tool }: ToolDisplayProps) {
   const [expanded, setExpanded] = useState(false);
@@ -206,6 +440,9 @@ function EditToolDisplay({ tool }: ToolDisplayProps) {
   const oldLines = countLines(oldStr);
   const newLines = countLines(newStr);
   const lineDiff = newLines - oldLines;
+
+  // Compute unified diff
+  const diffLines = useMemo(() => computeLineDiff(oldStr, newStr), [oldStr, newStr]);
 
   return (
     <div className="mt-2 text-xs border border-emerald-800/50 rounded bg-gray-800 overflow-hidden">
@@ -249,27 +486,71 @@ function EditToolDisplay({ tool }: ToolDisplayProps) {
             {filePath}
           </div>
 
-          {/* Diff view */}
-          <div className="grid grid-cols-2 divide-x divide-gray-700">
-            {/* Old string */}
-            <div className="min-w-0">
-              <div className="px-2 py-1 bg-red-900/20 text-red-400 text-[10px] font-medium border-b border-gray-700">
-                - Removed
-              </div>
-              <pre className="p-2 text-xs text-red-300/80 whitespace-pre-wrap overflow-auto max-h-60 bg-red-950/10">
-                {oldStr || <span className="text-gray-600 italic">empty</span>}
-              </pre>
-            </div>
+          {/* Unified diff view */}
+          <div className="overflow-auto max-h-80 font-mono text-xs">
+            {diffLines.length === 0 ? (
+              <div className="p-2 text-gray-500 italic">No changes</div>
+            ) : (
+              diffLines.map((diff, idx) => {
+                if (diff.type === 'modified') {
+                  // Render modified line with inline highlights
+                  return (
+                    <div key={idx}>
+                      {/* Old line with deletions highlighted */}
+                      <div className="px-2 py-0.5 whitespace-pre-wrap break-all bg-red-950/30">
+                        <span className="inline-block w-4 shrink-0 select-none text-red-500">-</span>
+                        {diff.oldSegments.map((seg, segIdx) => (
+                          <span
+                            key={segIdx}
+                            className={seg.type === 'delete' ? 'bg-red-700/60 text-red-200 rounded-sm' : 'text-red-300/70'}
+                          >
+                            {seg.text}
+                          </span>
+                        ))}
+                      </div>
+                      {/* New line with insertions highlighted */}
+                      <div className="px-2 py-0.5 whitespace-pre-wrap break-all bg-green-950/30">
+                        <span className="inline-block w-4 shrink-0 select-none text-green-500">+</span>
+                        {diff.newSegments.map((seg, segIdx) => (
+                          <span
+                            key={segIdx}
+                            className={seg.type === 'insert' ? 'bg-green-700/60 text-green-200 rounded-sm' : 'text-green-300/70'}
+                          >
+                            {seg.text}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
 
-            {/* New string */}
-            <div className="min-w-0">
-              <div className="px-2 py-1 bg-green-900/20 text-green-400 text-[10px] font-medium border-b border-gray-700">
-                + Added
-              </div>
-              <pre className="p-2 text-xs text-green-300/80 whitespace-pre-wrap overflow-auto max-h-60 bg-green-950/10">
-                {newStr || <span className="text-gray-600 italic">empty</span>}
-              </pre>
-            </div>
+                // Simple line (unchanged, removed, or added)
+                const line = diff.type === 'unchanged' ? diff.line : diff.line;
+                return (
+                  <div
+                    key={idx}
+                    className={`px-2 py-0.5 whitespace-pre-wrap break-all ${
+                      diff.type === 'removed'
+                        ? 'bg-red-950/30 text-red-300'
+                        : diff.type === 'added'
+                        ? 'bg-green-950/30 text-green-300'
+                        : 'bg-gray-900/30 text-gray-400'
+                    }`}
+                  >
+                    <span className={`inline-block w-4 shrink-0 select-none ${
+                      diff.type === 'removed'
+                        ? 'text-red-500'
+                        : diff.type === 'added'
+                        ? 'text-green-500'
+                        : 'text-gray-600'
+                    }`}>
+                      {diff.type === 'removed' ? '-' : diff.type === 'added' ? '+' : ' '}
+                    </span>
+                    {line || ' '}
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       )}
