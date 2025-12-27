@@ -49,15 +49,24 @@ export function SessionTabs({
         const isRunning = !!activeProcess;
 
         return (
-          <button
+          <div
             key={session.session_id}
+            role="tab"
+            tabIndex={0}
             className={`group flex items-center gap-1.5 px-3 py-2 cursor-pointer border-b-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset ${
               activeSessionId === session.session_id
                 ? 'border-blue-500 text-white'
                 : 'border-transparent text-gray-400 hover:text-white hover:bg-gray-800'
             }`}
             onClick={() => onSelectSession(session.session_id)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onSelectSession(session.session_id);
+              }
+            }}
             title={session.title || 'Untitled'}
+            aria-selected={activeSessionId === session.session_id}
           >
             {/* Status indicator */}
             <span className={`w-2 h-2 rounded-full shrink-0 ${
@@ -84,7 +93,7 @@ export function SessionTabs({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
-          </button>
+          </div>
         );
       })}
       <button
