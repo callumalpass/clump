@@ -2,8 +2,9 @@
 Router for managing scheduled jobs.
 """
 
+import json
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from croniter import croniter
 from fastapi import APIRouter, HTTPException, Query
@@ -17,6 +18,23 @@ from app.storage import get_repo_by_id
 from app.services.scheduler import scheduler
 
 router = APIRouter()
+
+
+def safe_json_loads(data: str | None) -> list[Any] | dict[str, Any] | None:
+    """Safely parse a JSON string, returning None on failure or empty input."""
+    if not data:
+        return None
+    try:
+        return json.loads(data)
+    except json.JSONDecodeError:
+        return None
+
+
+def safe_json_dumps(data: list[Any] | dict[str, Any] | None) -> str | None:
+    """Safely serialize data to JSON, returning None for empty input."""
+    if not data:
+        return None
+    return json.dumps(data)
 
 
 class ScheduledJobCreate(BaseModel):
@@ -155,15 +173,6 @@ class ScheduledJobRunsResponse(BaseModel):
 
 def job_to_response(job: ScheduledJob) -> ScheduledJobResponse:
     """Convert a ScheduledJob model to response."""
-    import json
-
-    allowed_tools = None
-    if job.allowed_tools:
-        try:
-            allowed_tools = json.loads(job.allowed_tools)
-        except json.JSONDecodeError:
-            pass
-
     return ScheduledJobResponse(
         id=job.id,
         name=job.name,
@@ -177,7 +186,7 @@ def job_to_response(job: ScheduledJob) -> ScheduledJobResponse:
         custom_prompt=job.custom_prompt,
         max_items=job.max_items,
         permission_mode=job.permission_mode,
-        allowed_tools=allowed_tools,
+        allowed_tools=safe_json_loads(job.allowed_tools),
         max_turns=job.max_turns,
         model=job.model,
         next_run_at=job.next_run_at.isoformat() + "Z" if job.next_run_at else None,
@@ -191,15 +200,6 @@ def job_to_response(job: ScheduledJob) -> ScheduledJobResponse:
 
 def run_to_response(run: ScheduledJobRun) -> ScheduledJobRunResponse:
     """Convert a ScheduledJobRun model to response."""
-    import json
-
-    session_ids = None
-    if run.session_ids:
-        try:
-            session_ids = json.loads(run.session_ids)
-        except json.JSONDecodeError:
-            pass
-
     return ScheduledJobRunResponse(
         id=run.id,
         job_id=run.job_id,
@@ -211,7 +211,7 @@ def run_to_response(run: ScheduledJobRun) -> ScheduledJobRunResponse:
         items_skipped=run.items_skipped,
         items_failed=run.items_failed,
         error_message=run.error_message,
-        session_ids=session_ids,
+        session_ids=safe_json_loads(run.session_ids),
     )
 
 
@@ -251,8 +251,6 @@ async def list_scheduled_jobs(repo_id: int) -> list[ScheduledJobResponse]:
 @router.post("/repos/{repo_id}/schedules", response_model=ScheduledJobResponse)
 async def create_scheduled_job(repo_id: int, data: ScheduledJobCreate) -> ScheduledJobResponse:
     """Create a new scheduled job."""
-    import json
-
     repo = get_repo_by_id(repo_id)
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
@@ -287,7 +285,7 @@ async def create_scheduled_job(repo_id: int, data: ScheduledJobCreate) -> Schedu
             custom_prompt=data.custom_prompt,
             max_items=data.max_items,
             permission_mode=data.permission_mode,
-            allowed_tools=json.dumps(data.allowed_tools) if data.allowed_tools else None,
+            allowed_tools=safe_json_dumps(data.allowed_tools),
             max_turns=data.max_turns,
             model=data.model,
             next_run_at=next_run,
@@ -329,8 +327,6 @@ async def update_scheduled_job(
     data: ScheduledJobUpdate,
 ) -> ScheduledJobResponse:
     """Update a scheduled job."""
-    import json
-
     repo = get_repo_by_id(repo_id)
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
@@ -351,7 +347,7 @@ async def update_scheduled_job(
         update_data = data.model_dump(exclude_unset=True)
 
         if "allowed_tools" in update_data:
-            update_data["allowed_tools"] = json.dumps(update_data["allowed_tools"]) if update_data["allowed_tools"] else None
+            update_data["allowed_tools"] = safe_json_dumps(update_data["allowed_tools"])
 
         for field, value in update_data.items():
             setattr(job, field, value)
