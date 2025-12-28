@@ -12,6 +12,22 @@ import {
   filterBarStyles,
 } from './FilterBar';
 
+// Get short model name for display
+function getShortModelName(model?: string): string {
+  if (!model) return '';
+  if (model.includes('opus')) return 'opus';
+  if (model.includes('haiku')) return 'haiku';
+  return 'sonnet';
+}
+
+// Get model-specific text color for visual differentiation
+function getModelTextStyle(model?: string): string {
+  if (!model) return 'text-gray-600';
+  if (model.includes('opus')) return 'text-amber-500';
+  if (model.includes('haiku')) return 'text-cyan-500';
+  return 'text-purple-400'; // Sonnet
+}
+
 export type SessionFilter = 'all' | 'active' | 'starred' | 'with-entities';
 
 export interface SessionListFilters {
@@ -293,10 +309,10 @@ export function SessionList({
                 </span>
               ))}
 
-              {/* Model */}
+              {/* Model - color-coded for quick identification */}
               {session.model && (
-                <span className="text-gray-600">
-                  {session.model.includes('opus') ? 'opus' : session.model.includes('haiku') ? 'haiku' : 'sonnet'}
+                <span className={getModelTextStyle(session.model)}>
+                  {getShortModelName(session.model)}
                 </span>
               )}
 

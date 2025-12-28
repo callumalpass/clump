@@ -87,6 +87,15 @@ function getModelName(model?: string): string {
   return model.split('-').slice(-1)[0] || model;
 }
 
+// Get model-specific badge styling for visual differentiation
+function getModelBadgeStyle(model?: string): string {
+  if (!model) return 'bg-gray-700/50 text-gray-400';
+  if (model.includes('opus')) return 'bg-amber-900/50 text-amber-300 border border-amber-700/30';
+  if (model.includes('haiku')) return 'bg-cyan-900/50 text-cyan-300 border border-cyan-700/30';
+  // Default to Sonnet styling (purple)
+  return 'bg-purple-900/50 text-purple-300 border border-purple-700/30';
+}
+
 // Calculate session duration from timestamps
 function getDuration(startTime?: string, endTime?: string): string {
   if (!startTime || !endTime) return '-';
@@ -170,8 +179,8 @@ function SessionStats({ transcript }: { transcript: ParsedTranscript }) {
     <div className="bg-gray-850 border-b border-gray-700 px-3 py-2">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-4 text-xs">
-          {/* Model badge */}
-          <span className="px-2 py-0.5 bg-purple-900/50 text-purple-300 rounded-full">
+          {/* Model badge - color-coded by model type */}
+          <span className={`px-2 py-0.5 rounded-full ${getModelBadgeStyle(transcript.model)}`}>
             {getModelName(transcript.model)}
           </span>
 
