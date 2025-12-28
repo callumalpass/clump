@@ -3,6 +3,7 @@ import type { Issue, SessionSummary, Tag, IssueTagsMap, Process, CommandMetadata
 import type { IssueFilters as IssueFiltersType } from '../hooks/useApi';
 import { IssueFilters } from './IssueFilters';
 import { StartSessionButton } from './StartSessionButton';
+import { Pagination, PaginationSkeleton } from './Pagination';
 import { getContrastColor } from '../utils/colors';
 
 /** Consistent focus ring styling for accessibility */
@@ -339,11 +340,7 @@ export function IssueList({
         {loading ? (
           <>
             <div className="h-4 w-16 rounded skeleton-shimmer" />
-            <div className="flex items-center gap-1">
-              <div className="h-7 w-8 rounded skeleton-shimmer" />
-              <div className="h-4 w-12 rounded mx-1 skeleton-shimmer" />
-              <div className="h-7 w-8 rounded skeleton-shimmer" />
-            </div>
+            <PaginationSkeleton />
           </>
         ) : (
           <>
@@ -361,31 +358,11 @@ export function IssueList({
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => onPageChange(page - 1)}
-                disabled={page <= 1}
-                className={`btn-secondary px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${focusRing} flex items-center gap-1.5`}
-                aria-label="Go to previous page (press [ key)"
-                title="Previous page ([)"
-              >
-                <kbd className="kbd-hint">[</kbd>
-                <span>Prev</span>
-              </button>
-              <span className="px-2 text-gray-300 tabular-nums">
-                {page} / {totalPages || 1}
-              </span>
-              <button
-                onClick={() => onPageChange(page + 1)}
-                disabled={page >= totalPages}
-                className={`btn-secondary px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${focusRing} flex items-center gap-1.5`}
-                aria-label="Go to next page (press ] key)"
-                title="Next page (])"
-              >
-                <span>Next</span>
-                <kbd className="kbd-hint">]</kbd>
-              </button>
-            </div>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={onPageChange}
+            />
           </>
         )}
       </div>
