@@ -6,12 +6,13 @@ Each line is a JSON object representing a message or event.
 """
 
 import json
-import os
+import logging
 import re
 from pathlib import Path
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -290,8 +291,8 @@ def parse_transcript(session_id: str, working_dir: str) -> Optional[ParsedTransc
                             usage=usage,
                         ))
 
-    except Exception as e:
-        print(f"Error parsing transcript: {e}")
+    except OSError as e:
+        logger.warning("Failed to read transcript file %s: %s", transcript_file, e)
         return None
 
     return ParsedTranscript(
