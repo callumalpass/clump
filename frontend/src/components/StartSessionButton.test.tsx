@@ -41,7 +41,7 @@ describe('StartSessionButton', () => {
       render(<StartSessionButton {...defaultProps} commands={[]} />);
 
       const button = screen.getByRole('button');
-      expect(button).toHaveTextContent('Loading...');
+      expect(button).toHaveTextContent('Loading');
       expect(button).toBeDisabled();
     });
 
@@ -110,10 +110,8 @@ describe('StartSessionButton', () => {
     it('hides dropdown by default', () => {
       render(<StartSessionButton {...defaultProps} commands={commands} />);
 
-      // Dropdown should have opacity-0 and pointer-events-none when hidden
-      const dropdown = screen.getByRole('button', { name: 'Select session type' })
-        .parentElement?.querySelector('[class*="absolute"]');
-      expect(dropdown).toHaveClass('opacity-0', 'pointer-events-none');
+      // Dropdown should not be in the DOM when hidden (conditional rendering)
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     });
 
     it('shows dropdown when trigger clicked', () => {
@@ -122,9 +120,8 @@ describe('StartSessionButton', () => {
       const dropdownButton = screen.getByLabelText('Select session type');
       fireEvent.click(dropdownButton);
 
-      const dropdown = dropdownButton.parentElement?.querySelector('[class*="absolute"]');
-      expect(dropdown).toHaveClass('opacity-100');
-      expect(dropdown).not.toHaveClass('pointer-events-none');
+      // Dropdown should be in the DOM when shown
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
     });
 
     it('selects command and starts session when command clicked in dropdown', () => {
@@ -160,9 +157,8 @@ describe('StartSessionButton', () => {
       // Click a command
       fireEvent.click(screen.getByText('Fix Issue'));
 
-      // Dropdown should be closed
-      const dropdown = dropdownButton.parentElement?.querySelector('[class*="absolute"]');
-      expect(dropdown).toHaveClass('opacity-0');
+      // Dropdown should be closed (not in DOM with conditional rendering)
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     });
 
     it('shows checkmark next to selected command', () => {
@@ -279,15 +275,13 @@ describe('StartSessionButton', () => {
       fireEvent.click(dropdownButton);
 
       // Verify dropdown is open
-      let dropdown = dropdownButton.parentElement?.querySelector('[class*="absolute"]');
-      expect(dropdown).toHaveClass('opacity-100');
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
 
       // Click outside
       fireEvent.mouseDown(screen.getByTestId('outside'));
 
-      // Dropdown should be closed
-      dropdown = dropdownButton.parentElement?.querySelector('[class*="absolute"]');
-      expect(dropdown).toHaveClass('opacity-0');
+      // Dropdown should be closed (not in DOM with conditional rendering)
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     });
   });
 

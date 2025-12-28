@@ -66,8 +66,8 @@ describe('IssueFilters', () => {
     it('renders order toggle button', () => {
       render(<IssueFilters {...defaultProps} />);
 
-      // Should have a button for toggling order
-      const orderButton = screen.getByTitle(/first/i);
+      // Should have a button for toggling order (title starts with "Newest first" or "Oldest first")
+      const orderButton = screen.getByTitle(/^(Newest|Oldest) first/);
       expect(orderButton).toBeInTheDocument();
     });
 
@@ -131,7 +131,7 @@ describe('IssueFilters', () => {
         />
       );
 
-      const clearButton = screen.getByRole('button', { name: '×' });
+      const clearButton = screen.getByRole('button', { name: 'Clear search' });
       fireEvent.click(clearButton);
 
       // Check that input is cleared
@@ -149,7 +149,7 @@ describe('IssueFilters', () => {
     it('does not show clear button when search is empty', () => {
       render(<IssueFilters {...defaultProps} />);
 
-      expect(screen.queryByRole('button', { name: '×' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
     });
 
     it('updates search input when filters.search changes externally', () => {
@@ -248,14 +248,14 @@ describe('IssueFilters', () => {
     it('displays desc order by default (newest first)', () => {
       render(<IssueFilters {...defaultProps} filters={{ state: 'open' }} />);
 
-      const orderButton = screen.getByTitle('Newest first');
+      const orderButton = screen.getByTitle(/^Newest first/);
       expect(orderButton).toBeInTheDocument();
     });
 
     it('displays asc order when specified', () => {
       render(<IssueFilters {...defaultProps} filters={{ state: 'open', order: 'asc' }} />);
 
-      const orderButton = screen.getByTitle('Oldest first');
+      const orderButton = screen.getByTitle(/^Oldest first/);
       expect(orderButton).toBeInTheDocument();
     });
 
@@ -269,7 +269,7 @@ describe('IssueFilters', () => {
         />
       );
 
-      fireEvent.click(screen.getByTitle('Newest first'));
+      fireEvent.click(screen.getByTitle(/^Newest first/));
 
       expect(onFiltersChange).toHaveBeenCalledWith({ state: 'open', order: 'asc' });
     });
@@ -284,7 +284,7 @@ describe('IssueFilters', () => {
         />
       );
 
-      fireEvent.click(screen.getByTitle('Oldest first'));
+      fireEvent.click(screen.getByTitle(/^Oldest first/));
 
       expect(onFiltersChange).toHaveBeenCalledWith({ state: 'open', order: 'desc' });
     });

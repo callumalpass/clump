@@ -107,7 +107,8 @@ describe('SessionTabs', () => {
     );
 
     const activeTab = screen.getByText('Session 1').closest('[role="tab"]');
-    expect(activeTab).toHaveClass('border-blue-500');
+    // Active tab has white text color (not gray-400)
+    expect(activeTab).toHaveClass('text-white');
     expect(activeTab).toHaveAttribute('aria-selected', 'true');
   });
 

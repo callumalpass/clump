@@ -111,7 +111,11 @@ export function RepoSelector({
   useEffect(() => {
     if (isOpen && highlightedIndex >= 0 && dropdownRef.current) {
       const items = dropdownRef.current.querySelectorAll('[role="option"]');
-      items[highlightedIndex]?.scrollIntoView({ block: 'nearest' });
+      const item = items[highlightedIndex];
+      // scrollIntoView may not be available in test environments (JSDOM)
+      if (item && typeof item.scrollIntoView === 'function') {
+        item.scrollIntoView({ block: 'nearest' });
+      }
     }
   }, [isOpen, highlightedIndex]);
 

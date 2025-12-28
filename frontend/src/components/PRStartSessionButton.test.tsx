@@ -81,7 +81,8 @@ describe('PRStartSessionButton', () => {
         />
       );
 
-      const button = screen.getByRole('button', { name: 'Loading...' });
+      // The button has aria-label "Loading session commands" and text content "Loading"
+      const button = screen.getByRole('button', { name: /loading/i });
       expect(button).toBeInTheDocument();
       expect(button).toBeDisabled();
     });
@@ -195,8 +196,8 @@ describe('PRStartSessionButton', () => {
 
       fireEvent.click(screen.getByText('Test PR'));
 
-      // Dropdown should be hidden (still in DOM but not visible)
-      expect(screen.getByText('Test PR').closest('.absolute')).toHaveClass('opacity-0');
+      // Dropdown should be removed from DOM (conditional rendering)
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     });
 
     it('highlights currently selected command in dropdown', () => {
@@ -237,13 +238,13 @@ describe('PRStartSessionButton', () => {
       const dropdownTrigger = screen.getByRole('button', { name: 'Select PR session type' });
       fireEvent.click(dropdownTrigger);
 
-      expect(screen.getByText('Review PR').closest('.absolute')).toHaveClass('opacity-100');
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
 
       // Click outside
       fireEvent.mouseDown(screen.getByTestId('outside'));
 
       await waitFor(() => {
-        expect(screen.getByText('Review PR').closest('.absolute')).toHaveClass('opacity-0');
+        expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
       });
     });
 
@@ -264,7 +265,7 @@ describe('PRStartSessionButton', () => {
       fireEvent.mouseDown(description);
 
       // Dropdown should still be visible
-      expect(screen.getByText('Review PR').closest('.absolute')).toHaveClass('opacity-100');
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
     });
   });
 
@@ -434,11 +435,11 @@ describe('PRStartSessionButton', () => {
 
       // Open dropdown
       fireEvent.click(dropdownTrigger);
-      expect(screen.getByText('Review PR').closest('.absolute')).toHaveClass('opacity-100');
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
 
       // Close dropdown
       fireEvent.click(dropdownTrigger);
-      expect(screen.getByText('Review PR').closest('.absolute')).toHaveClass('opacity-0');
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     });
   });
 
@@ -452,7 +453,7 @@ describe('PRStartSessionButton', () => {
         />
       );
 
-      expect(screen.getByRole('button', { name: 'Loading...' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /loading/i })).toBeInTheDocument();
 
       rerender(
         <PRStartSessionButton

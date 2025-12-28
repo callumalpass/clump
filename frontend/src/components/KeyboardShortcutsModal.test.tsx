@@ -35,7 +35,7 @@ describe('KeyboardShortcutsModal', () => {
       render(<KeyboardShortcutsModal {...defaultProps} />);
 
       expect(screen.getByText('Navigation')).toBeInTheDocument();
-      expect(screen.getByText('Focus search and switch to Analyses tab')).toBeInTheDocument();
+      expect(screen.getByText('Focus search in current tab')).toBeInTheDocument();
       expect(screen.getByText('Close modal, deselect, or close terminal')).toBeInTheDocument();
       expect(screen.getByText('Show this help dialog')).toBeInTheDocument();
     });
