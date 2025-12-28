@@ -6,6 +6,7 @@ import { SubsessionView } from './SubsessionView';
 import { calculateCost, formatCost } from '../utils/costs';
 import { getModelDisplayName, getModelBadgeStyle } from '../utils/models';
 import { computeLineDiff } from '../utils/diffing';
+import { cleanTerminalOutput } from '../utils/text';
 
 // Highlight matching text in a string
 // Memoized to avoid recomputation on every render
@@ -1363,37 +1364,9 @@ export function ConversationView({
 
 // Fallback for raw transcripts
 export function RawTranscriptView({ transcript }: { transcript: string }) {
-  // Strip ANSI escape codes and clean up terminal animation artifacts
-  const cleanTranscript = (text: string): string => {
-    let cleaned = text
-      .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '') // CSI sequences
-      .replace(/\x1b\][^\x07]*\x07/g, '')     // OSC sequences (bell terminated)
-      .replace(/\x1b\][^\x1b]*\x1b\\/g, '')   // OSC sequences (ST terminated)
-      .replace(/\x1b[PX^_][^\x1b]*\x1b\\/g, '') // DCS, SOS, PM, APC sequences
-      .replace(/\x1b[@-Z\\-_]/g, '')          // Fe sequences
-      .replace(/\x1b\[[\?]?[0-9;]*[hl]/g, '') // Mode sequences
-      .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, ''); // Other control chars
-
-    cleaned = cleaned.replace(/\r/g, '');
-
-    const lines = cleaned.split('\n');
-    const deduped: string[] = [];
-    let prevLine = '';
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed === '' && prevLine === '') continue;
-      if (trimmed === prevLine) continue;
-      deduped.push(line);
-      prevLine = trimmed;
-    }
-
-    return deduped.join('\n').replace(/\n{3,}/g, '\n\n');
-  };
-
   return (
     <pre className="text-xs text-gray-300 bg-gray-900 rounded p-3 overflow-auto max-h-96 whitespace-pre-wrap font-mono">
-      {cleanTranscript(transcript)}
+      {cleanTerminalOutput(transcript)}
     </pre>
   );
 }
