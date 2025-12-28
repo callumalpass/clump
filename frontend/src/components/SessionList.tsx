@@ -1,3 +1,4 @@
+import { memo, useCallback } from 'react';
 import type { SessionSummary, Process } from '../types';
 import { calculateDuration } from '../hooks/useElapsedTime';
 import { ElapsedTimer } from './ElapsedTimer';
@@ -35,6 +36,160 @@ function getModelTextStyle(model?: string): string {
   if (model.includes('haiku')) return 'text-cyan-500';
   return 'text-purple-400'; // Sonnet
 }
+
+// Memoized list item component to prevent unnecessary re-renders
+interface SessionListItemProps {
+  session: SessionSummary;
+  index: number;
+  onSelect: () => void;
+  onContinue?: (e: React.MouseEvent) => void;
+  onToggleStar?: (e: React.MouseEvent) => void;
+  showContinueButton: boolean;
+  showStarButton: boolean;
+}
+
+const SessionListItem = memo(function SessionListItem({
+  session,
+  index,
+  onSelect,
+  onContinue,
+  onToggleStar,
+  showContinueButton,
+  showStarButton,
+}: SessionListItemProps) {
+  // Format repo path for display - show last 2-3 segments
+  const formatRepoPath = (s: SessionSummary) => {
+    if (s.repo_name) return s.repo_name;
+    const segments = s.repo_path.split('/').filter(Boolean);
+    return segments.slice(-2).join('/');
+  };
+
+  return (
+    <div
+      className={`group p-3 cursor-pointer border-l-2 hover:bg-gray-800/60 transition-all duration-150 ease-out list-item-hover list-item-enter ${
+        session.is_active
+          ? 'border-yellow-500/70 hover:border-yellow-400'
+          : isRecentlyModified(session.modified_at)
+          ? 'border-blue-500/60 hover:border-blue-400'
+          : 'border-green-500/30 hover:border-green-500/60'
+      }`}
+      style={{ '--item-index': Math.min(index, 15) } as React.CSSProperties}
+      onClick={onSelect}
+    >
+      <div className="flex items-center gap-2 mb-1">
+        {/* Status indicator with text label for accessibility */}
+        {session.is_active ? (
+          <span
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-yellow-500/20 text-yellow-400 flex-shrink-0 active-badge-glow"
+            title="Session is actively running"
+            aria-label="Active session"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
+            Active
+          </span>
+        ) : isRecentlyModified(session.modified_at) ? (
+          <span
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-blue-500/20 text-blue-400 flex-shrink-0"
+            title="Session updated in the last 10 minutes"
+            aria-label="Recently updated session"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+            Recent
+          </span>
+        ) : (
+          <span
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-500/20 text-green-400 flex-shrink-0"
+            title="Session completed"
+            aria-label="Completed session"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+            Done
+          </span>
+        )}
+
+        {/* Title */}
+        <span className="text-sm font-medium text-white truncate flex-1" title={session.title || 'Untitled session'}>
+          {session.title || 'Untitled session'}
+        </span>
+
+        {/* Star button */}
+        {showStarButton && onToggleStar && (
+          <button
+            onClick={onToggleStar}
+            className={`flex-shrink-0 p-1 transition-colors rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 ${
+              session.starred
+                ? 'text-yellow-400'
+                : 'text-gray-600 group-hover:text-gray-400 hover:!text-yellow-400'
+            }`}
+            title={session.starred ? 'Unstar' : 'Star'}
+          >
+            <svg className="w-4 h-4" fill={session.starred ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+            </svg>
+          </button>
+        )}
+
+        {/* Continue button - show if not actively running */}
+        {showContinueButton && !session.is_active && onContinue && (
+          <button
+            onClick={onContinue}
+            className="flex-shrink-0 px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 active:scale-95 rounded flex items-center gap-1 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
+            title="Continue this conversation"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+            Continue
+          </button>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 text-xs text-gray-500">
+        {/* Repo path */}
+        <span className="px-1.5 py-0.5 bg-gray-700 hover:bg-gray-600 rounded truncate max-w-[120px] transition-colors" title={session.repo_path}>
+          {formatRepoPath(session)}
+        </span>
+
+        {/* Entity links */}
+        {session.entities?.map((entity, idx) => (
+          <span
+            key={idx}
+            className={`px-1 py-0.5 rounded transition-colors ${
+              entity.kind === 'issue'
+                ? 'bg-green-900/30 text-green-400 hover:bg-green-900/50 hover:text-green-300'
+                : 'bg-purple-900/30 text-purple-400 hover:bg-purple-900/50 hover:text-purple-300'
+            }`}
+          >
+            #{entity.number}
+          </span>
+        ))}
+
+        {/* Model - color-coded for quick identification */}
+        {session.model && (
+          <span className={getModelTextStyle(session.model)}>
+            {getShortModelName(session.model)}
+          </span>
+        )}
+
+        {/* Message count */}
+        <span className="text-gray-600">
+          {session.message_count} msg{session.message_count !== 1 ? 's' : ''}
+        </span>
+
+        {/* Duration */}
+        {session.is_active && session.start_time ? (
+          <span className="text-yellow-500" title="Time elapsed">
+            <ElapsedTimer startTime={session.start_time} />
+          </span>
+        ) : session.start_time && session.end_time ? (
+          <span className="text-gray-600" title="Total duration">
+            {calculateDuration(session.start_time, session.end_time)}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+});
 
 export type SessionFilter = 'all' | 'active' | 'starred' | 'with-entities';
 
@@ -214,152 +369,32 @@ export function SessionList({
     );
   }
 
-  const handleContinue = (e: React.MouseEvent, session: SessionSummary) => {
+  // Memoize event handlers to maintain stable references for memoized children
+  const handleContinue = useCallback((e: React.MouseEvent, session: SessionSummary) => {
     e.stopPropagation();
     onContinueSession?.(session);
-  };
+  }, [onContinueSession]);
 
-  const handleToggleStar = (e: React.MouseEvent, session: SessionSummary) => {
+  const handleToggleStar = useCallback((e: React.MouseEvent, session: SessionSummary) => {
     e.stopPropagation();
     onToggleStar?.(session);
-  };
-
-  // Format repo path for display - show last 2-3 segments
-  const formatRepoPath = (session: SessionSummary) => {
-    if (session.repo_name) return session.repo_name;
-    const segments = session.repo_path.split('/').filter(Boolean);
-    return segments.slice(-2).join('/');
-  };
+  }, [onToggleStar]);
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
       {filterBar}
       <div className="divide-y divide-gray-700 overflow-auto flex-1 min-h-0">
         {sessions.map((session, index) => (
-          <div
+          <SessionListItem
             key={session.session_id}
-            className={`group p-3 cursor-pointer border-l-2 hover:bg-gray-800/60 transition-all duration-150 ease-out list-item-hover list-item-enter ${
-              session.is_active
-                ? 'border-yellow-500/70 hover:border-yellow-400'
-                : isRecentlyModified(session.modified_at)
-                ? 'border-blue-500/60 hover:border-blue-400'
-                : 'border-green-500/30 hover:border-green-500/60'
-            }`}
-            style={{ '--item-index': Math.min(index, 15) } as React.CSSProperties}
-            onClick={() => onSelectSession(session)}
-          >
-            <div className="flex items-center gap-2 mb-1">
-              {/* Status indicator with text label for accessibility */}
-              {session.is_active ? (
-                <span
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-yellow-500/20 text-yellow-400 flex-shrink-0 active-badge-glow"
-                  title="Session is actively running"
-                  aria-label="Active session"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
-                  Active
-                </span>
-              ) : isRecentlyModified(session.modified_at) ? (
-                <span
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-blue-500/20 text-blue-400 flex-shrink-0"
-                  title="Session updated in the last 10 minutes"
-                  aria-label="Recently updated session"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                  Recent
-                </span>
-              ) : (
-                <span
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-500/20 text-green-400 flex-shrink-0"
-                  title="Session completed"
-                  aria-label="Completed session"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                  Done
-                </span>
-              )}
-
-              {/* Title */}
-              <span className="text-sm font-medium text-white truncate flex-1" title={session.title || 'Untitled session'}>
-                {session.title || 'Untitled session'}
-              </span>
-
-              {/* Star button */}
-              {onToggleStar && (
-                <button
-                  onClick={(e) => handleToggleStar(e, session)}
-                  className={`flex-shrink-0 p-1 transition-colors rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 ${
-                    session.starred
-                      ? 'text-yellow-400'
-                      : 'text-gray-600 group-hover:text-gray-400 hover:!text-yellow-400'
-                  }`}
-                  title={session.starred ? 'Unstar' : 'Star'}
-                >
-                  <svg className="w-4 h-4" fill={session.starred ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                  </svg>
-                </button>
-              )}
-
-              {/* Continue button - show if not actively running */}
-              {!session.is_active && onContinueSession && (
-                <button
-                  onClick={(e) => handleContinue(e, session)}
-                  className="flex-shrink-0 px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 active:scale-95 rounded flex items-center gap-1 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
-                  title="Continue this conversation"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                  </svg>
-                  Continue
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 text-xs text-gray-500">
-              {/* Repo path */}
-              <span className="px-1.5 py-0.5 bg-gray-700 hover:bg-gray-600 rounded truncate max-w-[120px] transition-colors" title={session.repo_path}>
-                {formatRepoPath(session)}
-              </span>
-
-              {/* Entity links */}
-              {session.entities?.map((entity, idx) => (
-                <span
-                  key={idx}
-                  className={`px-1 py-0.5 rounded transition-colors ${
-                    entity.kind === 'issue'
-                      ? 'bg-green-900/30 text-green-400 hover:bg-green-900/50 hover:text-green-300'
-                      : 'bg-purple-900/30 text-purple-400 hover:bg-purple-900/50 hover:text-purple-300'
-                  }`}
-                >
-                  #{entity.number}
-                </span>
-              ))}
-
-              {/* Model - color-coded for quick identification */}
-              {session.model && (
-                <span className={getModelTextStyle(session.model)}>
-                  {getShortModelName(session.model)}
-                </span>
-              )}
-
-              {/* Message count */}
-              <span className="text-gray-600">
-                {session.message_count} msg{session.message_count !== 1 ? 's' : ''}
-              </span>
-
-              {/* Duration */}
-              {session.is_active && session.start_time ? (
-                <span className="text-yellow-500" title="Time elapsed">
-                  <ElapsedTimer startTime={session.start_time} />
-                </span>
-              ) : session.start_time && session.end_time ? (
-                <span className="text-gray-600" title="Total duration">
-                  {calculateDuration(session.start_time, session.end_time)}
-                </span>
-              ) : null}
-            </div>
-          </div>
+            session={session}
+            index={index}
+            onSelect={() => onSelectSession(session)}
+            onContinue={(e) => handleContinue(e, session)}
+            onToggleStar={(e) => handleToggleStar(e, session)}
+            showContinueButton={!!onContinueSession}
+            showStarButton={!!onToggleStar}
+          />
         ))}
       </div>
 

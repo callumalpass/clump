@@ -1,3 +1,4 @@
+import { useMemo, memo } from 'react';
 import type { Issue, SessionSummary, Tag, IssueTagsMap, Process, CommandMetadata } from '../types';
 import type { IssueFilters as IssueFiltersType } from '../hooks/useApi';
 import { IssueFilters } from './IssueFilters';
@@ -6,6 +7,114 @@ import { getContrastColor } from '../utils/colors';
 
 /** Consistent focus ring styling for accessibility */
 const focusRing = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900';
+
+// Memoized list item component to prevent unnecessary re-renders
+interface IssueListItemProps {
+  issue: Issue;
+  index: number;
+  isSelected: boolean;
+  issueSessions: SessionSummary[];
+  issueTags: Tag[];
+  issueCommands: CommandMetadata[];
+  onSelect: () => void;
+  onStartSession: (issue: Issue, command: CommandMetadata) => void;
+}
+
+const IssueListItem = memo(function IssueListItem({
+  issue,
+  index,
+  isSelected,
+  issueSessions,
+  issueTags,
+  issueCommands,
+  onSelect,
+  onStartSession,
+}: IssueListItemProps) {
+  const hasRunning = issueSessions.some(s => s.is_active);
+  const hasCompleted = issueSessions.length > 0 && !hasRunning;
+
+  return (
+    <div
+      className={`p-3 cursor-pointer border-l-2 transition-all duration-150 ease-out list-item-hover list-item-enter ${
+        isSelected
+          ? 'bg-gray-800/80 border-blue-500 list-item-selected'
+          : 'border-transparent hover:bg-gray-800/60 hover:border-blue-500/50'
+      }`}
+      style={{ '--item-index': Math.min(index, 15) } as React.CSSProperties}
+      onClick={onSelect}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-gray-400 text-sm">#{issue.number}</span>
+            <h3 className="text-sm font-medium text-white truncate" title={issue.title}>
+              {issue.title}
+            </h3>
+            {hasRunning && (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-yellow-500/20 text-yellow-400 shrink-0 active-badge-glow"
+                title="Session actively running"
+                aria-label="Active session"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
+                Running
+              </span>
+            )}
+            {!hasRunning && hasCompleted && (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-500/20 text-green-400 shrink-0"
+                title={`${issueSessions.length} completed session${issueSessions.length !== 1 ? 's' : ''}`}
+                aria-label={`${issueSessions.length} completed session${issueSessions.length !== 1 ? 's' : ''}`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                {issueSessions.length}
+              </span>
+            )}
+          </div>
+          {(issue.labels.length > 0 || issueTags.length > 0) && (
+            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+              {issue.labels.map((label) => (
+                <span
+                  key={label}
+                  className="px-2 py-0.5 text-xs rounded-full bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+                >
+                  {label}
+                </span>
+              ))}
+              {issueTags.map((tag) => {
+                const bgColor = tag.color || '#374151';
+                return (
+                  <span
+                    key={tag.id}
+                    className="px-2 py-0.5 text-xs rounded-full"
+                    style={{ backgroundColor: bgColor, color: getContrastColor(bgColor) }}
+                  >
+                    {tag.name}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          <div className="text-xs text-gray-500 mt-1">
+            by {issue.author} · {issue.comments_count} comments
+            {issueSessions.length > 0 && (
+              <span className="text-purple-400"> · {issueSessions.length} session{issueSessions.length !== 1 ? 's' : ''}</span>
+            )}
+          </div>
+        </div>
+        <StartSessionButton
+          issue={issue}
+          commands={issueCommands}
+          onStart={(_, command) => {
+            onStartSession(issue, command);
+          }}
+          size="sm"
+          className="shrink-0"
+        />
+      </div>
+    </div>
+  );
+});
 
 interface IssueListProps {
   issues: Issue[];
@@ -52,36 +161,40 @@ export function IssueList({
   onCreateIssue,
   onRefresh,
 }: IssueListProps) {
-  // Group sessions by issue number (a session can appear under multiple issues)
-  const sessionsByIssue = sessions.reduce((acc, session) => {
-    const issueEntities = session.entities?.filter(e => e.kind === 'issue') || [];
-    for (const entity of issueEntities) {
-      const issueNum = entity.number.toString();
-      if (!acc[issueNum]) acc[issueNum] = [];
-      if (!acc[issueNum].includes(session)) {
-        acc[issueNum].push(session);
+  // Memoize session grouping to avoid recalculation on every render
+  const sessionsByIssue = useMemo(() => {
+    return sessions.reduce((acc, session) => {
+      const issueEntities = session.entities?.filter(e => e.kind === 'issue') || [];
+      for (const entity of issueEntities) {
+        const issueNum = entity.number.toString();
+        if (!acc[issueNum]) acc[issueNum] = [];
+        if (!acc[issueNum].includes(session)) {
+          acc[issueNum].push(session);
+        }
       }
-    }
-    return acc;
-  }, {} as Record<string, SessionSummary[]>);
+      return acc;
+    }, {} as Record<string, SessionSummary[]>);
+  }, [sessions]);
 
-  // Filter issues by selected tag and session status
-  const filteredIssues = issues.filter((issue) => {
-    // Filter by tag
-    if (selectedTagId) {
-      const issueTags = issueTagsMap[issue.number] || [];
-      if (!issueTags.some((t) => t.id === selectedTagId)) {
-        return false;
+  // Memoize filtered issues to avoid recalculation on every render
+  const filteredIssues = useMemo(() => {
+    return issues.filter((issue) => {
+      // Filter by tag
+      if (selectedTagId) {
+        const issueTags = issueTagsMap[issue.number] || [];
+        if (!issueTags.some((t) => t.id === selectedTagId)) {
+          return false;
+        }
       }
-    }
-    // Filter by session status
-    if (filters.sessionStatus) {
-      const hasSessions = (sessionsByIssue[issue.number.toString()] || []).length > 0;
-      if (filters.sessionStatus === 'analyzed' && !hasSessions) return false;
-      if (filters.sessionStatus === 'unanalyzed' && hasSessions) return false;
-    }
-    return true;
-  });
+      // Filter by session status
+      if (filters.sessionStatus) {
+        const hasSessions = (sessionsByIssue[issue.number.toString()] || []).length > 0;
+        if (filters.sessionStatus === 'analyzed' && !hasSessions) return false;
+        if (filters.sessionStatus === 'unanalyzed' && hasSessions) return false;
+      }
+      return true;
+    });
+  }, [issues, selectedTagId, issueTagsMap, filters.sessionStatus, sessionsByIssue]);
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
@@ -205,96 +318,19 @@ export function IssueList({
       {/* Issue list */}
       {!loading && filteredIssues.length > 0 && (
         <div className="flex-1 overflow-auto min-h-0 divide-y divide-gray-700">
-          {filteredIssues.map((issue, index) => {
-          const issueSessions = sessionsByIssue[issue.number.toString()] || [];
-          // Check if any session is actively running
-          const hasRunning = issueSessions.some(s => s.is_active);
-          const hasCompleted = issueSessions.length > 0 && !hasRunning;
-          const issueTags = issueTagsMap[issue.number] || [];
-
-          return (
-            <div
+          {filteredIssues.map((issue, index) => (
+            <IssueListItem
               key={issue.number}
-              className={`p-3 cursor-pointer border-l-2 transition-all duration-150 ease-out list-item-hover list-item-enter ${
-                selectedIssue === issue.number
-                  ? 'bg-gray-800/80 border-blue-500 list-item-selected'
-                  : 'border-transparent hover:bg-gray-800/60 hover:border-blue-500/50'
-              }`}
-              style={{ '--item-index': Math.min(index, 15) } as React.CSSProperties}
-              onClick={() => onSelectIssue(issue.number)}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-400 text-sm">#{issue.number}</span>
-                    <h3 className="text-sm font-medium text-white truncate" title={issue.title}>
-                      {issue.title}
-                    </h3>
-                    {hasRunning && (
-                      <span
-                        className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-yellow-500/20 text-yellow-400 shrink-0 active-badge-glow"
-                        title="Session actively running"
-                        aria-label="Active session"
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
-                        Running
-                      </span>
-                    )}
-                    {!hasRunning && hasCompleted && (
-                      <span
-                        className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-500/20 text-green-400 shrink-0"
-                        title={`${issueSessions.length} completed session${issueSessions.length !== 1 ? 's' : ''}`}
-                        aria-label={`${issueSessions.length} completed session${issueSessions.length !== 1 ? 's' : ''}`}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                        {issueSessions.length}
-                      </span>
-                    )}
-                  </div>
-                  {(issue.labels.length > 0 || issueTags.length > 0) && (
-                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                      {issue.labels.map((label) => (
-                        <span
-                          key={label}
-                          className="px-2 py-0.5 text-xs rounded-full bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
-                        >
-                          {label}
-                        </span>
-                      ))}
-                      {issueTags.map((tag) => {
-                        const bgColor = tag.color || '#374151';
-                        return (
-                          <span
-                            key={tag.id}
-                            className="px-2 py-0.5 text-xs rounded-full"
-                            style={{ backgroundColor: bgColor, color: getContrastColor(bgColor) }}
-                          >
-                            {tag.name}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <div className="text-xs text-gray-500 mt-1">
-                    by {issue.author} · {issue.comments_count} comments
-                    {issueSessions.length > 0 && (
-                      <span className="text-purple-400"> · {issueSessions.length} session{issueSessions.length !== 1 ? 's' : ''}</span>
-                    )}
-                  </div>
-                </div>
-                <StartSessionButton
-                  issue={issue}
-                  commands={issueCommands}
-                  onStart={(_, command) => {
-                    onStartSession(issue, command);
-                  }}
-                  size="sm"
-                  className="shrink-0"
-                />
-              </div>
-            </div>
-          );
-          })}
+              issue={issue}
+              index={index}
+              isSelected={selectedIssue === issue.number}
+              issueSessions={sessionsByIssue[issue.number.toString()] || []}
+              issueTags={issueTagsMap[issue.number] || []}
+              issueCommands={issueCommands}
+              onSelect={() => onSelectIssue(issue.number)}
+              onStartSession={onStartSession}
+            />
+          ))}
         </div>
       )}
 

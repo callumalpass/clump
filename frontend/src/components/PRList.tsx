@@ -1,3 +1,4 @@
+import { useMemo, memo } from 'react';
 import type { PR, SessionSummary, Process, CommandMetadata } from '../types';
 import type { PRFilters, SessionStatusFilter } from '../hooks/useApi';
 import { PRStartSessionButton } from './PRStartSessionButton';
@@ -15,6 +16,119 @@ import {
 
 /** Consistent focus ring styling for accessibility */
 const focusRing = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900';
+
+// Memoized list item component to prevent unnecessary re-renders
+interface PRListItemProps {
+  pr: PR;
+  index: number;
+  isSelected: boolean;
+  prSessions: SessionSummary[];
+  prCommands: CommandMetadata[];
+  onSelect: () => void;
+  onStartSession: (pr: PR, command: CommandMetadata) => void;
+}
+
+const PRListItem = memo(function PRListItem({
+  pr,
+  index,
+  isSelected,
+  prSessions,
+  prCommands,
+  onSelect,
+  onStartSession,
+}: PRListItemProps) {
+  const hasRunning = prSessions.some(s => s.is_active);
+  const hasCompleted = prSessions.length > 0 && !hasRunning;
+
+  return (
+    <div
+      className={`p-3 cursor-pointer border-l-2 transition-all duration-150 ease-out list-item-hover list-item-enter ${
+        isSelected
+          ? 'bg-gray-800/80 border-blue-500 list-item-selected'
+          : 'border-transparent hover:bg-gray-800/60 hover:border-blue-500/50'
+      }`}
+      style={{ '--item-index': Math.min(index, 15) } as React.CSSProperties}
+      onClick={onSelect}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-gray-400 text-sm">#{pr.number}</span>
+            <h3 className="text-sm font-medium text-white truncate" title={pr.title}>
+              {pr.title}
+            </h3>
+            {hasRunning && (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-yellow-500/20 text-yellow-400 shrink-0 active-badge-glow"
+                title="Session actively running"
+                aria-label="Active session"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
+                Running
+              </span>
+            )}
+            {!hasRunning && hasCompleted && (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-500/20 text-green-400 shrink-0"
+                title={`${prSessions.length} completed session${prSessions.length !== 1 ? 's' : ''}`}
+                aria-label={`${prSessions.length} completed session${prSessions.length !== 1 ? 's' : ''}`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                {prSessions.length}
+              </span>
+            )}
+          </div>
+          {/* Branch info */}
+          <div className="flex items-center gap-2 mt-1 text-xs">
+            <span className="px-2 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 font-mono truncate max-w-[120px] transition-colors" title={pr.head_ref}>
+              {pr.head_ref}
+            </span>
+            <svg className="w-3 h-3 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+            <span className="px-2 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 font-mono truncate max-w-[120px] transition-colors" title={pr.base_ref}>
+              {pr.base_ref}
+            </span>
+          </div>
+          {/* Labels */}
+          {pr.labels.length > 0 && (
+            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+              {pr.labels.map((label) => (
+                <span
+                  key={label}
+                  className="px-2 py-0.5 text-xs rounded-full bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+          )}
+          {/* Stats */}
+          <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+            <span>by {pr.author}</span>
+            <span className="flex items-center gap-1">
+              <span className="text-green-500">+{pr.additions}</span>
+              <span className="text-red-500">-{pr.deletions}</span>
+            </span>
+            <span>{pr.changed_files} file{pr.changed_files !== 1 ? 's' : ''}</span>
+            {prSessions.length > 0 && (
+              <span className="text-purple-400">{prSessions.length} session{prSessions.length !== 1 ? 's' : ''}</span>
+            )}
+          </div>
+        </div>
+        <PRStartSessionButton
+          pr={pr}
+          commands={prCommands}
+          onStart={(_, command) => {
+            onStartSession(pr, command);
+          }}
+          size="sm"
+          className="shrink-0"
+        />
+      </div>
+    </div>
+  );
+});
 
 interface PRListProps {
   prs: PR[];
@@ -56,18 +170,20 @@ export function PRList({
   total,
   onPageChange,
 }: PRListProps) {
-  // Group sessions by PR number (a session can appear under multiple PRs)
-  const sessionsByPR = sessions.reduce((acc, session) => {
-    const prEntities = session.entities?.filter(e => e.kind === 'pr') || [];
-    for (const entity of prEntities) {
-      const prNum = entity.number.toString();
-      if (!acc[prNum]) acc[prNum] = [];
-      if (!acc[prNum].includes(session)) {
-        acc[prNum].push(session);
+  // Memoize session grouping to avoid recalculation on every render
+  const sessionsByPR = useMemo(() => {
+    return sessions.reduce((acc, session) => {
+      const prEntities = session.entities?.filter(e => e.kind === 'pr') || [];
+      for (const entity of prEntities) {
+        const prNum = entity.number.toString();
+        if (!acc[prNum]) acc[prNum] = [];
+        if (!acc[prNum].includes(session)) {
+          acc[prNum].push(session);
+        }
       }
-    }
-    return acc;
-  }, {} as Record<string, SessionSummary[]>);
+      return acc;
+    }, {} as Record<string, SessionSummary[]>);
+  }, [sessions]);
 
   const setSearch = (search: string) => {
     onFiltersChange({ ...filters, search: search || undefined });
@@ -102,15 +218,17 @@ export function PRList({
     filters.sessionStatus ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
-  // Filter PRs by session status
-  const filteredPRs = prs.filter((pr) => {
-    if (filters.sessionStatus) {
-      const hasSessions = (sessionsByPR[pr.number.toString()] || []).length > 0;
-      if (filters.sessionStatus === 'analyzed' && !hasSessions) return false;
-      if (filters.sessionStatus === 'unanalyzed' && hasSessions) return false;
-    }
-    return true;
-  });
+  // Memoize filtered PRs to avoid recalculation on every render
+  const filteredPRs = useMemo(() => {
+    return prs.filter((pr) => {
+      if (filters.sessionStatus) {
+        const hasSessions = (sessionsByPR[pr.number.toString()] || []).length > 0;
+        if (filters.sessionStatus === 'analyzed' && !hasSessions) return false;
+        if (filters.sessionStatus === 'unanalyzed' && hasSessions) return false;
+      }
+      return true;
+    });
+  }, [prs, filters.sessionStatus, sessionsByPR]);
 
   // Filter tabs
   const filterBar = (
@@ -232,102 +350,18 @@ export function PRList({
     <div className="flex flex-col flex-1 min-h-0">
       {filterBar}
       <div className="flex-1 overflow-auto min-h-0 divide-y divide-gray-700">
-        {filteredPRs.map((pr, index) => {
-          const prSessions = sessionsByPR[pr.number.toString()] || [];
-          // Check if any session is actively running
-          const hasRunning = prSessions.some(s => s.is_active);
-          const hasCompleted = prSessions.length > 0 && !hasRunning;
-
-          return (
-            <div
-              key={pr.number}
-              className={`p-3 cursor-pointer border-l-2 transition-all duration-150 ease-out list-item-hover list-item-enter ${
-                selectedPR === pr.number
-                  ? 'bg-gray-800/80 border-blue-500 list-item-selected'
-                  : 'border-transparent hover:bg-gray-800/60 hover:border-blue-500/50'
-              }`}
-              style={{ '--item-index': Math.min(index, 15) } as React.CSSProperties}
-              onClick={() => onSelectPR(pr.number)}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-400 text-sm">#{pr.number}</span>
-                    <h3 className="text-sm font-medium text-white truncate" title={pr.title}>
-                      {pr.title}
-                    </h3>
-                    {hasRunning && (
-                      <span
-                        className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-yellow-500/20 text-yellow-400 shrink-0 active-badge-glow"
-                        title="Session actively running"
-                        aria-label="Active session"
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
-                        Running
-                      </span>
-                    )}
-                    {!hasRunning && hasCompleted && (
-                      <span
-                        className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-500/20 text-green-400 shrink-0"
-                        title={`${prSessions.length} completed session${prSessions.length !== 1 ? 's' : ''}`}
-                        aria-label={`${prSessions.length} completed session${prSessions.length !== 1 ? 's' : ''}`}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                        {prSessions.length}
-                      </span>
-                    )}
-                  </div>
-                  {/* Branch info */}
-                  <div className="flex items-center gap-2 mt-1 text-xs">
-                    <span className="px-2 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 font-mono truncate max-w-[120px] transition-colors" title={pr.head_ref}>
-                      {pr.head_ref}
-                    </span>
-                    <svg className="w-3 h-3 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                    </svg>
-                    <span className="px-2 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 font-mono truncate max-w-[120px] transition-colors" title={pr.base_ref}>
-                      {pr.base_ref}
-                    </span>
-                  </div>
-                  {/* Labels */}
-                  {pr.labels.length > 0 && (
-                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                      {pr.labels.map((label) => (
-                        <span
-                          key={label}
-                          className="px-2 py-0.5 text-xs rounded-full bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
-                        >
-                          {label}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {/* Stats */}
-                  <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
-                    <span>by {pr.author}</span>
-                    <span className="flex items-center gap-1">
-                      <span className="text-green-500">+{pr.additions}</span>
-                      <span className="text-red-500">-{pr.deletions}</span>
-                    </span>
-                    <span>{pr.changed_files} file{pr.changed_files !== 1 ? 's' : ''}</span>
-                    {prSessions.length > 0 && (
-                      <span className="text-purple-400">{prSessions.length} session{prSessions.length !== 1 ? 's' : ''}</span>
-                    )}
-                  </div>
-                </div>
-                <PRStartSessionButton
-                  pr={pr}
-                  commands={prCommands}
-                  onStart={(_, command) => {
-                    onStartSession(pr, command);
-                  }}
-                  size="sm"
-                  className="shrink-0"
-                />
-              </div>
-            </div>
-          );
-        })}
+        {filteredPRs.map((pr, index) => (
+          <PRListItem
+            key={pr.number}
+            pr={pr}
+            index={index}
+            isSelected={selectedPR === pr.number}
+            prSessions={sessionsByPR[pr.number.toString()] || []}
+            prCommands={prCommands}
+            onSelect={() => onSelectPR(pr.number)}
+            onStartSession={onStartSession}
+          />
+        ))}
       </div>
 
       {/* Pagination - always visible to prevent layout shift */}
