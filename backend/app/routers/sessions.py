@@ -9,7 +9,7 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, TypedDict
+from typing import Callable, List, Optional, TypedDict
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -952,46 +952,80 @@ async def continue_session(session_id: str, data: ContinueSessionRequest = None)
 # Export Session to Markdown
 # ==========================================
 
+def _format_edit_tool(tool_input: dict) -> str:
+    """Format Edit tool use as Markdown."""
+    file_path = tool_input.get("file_path", "unknown")
+    old_str = tool_input.get("old_string", "")
+    new_str = tool_input.get("new_string", "")
+    return f"**Edit** `{file_path}`\n\n```diff\n- {old_str.replace(chr(10), chr(10) + '- ')}\n+ {new_str.replace(chr(10), chr(10) + '+ ')}\n```"
+
+
+def _format_read_tool(tool_input: dict) -> str:
+    """Format Read tool use as Markdown."""
+    file_path = tool_input.get("file_path", "unknown")
+    return f"**Read** `{file_path}`"
+
+
+def _format_write_tool(tool_input: dict) -> str:
+    """Format Write tool use as Markdown."""
+    file_path = tool_input.get("file_path", "unknown")
+    content = tool_input.get("content", "")
+    lines = content.count('\n') + 1
+    return f"**Write** `{file_path}` ({lines} lines)"
+
+
+def _format_bash_tool(tool_input: dict) -> str:
+    """Format Bash tool use as Markdown."""
+    command = tool_input.get("command", "")
+    return f"**Bash**\n```bash\n$ {command}\n```"
+
+
+def _format_grep_tool(tool_input: dict) -> str:
+    """Format Grep tool use as Markdown."""
+    pattern = tool_input.get("pattern", "")
+    path = tool_input.get("path", ".")
+    return f"**Grep** `{pattern}` in `{path}`"
+
+
+def _format_glob_tool(tool_input: dict) -> str:
+    """Format Glob tool use as Markdown."""
+    pattern = tool_input.get("pattern", "")
+    return f"**Glob** `{pattern}`"
+
+
+def _format_task_tool(tool_input: dict) -> str:
+    """Format Task tool use as Markdown."""
+    description = tool_input.get("description", "")
+    subagent_type = tool_input.get("subagent_type", "general")
+    return f"**Task** ({subagent_type}): {description}"
+
+
+# Registry mapping tool names to their formatter functions
+_TOOL_FORMATTERS: dict[str, Callable[[dict], str]] = {
+    "Edit": _format_edit_tool,
+    "Read": _format_read_tool,
+    "Write": _format_write_tool,
+    "Bash": _format_bash_tool,
+    "Grep": _format_grep_tool,
+    "Glob": _format_glob_tool,
+    "Task": _format_task_tool,
+}
+
+
 def _format_tool_use_markdown(tool: dict) -> str:
-    """Format a tool use as Markdown."""
+    """Format a tool use as Markdown.
+
+    Uses a registry of tool-specific formatters. Unknown tools
+    fall back to a generic format showing just the tool name.
+    """
     name = tool.get("name", "Unknown")
     tool_input = tool.get("input", {})
 
-    if name == "Edit":
-        file_path = tool_input.get("file_path", "unknown")
-        old_str = tool_input.get("old_string", "")
-        new_str = tool_input.get("new_string", "")
-        return f"**Edit** `{file_path}`\n\n```diff\n- {old_str.replace(chr(10), chr(10) + '- ')}\n+ {new_str.replace(chr(10), chr(10) + '+ ')}\n```"
+    formatter = _TOOL_FORMATTERS.get(name)
+    if formatter:
+        return formatter(tool_input)
 
-    if name == "Read":
-        file_path = tool_input.get("file_path", "unknown")
-        return f"**Read** `{file_path}`"
-
-    if name == "Write":
-        file_path = tool_input.get("file_path", "unknown")
-        content = tool_input.get("content", "")
-        lines = content.count('\n') + 1
-        return f"**Write** `{file_path}` ({lines} lines)"
-
-    if name == "Bash":
-        command = tool_input.get("command", "")
-        return f"**Bash**\n```bash\n$ {command}\n```"
-
-    if name == "Grep":
-        pattern = tool_input.get("pattern", "")
-        path = tool_input.get("path", ".")
-        return f"**Grep** `{pattern}` in `{path}`"
-
-    if name == "Glob":
-        pattern = tool_input.get("pattern", "")
-        return f"**Glob** `{pattern}`"
-
-    if name == "Task":
-        description = tool_input.get("description", "")
-        subagent_type = tool_input.get("subagent_type", "general")
-        return f"**Task** ({subagent_type}): {description}"
-
-    # Generic fallback
+    # Generic fallback for unknown tools
     return f"**{name}**"
 
 
