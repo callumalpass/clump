@@ -1,11 +1,12 @@
 import type { PR, SessionSummary, Process, CommandMetadata } from '../types';
-import type { PRFilters } from '../hooks/useApi';
+import type { PRFilters, SessionStatusFilter } from '../hooks/useApi';
 import { PRStartSessionButton } from './PRStartSessionButton';
 import {
   FilterBar,
   FilterBarRow,
   SearchInput,
   StateToggle,
+  SessionStatusToggle,
   SortControl,
   ItemCount,
   RefreshButton,
@@ -73,6 +74,10 @@ export function PRList({
     onFiltersChange({ ...filters, order });
   };
 
+  const setSessionStatus = (sessionStatus: SessionStatusFilter) => {
+    onFiltersChange({ ...filters, sessionStatus: sessionStatus === 'all' ? undefined : sessionStatus });
+  };
+
   const clearFilters = () => {
     onFiltersChange({ state: 'open' });
   };
@@ -81,7 +86,18 @@ export function PRList({
     filters.search ||
     filters.state !== 'open' ||
     filters.sort !== 'created' ||
-    filters.order !== 'desc';
+    filters.order !== 'desc' ||
+    filters.sessionStatus;
+
+  // Filter PRs by session status
+  const filteredPRs = prs.filter((pr) => {
+    if (filters.sessionStatus) {
+      const hasSessions = (sessionsByPR[pr.number.toString()] || []).length > 0;
+      if (filters.sessionStatus === 'analyzed' && !hasSessions) return false;
+      if (filters.sessionStatus === 'unanalyzed' && hasSessions) return false;
+    }
+    return true;
+  });
 
   // Filter tabs
   const filterBar = (
@@ -91,8 +107,11 @@ export function PRList({
         onChange={setSearch}
         placeholder="Search PRs..."
       />
-      <FilterBarRow className="justify-between">
-        <StateToggle value={filters.state || 'open'} onChange={setState} />
+      <FilterBarRow className="justify-between flex-wrap gap-y-2">
+        <div className="flex items-center gap-2">
+          <StateToggle value={filters.state || 'open'} onChange={setState} />
+          <SessionStatusToggle value={filters.sessionStatus || 'all'} onChange={setSessionStatus} />
+        </div>
         <div className="flex items-center gap-2">
           <SortControl
             sortValue={filters.sort || 'created'}
@@ -101,7 +120,7 @@ export function PRList({
             onSortChange={setSort}
             onOrderChange={setOrder}
           />
-          <ItemCount count={prs.length} singular="PR" />
+          <ItemCount count={filteredPRs.length} singular="PR" />
           {onRefresh && <RefreshButton onClick={onRefresh} loading={loading} />}
         </div>
       </FilterBarRow>
@@ -139,9 +158,8 @@ export function PRList({
   }
 
   // Empty state
-  if (prs.length === 0) {
-    const stateFilter = filters.state || 'open';
-    const hasFilters = filters.search || stateFilter !== 'open';
+  if (filteredPRs.length === 0) {
+    const hasFilters = filters.search || filters.state !== 'open' || filters.sessionStatus;
     return (
       <div className="flex flex-col flex-1 min-h-0">
         {filterBar}
@@ -168,7 +186,7 @@ export function PRList({
     <div className="flex flex-col flex-1 min-h-0">
       {filterBar}
       <div className="flex-1 overflow-auto min-h-0 divide-y divide-gray-700">
-        {prs.map((pr) => {
+        {filteredPRs.map((pr) => {
           const prSessions = sessionsByPR[pr.number.toString()] || [];
           // Check if any session is actively running
           const hasRunning = prSessions.some(s => s.is_active);

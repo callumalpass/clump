@@ -65,13 +65,23 @@ export function IssueList({
     return acc;
   }, {} as Record<string, SessionSummary[]>);
 
-  // Filter issues by selected tag
-  const filteredIssues = selectedTagId
-    ? issues.filter((issue) => {
-        const issueTags = issueTagsMap[issue.number] || [];
-        return issueTags.some((t) => t.id === selectedTagId);
-      })
-    : issues;
+  // Filter issues by selected tag and session status
+  const filteredIssues = issues.filter((issue) => {
+    // Filter by tag
+    if (selectedTagId) {
+      const issueTags = issueTagsMap[issue.number] || [];
+      if (!issueTags.some((t) => t.id === selectedTagId)) {
+        return false;
+      }
+    }
+    // Filter by session status
+    if (filters.sessionStatus) {
+      const hasSessions = (sessionsByIssue[issue.number.toString()] || []).length > 0;
+      if (filters.sessionStatus === 'analyzed' && !hasSessions) return false;
+      if (filters.sessionStatus === 'unanalyzed' && hasSessions) return false;
+    }
+    return true;
+  });
 
   return (
     <div className="flex flex-col flex-1 min-h-0">

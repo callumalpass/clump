@@ -78,12 +78,15 @@ interface IssueListResponse {
   per_page: number;
 }
 
+export type SessionStatusFilter = 'all' | 'analyzed' | 'unanalyzed';
+
 export interface IssueFilters {
   state?: 'open' | 'closed' | 'all';
   search?: string;
   labels?: string[];
   sort?: 'created' | 'updated' | 'comments';
   order?: 'asc' | 'desc';
+  sessionStatus?: SessionStatusFilter;  // Client-side filter for issues with/without sessions
 }
 
 export function useIssues(repoId: number | null, filters: IssueFilters = {}) {
@@ -182,6 +185,7 @@ export interface PRFilters {
   search?: string;
   sort?: 'created' | 'updated';
   order?: 'asc' | 'desc';
+  sessionStatus?: SessionStatusFilter;  // Client-side filter for PRs with/without sessions
 }
 
 export function usePRs(repoId: number | null, filters: PRFilters = {}) {

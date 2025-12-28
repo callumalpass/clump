@@ -113,6 +113,36 @@ export function StateToggle({ value, onChange }: StateToggleProps) {
   );
 }
 
+// Session status toggle component (All/Analyzed/Unanalyzed)
+type SessionStatusFilter = 'all' | 'analyzed' | 'unanalyzed';
+
+interface SessionStatusToggleProps {
+  value: SessionStatusFilter;
+  onChange: (value: SessionStatusFilter) => void;
+}
+
+export function SessionStatusToggle({ value, onChange }: SessionStatusToggleProps) {
+  const statuses: { value: SessionStatusFilter; label: string }[] = [
+    { value: 'all', label: 'All' },
+    { value: 'analyzed', label: 'Analyzed' },
+    { value: 'unanalyzed', label: 'New' },
+  ];
+  return (
+    <div className={filterBarStyles.toggleGroup}>
+      {statuses.map((status) => (
+        <button
+          key={status.value}
+          onClick={() => onChange(status.value)}
+          className={filterBarStyles.toggleButton(value === status.value)}
+          title={status.value === 'analyzed' ? 'Has session' : status.value === 'unanalyzed' ? 'No sessions yet' : 'Show all'}
+        >
+          {status.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // Sort dropdown with order toggle
 interface SortOption {
   value: string;

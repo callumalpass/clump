@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 import type { Issue } from '../types';
-import type { IssueFilters as IssueFiltersType } from '../hooks/useApi';
+import type { IssueFilters as IssueFiltersType, SessionStatusFilter } from '../hooks/useApi';
 import {
   FilterBar,
   FilterBarRow,
   SearchInput,
   StateToggle,
+  SessionStatusToggle,
   SortControl,
   LabelSelect,
   ItemCount,
@@ -58,6 +59,10 @@ export function IssueFilters({ filters, onFiltersChange, issues, total, onRefres
     onFiltersChange({ ...filters, labels: labels.length > 0 ? labels : undefined });
   };
 
+  const setSessionStatus = (sessionStatus: SessionStatusFilter) => {
+    onFiltersChange({ ...filters, sessionStatus: sessionStatus === 'all' ? undefined : sessionStatus });
+  };
+
   const clearFilters = () => {
     onFiltersChange({ state: 'open' });
   };
@@ -67,7 +72,8 @@ export function IssueFilters({ filters, onFiltersChange, issues, total, onRefres
     filters.state !== 'open' ||
     (filters.labels && filters.labels.length > 0) ||
     filters.sort !== 'created' ||
-    filters.order !== 'desc';
+    filters.order !== 'desc' ||
+    filters.sessionStatus;
 
   return (
     <FilterBar>
@@ -78,9 +84,12 @@ export function IssueFilters({ filters, onFiltersChange, issues, total, onRefres
         placeholder="Search issues..."
       />
 
-      {/* State toggle and sort */}
-      <FilterBarRow className="justify-between">
-        <StateToggle value={filters.state || 'open'} onChange={setState} />
+      {/* State toggle, session status, and sort */}
+      <FilterBarRow className="justify-between flex-wrap gap-y-2">
+        <div className="flex items-center gap-2">
+          <StateToggle value={filters.state || 'open'} onChange={setState} />
+          <SessionStatusToggle value={filters.sessionStatus || 'all'} onChange={setSessionStatus} />
+        </div>
         <div className="flex items-center gap-2">
           <SortControl
             sortValue={filters.sort || 'created'}
