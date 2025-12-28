@@ -3,6 +3,7 @@ import type { TranscriptMessage, ToolUse, ParsedTranscript } from '../types';
 import { Markdown } from './Markdown';
 import { Editor } from './Editor';
 import { SubsessionView } from './SubsessionView';
+import { calculateCost, formatCost } from '../utils/costs';
 
 // Highlight matching text in a string
 // Memoized to avoid recomputation on every render
@@ -118,58 +119,6 @@ function getDuration(startTime?: string, endTime?: string): string {
   return `${(diffMs / 3600000).toFixed(1)}h`;
 }
 
-// Estimate cost based on model and token counts (prices per million tokens as of Dec 2024)
-function estimateCost(
-  model: string | undefined,
-  inputTokens: number,
-  outputTokens: number,
-  cacheReadTokens: number,
-  cacheCreationTokens: number
-): number | null {
-  if (!model) return null;
-
-  // Pricing per million tokens (December 2024)
-  let inputPrice: number;
-  let outputPrice: number;
-  let cacheReadPrice: number;
-  let cacheCreationPrice: number;
-
-  if (model.includes('opus')) {
-    // Claude Opus 4.5
-    inputPrice = 15.0;      // $15/MTok input
-    outputPrice = 75.0;     // $75/MTok output
-    cacheReadPrice = 1.5;   // $1.50/MTok cache read
-    cacheCreationPrice = 18.75; // $18.75/MTok cache creation
-  } else if (model.includes('haiku')) {
-    // Claude Haiku
-    inputPrice = 0.25;      // $0.25/MTok input
-    outputPrice = 1.25;     // $1.25/MTok output
-    cacheReadPrice = 0.025; // $0.025/MTok cache read
-    cacheCreationPrice = 0.3125; // $0.3125/MTok cache creation
-  } else {
-    // Default to Sonnet pricing
-    inputPrice = 3.0;       // $3/MTok input
-    outputPrice = 15.0;     // $15/MTok output
-    cacheReadPrice = 0.3;   // $0.30/MTok cache read
-    cacheCreationPrice = 3.75; // $3.75/MTok cache creation
-  }
-
-  // Calculate cost: (tokens / 1M) * price
-  const inputCost = (inputTokens / 1_000_000) * inputPrice;
-  const outputCost = (outputTokens / 1_000_000) * outputPrice;
-  const cacheReadCost = (cacheReadTokens / 1_000_000) * cacheReadPrice;
-  const cacheCreationCost = (cacheCreationTokens / 1_000_000) * cacheCreationPrice;
-
-  return inputCost + outputCost + cacheReadCost + cacheCreationCost;
-}
-
-// Format cost for display
-function formatCost(cost: number | null): string {
-  if (cost === null) return '';
-  if (cost < 0.01) return '<$0.01';
-  if (cost < 1) return `$${cost.toFixed(2)}`;
-  return `$${cost.toFixed(2)}`;
-}
 
 // Format time gap for display between messages
 function formatTimeGap(ms: number): string | null {
@@ -215,12 +164,12 @@ function SessionStats({ transcript }: { transcript: ParsedTranscript }) {
   const totalCacheRead = transcript.total_cache_read_tokens ?? 0;
   const totalCacheCreation = transcript.total_cache_creation_tokens ?? 0;
   const totalTokens = totalInput + totalOutput;
-  const estimatedCost = estimateCost(
-    transcript.model,
+  const estimatedCost = calculateCost(
     totalInput,
     totalOutput,
     totalCacheRead,
-    totalCacheCreation
+    totalCacheCreation,
+    transcript.model
   );
 
   return (
