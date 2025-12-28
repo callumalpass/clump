@@ -170,9 +170,9 @@ class ProcessManager:
                 os.environ["FORCE_COLOR"] = "1"
                 os.environ["CI"] = ""  # Unset CI to prevent non-interactive detection
                 os.environ["TERM_PROGRAM"] = "xterm"
-                # Ensure proper columns/lines are set
-                os.environ["COLUMNS"] = "120"
-                os.environ["LINES"] = "30"
+                # Ensure proper columns/lines are set (using module constants)
+                os.environ["COLUMNS"] = str(INITIAL_PTY_COLS)
+                os.environ["LINES"] = str(INITIAL_PTY_ROWS)
                 os.execvp("claude", args)
             except Exception as e:
                 # Write error to stderr so it can be captured
