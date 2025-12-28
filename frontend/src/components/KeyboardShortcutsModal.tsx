@@ -15,7 +15,9 @@ const shortcutGroups: ShortcutGroup[] = [
   {
     title: 'Navigation',
     shortcuts: [
-      { keys: ['/'], description: 'Focus search and switch to Analyses tab' },
+      { keys: ['/'], description: 'Focus search in current tab' },
+      { keys: ['['], description: 'Previous page in list' },
+      { keys: [']'], description: 'Next page in list' },
       { keys: ['Esc'], description: 'Close modal, deselect, or close terminal' },
       { keys: ['?'], description: 'Show this help dialog' },
     ],

@@ -448,6 +448,32 @@ export default function App() {
         return;
       }
 
+      // "[" : Previous page in current list (without Alt - Alt+[ is for session tabs)
+      if (e.key === '[' && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        if (activeTab === 'issues' && issuesPage > 1) {
+          goToIssuesPage(issuesPage - 1);
+        } else if (activeTab === 'prs' && prsPage > 1) {
+          goToPRsPage(prsPage - 1);
+        } else if (activeTab === 'sessions' && sessionsPage > 1) {
+          goToSessionsPage(sessionsPage - 1);
+        }
+        return;
+      }
+
+      // "]" : Next page in current list (without Alt - Alt+] is for session tabs)
+      if (e.key === ']' && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        if (activeTab === 'issues' && issuesPage < issuesTotalPages) {
+          goToIssuesPage(issuesPage + 1);
+        } else if (activeTab === 'prs' && prsPage < prsTotalPages) {
+          goToPRsPage(prsPage + 1);
+        } else if (activeTab === 'sessions' && sessionsPage < sessionsTotalPages) {
+          goToSessionsPage(sessionsPage + 1);
+        }
+        return;
+      }
+
       // Escape: Close modals, deselect issue/PR, or close terminal
       if (e.key === 'Escape') {
         if (shortcutsOpen) {
@@ -467,7 +493,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [settingsOpen, shortcutsOpen, activeProcessId, selectedIssue, selectedPR, activeTab]);
+  }, [settingsOpen, shortcutsOpen, activeProcessId, selectedIssue, selectedPR, activeTab, issuesPage, issuesTotalPages, goToIssuesPage, prsPage, prsTotalPages, goToPRsPage, sessionsPage, sessionsTotalPages, goToSessionsPage]);
 
   const handleSelectSession = useCallback((session: SessionSummary) => {
     // Check if this session is active (has a running process)
