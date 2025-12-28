@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { useSchedules, describeCron, formatRelativeTime, CRON_PRESETS } from '../hooks/useSchedules';
-import type { ScheduledJob, ScheduledJobCreate, CommandMetadata, ScheduledJobTargetType } from '../types';
+import type { ScheduledJob, ScheduledJobCreate, ScheduledJobTargetType, CommandsResponse } from '../types';
 
 interface ScheduleListProps {
   repoId: number;
   repoPath: string;
-  commands: { issue: CommandMetadata[]; pr: CommandMetadata[]; general: CommandMetadata[] };
+  commands: CommandsResponse;
+  selectedScheduleId?: number | null;
+  onSelectSchedule?: (scheduleId: number) => void;
 }
 
-export function ScheduleList({ repoId, repoPath, commands }: ScheduleListProps) {
+export function ScheduleList({ repoId, commands, selectedScheduleId, onSelectSchedule }: ScheduleListProps) {
   const {
     schedules,
     loading,
@@ -98,8 +100,8 @@ export function ScheduleList({ repoId, repoPath, commands }: ScheduleListProps) 
             Loading schedules...
           </div>
         ) : schedules.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 rounded-full bg-gray-800 flex items-center justify-center mx-auto mb-4">
+          <div className="text-center py-12 empty-state-enter">
+            <div className="w-16 h-16 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4 empty-state-icon-float">
               <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -110,7 +112,7 @@ export function ScheduleList({ repoId, repoPath, commands }: ScheduleListProps) 
             </p>
             <button
               onClick={() => setIsCreating(true)}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors btn-primary"
             >
               Create your first schedule
             </button>
@@ -121,6 +123,8 @@ export function ScheduleList({ repoId, repoPath, commands }: ScheduleListProps) 
               <ScheduleCard
                 key={schedule.id}
                 schedule={schedule}
+                selected={selectedScheduleId === schedule.id}
+                onSelect={() => onSelectSchedule?.(schedule.id)}
                 onTrigger={() => handleTrigger(schedule)}
                 onDelete={() => handleDelete(schedule)}
                 onTogglePause={() => handleTogglePause(schedule)}
@@ -144,12 +148,14 @@ export function ScheduleList({ repoId, repoPath, commands }: ScheduleListProps) 
 
 interface ScheduleCardProps {
   schedule: ScheduledJob;
+  selected?: boolean;
+  onSelect?: () => void;
   onTrigger: () => void;
   onDelete: () => void;
   onTogglePause: () => void;
 }
 
-function ScheduleCard({ schedule, onTrigger, onDelete, onTogglePause }: ScheduleCardProps) {
+function ScheduleCard({ schedule, selected, onSelect, onTrigger, onDelete, onTogglePause }: ScheduleCardProps) {
   const nextRun = schedule.next_run_at
     ? formatRelativeTime(new Date(schedule.next_run_at))
     : 'Not scheduled';
@@ -157,9 +163,16 @@ function ScheduleCard({ schedule, onTrigger, onDelete, onTogglePause }: Schedule
   const isPaused = schedule.status === 'paused';
 
   return (
-    <div className={`bg-gray-800 rounded-lg p-4 border transition-colors ${
-      isPaused ? 'border-gray-600 opacity-60' : 'border-gray-700'
-    }`}>
+    <div
+      onClick={onSelect}
+      className={`bg-gray-800 rounded-lg p-4 border transition-all duration-150 ease-out cursor-pointer list-item-hover ${
+        selected
+          ? 'border-blue-500 ring-1 ring-blue-500/50 list-item-selected'
+          : isPaused
+          ? 'border-gray-600 opacity-60 hover:border-gray-500'
+          : 'border-gray-700 hover:border-gray-600'
+      }`}
+    >
       <div className="flex justify-between items-start">
         <div className="flex-1 min-w-0">
           <h3 className="font-medium flex items-center gap-2">
@@ -170,7 +183,7 @@ function ScheduleCard({ schedule, onTrigger, onDelete, onTogglePause }: Schedule
             <p className="text-sm text-gray-400 mt-1 line-clamp-2">{schedule.description}</p>
           )}
         </div>
-        <div className="flex items-center gap-1 ml-2">
+        <div className="flex items-center gap-1 ml-2" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={onTrigger}
             className="p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors"
@@ -264,7 +277,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 interface ScheduleCreateModalProps {
-  commands: { issue: CommandMetadata[]; pr: CommandMetadata[] };
+  commands: CommandsResponse;
   onClose: () => void;
   onCreate: (data: ScheduledJobCreate) => Promise<void>;
 }
@@ -333,9 +346,9 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
     : [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop-enter">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-[#161b22] border border-gray-700 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col mx-4">
+      <div className="relative bg-[#161b22] border border-gray-700 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col mx-4 modal-content-enter">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
           <h2 className="text-lg font-semibold">Create Scheduled Job</h2>
