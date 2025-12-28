@@ -140,6 +140,13 @@ body {
   box-shadow: -2px 0 12px rgba(59, 130, 246, 0.2), 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
+/* Active/pressed state for clickable list items - provides tactile feedback */
+.list-item-hover:active {
+  transform: translateX(1px) scale(0.995);
+  box-shadow: -1px 0 6px rgba(59, 130, 246, 0.15), 0 1px 4px rgba(0, 0, 0, 0.1);
+  background-color: rgba(55, 65, 81, 0.5);
+}
+
 /* Selected list item enhanced state */
 .list-item-selected {
   box-shadow: -3px 0 16px rgba(59, 130, 246, 0.25), 0 2px 8px rgba(0, 0, 0, 0.2);
