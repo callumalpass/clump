@@ -339,12 +339,11 @@ export function PRList({
           <button
             onClick={() => onPageChange(page - 1)}
             disabled={page <= 1}
-            className={`btn-secondary px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${focusRing} flex items-center gap-1`}
-            aria-label="Go to previous page"
+            className={`btn-secondary px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${focusRing} flex items-center gap-1.5`}
+            aria-label="Go to previous page (press [ key)"
+            title="Previous page ([)"
           >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
+            <kbd className="kbd-hint">[</kbd>
             <span>Prev</span>
           </button>
           <span className="px-2 text-gray-300 tabular-nums">
@@ -353,13 +352,12 @@ export function PRList({
           <button
             onClick={() => onPageChange(page + 1)}
             disabled={page >= totalPages}
-            className={`btn-secondary px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${focusRing} flex items-center gap-1`}
-            aria-label="Go to next page"
+            className={`btn-secondary px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${focusRing} flex items-center gap-1.5`}
+            aria-label="Go to next page (press ] key)"
+            title="Next page (])"
           >
             <span>Next</span>
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
+            <kbd className="kbd-hint">]</kbd>
           </button>
         </div>
       </div>

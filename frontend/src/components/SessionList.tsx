@@ -372,11 +372,11 @@ export function SessionList({
           <button
             onClick={() => onPageChange(page - 1)}
             disabled={page <= 1}
-            className="btn-secondary px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900 flex items-center gap-1"
+            className="btn-secondary px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900 flex items-center gap-1.5"
             aria-label="Go to previous page (press [ key)"
             title="Previous page ([)"
           >
-            <kbd className="text-[10px] px-1 py-0.5 rounded bg-gray-600/50 text-gray-400 font-mono">[</kbd>
+            <kbd className="kbd-hint">[</kbd>
             <span>Prev</span>
           </button>
           <span className="px-2 text-gray-300 tabular-nums">
@@ -385,12 +385,12 @@ export function SessionList({
           <button
             onClick={() => onPageChange(page + 1)}
             disabled={page >= totalPages}
-            className="btn-secondary px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900 flex items-center gap-1"
+            className="btn-secondary px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900 flex items-center gap-1.5"
             aria-label="Go to next page (press ] key)"
             title="Next page (])"
           >
             <span>Next</span>
-            <kbd className="text-[10px] px-1 py-0.5 rounded bg-gray-600/50 text-gray-400 font-mono">]</kbd>
+            <kbd className="kbd-hint">]</kbd>
           </button>
         </div>
       </div>
