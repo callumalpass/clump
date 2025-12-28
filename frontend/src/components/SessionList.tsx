@@ -209,9 +209,11 @@ const SessionListItem = memo(function SessionListItem({
 });
 
 export type SessionFilter = 'all' | 'active' | 'starred' | 'with-entities';
+export type ModelFilter = 'all' | 'sonnet' | 'opus' | 'haiku';
 
 export interface SessionListFilters {
   category: SessionFilter;
+  model?: ModelFilter;
   search?: string;
   sort?: 'created' | 'updated' | 'messages';
   order?: 'asc' | 'desc';
@@ -240,6 +242,13 @@ const CATEGORY_FILTERS: { value: SessionFilter; label: string }[] = [
   { value: 'active', label: 'Active' },
   { value: 'starred', label: 'Starred' },
   { value: 'with-entities', label: 'Linked' },
+];
+
+const MODEL_FILTERS: { value: ModelFilter; label: string; color: string }[] = [
+  { value: 'all', label: 'All Models', color: 'text-gray-400' },
+  { value: 'sonnet', label: 'Sonnet', color: 'text-purple-400' },
+  { value: 'opus', label: 'Opus', color: 'text-amber-500' },
+  { value: 'haiku', label: 'Haiku', color: 'text-cyan-400' },
 ];
 
 const SORT_OPTIONS = [
@@ -356,6 +365,10 @@ export function SessionList({
     onFiltersChange({ ...filters, category });
   };
 
+  const setModel = (model: ModelFilter) => {
+    onFiltersChange({ ...filters, model: model === 'all' ? undefined : model });
+  };
+
   const setSort = (sort: string) => {
     onFiltersChange({ ...filters, sort: sort as 'created' | 'updated' | 'messages' });
   };
@@ -372,6 +385,7 @@ export function SessionList({
   const activeFilterCount = [
     filters.search ? 1 : 0,
     filters.category !== 'all' ? 1 : 0,
+    filters.model && filters.model !== 'all' ? 1 : 0,
     filters.sort !== 'created' ? 1 : 0,
     filters.order !== 'desc' ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
@@ -476,6 +490,18 @@ export function SessionList({
             key={f.value}
             onClick={() => setCategory(f.value)}
             className={filterBarStyles.pillButton(filters.category === f.value)}
+          >
+            {f.label}
+          </button>
+        ))}
+        <span className="text-gray-600 mx-1">|</span>
+        {MODEL_FILTERS.map((f) => (
+          <button
+            key={f.value}
+            onClick={() => setModel(f.value)}
+            className={`${filterBarStyles.pillButton((filters.model || 'all') === f.value)} ${
+              (filters.model || 'all') === f.value ? f.color : ''
+            }`}
           >
             {f.label}
           </button>

@@ -502,6 +502,7 @@ async def list_sessions(
     starred: Optional[bool] = None,
     has_entities: Optional[bool] = None,
     search: Optional[str] = None,
+    model: Optional[str] = Query(default=None, regex="^(sonnet|opus|haiku)$"),
     sort: Optional[str] = Query(default="updated", regex="^(created|updated|messages)$"),
     order: Optional[str] = Query(default="desc", regex="^(asc|desc)$"),
     limit: int = Query(default=50, le=200),
@@ -564,6 +565,10 @@ async def list_sessions(
             summaries = [s for s in summaries if len(s.entities) > 0]
         else:
             summaries = [s for s in summaries if len(s.entities) == 0]
+
+    if model:
+        # Filter by model name (sonnet, opus, haiku)
+        summaries = [s for s in summaries if s.model and model in s.model.lower()]
 
     if search:
         search_lower = search.lower()
