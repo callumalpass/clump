@@ -464,7 +464,24 @@ textarea::placeholder {
   border: 1px solid #4b5563;
   border-radius: 0.25rem;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  transition: color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+  transition: opacity 150ms ease, transform 150ms ease, color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+
+/* Subtle pop-in animation for keyboard hints that fade in on hover */
+@keyframes kbd-hint-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Apply pop-in animation when kbd-hint transitions from hidden to visible */
+.group:hover .kbd-hint {
+  animation: kbd-hint-pop-in 150ms ease-out forwards;
 }
 
 /* Brighten keyboard hint on button hover */
@@ -998,8 +1015,10 @@ button:disabled .kbd-hint {
   .kbd-hint,
   button:hover:not(:disabled) .kbd-hint,
   button:active:not(:disabled) .kbd-hint,
-  button:disabled .kbd-hint {
+  button:disabled .kbd-hint,
+  .group:hover .kbd-hint {
     transition-duration: 0.01ms !important;
+    animation: none !important;
   }
 
   /* Reduce resize handle transitions */
