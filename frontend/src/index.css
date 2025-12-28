@@ -268,6 +268,44 @@ textarea::placeholder {
   opacity: 1;
 }
 
+/* Alert message entrance animation - gentle attention-grabbing slide and fade */
+@keyframes alert-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.alert-enter {
+  animation: alert-slide-in 200ms ease-out forwards;
+}
+
+/* Alert message left accent bar with glow effect */
+.alert-accent {
+  position: relative;
+}
+
+.alert-accent::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 3px 0 0 3px;
+  background: var(--alert-color);
+  box-shadow: 0 0 8px var(--alert-glow);
+  transition: box-shadow 200ms ease;
+}
+
+.alert-accent:hover::before {
+  box-shadow: 0 0 12px var(--alert-glow);
+}
+
 /* Toggle button group styling */
 .toggle-btn {
   transition: background-color 150ms ease, color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
@@ -547,8 +585,15 @@ button:active:not(:disabled) .kbd-hint {
   .list-item-enter,
   .skeleton-item-enter,
   .active-badge-glow,
-  .star-button-animate {
+  .star-button-animate,
+  .alert-enter {
     animation: none;
+  }
+
+  /* Ensure alert is visible immediately */
+  .alert-enter {
+    opacity: 1;
+    transform: none;
   }
 
   /* Disable star button hover transform */
