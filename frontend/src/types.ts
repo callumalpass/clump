@@ -5,6 +5,16 @@ export interface Repo {
   local_path: string;
 }
 
+export interface RepoSessionCount {
+  repo_id: number;
+  total: number;
+  active: number;
+}
+
+export interface SessionCountsResponse {
+  counts: RepoSessionCount[];
+}
+
 export interface Issue {
   number: number;
   title: string;

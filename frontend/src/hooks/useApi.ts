@@ -3,7 +3,8 @@ import type {
   Repo, Issue, IssueDetail, PR, Process,
   SessionSummary, SessionDetail, SessionListResponse, EntityLink,
   ClaudeCodeSettings, ProcessCreateOptions, Tag, IssueTagsMap, GitHubLabel,
-  CommandsResponse, CommandMetadata, SubsessionDetail
+  CommandsResponse, CommandMetadata, SubsessionDetail,
+  RepoSessionCount, SessionCountsResponse
 } from '../types';
 
 export interface EntityInput {
@@ -423,6 +424,36 @@ export function useSessions(filters: SessionFilters = {}) {
   const totalPages = Math.ceil(total / perPage);
 
   return { sessions, total, loading, refresh, continueSession, deleteSession, updateSessionMetadata, page, totalPages, goToPage };
+}
+
+// Session counts per repo (for badges)
+export function useSessionCounts() {
+  const [counts, setCounts] = useState<Map<number, RepoSessionCount>>(new Map());
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    try {
+      const data = await fetchJson<SessionCountsResponse>(`${API_BASE}/sessions/counts`);
+      const countsMap = new Map<number, RepoSessionCount>();
+      for (const count of data.counts) {
+        countsMap.set(count.repo_id, count);
+      }
+      setCounts(countsMap);
+    } catch (e) {
+      console.error('Failed to fetch session counts:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    // Poll for updates
+    const interval = setInterval(refresh, 5000);
+    return () => clearInterval(interval);
+  }, [refresh]);
+
+  return { counts, loading, refresh };
 }
 
 // Fetch full session detail with transcript
