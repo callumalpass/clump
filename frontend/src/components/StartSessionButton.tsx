@@ -95,7 +95,7 @@ export function StartSessionButton({ issue, commands, onStart, size = 'md', clas
         aria-expanded={showDropdown}
         aria-haspopup="listbox"
       >
-        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className={`w-3 h-3 transition-transform duration-150 ${showDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
