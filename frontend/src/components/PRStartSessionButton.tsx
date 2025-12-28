@@ -53,9 +53,15 @@ export function PRStartSessionButton({ pr, commands, onStart, size = 'md', class
       <div className={`inline-flex ${className}`}>
         <button
           disabled
-          className={`px-3 ${sizeClasses} bg-gray-600 text-gray-400 rounded-md font-medium cursor-not-allowed`}
+          className={`inline-flex items-center gap-1.5 px-3 ${sizeClasses} bg-gray-600 text-gray-400 rounded-md font-medium cursor-not-allowed`}
+          aria-busy="true"
+          aria-label="Loading session commands"
         >
-          Loading...
+          <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <span>Loading</span>
         </button>
       </div>
     );
@@ -91,12 +97,11 @@ export function PRStartSessionButton({ pr, commands, onStart, size = 'md', class
       </button>
 
       {/* Dropdown menu */}
+      {showDropdown && (
       <div
-        className={`absolute right-0 top-full mt-1 w-64 bg-gray-800 border border-gray-600 rounded-md shadow-lg z-20 transition-all duration-150 origin-top-right ${
-          showDropdown
-            ? 'opacity-100 scale-100'
-            : 'opacity-0 scale-95 pointer-events-none'
-        }`}
+        className="absolute right-0 top-full mt-1 w-64 bg-gray-800 border border-gray-600 rounded-md shadow-lg z-20 dropdown-menu-enter"
+        role="listbox"
+        aria-label="Select PR session command"
       >
         {commands.map((command) => (
             <button
@@ -121,6 +126,7 @@ export function PRStartSessionButton({ pr, commands, onStart, size = 'md', class
             </button>
         ))}
       </div>
+      )}
     </div>
   );
 }
