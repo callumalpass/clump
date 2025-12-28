@@ -58,10 +58,14 @@ class HeadlessAnalyzer:
 
     def register_running(self, session_id: str) -> None:
         """Register a session as running. Call before starting the session."""
+        import logging
+        logging.getLogger(__name__).info(f"Registering session as running: {session_id}")
         self._active_session_ids.add(session_id)
 
     def unregister_running(self, session_id: str) -> None:
         """Unregister a session as running. Call when session completes."""
+        import logging
+        logging.getLogger(__name__).info(f"Unregistering session (completed): {session_id}")
         self._active_session_ids.discard(session_id)
 
     def _build_command(
@@ -243,6 +247,8 @@ class HeadlessAnalyzer:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=working_dir,
+            # Increase buffer limit to 10MB to handle large tool outputs
+            limit=10 * 1024 * 1024,
         )
 
         run_id = session_id or str(uuid4())[:8]
@@ -326,6 +332,9 @@ class HeadlessAnalyzer:
         """List IDs of running sessions."""
         # Combine both tracking mechanisms for robustness
         all_running = set(self._running_sessions.keys()) | self._active_session_ids
+        import logging
+        if all_running:
+            logging.getLogger(__name__).debug(f"list_running: {all_running}")
         return list(all_running)
 
 
