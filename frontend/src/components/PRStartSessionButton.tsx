@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import type { PR, CommandMetadata } from '../types';
+import { focusRingInset } from '../utils/styles';
 
 interface PRStartSessionButtonProps {
   pr: PR;
@@ -110,7 +111,7 @@ export function PRStartSessionButton({ pr, commands, onStart, size = 'md', class
                 e.stopPropagation();
                 handleCommandSelect(command);
               }}
-              className={`w-full px-3 py-2 text-left hover:bg-gray-700 first:rounded-t-md last:rounded-b-md focus:outline-none focus:bg-gray-700 ${
+              className={`w-full px-3 py-2 text-left hover:bg-gray-700 first:rounded-t-md last:rounded-b-md focus:bg-gray-700 ${focusRingInset} ${
                 selectedCommand?.id === command.id ? 'bg-gray-700' : ''
               }`}
             >

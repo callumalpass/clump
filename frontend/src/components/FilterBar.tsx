@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, ReactNode } from 'react';
-import { focusRing } from '../utils/styles';
+import { focusRing, focusRingInset } from '../utils/styles';
 
 // Shared filter bar styling constants
 export const filterBarStyles = {
@@ -273,7 +273,7 @@ export function LabelSelect({ selectedLabels, availableLabels, onChange }: Label
                   toggleLabel(label);
                   setShowDropdown(false);
                 }}
-                className={`dropdown-item-enter w-full px-3 py-1.5 text-left text-xs text-gray-300 hover:bg-gray-700 hover:text-white truncate transition-colors duration-100 ${focusRing} focus:bg-gray-700 focus:text-white`}
+                className={`dropdown-item-enter w-full px-3 py-1.5 text-left text-xs text-gray-300 hover:bg-gray-700 hover:text-white truncate transition-colors duration-100 ${focusRingInset} focus:bg-gray-700 focus:text-white`}
                 style={{ '--item-index': index } as React.CSSProperties}
               >
                 {label}

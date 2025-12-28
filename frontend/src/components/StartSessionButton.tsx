@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import type { CommandMetadata } from '../types';
+import { focusRingInset } from '../utils/styles';
 
 // Minimal issue info needed for starting a session
 export interface SessionableIssue {
@@ -114,7 +115,7 @@ export function StartSessionButton({ issue, commands, onStart, size = 'md', clas
                 e.stopPropagation();
                 handleCommandSelect(command);
               }}
-              className={`w-full px-3 py-2 text-left hover:bg-gray-700 first:rounded-t-md last:rounded-b-md focus:outline-none focus:bg-gray-700 ${
+              className={`w-full px-3 py-2 text-left hover:bg-gray-700 first:rounded-t-md last:rounded-b-md focus:bg-gray-700 ${focusRingInset} ${
                 selectedCommand?.id === command.id ? 'bg-gray-700' : ''
               }`}
             >
