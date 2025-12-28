@@ -330,6 +330,14 @@ def transcript_to_dict(transcript: ParsedTranscript) -> dict:
                     }
                     for t in msg.tool_uses
                 ],
+                'tool_results': [
+                    {
+                        'tool_use_id': r.tool_use_id,
+                        'content': r.content,
+                        'is_error': r.is_error,
+                    }
+                    for r in msg.tool_results
+                ],
                 'model': msg.model,
                 'usage': {
                     'input_tokens': msg.usage.input_tokens,

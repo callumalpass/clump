@@ -189,6 +189,86 @@ class TestTranscriptToDict:
 
         assert result["messages"][0]["usage"] is None
 
+    def test_converts_message_with_tool_results(self):
+        """Converts a message with tool results."""
+        tool_result = ToolResult(
+            tool_use_id="t1",
+            content="File contents here",
+            is_error=False
+        )
+        msg = TranscriptMessage(
+            uuid="msg-1",
+            role="user",
+            content="",
+            timestamp="2025-01-01T00:00:00Z",
+            tool_results=[tool_result]
+        )
+        transcript = ParsedTranscript(session_id="sess-123", messages=[msg])
+        result = transcript_to_dict(transcript)
+
+        assert len(result["messages"][0]["tool_results"]) == 1
+        assert result["messages"][0]["tool_results"][0]["tool_use_id"] == "t1"
+        assert result["messages"][0]["tool_results"][0]["content"] == "File contents here"
+        assert result["messages"][0]["tool_results"][0]["is_error"] is False
+
+    def test_converts_message_with_error_tool_result(self):
+        """Converts a message with an error tool result."""
+        tool_result = ToolResult(
+            tool_use_id="t2",
+            content="Error: File not found",
+            is_error=True
+        )
+        msg = TranscriptMessage(
+            uuid="msg-2",
+            role="user",
+            content="",
+            timestamp="2025-01-01T00:00:00Z",
+            tool_results=[tool_result]
+        )
+        transcript = ParsedTranscript(session_id="sess-123", messages=[msg])
+        result = transcript_to_dict(transcript)
+
+        assert len(result["messages"][0]["tool_results"]) == 1
+        assert result["messages"][0]["tool_results"][0]["tool_use_id"] == "t2"
+        assert result["messages"][0]["tool_results"][0]["is_error"] is True
+
+    def test_converts_message_with_multiple_tool_results(self):
+        """Converts a message with multiple tool results."""
+        results = [
+            ToolResult(tool_use_id="t1", content="Result 1", is_error=False),
+            ToolResult(tool_use_id="t2", content="Result 2", is_error=False),
+            ToolResult(tool_use_id="t3", content="Error 3", is_error=True),
+        ]
+        msg = TranscriptMessage(
+            uuid="msg-3",
+            role="user",
+            content="",
+            timestamp="2025-01-01T00:00:00Z",
+            tool_results=results
+        )
+        transcript = ParsedTranscript(session_id="sess-123", messages=[msg])
+        result = transcript_to_dict(transcript)
+
+        assert len(result["messages"][0]["tool_results"]) == 3
+        assert result["messages"][0]["tool_results"][0]["tool_use_id"] == "t1"
+        assert result["messages"][0]["tool_results"][1]["tool_use_id"] == "t2"
+        assert result["messages"][0]["tool_results"][2]["tool_use_id"] == "t3"
+        assert result["messages"][0]["tool_results"][2]["is_error"] is True
+
+    def test_converts_message_with_empty_tool_results(self):
+        """Converts a message with empty tool results list."""
+        msg = TranscriptMessage(
+            uuid="msg-4",
+            role="assistant",
+            content="Response text",
+            timestamp="2025-01-01T00:00:00Z",
+            tool_results=[]
+        )
+        transcript = ParsedTranscript(session_id="sess-123", messages=[msg])
+        result = transcript_to_dict(transcript)
+
+        assert result["messages"][0]["tool_results"] == []
+
 
 class TestExtractAgentId:
     """Tests for extract_agent_id function."""

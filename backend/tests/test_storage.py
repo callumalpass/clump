@@ -208,6 +208,145 @@ class TestDiscoveredSession:
 
         assert session.modified_at == modified_time
 
+    def test_discovered_session_equality(self, tmp_path):
+        """Test that two DiscoveredSessions with same attributes are equal."""
+        modified_time = datetime(2024, 6, 15, 12, 30, 0)
+        transcript_path = tmp_path / "test.jsonl"
+
+        session1 = DiscoveredSession(
+            session_id="test-session",
+            encoded_path="-home-user-project",
+            transcript_path=transcript_path,
+            modified_at=modified_time,
+            file_size=100,
+        )
+
+        session2 = DiscoveredSession(
+            session_id="test-session",
+            encoded_path="-home-user-project",
+            transcript_path=transcript_path,
+            modified_at=modified_time,
+            file_size=100,
+        )
+
+        assert session1 == session2
+
+    def test_discovered_session_inequality_session_id(self, tmp_path):
+        """Test that sessions with different session_ids are not equal."""
+        modified_time = datetime(2024, 6, 15, 12, 30, 0)
+        transcript_path = tmp_path / "test.jsonl"
+
+        session1 = DiscoveredSession(
+            session_id="session-1",
+            encoded_path="-home-user-project",
+            transcript_path=transcript_path,
+            modified_at=modified_time,
+            file_size=100,
+        )
+
+        session2 = DiscoveredSession(
+            session_id="session-2",
+            encoded_path="-home-user-project",
+            transcript_path=transcript_path,
+            modified_at=modified_time,
+            file_size=100,
+        )
+
+        assert session1 != session2
+
+    def test_discovered_session_inequality_file_size(self, tmp_path):
+        """Test that sessions with different file sizes are not equal."""
+        modified_time = datetime(2024, 6, 15, 12, 30, 0)
+        transcript_path = tmp_path / "test.jsonl"
+
+        session1 = DiscoveredSession(
+            session_id="test-session",
+            encoded_path="-home-user-project",
+            transcript_path=transcript_path,
+            modified_at=modified_time,
+            file_size=100,
+        )
+
+        session2 = DiscoveredSession(
+            session_id="test-session",
+            encoded_path="-home-user-project",
+            transcript_path=transcript_path,
+            modified_at=modified_time,
+            file_size=200,
+        )
+
+        assert session1 != session2
+
+    def test_discovered_session_with_different_metadata(self, tmp_path):
+        """Test that sessions with different metadata are not equal."""
+        modified_time = datetime(2024, 6, 15, 12, 30, 0)
+        transcript_path = tmp_path / "test.jsonl"
+
+        metadata1 = SessionMetadata(session_id="test-session", title="Title 1")
+        metadata2 = SessionMetadata(session_id="test-session", title="Title 2")
+
+        session1 = DiscoveredSession(
+            session_id="test-session",
+            encoded_path="-home-user-project",
+            transcript_path=transcript_path,
+            modified_at=modified_time,
+            file_size=100,
+            metadata=metadata1,
+        )
+
+        session2 = DiscoveredSession(
+            session_id="test-session",
+            encoded_path="-home-user-project",
+            transcript_path=transcript_path,
+            modified_at=modified_time,
+            file_size=100,
+            metadata=metadata2,
+        )
+
+        assert session1 != session2
+
+    def test_discovered_session_sortable_by_modified_at(self, tmp_path):
+        """Test that sessions can be sorted by modified_at."""
+        older_time = datetime(2024, 1, 1, 12, 0, 0)
+        newer_time = datetime(2024, 6, 15, 12, 0, 0)
+
+        older_session = DiscoveredSession(
+            session_id="older-session",
+            encoded_path="-home-user-project",
+            transcript_path=tmp_path / "older.jsonl",
+            modified_at=older_time,
+            file_size=100,
+        )
+
+        newer_session = DiscoveredSession(
+            session_id="newer-session",
+            encoded_path="-home-user-project",
+            transcript_path=tmp_path / "newer.jsonl",
+            modified_at=newer_time,
+            file_size=100,
+        )
+
+        sessions = [newer_session, older_session]
+        sorted_sessions = sorted(sessions, key=lambda s: s.modified_at)
+
+        assert sorted_sessions[0].session_id == "older-session"
+        assert sorted_sessions[1].session_id == "newer-session"
+
+    def test_discovered_session_in_list(self, tmp_path):
+        """Test that DiscoveredSession works correctly in lists."""
+        session = DiscoveredSession(
+            session_id="test-session",
+            encoded_path="-home-user-project",
+            transcript_path=tmp_path / "test.jsonl",
+            modified_at=datetime.now(),
+            file_size=100,
+        )
+
+        sessions = [session]
+
+        assert session in sessions
+        assert len(sessions) == 1
+
 
 class TestSessionMetadata:
     """Tests for SessionMetadata dataclass."""
