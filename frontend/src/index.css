@@ -194,17 +194,28 @@ textarea:disabled {
   opacity: 0.5;
 }
 
-/* Enhanced input focus glow effect */
+/* Enhanced disabled button styling for better visual feedback */
+button:disabled {
+  cursor: not-allowed;
+}
+
+button:disabled:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Enhanced input focus glow effect with improved visibility */
 input:focus,
 select:focus,
 textarea:focus {
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  border-color: #3b82f6 !important; /* blue-500 - ensure border changes on focus */
 }
 
-/* Placeholder text styling for better hierarchy */
+/* Placeholder text styling for better hierarchy - improved contrast for accessibility */
 input::placeholder,
 textarea::placeholder {
-  color: #6b7280;
+  color: #9ca3af; /* gray-400 for better contrast on dark backgrounds */
   opacity: 1;
 }
 
