@@ -159,7 +159,7 @@ const SessionListItem = memo(function SessionListItem({
         )}
       </div>
 
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="list-item-metadata flex items-center gap-2 text-xs text-gray-400">
         {/* Repo path */}
         <span className="px-1.5 py-0.5 bg-gray-700 hover:bg-gray-600 rounded truncate max-w-[120px] transition-colors" title={session.repo_path}>
           {formatRepoPath(session)}

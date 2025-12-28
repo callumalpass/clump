@@ -197,6 +197,21 @@ body {
   box-shadow: -3px 0 16px rgba(59, 130, 246, 0.25), 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
+/* List item metadata row - subtle reveal on parent hover */
+.list-item-metadata {
+  transition: opacity 150ms ease-out, transform 150ms ease-out;
+  opacity: 0.85;
+}
+
+.list-item-hover:hover .list-item-metadata {
+  opacity: 1;
+  transform: translateX(2px);
+}
+
+.list-item-hover:active .list-item-metadata {
+  transform: translateX(1px);
+}
+
 /* Status-colored hover glow variants for list items */
 .list-item-glow-active:hover {
   box-shadow:
@@ -734,6 +749,7 @@ button:disabled .kbd-hint {
 
   /* Reduce transition durations to near-instant */
   .list-item-hover,
+  .list-item-metadata,
   .tool-card-hover,
   .toggle-btn,
   .btn-primary,
@@ -755,10 +771,17 @@ button:disabled .kbd-hint {
   .list-item-glow-active:hover,
   .list-item-glow-recent:hover,
   .list-item-glow-done:hover,
+  .list-item-hover:hover .list-item-metadata,
+  .list-item-hover:active .list-item-metadata,
   .tool-card-hover:hover,
   .tool-card-hover:active {
     transform: none;
     box-shadow: none;
+  }
+
+  /* Ensure metadata is fully visible without reduced opacity */
+  .list-item-metadata {
+    opacity: 1;
   }
 
   .toggle-btn:active:not(:disabled) {
