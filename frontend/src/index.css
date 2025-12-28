@@ -559,6 +559,21 @@ button:disabled .kbd-hint {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
+/* Tool card expand/collapse content animation */
+.tool-card-content {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 200ms ease-out;
+}
+
+.tool-card-content[data-expanded="true"] {
+  grid-template-rows: 1fr;
+}
+
+.tool-card-content-inner {
+  overflow: hidden;
+}
+
 /* Token usage bar segment hover effects */
 .token-bar-segment {
   transition: filter 150ms ease-out, box-shadow 150ms ease-out;
@@ -990,6 +1005,11 @@ button:disabled .kbd-hint {
 
   /* Disable toggle indicator sliding animation */
   .toggle-indicator {
+    transition-duration: 0.01ms !important;
+  }
+
+  /* Disable tool card expand/collapse animation */
+  .tool-card-content {
     transition-duration: 0.01ms !important;
   }
 

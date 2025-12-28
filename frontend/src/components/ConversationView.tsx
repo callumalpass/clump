@@ -7,6 +7,7 @@ import { calculateCost, formatCost } from '../utils/costs';
 import { getModelDisplayName, getModelBadgeStyle } from '../utils/models';
 import { computeLineDiff } from '../utils/diffing';
 import { cleanTerminalOutput } from '../utils/text';
+import { calculateDuration } from '../hooks/useElapsedTime';
 
 // Highlight matching text in a string
 // Memoized to avoid recomputation on every render
@@ -91,19 +92,6 @@ function formatTokens(count: number | undefined): string {
   if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
   return count.toString();
 }
-
-// Calculate session duration from timestamps
-function getDuration(startTime?: string, endTime?: string): string {
-  if (!startTime || !endTime) return '-';
-  const start = new Date(startTime).getTime();
-  const end = new Date(endTime).getTime();
-  const diffMs = end - start;
-
-  if (diffMs < 60000) return `${Math.round(diffMs / 1000)}s`;
-  if (diffMs < 3600000) return `${Math.round(diffMs / 60000)}m`;
-  return `${(diffMs / 3600000).toFixed(1)}h`;
-}
-
 
 // Format time gap for display between messages
 function formatTimeGap(ms: number): string | null {
@@ -257,7 +245,7 @@ function SessionStats({ transcript }: { transcript: ParsedTranscript }) {
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span>{getDuration(transcript.start_time, transcript.end_time)}</span>
+            <span>{transcript.start_time && transcript.end_time ? calculateDuration(transcript.start_time, transcript.end_time) : '-'}</span>
           </div>
 
           {/* Message count */}
@@ -383,81 +371,83 @@ function EditToolDisplay({ tool }: ToolDisplayProps) {
         </svg>
       </button>
 
-      {expanded && (
-        <div className="border-t border-gray-700">
-          {/* File path */}
-          <div className="px-2 py-1 bg-gray-900/50 text-gray-500 font-mono text-[10px] truncate">
-            {filePath}
-          </div>
+      <div className="tool-card-content" data-expanded={expanded}>
+        <div className="tool-card-content-inner">
+          <div className="border-t border-gray-700">
+            {/* File path */}
+            <div className="px-2 py-1 bg-gray-900/50 text-gray-500 font-mono text-[10px] truncate">
+              {filePath}
+            </div>
 
-          {/* Unified diff view */}
-          <div className="overflow-auto max-h-80 font-mono text-xs">
-            {diffLines.length === 0 ? (
-              <div className="p-2 text-gray-500 italic">No changes</div>
-            ) : (
-              diffLines.map((diff, idx) => {
-                if (diff.type === 'modified') {
-                  // Render modified line with inline highlights
+            {/* Unified diff view */}
+            <div className="overflow-auto max-h-80 font-mono text-xs">
+              {diffLines.length === 0 ? (
+                <div className="p-2 text-gray-500 italic">No changes</div>
+              ) : (
+                diffLines.map((diff, idx) => {
+                  if (diff.type === 'modified') {
+                    // Render modified line with inline highlights
+                    return (
+                      <div key={idx}>
+                        {/* Old line with deletions highlighted */}
+                        <div className="px-2 py-0.5 whitespace-pre-wrap break-all bg-red-950/30">
+                          <span className="inline-block w-4 shrink-0 select-none text-red-500">-</span>
+                          {diff.oldSegments.map((seg, segIdx) => (
+                            <span
+                              key={segIdx}
+                              className={seg.type === 'delete' ? 'bg-red-700/60 text-red-200 rounded-sm' : 'text-red-300/70'}
+                            >
+                              {seg.text}
+                            </span>
+                          ))}
+                        </div>
+                        {/* New line with insertions highlighted */}
+                        <div className="px-2 py-0.5 whitespace-pre-wrap break-all bg-green-950/30">
+                          <span className="inline-block w-4 shrink-0 select-none text-green-500">+</span>
+                          {diff.newSegments.map((seg, segIdx) => (
+                            <span
+                              key={segIdx}
+                              className={seg.type === 'insert' ? 'bg-green-700/60 text-green-200 rounded-sm' : 'text-green-300/70'}
+                            >
+                              {seg.text}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Simple line (unchanged, removed, or added)
+                  const line = diff.type === 'unchanged' ? diff.line : diff.line;
                   return (
-                    <div key={idx}>
-                      {/* Old line with deletions highlighted */}
-                      <div className="px-2 py-0.5 whitespace-pre-wrap break-all bg-red-950/30">
-                        <span className="inline-block w-4 shrink-0 select-none text-red-500">-</span>
-                        {diff.oldSegments.map((seg, segIdx) => (
-                          <span
-                            key={segIdx}
-                            className={seg.type === 'delete' ? 'bg-red-700/60 text-red-200 rounded-sm' : 'text-red-300/70'}
-                          >
-                            {seg.text}
-                          </span>
-                        ))}
-                      </div>
-                      {/* New line with insertions highlighted */}
-                      <div className="px-2 py-0.5 whitespace-pre-wrap break-all bg-green-950/30">
-                        <span className="inline-block w-4 shrink-0 select-none text-green-500">+</span>
-                        {diff.newSegments.map((seg, segIdx) => (
-                          <span
-                            key={segIdx}
-                            className={seg.type === 'insert' ? 'bg-green-700/60 text-green-200 rounded-sm' : 'text-green-300/70'}
-                          >
-                            {seg.text}
-                          </span>
-                        ))}
-                      </div>
+                    <div
+                      key={idx}
+                      className={`px-2 py-0.5 whitespace-pre-wrap break-all ${
+                        diff.type === 'removed'
+                          ? 'bg-red-950/30 text-red-300'
+                          : diff.type === 'added'
+                          ? 'bg-green-950/30 text-green-300'
+                          : 'bg-gray-900/30 text-gray-400'
+                      }`}
+                    >
+                      <span className={`inline-block w-4 shrink-0 select-none ${
+                        diff.type === 'removed'
+                          ? 'text-red-500'
+                          : diff.type === 'added'
+                          ? 'text-green-500'
+                          : 'text-gray-600'
+                      }`}>
+                        {diff.type === 'removed' ? '-' : diff.type === 'added' ? '+' : ' '}
+                      </span>
+                      {line || ' '}
                     </div>
                   );
-                }
-
-                // Simple line (unchanged, removed, or added)
-                const line = diff.type === 'unchanged' ? diff.line : diff.line;
-                return (
-                  <div
-                    key={idx}
-                    className={`px-2 py-0.5 whitespace-pre-wrap break-all ${
-                      diff.type === 'removed'
-                        ? 'bg-red-950/30 text-red-300'
-                        : diff.type === 'added'
-                        ? 'bg-green-950/30 text-green-300'
-                        : 'bg-gray-900/30 text-gray-400'
-                    }`}
-                  >
-                    <span className={`inline-block w-4 shrink-0 select-none ${
-                      diff.type === 'removed'
-                        ? 'text-red-500'
-                        : diff.type === 'added'
-                        ? 'text-green-500'
-                        : 'text-gray-600'
-                    }`}>
-                      {diff.type === 'removed' ? '-' : diff.type === 'added' ? '+' : ' '}
-                    </span>
-                    {line || ' '}
-                  </div>
-                );
-              })
-            )}
+                })
+              )}
+            </div>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -503,20 +493,22 @@ function ReadToolDisplay({ tool }: ToolDisplayProps) {
         </svg>
       </button>
 
-      {expanded && (
-        <div className="border-t border-gray-700 px-2 py-1.5 bg-gray-900/50">
-          <div className="font-mono text-gray-400 text-[10px] break-all">
-            {filePath}
-          </div>
-          {hasRange && (
-            <div className="mt-1 text-gray-500">
-              {input.offset !== undefined && <span>Offset: {input.offset}</span>}
-              {input.offset !== undefined && input.limit !== undefined && <span> | </span>}
-              {input.limit !== undefined && <span>Limit: {input.limit} lines</span>}
+      <div className="tool-card-content" data-expanded={expanded}>
+        <div className="tool-card-content-inner">
+          <div className="border-t border-gray-700 px-2 py-1.5 bg-gray-900/50">
+            <div className="font-mono text-gray-400 text-[10px] break-all">
+              {filePath}
             </div>
-          )}
+            {hasRange && (
+              <div className="mt-1 text-gray-500">
+                {input.offset !== undefined && <span>Offset: {input.offset}</span>}
+                {input.offset !== undefined && input.limit !== undefined && <span> | </span>}
+                {input.limit !== undefined && <span>Limit: {input.limit} lines</span>}
+              </div>
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -564,18 +556,20 @@ function BashToolDisplay({ tool }: ToolDisplayProps) {
         </svg>
       </button>
 
-      {expanded && (
-        <div className="border-t border-gray-700">
-          {description && (
-            <div className="px-2 py-1 bg-gray-900/50 text-gray-400 text-[10px] border-b border-gray-700">
-              {description}
-            </div>
-          )}
-          <pre className="p-2 text-xs text-amber-200/80 whitespace-pre-wrap overflow-auto max-h-60 bg-gray-900/30 font-mono">
-            $ {command}
-          </pre>
+      <div className="tool-card-content" data-expanded={expanded}>
+        <div className="tool-card-content-inner">
+          <div className="border-t border-gray-700">
+            {description && (
+              <div className="px-2 py-1 bg-gray-900/50 text-gray-400 text-[10px] border-b border-gray-700">
+                {description}
+              </div>
+            )}
+            <pre className="p-2 text-xs text-amber-200/80 whitespace-pre-wrap overflow-auto max-h-60 bg-gray-900/30 font-mono">
+              $ {command}
+            </pre>
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -618,16 +612,18 @@ function WriteToolDisplay({ tool }: ToolDisplayProps) {
         </svg>
       </button>
 
-      {expanded && (
-        <div className="border-t border-gray-700">
-          <div className="px-2 py-1 bg-gray-900/50 text-gray-500 font-mono text-[10px] truncate">
-            {filePath}
+      <div className="tool-card-content" data-expanded={expanded}>
+        <div className="tool-card-content-inner">
+          <div className="border-t border-gray-700">
+            <div className="px-2 py-1 bg-gray-900/50 text-gray-500 font-mono text-[10px] truncate">
+              {filePath}
+            </div>
+            <pre className="p-2 text-xs text-gray-300 whitespace-pre-wrap overflow-auto max-h-60 bg-gray-900/30">
+              {content}
+            </pre>
           </div>
-          <pre className="p-2 text-xs text-gray-300 whitespace-pre-wrap overflow-auto max-h-60 bg-gray-900/30">
-            {content}
-          </pre>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -674,32 +670,34 @@ function GrepToolDisplay({ tool }: ToolDisplayProps) {
         </svg>
       </button>
 
-      {expanded && (
-        <div className="border-t border-gray-700 p-2 bg-gray-900/30 space-y-1">
-          <div>
-            <span className="text-gray-500">Pattern: </span>
-            <code className="text-orange-300 font-mono">{pattern}</code>
+      <div className="tool-card-content" data-expanded={expanded}>
+        <div className="tool-card-content-inner">
+          <div className="border-t border-gray-700 p-2 bg-gray-900/30 space-y-1">
+            <div>
+              <span className="text-gray-500">Pattern: </span>
+              <code className="text-orange-300 font-mono">{pattern}</code>
+            </div>
+            {path && (
+              <div>
+                <span className="text-gray-500">Path: </span>
+                <span className="text-gray-300 font-mono">{path}</span>
+              </div>
+            )}
+            {glob && (
+              <div>
+                <span className="text-gray-500">Glob: </span>
+                <span className="text-gray-300 font-mono">{glob}</span>
+              </div>
+            )}
+            {input.type && (
+              <div>
+                <span className="text-gray-500">Type: </span>
+                <span className="text-gray-300">{input.type}</span>
+              </div>
+            )}
           </div>
-          {path && (
-            <div>
-              <span className="text-gray-500">Path: </span>
-              <span className="text-gray-300 font-mono">{path}</span>
-            </div>
-          )}
-          {glob && (
-            <div>
-              <span className="text-gray-500">Glob: </span>
-              <span className="text-gray-300 font-mono">{glob}</span>
-            </div>
-          )}
-          {input.type && (
-            <div>
-              <span className="text-gray-500">Type: </span>
-              <span className="text-gray-300">{input.type}</span>
-            </div>
-          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -737,12 +735,14 @@ function GlobToolDisplay({ tool }: ToolDisplayProps) {
         </svg>
       </button>
 
-      {expanded && path && (
-        <div className="border-t border-gray-700 px-2 py-1.5 bg-gray-900/30">
-          <span className="text-gray-500">In: </span>
-          <span className="text-gray-300 font-mono">{path}</span>
+      <div className="tool-card-content" data-expanded={expanded && !!path}>
+        <div className="tool-card-content-inner">
+          <div className="border-t border-gray-700 px-2 py-1.5 bg-gray-900/30">
+            <span className="text-gray-500">In: </span>
+            <span className="text-gray-300 font-mono">{path}</span>
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -792,18 +792,20 @@ function TaskToolDisplay({ tool, parentSessionId }: ToolDisplayProps) {
         </svg>
       </button>
 
-      {expanded && (
-        <div className="border-t border-gray-700">
-          {description && (
-            <div className="px-2 py-1 bg-gray-900/50 text-gray-400 text-[10px] border-b border-gray-700">
-              {description}
-            </div>
-          )}
-          <pre className="p-2 text-xs text-gray-300 whitespace-pre-wrap overflow-auto max-h-40 bg-gray-900/30">
-            {prompt}
-          </pre>
+      <div className="tool-card-content" data-expanded={expanded}>
+        <div className="tool-card-content-inner">
+          <div className="border-t border-gray-700">
+            {description && (
+              <div className="px-2 py-1 bg-gray-900/50 text-gray-400 text-[10px] border-b border-gray-700">
+                {description}
+              </div>
+            )}
+            <pre className="p-2 text-xs text-gray-300 whitespace-pre-wrap overflow-auto max-h-40 bg-gray-900/30">
+              {prompt}
+            </pre>
+          </div>
         </div>
-      )}
+      </div>
 
       {/* Subsession expansion */}
       {hasSpawnedAgent && parentSessionId && (
@@ -868,13 +870,15 @@ function GenericToolDisplay({ tool, parentSessionId }: ToolDisplayProps) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      {expanded && (
-        <div className="p-2 border-t border-gray-600">
-          <pre className="text-xs text-gray-300 whitespace-pre-wrap overflow-auto max-h-60">
-            {JSON.stringify(tool.input, null, 2)}
-          </pre>
+      <div className="tool-card-content" data-expanded={expanded}>
+        <div className="tool-card-content-inner">
+          <div className="p-2 border-t border-gray-600">
+            <pre className="text-xs text-gray-300 whitespace-pre-wrap overflow-auto max-h-60">
+              {JSON.stringify(tool.input, null, 2)}
+            </pre>
+          </div>
         </div>
-      )}
+      </div>
 
       {hasSpawnedAgent && parentSessionId && (
         <div className="border-t border-gray-600">
@@ -943,7 +947,7 @@ function ThinkingDisplay({ thinking }: { thinking: string }) {
   const hasMore = thinking.length > 150;
 
   return (
-    <div className="mt-2 text-xs border border-gray-600 rounded bg-gray-900">
+    <div className="mt-2 text-xs border border-gray-600 rounded bg-gray-900 overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-2 py-1 hover:bg-gray-800 text-left transition-colors"
@@ -963,11 +967,13 @@ function ThinkingDisplay({ thinking }: { thinking: string }) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      {expanded && (
-        <div className="p-2 border-t border-gray-600 text-gray-400 italic whitespace-pre-wrap">
-          {thinking}
+      <div className="tool-card-content" data-expanded={expanded}>
+        <div className="tool-card-content-inner">
+          <div className="p-2 border-t border-gray-600 text-gray-400 italic whitespace-pre-wrap">
+            {thinking}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
