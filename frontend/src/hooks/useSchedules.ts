@@ -180,17 +180,76 @@ export function useScheduleDetail(repoId: number | null, scheduleId: number | nu
 
   const RUNS_PER_PAGE = 10;
 
-  const fetchSchedule = useCallback(async () => {
-    if (!repoId || !scheduleId) return;
-    try {
-      const data = await fetchJson<ScheduledJob>(
-        `${API_BASE}/repos/${repoId}/schedules/${scheduleId}`
-      );
-      setSchedule(data);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to fetch schedule');
+  // Reset state immediately when scheduleId changes to prevent showing stale data
+  useEffect(() => {
+    setSchedule(null);
+    setRuns([]);
+    setRunsTotal(0);
+    setRunsPage(1);
+    setError(null);
+  }, [scheduleId]);
+
+  // Fetch schedule and runs with proper cancellation
+  useEffect(() => {
+    if (!repoId || !scheduleId) {
+      setLoading(false);
+      return;
     }
+
+    const controller = new AbortController();
+    let cancelled = false;
+
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        // Fetch schedule
+        const scheduleResponse = await fetch(
+          `${API_BASE}/repos/${repoId}/schedules/${scheduleId}`,
+          { signal: controller.signal }
+        );
+        if (!scheduleResponse.ok) {
+          const error = await scheduleResponse.json().catch(() => ({ detail: scheduleResponse.statusText }));
+          throw new Error(error.detail || `HTTP ${scheduleResponse.status}`);
+        }
+        const scheduleData = await scheduleResponse.json();
+
+        // Fetch runs
+        const runsResponse = await fetch(
+          `${API_BASE}/repos/${repoId}/schedules/${scheduleId}/runs?limit=${RUNS_PER_PAGE}&offset=0`,
+          { signal: controller.signal }
+        );
+        if (!runsResponse.ok) {
+          const error = await runsResponse.json().catch(() => ({ detail: runsResponse.statusText }));
+          throw new Error(error.detail || `HTTP ${runsResponse.status}`);
+        }
+        const runsData = await runsResponse.json();
+
+        // Only update state if not cancelled
+        if (!cancelled) {
+          setSchedule(scheduleData);
+          setRuns(runsData.runs);
+          setRunsTotal(runsData.total);
+          setRunsPage(1);
+          setError(null);
+        }
+      } catch (e) {
+        if (e instanceof Error && e.name === 'AbortError') return;
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : 'Failed to fetch schedule');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchData();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [repoId, scheduleId]);
 
   const fetchRuns = useCallback(async (page: number = 1) => {
@@ -211,27 +270,20 @@ export function useScheduleDetail(repoId: number | null, scheduleId: number | nu
     if (!repoId || !scheduleId) return;
     setLoading(true);
     try {
-      await Promise.all([fetchSchedule(), fetchRuns(runsPage)]);
+      const [scheduleData, runsData] = await Promise.all([
+        fetchJson<ScheduledJob>(`${API_BASE}/repos/${repoId}/schedules/${scheduleId}`),
+        fetchScheduleRuns(repoId, scheduleId, RUNS_PER_PAGE, (runsPage - 1) * RUNS_PER_PAGE),
+      ]);
+      setSchedule(scheduleData);
+      setRuns(runsData.runs);
+      setRunsTotal(runsData.total);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to refresh');
     } finally {
       setLoading(false);
     }
-  }, [repoId, scheduleId, fetchSchedule, fetchRuns, runsPage]);
-
-  useEffect(() => {
-    if (!repoId || !scheduleId) {
-      setSchedule(null);
-      setRuns([]);
-      setRunsTotal(0);
-      setRunsPage(1);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    Promise.all([fetchSchedule(), fetchRuns(1)]).finally(() => {
-      setLoading(false);
-    });
-  }, [repoId, scheduleId, fetchSchedule, fetchRuns]);
+  }, [repoId, scheduleId, runsPage]);
 
   const updateSchedule = async (data: ScheduledJobUpdate): Promise<ScheduledJob> => {
     if (!repoId || !scheduleId) throw new Error('No schedule selected');

@@ -382,7 +382,7 @@ export interface ScheduledJobUpdate {
   timezone?: string;
   target_type?: ScheduledJobTargetType;
   filter_query?: string;
-  command_id?: string;
+  command_id?: string | null;  // null to clear, undefined to leave unchanged
   custom_prompt?: string;
   max_items?: number;
   permission_mode?: string;
