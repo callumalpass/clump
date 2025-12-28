@@ -79,8 +79,11 @@ export function RepoSelector({
           {/* Dropdown menu */}
           {isOpen && (
             <>
-              {/* Backdrop to close dropdown */}
-              <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
+              {/* Backdrop to close dropdown - subtle overlay for visual hierarchy */}
+              <div
+                className="fixed inset-0 z-10 bg-black/20 transition-opacity"
+                onClick={() => setIsOpen(false)}
+              />
 
               <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-600 rounded shadow-lg max-h-64 overflow-auto">
                 {repos.length === 0 ? (

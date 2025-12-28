@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef, ReactNode } from 'react';
 
+// Consistent focus ring styling for accessibility
+const focusRing = 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900';
+
 // Shared filter bar styling constants
 export const filterBarStyles = {
   container: 'flex flex-col gap-2 p-2 border-b border-gray-700 bg-gray-800/30',
@@ -7,26 +10,26 @@ export const filterBarStyles = {
   // Toggle button group (connected buttons)
   toggleGroup: 'flex rounded-md overflow-hidden border border-gray-600',
   toggleButton: (isActive: boolean) =>
-    `toggle-btn px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset focus:z-10 ${
+    `toggle-btn px-2.5 py-1 text-xs ${focusRing} focus:z-10 ${
       isActive
         ? 'bg-blue-600 text-white'
         : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white'
     }`,
   // Standalone pill buttons (for category filters)
   pillButton: (isActive: boolean) =>
-    `toggle-btn px-2.5 py-1 text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900 ${
+    `toggle-btn px-2.5 py-1 text-xs rounded-md ${focusRing} ${
       isActive
         ? 'bg-blue-600 text-white'
         : 'text-gray-400 hover:text-white hover:bg-gray-700'
     }`,
   // Select dropdown
-  select: 'bg-gray-800 border border-gray-600 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
+  select: `bg-gray-800 border border-gray-600 rounded-md px-2 py-1 text-xs ${focusRing} focus:border-blue-500`,
   // Icon button
-  iconButton: 'p-1 bg-gray-800 border border-gray-600 rounded-md hover:bg-gray-700 hover:border-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500',
+  iconButton: `p-1 bg-gray-800 border border-gray-600 rounded-md hover:bg-gray-700 hover:border-gray-500 transition-colors ${focusRing}`,
   // Counts and metadata
   count: 'text-xs text-gray-500',
   // Clear filters
-  clearButton: 'text-xs text-gray-400 hover:text-white focus:outline-none focus:text-white focus:underline',
+  clearButton: `text-xs text-gray-400 hover:text-white ${focusRing}`,
 };
 
 // Search input component
@@ -62,7 +65,7 @@ export function SearchInput({ value, onChange, placeholder = 'Search...', deboun
         placeholder={placeholder}
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
-        className="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-1 text-xs pl-7 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        className={`w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-1 text-xs pl-7 ${focusRing} focus:border-blue-500`}
       />
       <svg
         className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400"
@@ -78,7 +81,7 @@ export function SearchInput({ value, onChange, placeholder = 'Search...', deboun
             setInputValue('');
             onChange('');
           }}
-          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white focus:outline-none focus:text-white"
+          className={`absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white rounded-sm ${focusRing}`}
         >
           ×
         </button>
@@ -199,7 +202,7 @@ export function LabelSelect({ selectedLabels, availableLabels, onChange }: Label
           <button
             key={label}
             onClick={() => toggleLabel(label)}
-            className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900"
+            className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-600 text-white ${focusRing}`}
           >
             {label}
             <span className="hover:text-blue-200">×</span>
@@ -208,7 +211,7 @@ export function LabelSelect({ selectedLabels, availableLabels, onChange }: Label
         {unselectedLabels.length > 0 && (
           <button
             onClick={() => setShowDropdown(!showDropdown)}
-            className="px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900"
+            className={`px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 hover:bg-gray-600 ${focusRing}`}
           >
             + Add
           </button>
@@ -216,20 +219,27 @@ export function LabelSelect({ selectedLabels, availableLabels, onChange }: Label
       </div>
 
       {showDropdown && unselectedLabels.length > 0 && (
-        <div className="absolute top-full left-0 mt-1 w-48 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-10 max-h-48 overflow-auto">
-          {unselectedLabels.map((label) => (
-            <button
-              key={label}
-              onClick={() => {
-                toggleLabel(label);
-                setShowDropdown(false);
-              }}
-              className="w-full px-3 py-1.5 text-left text-xs hover:bg-gray-700 truncate focus:outline-none focus:bg-gray-700 focus:text-white"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <>
+          {/* Backdrop to close dropdown */}
+          <div
+            className="fixed inset-0 z-10 bg-black/20 transition-opacity"
+            onClick={() => setShowDropdown(false)}
+          />
+          <div className="absolute top-full left-0 mt-1 w-48 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-20 max-h-48 overflow-auto">
+            {unselectedLabels.map((label) => (
+              <button
+                key={label}
+                onClick={() => {
+                  toggleLabel(label);
+                  setShowDropdown(false);
+                }}
+                className={`w-full px-3 py-1.5 text-left text-xs hover:bg-gray-700 truncate ${focusRing} focus:bg-gray-700`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
@@ -277,7 +287,7 @@ export function RefreshButton({ onClick, loading }: RefreshButtonProps) {
     <button
       onClick={onClick}
       disabled={loading}
-      className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900"
+      className={`p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${focusRing}`}
       title="Refresh"
     >
       <svg

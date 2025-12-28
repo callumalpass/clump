@@ -262,7 +262,13 @@ export function IssueDetail({
               </button>
 
               {showTagDropdown && (
-                <div className="absolute top-full left-0 mt-1 w-56 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-10">
+                <>
+                  {/* Backdrop to close dropdown */}
+                  <div
+                    className="fixed inset-0 z-10 bg-black/20 transition-opacity"
+                    onClick={() => setShowTagDropdown(false)}
+                  />
+                  <div className="absolute top-full left-0 mt-1 w-56 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-20">
                   {/* Existing tags */}
                   {tags.filter(t => !issueTags.some(it => it.id === t.id)).length > 0 && (
                     <div className="p-2 border-b border-gray-700">
@@ -327,6 +333,7 @@ export function IssueDetail({
                     </div>
                   </div>
                 </div>
+                </>
               )}
             </div>
           </div>
