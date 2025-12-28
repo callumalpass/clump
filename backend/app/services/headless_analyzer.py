@@ -18,6 +18,10 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Buffer limit for subprocess stdout/stderr streams.
+# Large tool outputs (e.g., file reads, grep results) can exceed the default 64KB.
+SUBPROCESS_BUFFER_LIMIT_BYTES = 10 * 1024 * 1024  # 10 MB
+
 
 @dataclass
 class SessionMessage:
@@ -248,8 +252,7 @@ class HeadlessAnalyzer:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=working_dir,
-            # Increase buffer limit to 10MB to handle large tool outputs
-            limit=10 * 1024 * 1024,
+            limit=SUBPROCESS_BUFFER_LIMIT_BYTES,
         )
 
         run_id = session_id or str(uuid4())[:8]
