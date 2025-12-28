@@ -1400,7 +1400,38 @@ export default function App() {
             {/* Bottom: Tabs for Issues/PRs/History/Schedules */}
             <Panel minSize="200px" className="flex flex-col">
               {/* Tabs with sliding indicator */}
-              <div ref={tabsContainerRef} className="relative flex border-b border-gray-700 shrink-0">
+              <div
+                ref={tabsContainerRef}
+                className="relative flex border-b border-gray-700 shrink-0"
+                role="tablist"
+                aria-label="Main navigation"
+                onKeyDown={(e) => {
+                  const tabs: Tab[] = ['issues', 'prs', 'history', 'schedules'];
+                  const currentIndex = tabs.indexOf(activeTab);
+                  let newIndex = currentIndex;
+
+                  if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    newIndex = (currentIndex + 1) % tabs.length;
+                  } else if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    newIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+                  } else if (e.key === 'Home') {
+                    e.preventDefault();
+                    newIndex = 0;
+                  } else if (e.key === 'End') {
+                    e.preventDefault();
+                    newIndex = tabs.length - 1;
+                  }
+
+                  if (newIndex !== currentIndex) {
+                    const newTab = tabs[newIndex] as Tab;
+                    setActiveTab(newTab);
+                    // Focus the new tab
+                    tabRefs.current.get(newTab)?.focus();
+                  }
+                }}
+              >
                 {(['issues', 'prs', 'history', 'schedules'] as Tab[]).map((tab) => {
                   // Display labels - handles special casing like "PRs"
                   const tabLabels: Record<Tab, string> = {
@@ -1454,6 +1485,11 @@ export default function App() {
                         if (el) tabRefs.current.set(tab, el);
                       }}
                       onClick={() => setActiveTab(tab)}
+                      role="tab"
+                      aria-selected={activeTab === tab}
+                      aria-controls={`tabpanel-${tab}`}
+                      id={`tab-${tab}`}
+                      tabIndex={activeTab === tab ? 0 : -1}
                       className={`group flex-1 px-3 py-2 text-sm outline-none focus-visible:bg-blue-500/10 focus-visible:text-blue-300 flex items-center justify-center gap-1.5 transition-colors duration-150 ${
                         activeTab === tab
                           ? 'text-white'
@@ -1491,7 +1527,13 @@ export default function App() {
               </div>
 
               {/* List content - key triggers fade animation on tab switch */}
-              <div key={activeTab} className="flex-1 min-h-0 flex flex-col tab-content-enter">
+              <div
+                key={activeTab}
+                role="tabpanel"
+                id={`tabpanel-${activeTab}`}
+                aria-labelledby={`tab-${activeTab}`}
+                className="flex-1 min-h-0 flex flex-col tab-content-enter"
+              >
                 {activeTab === 'issues' && selectedRepo && (
                   <IssueList
                     issues={issues}
