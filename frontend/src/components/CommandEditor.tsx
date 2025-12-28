@@ -113,7 +113,7 @@ export function CommandEditor({ commands, repoPath, onRefresh }: CommandEditorPr
               setSelectedCategory(cat);
               setEditing(null);
             }}
-            className={`px-3 py-1.5 text-sm rounded capitalize transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+            className={`px-3 py-1.5 text-sm rounded capitalize transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
               selectedCategory === cat
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -155,7 +155,7 @@ export function CommandEditor({ commands, repoPath, onRefresh }: CommandEditorPr
                 value={editing.name}
                 onChange={(e) => setEditing({ ...editing, name: e.target.value })}
                 placeholder="Fix Suggestion"
-                className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               />
             </div>
             <div>
@@ -165,7 +165,7 @@ export function CommandEditor({ commands, repoPath, onRefresh }: CommandEditorPr
                 value={editing.shortName}
                 onChange={(e) => setEditing({ ...editing, shortName: e.target.value })}
                 placeholder="Fix"
-                className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               />
             </div>
           </div>
@@ -177,7 +177,7 @@ export function CommandEditor({ commands, repoPath, onRefresh }: CommandEditorPr
               value={editing.description}
               onChange={(e) => setEditing({ ...editing, description: e.target.value })}
               placeholder="Analyze root cause and suggest a fix approach"
-              className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             />
           </div>
 
@@ -193,7 +193,7 @@ export function CommandEditor({ commands, repoPath, onRefresh }: CommandEditorPr
               onChange={(e) => setEditing({ ...editing, template: e.target.value })}
               placeholder="Please analyze this issue and suggest a fix..."
               rows={8}
-              className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm font-mono focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             />
           </div>
 
@@ -216,7 +216,7 @@ export function CommandEditor({ commands, repoPath, onRefresh }: CommandEditorPr
             <button
               onClick={handleSave}
               disabled={saving}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
             >
               {saving ? 'Saving...' : 'Save Command'}
             </button>
@@ -287,7 +287,7 @@ export function CommandEditor({ commands, repoPath, onRefresh }: CommandEditorPr
           {/* Add button */}
           <button
             onClick={handleNew}
-            className="w-full py-2 border-2 border-dashed border-gray-600 hover:border-gray-500 rounded-lg text-gray-400 hover:text-white text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full py-2 border-2 border-dashed border-gray-600 hover:border-gray-500 rounded-lg text-gray-400 hover:text-white text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             + Add {selectedCategory === 'issue' ? 'Issue' : 'PR'} Command
           </button>

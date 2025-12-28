@@ -242,7 +242,7 @@ export function SessionList({
               {onToggleStar && (
                 <button
                   onClick={(e) => handleToggleStar(e, session)}
-                  className={`flex-shrink-0 p-1 transition-colors rounded focus:outline-none focus:ring-2 focus:ring-yellow-400 ${
+                  className={`flex-shrink-0 p-1 transition-colors rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 ${
                     session.starred
                       ? 'text-yellow-400'
                       : 'text-gray-600 group-hover:text-gray-400 hover:!text-yellow-400'
@@ -259,7 +259,7 @@ export function SessionList({
               {!session.is_active && onContinueSession && (
                 <button
                   onClick={(e) => handleContinue(e, session)}
-                  className="flex-shrink-0 px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 active:scale-95 rounded flex items-center gap-1 transition-all focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900"
+                  className="flex-shrink-0 px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 active:scale-95 rounded flex items-center gap-1 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
                   title="Continue this conversation"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -156,7 +156,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
           <h2 className="text-lg font-semibold">Settings</h2>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900"
+            className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
             aria-label="Close"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -171,7 +171,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 text-sm capitalize focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset ${
+              className={`px-4 py-2 text-sm capitalize focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset ${
                 activeTab === tab
                   ? 'text-white border-b-2 border-blue-500'
                   : 'text-gray-400 hover:text-white'
@@ -272,7 +272,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                         value={newToken}
                         onChange={(e) => setNewToken(e.target.value)}
                         placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                        className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:border-blue-500"
                         required
                       />
 
@@ -284,7 +284,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                         <button
                           type="submit"
                           disabled={tokenSaving}
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900"
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
                         >
                           {tokenSaving ? 'Saving...' : 'Save Token'}
                         </button>
@@ -296,7 +296,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                               setNewToken('');
                               setTokenError('');
                             }}
-                            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 focus:ring-offset-gray-900"
+                            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
                           >
                             Cancel
                           </button>
@@ -328,7 +328,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                       key={mode.value}
                       onClick={() => handlePermissionModeChange(mode.value as PermissionMode)}
                       disabled={saving}
-                      className={`p-3 rounded border text-left focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      className={`p-3 rounded border text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                         settings.permission_mode === mode.value
                           ? 'border-blue-500 bg-blue-900/30'
                           : 'border-gray-600 hover:border-gray-500'
@@ -372,13 +372,13 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                     value={customTool}
                     onChange={(e) => setCustomTool(e.target.value)}
                     placeholder="Add tool (e.g., Bash(npm:*))"
-                    className="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:border-blue-500"
                     onKeyDown={(e) => e.key === 'Enter' && handleAddTool()}
                   />
                   <button
                     onClick={handleAddTool}
                     disabled={saving || !customTool.trim()}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900"
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
                   >
                     Add
                   </button>
@@ -426,7 +426,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                       key={model}
                       onClick={() => handleModelChange(model)}
                       disabled={saving}
-                      className={`flex-1 px-4 py-2 rounded border capitalize focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      className={`flex-1 px-4 py-2 rounded border capitalize focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                         settings.model === model
                           ? 'border-blue-500 bg-blue-900/30'
                           : 'border-gray-600 hover:border-gray-500'
@@ -454,7 +454,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                       key={format.value}
                       onClick={() => handleOutputFormatChange(format.value as OutputFormat)}
                       disabled={saving}
-                      className={`flex-1 px-4 py-2 rounded border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      className={`flex-1 px-4 py-2 rounded border focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                         settings.output_format === format.value
                           ? 'border-blue-500 bg-blue-900/30'
                           : 'border-gray-600 hover:border-gray-500'
@@ -505,7 +505,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                     checked={settings.mcp_github}
                     onChange={(e) => handleMcpGithubChange(e.target.checked)}
                     disabled={saving}
-                    className="w-4 h-4 rounded border-gray-600 bg-gray-800 focus:ring-2 focus:ring-blue-500 focus:ring-offset-0"
+                    className="w-4 h-4 rounded border-gray-600 bg-gray-800 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-0"
                   />
                   <div>
                     <div className="text-sm font-medium">Enable GitHub MCP Server</div>
@@ -521,7 +521,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                 <button
                   onClick={handleReset}
                   disabled={saving}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-1 focus:ring-offset-gray-900"
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
                 >
                   Reset to Defaults
                 </button>
@@ -540,7 +540,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
           </div>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 focus:ring-offset-gray-900"
+            className="px-4 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
           >
             Close
           </button>
