@@ -66,12 +66,14 @@ export function SearchInput({ value, onChange, placeholder = 'Search...', deboun
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
         className={`w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-1 text-xs pl-7 transition-colors duration-150 ${focusRing} focus:border-blue-500 focus:bg-gray-700/50 placeholder:text-gray-500`}
+        aria-label={placeholder.replace('...', '')}
       />
       <svg
-        className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400"
+        className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
+        aria-hidden="true"
       >
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
       </svg>
@@ -82,6 +84,8 @@ export function SearchInput({ value, onChange, placeholder = 'Search...', deboun
             onChange('');
           }}
           className={`absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white rounded-sm ${focusRing}`}
+          aria-label="Clear search"
+          title="Clear search"
         >
           ×
         </button>
@@ -99,12 +103,13 @@ interface StateToggleProps {
 export function StateToggle({ value, onChange }: StateToggleProps) {
   const states: ('open' | 'closed' | 'all')[] = ['open', 'closed', 'all'];
   return (
-    <div className={filterBarStyles.toggleGroup}>
+    <div className={filterBarStyles.toggleGroup} role="group" aria-label="Filter by state">
       {states.map((state) => (
         <button
           key={state}
           onClick={() => onChange(state)}
           className={filterBarStyles.toggleButton(value === state)}
+          aria-pressed={value === state}
         >
           {state.charAt(0).toUpperCase() + state.slice(1)}
         </button>
@@ -128,12 +133,13 @@ export function SessionStatusToggle({ value, onChange }: SessionStatusToggleProp
     { value: 'unanalyzed', label: 'New' },
   ];
   return (
-    <div className={filterBarStyles.toggleGroup}>
+    <div className={filterBarStyles.toggleGroup} role="group" aria-label="Filter by session status">
       {statuses.map((status) => (
         <button
           key={status.value}
           onClick={() => onChange(status.value)}
           className={filterBarStyles.toggleButton(value === status.value)}
+          aria-pressed={value === status.value}
           title={status.value === 'analyzed' ? 'Has session' : status.value === 'unanalyzed' ? 'No sessions yet' : 'Show all'}
         >
           {status.label}
@@ -159,11 +165,12 @@ interface SortControlProps {
 
 export function SortControl({ sortValue, orderValue, options, onSortChange, onOrderChange }: SortControlProps) {
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-1" role="group" aria-label="Sort options">
       <select
         value={sortValue}
         onChange={(e) => onSortChange(e.target.value)}
         className={filterBarStyles.select}
+        aria-label="Sort by"
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
@@ -174,14 +181,15 @@ export function SortControl({ sortValue, orderValue, options, onSortChange, onOr
       <button
         onClick={() => onOrderChange(orderValue === 'asc' ? 'desc' : 'asc')}
         className={filterBarStyles.iconButton}
-        title={orderValue === 'asc' ? 'Oldest first' : 'Newest first'}
+        title={orderValue === 'asc' ? 'Oldest first - click for newest first' : 'Newest first - click for oldest first'}
+        aria-label={orderValue === 'asc' ? 'Sort order: oldest first. Click to sort newest first' : 'Sort order: newest first. Click to sort oldest first'}
       >
         {orderValue === 'asc' ? (
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
           </svg>
         ) : (
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         )}
@@ -318,13 +326,15 @@ export function RefreshButton({ onClick, loading }: RefreshButtonProps) {
       onClick={onClick}
       disabled={loading}
       className={`p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${focusRing}`}
-      title="Refresh"
+      title={loading ? 'Refreshing...' : 'Refresh'}
+      aria-label={loading ? 'Refreshing data' : 'Refresh data'}
     >
       <svg
         className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`}
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
+        aria-hidden="true"
       >
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
       </svg>
@@ -345,12 +355,13 @@ export function ActiveFiltersIndicator({ onClick, filterCount }: ActiveFiltersIn
       onClick={onClick}
       className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-md bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 hover:text-blue-300 border border-blue-500/30 transition-all active:scale-95 ${focusRing}`}
       title="Clear all active filters"
+      aria-label={`Clear ${filterCount} active filter${filterCount !== 1 ? 's' : ''}`}
     >
-      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
       </svg>
       <span>{filterCount} filter{filterCount !== 1 ? 's' : ''}</span>
-      <svg className="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
       </svg>
     </button>
