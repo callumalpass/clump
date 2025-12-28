@@ -9,9 +9,10 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, TypedDict
+from typing import List, Optional, TypedDict
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.database import get_repo_db
@@ -195,9 +196,6 @@ def _get_pending_sessions(
     the transcript file yet. We synthesize a minimal session summary from process info
     and sidecar metadata.
     """
-    from app.services.session_manager import process_manager
-    from datetime import datetime
-
     pending = []
 
     # Get all processes synchronously (we're called from async context but this is safe)
@@ -1013,9 +1011,6 @@ async def delete_session(session_id: str):
 # ==========================================
 # Bulk Delete Sessions
 # ==========================================
-
-from pydantic import BaseModel
-from typing import List
 
 
 class BulkDeleteRequest(BaseModel):
