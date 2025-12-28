@@ -135,27 +135,27 @@ export function TokenUsageBar({
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 text-[10px]">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px]">
         <span className="flex items-center gap-1.5 text-gray-400">
-          <span className="w-2 h-2 rounded-sm bg-blue-500 ring-1 ring-blue-400/30" />
+          <span className="w-2 h-2 rounded-sm bg-blue-500 ring-1 ring-blue-400/30 shrink-0" />
           <span className="font-medium">Input</span>
           <span className="text-gray-600 tabular-nums">{formatTokenCount(inputTokens)}</span>
         </span>
         <span className="flex items-center gap-1.5 text-gray-400">
-          <span className="w-2 h-2 rounded-sm bg-purple-500 ring-1 ring-purple-400/30" />
+          <span className="w-2 h-2 rounded-sm bg-purple-500 ring-1 ring-purple-400/30 shrink-0" />
           <span className="font-medium">Output</span>
           <span className="text-gray-600 tabular-nums">{formatTokenCount(outputTokens)}</span>
         </span>
         {cacheReadTokens > 0 && (
           <span className="flex items-center gap-1.5 text-gray-400">
-            <span className="w-2 h-2 rounded-sm bg-emerald-500 ring-1 ring-emerald-400/30" />
+            <span className="w-2 h-2 rounded-sm bg-emerald-500 ring-1 ring-emerald-400/30 shrink-0" />
             <span className="font-medium">Cache</span>
             <span className="text-gray-600 tabular-nums">{formatTokenCount(cacheReadTokens)}</span>
           </span>
         )}
         {cacheCreationTokens > 0 && (
           <span className="flex items-center gap-1.5 text-gray-400">
-            <span className="w-2 h-2 rounded-sm bg-amber-500 ring-1 ring-amber-400/30" />
+            <span className="w-2 h-2 rounded-sm bg-amber-500 ring-1 ring-amber-400/30 shrink-0" />
             <span className="font-medium">Write</span>
             <span className="text-gray-600 tabular-nums">{formatTokenCount(cacheCreationTokens)}</span>
           </span>
