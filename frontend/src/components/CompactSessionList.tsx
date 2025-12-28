@@ -123,11 +123,11 @@ export function CompactSessionList({
               </span>
             )}
 
-            {/* Continue button for non-active */}
+            {/* Continue button for non-active - subtly visible, fully visible on hover */}
             {!session.is_active && onContinueSession && (
               <button
                 onClick={(e) => handleContinue(e, session)}
-                className="flex-shrink-0 opacity-0 group-hover:opacity-100 px-1.5 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 active:scale-95 rounded transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-400"
+                className="flex-shrink-0 opacity-40 group-hover:opacity-100 px-1.5 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 active:scale-95 rounded transition-all focus:outline-none focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-blue-400"
                 title="Continue this session"
               >
                 Continue
