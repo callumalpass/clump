@@ -95,11 +95,15 @@ export function TokenUsageBar({
       </div>
 
       {/* Visual bar */}
-      <div className="flex h-2 rounded-full overflow-hidden bg-gray-700/50">
+      <div
+        className="flex h-2 rounded-full overflow-hidden bg-gray-700/50 ring-1 ring-gray-600/30"
+        role="img"
+        aria-label={`Token usage: ${formatTokenCount(inputTokens)} input, ${formatTokenCount(outputTokens)} output, ${formatTokenCount(cacheReadTokens)} cache read, ${formatTokenCount(cacheCreationTokens)} cache write`}
+      >
         {/* Input tokens - blue */}
         {inputPct > 0 && (
           <div
-            className="token-bar-segment bg-blue-500"
+            className="token-bar-segment bg-blue-500 border-r border-gray-900/20 last:border-r-0"
             style={{ width: `${inputPct}%`, '--segment-color': 'rgba(59, 130, 246, 0.4)' } as React.CSSProperties}
             title={`Input: ${formatTokenCount(inputTokens)} (${inputPct.toFixed(1)}%)`}
           />
@@ -107,7 +111,7 @@ export function TokenUsageBar({
         {/* Output tokens - purple */}
         {outputPct > 0 && (
           <div
-            className="token-bar-segment bg-purple-500"
+            className="token-bar-segment bg-purple-500 border-r border-gray-900/20 last:border-r-0"
             style={{ width: `${outputPct}%`, '--segment-color': 'rgba(168, 85, 247, 0.4)' } as React.CSSProperties}
             title={`Output: ${formatTokenCount(outputTokens)} (${outputPct.toFixed(1)}%)`}
           />
@@ -115,7 +119,7 @@ export function TokenUsageBar({
         {/* Cache read - emerald */}
         {cacheReadPct > 0 && (
           <div
-            className="token-bar-segment bg-emerald-500"
+            className="token-bar-segment bg-emerald-500 border-r border-gray-900/20 last:border-r-0"
             style={{ width: `${cacheReadPct}%`, '--segment-color': 'rgba(16, 185, 129, 0.4)' } as React.CSSProperties}
             title={`Cache Read: ${formatTokenCount(cacheReadTokens)} (${cacheReadPct.toFixed(1)}%)`}
           />
@@ -123,7 +127,7 @@ export function TokenUsageBar({
         {/* Cache write - amber */}
         {cacheWritePct > 0 && (
           <div
-            className="token-bar-segment bg-amber-500"
+            className="token-bar-segment bg-amber-500 border-r border-gray-900/20 last:border-r-0"
             style={{ width: `${cacheWritePct}%`, '--segment-color': 'rgba(245, 158, 11, 0.4)' } as React.CSSProperties}
             title={`Cache Write: ${formatTokenCount(cacheCreationTokens)} (${cacheWritePct.toFixed(1)}%)`}
           />
