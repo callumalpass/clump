@@ -7,6 +7,7 @@ import { TokenUsageBar } from './TokenUsageBar';
 import type { SessionSummary, SessionDetail, EntityLink, Issue, PR, ParsedTranscript, TranscriptMessage } from '../types';
 import { fetchSessionDetail, addEntityToSession, removeEntityFromSession } from '../hooks/useApi';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { formatDuration } from '../utils/time';
 
 // Format transcript as markdown for export
 function formatTranscriptAsMarkdown(detail: SessionDetail): string {
@@ -1207,6 +1208,12 @@ export function SessionView({
             <span>
               {detail?.start_time ? new Date(detail.start_time).toLocaleString() : session.modified_at ? new Date(session.modified_at).toLocaleString() : 'Unknown date'}
             </span>
+            {/* Session duration for completed sessions */}
+            {!isActiveProcess && detail?.duration_seconds != null && (
+              <span className="text-gray-400" title="Session duration">
+                {formatDuration(detail.duration_seconds)}
+              </span>
+            )}
             {detail?.model && (
               <span className="text-gray-600">
                 {detail.model.includes('opus') ? 'Opus' : detail.model.includes('haiku') ? 'Haiku' : 'Sonnet'}

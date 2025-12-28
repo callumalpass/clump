@@ -72,6 +72,7 @@ class SessionSummaryResponse(BaseModel):
     model: Optional[str] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
+    duration_seconds: Optional[int] = None  # Session duration in seconds
     message_count: int = 0
 
     # File info
@@ -159,6 +160,7 @@ class SessionDetailResponse(BaseModel):
     # Timestamps
     start_time: Optional[str] = None
     end_time: Optional[str] = None
+    duration_seconds: Optional[int] = None  # Session duration in seconds
 
     # Version info
     claude_code_version: Optional[str] = None

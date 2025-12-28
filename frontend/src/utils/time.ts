@@ -92,3 +92,38 @@ export function getTimeWithTooltip(dateString: string): { relative: string; full
     }),
   };
 }
+
+/**
+ * Formats a duration in seconds as a human-readable string.
+ * Examples: "45s", "2m 30s", "1h 15m", "2h 30m"
+ * Returns null for null/undefined/negative inputs.
+ */
+export function formatDuration(seconds: number | null | undefined): string | null {
+  if (seconds === null || seconds === undefined || seconds < 0) {
+    return null;
+  }
+
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+
+  if (minutes < 60) {
+    // For short durations, include seconds
+    if (remainingSeconds > 0) {
+      return `${minutes}m ${remainingSeconds}s`;
+    }
+    return `${minutes}m`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+
+  // For longer durations, skip seconds
+  if (remainingMinutes > 0) {
+    return `${hours}h ${remainingMinutes}m`;
+  }
+  return `${hours}h`;
+}

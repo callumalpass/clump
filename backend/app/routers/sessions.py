@@ -67,6 +67,26 @@ class QuickScanResult(TypedDict):
     message_count: int
 
 
+def _calculate_duration_seconds(start_time: Optional[str], end_time: Optional[str]) -> Optional[int]:
+    """
+    Calculate session duration in seconds from start and end timestamps.
+
+    Returns None if either timestamp is missing or invalid.
+    """
+    if not start_time or not end_time:
+        return None
+
+    try:
+        # Handle ISO format timestamps (with or without timezone)
+        start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+        end = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
+        duration = (end - start).total_seconds()
+        # Return None for negative durations (shouldn't happen, but be safe)
+        return int(duration) if duration >= 0 else None
+    except (ValueError, TypeError):
+        return None
+
+
 router = APIRouter()
 
 
@@ -437,6 +457,11 @@ def _session_to_summary(
         if session.metadata.title:
             scan["title"] = session.metadata.title
 
+    # Calculate duration for completed sessions
+    duration_seconds = None if is_active else _calculate_duration_seconds(
+        scan["start_time"], scan["end_time"]
+    )
+
     return SessionSummaryResponse(
         session_id=session.session_id,
         encoded_path=session.encoded_path,
@@ -446,6 +471,7 @@ def _session_to_summary(
         model=scan["model"],
         start_time=scan["start_time"],
         end_time=scan["end_time"],
+        duration_seconds=duration_seconds,
         message_count=scan["message_count"],
         modified_at=session.modified_at.isoformat(),
         file_size=session.file_size,
@@ -471,6 +497,11 @@ def _parsed_to_detail(
     # Convert messages
     messages = [_message_to_response(msg) for msg in parsed.messages]
 
+    # Calculate duration for completed sessions
+    duration_seconds = None if is_active else _calculate_duration_seconds(
+        parsed.start_time, parsed.end_time
+    )
+
     return SessionDetailResponse(
         session_id=session_id,
         encoded_path=encoded_path,
@@ -485,6 +516,7 @@ def _parsed_to_detail(
         total_cache_creation_tokens=parsed.total_cache_creation_tokens,
         start_time=parsed.start_time,
         end_time=parsed.end_time,
+        duration_seconds=duration_seconds,
         claude_code_version=parsed.claude_code_version,
         git_branch=parsed.git_branch,
         metadata=_build_metadata_response(session_id, metadata),
@@ -957,49 +989,49 @@ async def continue_session(session_id: str, data: ContinueSessionRequest = None)
 
 def _format_edit_tool(tool_input: dict) -> str:
     """Format Edit tool use as Markdown."""
-    file_path = tool_input.get("file_path", "unknown")
-    old_str = tool_input.get("old_string", "")
-    new_str = tool_input.get("new_string", "")
+    file_path = tool_input.get("file_path") or "unknown"
+    old_str = tool_input.get("old_string") or ""
+    new_str = tool_input.get("new_string") or ""
     return f"**Edit** `{file_path}`\n\n```diff\n- {old_str.replace(chr(10), chr(10) + '- ')}\n+ {new_str.replace(chr(10), chr(10) + '+ ')}\n```"
 
 
 def _format_read_tool(tool_input: dict) -> str:
     """Format Read tool use as Markdown."""
-    file_path = tool_input.get("file_path", "unknown")
+    file_path = tool_input.get("file_path") or "unknown"
     return f"**Read** `{file_path}`"
 
 
 def _format_write_tool(tool_input: dict) -> str:
     """Format Write tool use as Markdown."""
-    file_path = tool_input.get("file_path", "unknown")
-    content = tool_input.get("content", "")
+    file_path = tool_input.get("file_path") or "unknown"
+    content = tool_input.get("content") or ""
     lines = content.count('\n') + 1
     return f"**Write** `{file_path}` ({lines} lines)"
 
 
 def _format_bash_tool(tool_input: dict) -> str:
     """Format Bash tool use as Markdown."""
-    command = tool_input.get("command", "")
+    command = tool_input.get("command") or ""
     return f"**Bash**\n```bash\n$ {command}\n```"
 
 
 def _format_grep_tool(tool_input: dict) -> str:
     """Format Grep tool use as Markdown."""
-    pattern = tool_input.get("pattern", "")
-    path = tool_input.get("path", ".")
+    pattern = tool_input.get("pattern") or ""
+    path = tool_input.get("path") or "."
     return f"**Grep** `{pattern}` in `{path}`"
 
 
 def _format_glob_tool(tool_input: dict) -> str:
     """Format Glob tool use as Markdown."""
-    pattern = tool_input.get("pattern", "")
+    pattern = tool_input.get("pattern") or ""
     return f"**Glob** `{pattern}`"
 
 
 def _format_task_tool(tool_input: dict) -> str:
     """Format Task tool use as Markdown."""
-    description = tool_input.get("description", "")
-    subagent_type = tool_input.get("subagent_type", "general")
+    description = tool_input.get("description") or ""
+    subagent_type = tool_input.get("subagent_type") or "general"
     return f"**Task** ({subagent_type}): {description}"
 
 

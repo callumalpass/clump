@@ -126,6 +126,7 @@ export interface SessionSummary {
   model?: string | null;
   start_time?: string | null;
   end_time?: string | null;
+  duration_seconds?: number | null;  // Session duration in seconds (null if active)
   message_count: number;
 
   // File info
@@ -162,6 +163,7 @@ export interface SessionDetail {
   // Timestamps
   start_time?: string | null;
   end_time?: string | null;
+  duration_seconds?: number | null;  // Session duration in seconds (null if active)
 
   // Version info
   claude_code_version?: string | null;

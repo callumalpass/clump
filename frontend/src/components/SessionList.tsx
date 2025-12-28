@@ -1,7 +1,7 @@
 import { memo, useCallback, useState } from 'react';
 import type { SessionSummary, Process, BulkOperationResult } from '../types';
 import { getModelShortName, getModelTextColor } from '../utils/models';
-import { formatRelativeTime } from '../utils/time';
+import { formatRelativeTime, formatDuration } from '../utils/time';
 import { ElapsedTimer } from './ElapsedTimer';
 import { Pagination, PaginationSkeleton } from './Pagination';
 import {
@@ -191,18 +191,32 @@ const SessionListItem = memo(function SessionListItem({
           {session.message_count} msg{session.message_count !== 1 ? 's' : ''}
         </span>
 
-        {/* Duration for active, relative time for completed */}
+        {/* Duration for active sessions, duration + relative time for completed */}
         {session.is_active && session.start_time ? (
           <span className="text-yellow-500" title="Time elapsed">
             <ElapsedTimer startTime={session.start_time} />
           </span>
-        ) : session.modified_at && (
-          <span
-            className="text-gray-500"
-            title={new Date(session.modified_at).toLocaleString()}
-          >
-            {formatRelativeTime(session.modified_at)}
-          </span>
+        ) : (
+          <>
+            {/* Show session duration if available */}
+            {session.duration_seconds != null && (
+              <span
+                className="text-gray-400"
+                title="Session duration"
+              >
+                {formatDuration(session.duration_seconds)}
+              </span>
+            )}
+            {/* Show relative time */}
+            {session.modified_at && (
+              <span
+                className="text-gray-500"
+                title={new Date(session.modified_at).toLocaleString()}
+              >
+                {formatRelativeTime(session.modified_at)}
+              </span>
+            )}
+          </>
         )}
       </div>
     </div>
