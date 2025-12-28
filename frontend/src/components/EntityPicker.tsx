@@ -133,14 +133,21 @@ export function EntityPicker({
         {/* List */}
         <div className="overflow-y-auto max-h-[calc(70vh-140px)]">
           {items.length === 0 ? (
-            <div className="px-4 py-8 text-center text-gray-500">
-              {search
-                ? `No ${entityType === 'issue' ? 'issues' : 'PRs'} found`
-                : `No ${entityType === 'issue' ? 'issues' : 'PRs'} available`}
+            <div className="px-4 py-8 text-center empty-state-enter">
+              <div className="w-12 h-12 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-3 empty-state-icon-float">
+                <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <p className="text-gray-400">
+                {search
+                  ? `No ${entityType === 'issue' ? 'issues' : 'PRs'} found`
+                  : `No ${entityType === 'issue' ? 'issues' : 'PRs'} available`}
+              </p>
             </div>
           ) : (
             <div className="divide-y divide-gray-700/50">
-              {items.map((item) => {
+              {items.map((item, index) => {
                 const linked = isLinked(item.number);
                 const isAdding = adding === item.number;
 
@@ -149,13 +156,14 @@ export function EntityPicker({
                     key={item.number}
                     onClick={() => handleAdd(item.number)}
                     disabled={linked || isAdding}
-                    className={`w-full px-4 py-3 text-left transition-colors ${
+                    className={`group w-full px-4 py-3 text-left list-item-hover list-item-enter ${
                       linked
                         ? 'opacity-50 cursor-not-allowed bg-gray-800/30'
                         : isAdding
                         ? 'bg-blue-900/20 cursor-wait'
                         : 'hover:bg-gray-800/50'
                     }`}
+                    style={{ '--item-index': Math.min(index, 10) } as React.CSSProperties}
                   >
                     <div className="flex items-start gap-3">
                       {/* Number */}
@@ -182,23 +190,29 @@ export function EntityPicker({
                       </div>
 
                       {/* Status indicator */}
-                      <div className="shrink-0">
+                      <div className="shrink-0 transition-all duration-150">
                         {linked ? (
-                          <span className="text-xs text-gray-500 flex items-center gap-1">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          <span className="status-badge-enter inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-500/20 text-green-400">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                             </svg>
                             Linked
                           </span>
                         ) : isAdding ? (
-                          <svg className="w-4 h-4 text-blue-400 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                          </svg>
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-blue-500/20 text-blue-400">
+                            <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                            Adding
+                          </span>
                         ) : (
-                          <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                          </svg>
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-gray-600/50 text-gray-400 group-hover:bg-blue-500/20 group-hover:text-blue-400 transition-colors">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            Link
+                          </span>
                         )}
                       </div>
                     </div>
