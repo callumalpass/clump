@@ -813,7 +813,7 @@ export default function App() {
           {/* Keyboard shortcuts hint */}
           <button
             onClick={() => setShortcutsOpen(true)}
-            className="hidden sm:flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300 transition-colors focus:outline-none focus:text-gray-300"
+            className="hidden sm:flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300 transition-all active:scale-95 focus:outline-none focus:text-gray-300"
             title="Keyboard shortcuts (?)"
           >
             <kbd className="px-1.5 py-0.5 bg-gray-800 border border-gray-600 rounded text-gray-400">?</kbd>
@@ -821,7 +821,7 @@ export default function App() {
           </button>
           <button
             onClick={() => setSettingsOpen(true)}
-            className="p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-all active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             title="Settings"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1332,8 +1332,8 @@ export default function App() {
             {/* Empty state (no open session tabs and no issue/PR selected) */}
             {openSessions.length === 0 && !selectedIssue && !selectedPR && (
               <div className="flex-1 flex items-center justify-center p-8">
-                <div className="text-center p-8 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-sm">
-                  <div className="w-16 h-16 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-5">
+                <div className="text-center p-8 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-sm empty-state-enter">
+                  <div className="w-16 h-16 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-5 empty-state-icon-float">
                     <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
                     </svg>

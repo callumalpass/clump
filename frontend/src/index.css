@@ -116,6 +116,20 @@ body {
   animation: empty-state-fade-in 200ms ease-out forwards;
 }
 
+/* Subtle floating animation for empty state icon */
+@keyframes empty-state-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.empty-state-icon-float {
+  animation: empty-state-float 3s ease-in-out infinite;
+}
+
 /* List item hover lift effect */
 .list-item-hover {
   transition: transform 150ms ease-out, box-shadow 150ms ease-out, background-color 150ms ease-out;
@@ -221,4 +235,17 @@ textarea::placeholder {
 
 .message-user:hover {
   border-color: rgba(59, 130, 246, 0.6);
+}
+
+/* Token usage bar segment hover effects */
+.token-bar-segment {
+  transition: transform 150ms ease-out, box-shadow 150ms ease-out, filter 150ms ease-out;
+  cursor: pointer;
+}
+
+.token-bar-segment:hover {
+  transform: scaleY(1.5);
+  box-shadow: 0 0 8px var(--segment-color, rgba(59, 130, 246, 0.4));
+  filter: brightness(1.15);
+  z-index: 1;
 }
