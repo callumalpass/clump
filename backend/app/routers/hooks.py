@@ -213,7 +213,7 @@ async def notifications_websocket(websocket: WebSocket):
     # Unified queue for all events (notifications + general events)
     event_queue: asyncio.Queue[dict] = asyncio.Queue()
 
-    def on_notification(notification: Notification):
+    def on_notification(notification: Notification) -> None:
         """Callback when a notification is received."""
         try:
             event_queue.put_nowait({
@@ -223,7 +223,7 @@ async def notifications_websocket(websocket: WebSocket):
         except asyncio.QueueFull:
             pass
 
-    def on_event(event: Event):
+    def on_event(event: Event) -> None:
         """Callback when a general event is received."""
         try:
             event_queue.put_nowait(event.to_dict())
@@ -234,7 +234,7 @@ async def notifications_websocket(websocket: WebSocket):
     notification_manager.subscribe_global(on_notification)
     event_manager.subscribe(on_event)
 
-    async def send_events():
+    async def send_events() -> None:
         """Task to send events to the client."""
         while True:
             try:
@@ -250,7 +250,7 @@ async def notifications_websocket(websocket: WebSocket):
                 logger.exception("Unexpected error sending WebSocket event")
                 break
 
-    async def receive_messages():
+    async def receive_messages() -> None:
         """Task to receive messages from client (e.g., clear attention)."""
         while True:
             try:
