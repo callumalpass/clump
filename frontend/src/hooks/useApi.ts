@@ -337,6 +337,8 @@ export interface SessionFilters {
   hasEntities?: boolean;
   search?: string;
   isActive?: boolean;
+  sort?: 'created' | 'updated' | 'messages';
+  order?: 'asc' | 'desc';
 }
 
 export function useSessions(filters: SessionFilters = {}) {
@@ -346,7 +348,7 @@ export function useSessions(filters: SessionFilters = {}) {
   const [perPage] = useState(30);
   const [loading, setLoading] = useState(true);
 
-  const { repoPath, starred, hasEntities, search, isActive } = filters;
+  const { repoPath, starred, hasEntities, search, isActive, sort, order } = filters;
 
   // Internal fetch that optionally shows loading state
   const fetchPage = useCallback(async (pageNum: number, showLoading: boolean) => {
@@ -358,6 +360,8 @@ export function useSessions(filters: SessionFilters = {}) {
       if (hasEntities !== undefined) params.set('has_entities', hasEntities.toString());
       if (isActive !== undefined) params.set('is_active', isActive.toString());
       if (search) params.set('search', search);
+      if (sort) params.set('sort', sort);
+      if (order) params.set('order', order);
       params.set('limit', perPage.toString());
       params.set('offset', ((pageNum - 1) * perPage).toString());
 
@@ -372,7 +376,7 @@ export function useSessions(filters: SessionFilters = {}) {
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [repoPath, starred, hasEntities, search, isActive, perPage]);
+  }, [repoPath, starred, hasEntities, search, isActive, sort, order, perPage]);
 
   // Public refresh - silent by default for polling
   const refresh = useCallback(() => fetchPage(page, false), [fetchPage, page]);
@@ -385,7 +389,7 @@ export function useSessions(filters: SessionFilters = {}) {
   useEffect(() => {
     setPage(1);
     fetchPage(1, true);
-  }, [repoPath, starred, hasEntities, search, isActive]);
+  }, [repoPath, starred, hasEntities, search, isActive, sort, order]);
 
   const continueSession = async (sessionId: string): Promise<Process> => {
     const result = await fetchJson<Process>(

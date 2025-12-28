@@ -354,6 +354,8 @@ async def list_sessions(
     starred: Optional[bool] = None,
     has_entities: Optional[bool] = None,
     search: Optional[str] = None,
+    sort: Optional[str] = Query(default="updated", regex="^(created|updated|messages)$"),
+    order: Optional[str] = Query(default="desc", regex="^(asc|desc)$"),
     limit: int = Query(default=50, le=200),
     offset: int = 0,
 ):
@@ -386,8 +388,14 @@ async def list_sessions(
     pending = _get_pending_sessions(active_session_ids, discovered_session_ids, repo_path)
     summaries.extend(pending)
 
-    # Re-sort by modified_at (pending sessions are at the top since they're newest)
-    summaries.sort(key=lambda s: s.modified_at or "", reverse=True)
+    # Sort based on the requested field and order
+    reverse = order == "desc"
+    if sort == "created":
+        summaries.sort(key=lambda s: s.start_time or "", reverse=reverse)
+    elif sort == "messages":
+        summaries.sort(key=lambda s: s.message_count or 0, reverse=reverse)
+    else:  # default to "updated"
+        summaries.sort(key=lambda s: s.modified_at or "", reverse=reverse)
 
     # Apply filters
     if starred is not None:
