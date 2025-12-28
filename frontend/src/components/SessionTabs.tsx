@@ -1,8 +1,9 @@
+import { useRef, useState, useLayoutEffect } from 'react';
 import type { SessionSummary, Process } from '../types';
 import { ElapsedTimer } from './ElapsedTimer';
 
-/** Consistent focus ring styling for accessibility */
-const focusRing = 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900';
+/** Consistent focus ring styling for accessibility (focus-visible for keyboard only) */
+const focusRing = 'outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900';
 
 /** Maximum length of a tab title before truncation */
 const MAX_TAB_TITLE_LENGTH = 30;
@@ -47,8 +48,36 @@ export function SessionTabs({
   needsAttention,
   newSessionDisabled,
 }: SessionTabsProps) {
+  // Refs for animated tab indicator
+  const containerRef = useRef<HTMLDivElement>(null);
+  const tabRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
+
+  // Update the sliding tab indicator position when active tab changes
+  useLayoutEffect(() => {
+    const updateIndicator = () => {
+      const container = containerRef.current;
+      const activeTabElement = activeSessionId ? tabRefs.current.get(activeSessionId) : null;
+      if (container && activeTabElement) {
+        const containerRect = container.getBoundingClientRect();
+        const tabRect = activeTabElement.getBoundingClientRect();
+        setIndicatorStyle({
+          left: tabRect.left - containerRect.left,
+          width: tabRect.width,
+        });
+      } else {
+        // No active tab - hide indicator
+        setIndicatorStyle({ left: 0, width: 0 });
+      }
+    };
+    updateIndicator();
+    // Also update on window resize
+    window.addEventListener('resize', updateIndicator);
+    return () => window.removeEventListener('resize', updateIndicator);
+  }, [activeSessionId, sessions]); // Re-run when sessions change too (for dynamic tabs)
+
   return (
-    <div className="flex items-center gap-1 bg-[#161b22] border-b border-gray-700 px-2 overflow-x-auto">
+    <div ref={containerRef} className="relative flex items-center gap-1 bg-[#161b22] border-b border-gray-700 px-2 overflow-x-auto">
       {sessions.map((session) => {
         const tabName = getTabName(session);
         // Check if this session has an active process
@@ -63,14 +92,17 @@ export function SessionTabs({
         return (
           <div
             key={session.session_id}
+            ref={(el) => {
+              if (el) tabRefs.current.set(session.session_id, el);
+            }}
             role="tab"
             tabIndex={0}
-            className={`group flex items-center gap-1.5 px-3 py-2 cursor-pointer border-b-2 transition-colors ${focusRing} ${
+            className={`group flex items-center gap-1.5 px-3 py-2 cursor-pointer transition-colors ${focusRing} ${
               isActiveTab
-                ? 'border-blue-500 text-white'
+                ? 'text-white'
                 : sessionNeedsAttention
-                  ? 'border-orange-400 text-orange-200 bg-orange-900/40 hover:bg-orange-900/60'
-                  : 'border-transparent text-gray-400 hover:text-white hover:bg-gray-800'
+                  ? 'text-orange-200 bg-orange-900/40 hover:bg-orange-900/60'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
             }`}
             onClick={() => onSelectSession(session.session_id)}
             onKeyDown={(e) => {
@@ -163,6 +195,16 @@ export function SessionTabs({
       >
         +
       </button>
+      {/* Sliding indicator - only show when width is calculated */}
+      {indicatorStyle.width > 0 && (
+        <div
+          className="absolute bottom-0 left-0 h-0.5 bg-blue-500 transition-all duration-200 ease-out"
+          style={{
+            transform: `translateX(${indicatorStyle.left}px)`,
+            width: indicatorStyle.width,
+          }}
+        />
+      )}
     </div>
   );
 }
