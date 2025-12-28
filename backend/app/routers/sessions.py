@@ -5,10 +5,17 @@ Sessions are discovered from Claude's JSONL files in ~/.claude/projects/
 with optional sidecar metadata stored in ~/.clump/projects/
 """
 
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
+import time
 
 from fastapi import APIRouter, HTTPException, Query
+
+# Session discovery cache with TTL
+# This avoids redundant filesystem scans when polling frequently
+_session_cache: dict[str, tuple[list, float]] = {}  # key -> (sessions, timestamp)
+SESSION_CACHE_TTL = 2.0  # seconds
 
 from app.schemas import (
     SessionSummaryResponse,
@@ -43,6 +50,55 @@ from app.services.transcript_parser import parse_transcript, ParsedTranscript, T
 from app.services.session_manager import process_manager
 
 router = APIRouter()
+
+
+def _get_cached_sessions(repo_path: Optional[str] = None) -> list[DiscoveredSession]:
+    """
+    Get sessions with caching to avoid redundant filesystem scans.
+
+    Uses a simple TTL cache keyed by repo_path.
+    """
+    global _session_cache
+
+    cache_key = repo_path or "__all__"
+    now = time.time()
+
+    # Check if we have a valid cache entry
+    if cache_key in _session_cache:
+        cached_sessions, cached_time = _session_cache[cache_key]
+        if now - cached_time < SESSION_CACHE_TTL:
+            return cached_sessions
+
+    # Cache miss or expired - fetch fresh data
+    sessions = discover_sessions(repo_path=repo_path)
+
+    # Update cache
+    _session_cache[cache_key] = (sessions, now)
+
+    # Clean up old cache entries (keep cache size bounded)
+    if len(_session_cache) > 100:
+        cutoff = now - SESSION_CACHE_TTL * 10  # Remove entries older than 10x TTL
+        _session_cache = {
+            k: v for k, v in _session_cache.items()
+            if v[1] > cutoff
+        }
+
+    return sessions
+
+
+def invalidate_session_cache(repo_path: Optional[str] = None) -> None:
+    """
+    Invalidate session cache.
+
+    Call this when sessions are created, deleted, or modified.
+    """
+    global _session_cache
+    if repo_path:
+        cache_key = repo_path
+        _session_cache.pop(cache_key, None)
+        _session_cache.pop("__all__", None)  # Also invalidate global cache
+    else:
+        _session_cache.clear()
 
 
 def _message_to_response(msg: TranscriptMessage) -> TranscriptMessageResponse:
@@ -367,8 +423,10 @@ async def list_sessions(
     transcript files yet (Claude is still starting up).
 
     Optional filtering by repo path, starred status, or search term.
+
+    Uses caching to avoid redundant filesystem scans when polling frequently.
     """
-    sessions = discover_sessions(repo_path=repo_path)
+    sessions = _get_cached_sessions(repo_path=repo_path)
 
     # Get active session IDs from running processes
     active_processes = await process_manager.list_processes()
@@ -448,8 +506,8 @@ async def get_session_counts():
 
     counts = []
     for repo in repos:
-        # Discover sessions for this repo
-        sessions = discover_sessions(repo_path=repo["local_path"])
+        # Discover sessions for this repo (use cached)
+        sessions = _get_cached_sessions(repo_path=repo["local_path"])
 
         # Count active sessions
         active_count = sum(
@@ -486,8 +544,8 @@ async def get_session(session_id: str):
     The session_id is the UUID from the JSONL filename.
     For pending sessions (no JSONL file yet), returns minimal data from process info.
     """
-    # Find the session by scanning all projects
-    sessions = discover_sessions()
+    # Find the session (use cached for performance)
+    sessions = _get_cached_sessions()
     session = _find_session_by_id(sessions, session_id)
 
     # Check if this is an active process
@@ -606,8 +664,8 @@ async def update_session_metadata(session_id: str, data: SessionMetadataUpdate):
 
     Creates the sidecar file if it doesn't exist.
     """
-    # Find the session
-    sessions = discover_sessions()
+    # Find the session (use cached for performance)
+    sessions = _get_cached_sessions()
     session = _find_session_by_id(sessions, session_id)
 
     if not session:
@@ -642,8 +700,8 @@ async def update_session_metadata(session_id: str, data: SessionMetadataUpdate):
 @router.post("/sessions/{session_id}/entities", response_model=EntityLinkResponse)
 async def add_entity_to_session(session_id: str, data: AddEntityRequest):
     """Add an issue or PR link to a session."""
-    # Find the session
-    sessions = discover_sessions()
+    # Find the session (use cached for performance)
+    sessions = _get_cached_sessions()
     session = _find_session_by_id(sessions, session_id)
 
     if not session:
@@ -679,8 +737,8 @@ async def remove_entity_from_session(session_id: str, entity_idx: int):
 
     entity_idx is the index in the entities array (0-based).
     """
-    # Find the session
-    sessions = discover_sessions()
+    # Find the session (use cached for performance)
+    sessions = _get_cached_sessions()
     session = _find_session_by_id(sessions, session_id)
 
     if not session:
@@ -712,8 +770,8 @@ async def continue_session(session_id: str):
 
     Creates a new PTY process that resumes the Claude conversation.
     """
-    # Find the session
-    sessions = discover_sessions()
+    # Find the session (use cached for performance)
+    sessions = _get_cached_sessions()
     session = _find_session_by_id(sessions, session_id)
 
     if not session:
@@ -764,8 +822,8 @@ async def delete_session(session_id: str):
 
     Cannot delete sessions that are currently running.
     """
-    # Find the session
-    sessions = discover_sessions()
+    # Find the session (use cached for performance)
+    sessions = _get_cached_sessions()
     session = _find_session_by_id(sessions, session_id)
 
     if not session:
@@ -794,6 +852,9 @@ async def delete_session(session_id: str):
 
     # Delete sidecar metadata
     metadata_deleted = delete_session_metadata(session.encoded_path, session_id)
+
+    # Invalidate cache after deletion
+    invalidate_session_cache()
 
     return {
         "status": "deleted",

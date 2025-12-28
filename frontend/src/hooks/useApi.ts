@@ -389,7 +389,9 @@ export function useSessions(filters: SessionFilters = {}) {
   useEffect(() => {
     setPage(1);
     fetchPage(1, true);
-  }, [repoPath, starred, hasEntities, search, isActive, sort, order]);
+  // fetchPage captures all filter values, so we just need it as a dependency
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchPage]);
 
   const continueSession = async (sessionId: string): Promise<Process> => {
     const result = await fetchJson<Process>(

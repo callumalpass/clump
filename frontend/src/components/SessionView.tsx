@@ -276,42 +276,31 @@ export function SessionView({
     return () => document.removeEventListener('click', handleClick);
   }, [showActionsMenu]);
 
-  // Fetch session detail (with polling for active sessions)
+  // Fetch session detail (no polling - App.tsx handles global session refresh)
   useEffect(() => {
     let isMounted = true;
-    let pollTimeout: NodeJS.Timeout | null = null;
-
-    const fetchData = () => {
-      fetchSessionDetail(session.session_id)
-        .then((data) => {
-          if (isMounted) {
-            setDetail(data);
-            setLoading(false);
-          }
-        })
-        .catch((err) => {
-          if (isMounted) {
-            setError(err.message || 'Failed to load session');
-            setLoading(false);
-          }
-        })
-        .finally(() => {
-          // Poll for updates if this is an active session and we're viewing transcript
-          if (isMounted && isActiveProcess && viewMode === 'transcript') {
-            pollTimeout = setTimeout(fetchData, 2000);
-          }
-        });
-    };
 
     setLoading(true);
     setError(null);
-    fetchData();
+
+    fetchSessionDetail(session.session_id)
+      .then((data) => {
+        if (isMounted) {
+          setDetail(data);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          setError(err.message || 'Failed to load session');
+          setLoading(false);
+        }
+      });
 
     return () => {
       isMounted = false;
-      if (pollTimeout) clearTimeout(pollTimeout);
     };
-  }, [session.session_id, isActiveProcess, viewMode]);
+  }, [session.session_id]);
 
   // Reset search when session changes
   useEffect(() => {
