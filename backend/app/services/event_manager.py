@@ -8,11 +8,15 @@ Replaces polling with push-based updates.
 import asyncio
 import logging
 
-logger = logging.getLogger(__name__)
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Callable, Any
+
+logger = logging.getLogger(__name__)
+
+# Debounce delay for coalescing rapid count change events
+COUNTS_DEBOUNCE_SECS = 0.1
 
 
 class EventType(str, Enum):
@@ -108,7 +112,7 @@ class EventManager:
     async def _debounced_counts_emit(self) -> None:
         """Emit counts after debounce delay."""
         try:
-            await asyncio.sleep(0.1)  # 100ms debounce
+            await asyncio.sleep(COUNTS_DEBOUNCE_SECS)
             # Capture counts under lock, then emit outside lock
             # This prevents holding the lock during potentially slow emit callbacks
             counts_to_emit = None
