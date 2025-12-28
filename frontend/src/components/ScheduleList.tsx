@@ -310,14 +310,42 @@ const ScheduleCard = memo(function ScheduleCard({ schedule, selected, onSelect, 
 });
 
 function StatusBadge({ status }: { status: string }) {
-  const colors = {
-    active: 'bg-green-500/20 text-green-400',
-    paused: 'bg-yellow-500/20 text-yellow-400',
-    disabled: 'bg-gray-500/20 text-gray-400',
+  const config = {
+    active: {
+      containerClass: 'bg-green-500/20 text-green-400',
+      dotClass: 'bg-green-500',
+      pulse: false,
+      label: 'Schedule is active and will run on its cron schedule',
+    },
+    paused: {
+      containerClass: 'bg-yellow-500/20 text-yellow-400',
+      dotClass: 'bg-yellow-500',
+      pulse: false,
+      label: 'Schedule is paused and will not run until resumed',
+    },
+    disabled: {
+      containerClass: 'bg-gray-500/20 text-gray-400',
+      dotClass: 'bg-gray-500',
+      pulse: false,
+      label: 'Schedule is disabled',
+    },
+    running: {
+      containerClass: 'bg-blue-500/20 text-blue-400 active-badge-glow',
+      dotClass: 'bg-blue-500',
+      pulse: true,
+      label: 'Schedule is currently running',
+    },
   };
 
+  const { containerClass, dotClass, pulse, label } = config[status as keyof typeof config] || config.disabled;
+
   return (
-    <span className={`px-1.5 py-0.5 text-xs rounded ${colors[status as keyof typeof colors] || colors.disabled}`}>
+    <span
+      className={`status-badge status-badge-enter inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full ${containerClass}`}
+      title={label}
+      aria-label={label}
+    >
+      <span className={`status-dot w-1.5 h-1.5 rounded-full ${dotClass} ${pulse ? 'animate-pulse' : ''}`} />
       {status}
     </span>
   );
