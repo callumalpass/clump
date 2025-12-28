@@ -149,8 +149,12 @@ export function SessionList({
       <div className="flex flex-col flex-1 min-h-0">
         {filterBar}
         <div className="divide-y divide-gray-700">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="p-3">
+          {[0, 1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="p-3 skeleton-item-enter"
+              style={{ '--item-index': i } as React.CSSProperties}
+            >
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-10 h-4 rounded-full skeleton-shimmer" />
                 <div className="h-4 w-40 rounded skeleton-shimmer" />

@@ -147,8 +147,12 @@ export function PRList({
       <div className="flex flex-col flex-1 min-h-0">
         {filterBar}
         <div className="divide-y divide-gray-700">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="p-3">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className="p-3 skeleton-item-enter"
+              style={{ '--item-index': i } as React.CSSProperties}
+            >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
