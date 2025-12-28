@@ -148,7 +148,17 @@ export function PRDetail({
   }
 
   if (!pr) {
-    return <div className="p-4 text-gray-400">Pull request not found</div>;
+    return (
+      <div className="p-4 flex flex-col items-center justify-center min-h-[200px] empty-state-enter">
+        <div className="w-12 h-12 rounded-full bg-gray-700/40 flex items-center justify-center mb-3">
+          <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <p className="text-gray-400 font-medium mb-1">Pull request not found</p>
+        <p className="text-sm text-gray-500">This PR may have been deleted or merged.</p>
+      </div>
+    );
   }
 
   return (
