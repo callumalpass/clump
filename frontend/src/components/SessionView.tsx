@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Terminal } from './Terminal';
 import { ConversationView } from './ConversationView';
 import { EntityPicker } from './EntityPicker';
+import { TokenUsageBar } from './TokenUsageBar';
 import type { SessionSummary, SessionDetail, EntityLink, Issue, PR, ParsedTranscript } from '../types';
 import { fetchSessionDetail, addEntityToSession, removeEntityFromSession } from '../hooks/useApi';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -970,12 +971,31 @@ export function SessionView({
         )}
       </div>
 
-      {/* Footer with metadata */}
-      <div className="px-4 py-2 border-t border-gray-700 bg-gray-800/30">
+      {/* Footer with metadata and token usage */}
+      <div className="px-4 py-2 border-t border-gray-700 bg-gray-800/30 space-y-2">
+        {/* Token usage bar (only show if we have token data) */}
+        {detail && (detail.total_input_tokens > 0 || detail.total_output_tokens > 0) && (
+          <TokenUsageBar
+            inputTokens={detail.total_input_tokens}
+            outputTokens={detail.total_output_tokens}
+            cacheReadTokens={detail.total_cache_read_tokens}
+            cacheCreationTokens={detail.total_cache_creation_tokens}
+            model={detail.model}
+          />
+        )}
+
+        {/* Metadata row */}
         <div className="flex items-center justify-between text-xs text-gray-500">
-          <span>
-            {detail?.start_time ? new Date(detail.start_time).toLocaleString() : session.modified_at ? new Date(session.modified_at).toLocaleString() : 'Unknown date'}
-          </span>
+          <div className="flex items-center gap-3">
+            <span>
+              {detail?.start_time ? new Date(detail.start_time).toLocaleString() : session.modified_at ? new Date(session.modified_at).toLocaleString() : 'Unknown date'}
+            </span>
+            {detail?.model && (
+              <span className="text-gray-600">
+                {detail.model.includes('opus') ? 'Opus' : detail.model.includes('haiku') ? 'Haiku' : 'Sonnet'}
+              </span>
+            )}
+          </div>
           <span className="text-gray-600" title={session.session_id}>
             Session: {session.session_id.slice(0, 8)}...
           </span>
