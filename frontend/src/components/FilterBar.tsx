@@ -23,7 +23,7 @@ export const filterBarStyles = {
         : 'text-gray-400 hover:text-white hover:bg-gray-700'
     }`,
   // Select dropdown
-  select: `bg-gray-800 border border-gray-600 rounded-md px-2 py-1 text-xs ${focusRing} focus:border-blue-500`,
+  select: `bg-gray-800 border border-gray-600 rounded-md px-2 py-1 text-xs transition-colors duration-150 ${focusRing} focus:border-blue-500 focus:bg-gray-700/50`,
   // Icon button
   iconButton: `p-1 bg-gray-800 border border-gray-600 rounded-md hover:bg-gray-700 hover:border-gray-500 transition-colors ${focusRing}`,
   // Counts and metadata
@@ -65,7 +65,7 @@ export function SearchInput({ value, onChange, placeholder = 'Search...', deboun
         placeholder={placeholder}
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
-        className={`w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-1 text-xs pl-7 ${focusRing} focus:border-blue-500`}
+        className={`w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-1 text-xs pl-7 transition-colors duration-150 ${focusRing} focus:border-blue-500 focus:bg-gray-700/50 placeholder:text-gray-500`}
       />
       <svg
         className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400"

@@ -153,6 +153,20 @@ textarea:disabled {
   opacity: 0.5;
 }
 
+/* Enhanced input focus glow effect */
+input:focus,
+select:focus,
+textarea:focus {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+/* Placeholder text styling for better hierarchy */
+input::placeholder,
+textarea::placeholder {
+  color: #6b7280;
+  opacity: 1;
+}
+
 /* Toggle button group styling */
 .toggle-btn {
   transition: background-color 150ms ease, color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
