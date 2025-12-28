@@ -47,6 +47,12 @@ interface PendingPRContext {
   prNumber: number;
 }
 
+// Track pending session metadata for optimistic UI
+interface PendingSessionData {
+  title: string;
+  entities: { kind: string; number: number }[];
+}
+
 export default function App() {
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('issues');
@@ -74,16 +80,20 @@ export default function App() {
   const pendingIssueContextRef = useRef<PendingIssueContext | null>(null);
   const pendingPRContextRef = useRef<PendingPRContext | null>(null);
 
+  // Track pending session data for optimistic UI (title, entities before backend returns)
+  const pendingSessionsRef = useRef<Map<string, PendingSessionData>>(new Map());
+
   // Ref for collapsible issue/PR context panel
   const contextPanelRef = useRef<PanelImperativeHandle>(null);
 
   // Save session tabs on every change
-  const isRestoringTabsRef = useRef(false);
+  // Track which repo the current tabs belong to (prevents saving old tabs to new repo on switch)
+  const tabsRepoIdRef = useRef<number | null>(null);
   useEffect(() => {
-    // Skip saving during restore (when switching repos)
-    if (isRestoringTabsRef.current) return;
     // Only save if we have a selected repo
     if (!selectedRepo?.id) return;
+    // Only save if these tabs belong to this repo (prevents race on repo switch)
+    if (tabsRepoIdRef.current !== selectedRepo.id) return;
 
     const STORAGE_KEY = 'clump:repoSessionTabs';
     try {
@@ -141,8 +151,6 @@ export default function App() {
     setSelectedPR(null);
 
     // Restore tabs for new repo (or clear if none saved)
-    // Set flag to prevent the save effect from re-saving during restore
-    isRestoringTabsRef.current = true;
     if (selectedRepo?.id) {
       try {
         const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
@@ -167,15 +175,14 @@ export default function App() {
         setActiveTabSessionId(null);
         setViewingSessionId(null);
       }
+      // Mark that these tabs now belong to this repo (enables saving)
+      tabsRepoIdRef.current = selectedRepo.id;
     } else {
       setOpenSessionIds([]);
       setActiveTabSessionId(null);
       setViewingSessionId(null);
+      tabsRepoIdRef.current = null;
     }
-    // Clear flag after a microtask to allow state updates to settle
-    Promise.resolve().then(() => {
-      isRestoringTabsRef.current = false;
-    });
 
     // Clear process (we'll check if any restored tabs have running processes separately)
     setActiveProcessId(null);
@@ -200,11 +207,38 @@ export default function App() {
     setExpandedSessionId(null);
   }, []);
 
-  // Refresh sessions periodically to update status indicators
+  // Smart polling: only poll when there are active sessions, with adaptive intervals
+  const hasActiveSessions = sessions.some(s => s.is_active) || processes.length > 0;
   useEffect(() => {
-    const interval = setInterval(refreshSessions, 5000);
+    if (!hasActiveSessions) return;
+
+    // Poll more frequently when there are active sessions
+    const interval = setInterval(refreshSessions, 3000);
     return () => clearInterval(interval);
-  }, [refreshSessions]);
+  }, [hasActiveSessions, refreshSessions]);
+
+  // Validate and cleanup stale session tabs (after sessions load)
+  useEffect(() => {
+    if (sessionsLoading) return;
+
+    // Find tabs that reference sessions that no longer exist and have no active process
+    const validTabs = openSessionIds.filter(id => {
+      // Keep if session exists in backend
+      if (sessions.find(s => s.session_id === id)) return true;
+      // Keep if there's an active process for this session (optimistic UI)
+      if (processes.find(p => p.claude_session_id === id)) return true;
+      // Remove stale tabs
+      return false;
+    });
+
+    if (validTabs.length < openSessionIds.length) {
+      setOpenSessionIds(validTabs);
+      // If active tab was removed, clear it
+      if (activeTabSessionId && !validTabs.includes(activeTabSessionId)) {
+        setActiveTabSessionId(validTabs[0] || null);
+      }
+    }
+  }, [sessions, processes, openSessionIds, activeTabSessionId, sessionsLoading]);
 
   const handleStartIssueSession = useCallback(
     async (issue: Issue, command: CommandMetadata) => {
@@ -216,12 +250,15 @@ export default function App() {
         body: issue.body,
       });
 
+      const title = `${command.name}: Issue #${issue.number}`;
+      const entities = [{ kind: 'issue', number: issue.number }];
+
       const process = await createProcess(
         selectedRepo.id,
         prompt,
         'issue',
-        [{ kind: 'issue', number: issue.number }],
-        `${command.name}: Issue #${issue.number}`
+        entities,
+        title
       );
 
       // Store pending context so side-by-side view shows immediately
@@ -230,6 +267,11 @@ export default function App() {
         processId: process.id,
         issueNumber: issue.number,
       };
+
+      // Store pending session data for optimistic UI
+      if (process.claude_session_id) {
+        pendingSessionsRef.current.set(process.claude_session_id, { title, entities });
+      }
 
       setActiveProcessId(process.id);
 
@@ -257,12 +299,15 @@ export default function App() {
         base_ref: pr.base_ref,
       });
 
+      const title = `${command.name}: PR #${pr.number}`;
+      const entities = [{ kind: 'pr', number: pr.number }];
+
       const process = await createProcess(
         selectedRepo.id,
         prompt,
         'pr',
-        [{ kind: 'pr', number: pr.number }],
-        `${command.name}: PR #${pr.number}`
+        entities,
+        title
       );
 
       // Store pending context so side-by-side view shows immediately
@@ -270,6 +315,11 @@ export default function App() {
         processId: process.id,
         prNumber: pr.number,
       };
+
+      // Store pending session data for optimistic UI
+      if (process.claude_session_id) {
+        pendingSessionsRef.current.set(process.claude_session_id, { title, entities });
+      }
 
       setActiveProcessId(process.id);
 
@@ -288,13 +338,21 @@ export default function App() {
   const handleNewProcess = useCallback(async () => {
     if (!selectedRepo) return;
 
+    const title = 'New Session';
+    const entities: { kind: string; number: number }[] = [];
+
     const process = await createProcess(
       selectedRepo.id,
       undefined,
       'custom',
-      [],
-      'New Session'
+      entities,
+      title
     );
+
+    // Store pending session data for optimistic UI
+    if (process.claude_session_id) {
+      pendingSessionsRef.current.set(process.claude_session_id, { title, entities });
+    }
 
     setActiveProcessId(process.id);
 
@@ -619,30 +677,37 @@ export default function App() {
 
   // Get the list of open sessions (sessions that have tabs open)
   // Uses optimistic UI: if a session isn't in the backend yet but has an active process,
-  // synthesize a minimal session from process data so the tab appears immediately
+  // synthesize a session from process data + pending metadata so the tab appears immediately
   const openSessions = openSessionIds
     .map(id => {
       // First try to find in fetched sessions
       const session = sessions.find(s => s.session_id === id);
-      if (session) return session;
+      if (session) {
+        // Clear pending data once we have real session data
+        pendingSessionsRef.current.delete(id);
+        return session;
+      }
 
       // If not found, check if there's an active process for this session
       const process = processes.find(p => p.claude_session_id === id);
       if (process && selectedRepo) {
-        // Create a synthetic session from process data (optimistic UI)
+        // Get pending session data (title, entities) if available
+        const pendingData = pendingSessionsRef.current.get(id);
+
+        // Create a synthetic session from process data + pending metadata (optimistic UI)
         return {
           session_id: id,
           encoded_path: '',
           repo_path: process.working_dir,
           repo_name: `${selectedRepo.owner}/${selectedRepo.name}`,
-          title: 'New Session',
+          title: pendingData?.title || 'New Session',
           model: null,
           start_time: process.created_at,
           end_time: null,
           message_count: 0,
           modified_at: process.created_at,
           file_size: 0,
-          entities: [],
+          entities: pendingData?.entities || [],
           tags: [],
           starred: false,
           is_active: true,
