@@ -127,6 +127,14 @@ class ScheduledJobTargetType(str, Enum):
     CUSTOM = "custom"
 
 
+class JobRunStatus(str, Enum):
+    """Status of a scheduled job run."""
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class ScheduledJob(Base):
     """A scheduled job configuration for automated sessions."""
     __tablename__ = "scheduled_jobs"

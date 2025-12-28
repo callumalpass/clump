@@ -16,7 +16,7 @@ import pytz
 from sqlalchemy import select
 
 from app.database import get_repo_db
-from app.models import ScheduledJob, ScheduledJobRun, ScheduledJobStatus, Session, SessionStatus
+from app.models import ScheduledJob, ScheduledJobRun, ScheduledJobStatus, JobRunStatus, Session, SessionStatus
 from app.storage import load_repos, get_repo_by_id, encode_path, SessionMetadata, EntityLink, save_session_metadata
 from app.services.headless_analyzer import headless_analyzer
 from app.services.github_client import GitHubClient
@@ -239,7 +239,7 @@ class SchedulerService:
             run = ScheduledJobRun(
                 job_id=job.id,
                 repo_id=job.repo_id,
-                status="running",
+                status=JobRunStatus.RUNNING.value,
             )
             db.add(run)
             await db.commit()
@@ -264,11 +264,11 @@ class SchedulerService:
                         run.items_failed += 1
                         logger.error(f"Failed to process item in job {job.id}: {e}")
 
-                run.status = "completed"
+                run.status = JobRunStatus.COMPLETED.value
                 run.session_ids = json.dumps(session_ids)
 
             except Exception as e:
-                run.status = "failed"
+                run.status = JobRunStatus.FAILED.value
                 run.error_message = str(e)
                 logger.error(f"Job {job.id} execution failed: {e}")
 
@@ -549,7 +549,7 @@ class SchedulerService:
             return ScheduledJobRun(
                 job_id=job.id,
                 repo_id=job.repo_id,
-                status="pending",
+                status=JobRunStatus.PENDING.value,
             ), None
 
 
