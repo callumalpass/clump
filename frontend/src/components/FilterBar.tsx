@@ -23,7 +23,7 @@ export const filterBarStyles = {
   // Select dropdown
   select: `bg-gray-800 border border-gray-600 rounded-md px-2 py-1 text-xs transition-colors duration-150 ${focusRing} focus:border-blue-500 focus:bg-gray-700/50`,
   // Icon button
-  iconButton: `p-1 bg-gray-800 border border-gray-600 rounded-md hover:bg-gray-700 hover:border-gray-500 transition-all active:scale-95 ${focusRing}`,
+  iconButton: `icon-btn p-1 bg-gray-800 border border-gray-600 rounded-md hover:bg-gray-700 hover:border-gray-500 ${focusRing}`,
   // Counts and metadata
   count: 'text-xs text-gray-500',
   // Clear filters
@@ -392,7 +392,7 @@ export function RefreshButton({ onClick, loading }: RefreshButtonProps) {
     <button
       onClick={onClick}
       disabled={loading}
-      className={`p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${focusRing}`}
+      className={`icon-btn p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed ${focusRing}`}
       title={loading ? 'Refreshing...' : 'Refresh'}
       aria-label={loading ? 'Refreshing data' : 'Refresh data'}
     >
