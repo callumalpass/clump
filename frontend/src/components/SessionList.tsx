@@ -1,7 +1,7 @@
 import { memo, useCallback, useState } from 'react';
 import type { SessionSummary, Process, BulkOperationResult } from '../types';
 import { getModelShortName, getModelTextColor } from '../utils/models';
-import { formatRelativeTime, formatDuration } from '../utils/time';
+import { formatRelativeTime, formatDuration, isRecentlyModified } from '../utils/time';
 import { ElapsedTimer } from './ElapsedTimer';
 import { Pagination, PaginationSkeleton } from './Pagination';
 import {
@@ -15,14 +15,6 @@ import {
   filterBarStyles,
 } from './FilterBar';
 import { ConfirmDialog } from './ConfirmDialog';
-
-// Check if a session was modified recently (within last 10 minutes)
-function isRecentlyModified(modifiedAt: string): boolean {
-  const modified = new Date(modifiedAt);
-  const now = new Date();
-  const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
-  return modified > tenMinutesAgo;
-}
 
 // Memoized list item component to prevent unnecessary re-renders
 interface SessionListItemProps {

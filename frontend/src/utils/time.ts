@@ -94,6 +94,27 @@ export function getTimeWithTooltip(dateString: string): { relative: string; full
 }
 
 /**
+ * Checks if a date string represents a time within the given threshold from now.
+ * Useful for determining if something was "recently" modified.
+ * Returns false for invalid date strings.
+ *
+ * @param dateString - The ISO date string to check
+ * @param thresholdMinutes - How many minutes ago counts as "recent" (default: 10)
+ */
+export function isRecentlyModified(dateString: string, thresholdMinutes: number = 10): boolean {
+  const date = new Date(dateString);
+
+  // Handle invalid dates
+  if (isNaN(date.getTime())) {
+    return false;
+  }
+
+  const now = new Date();
+  const thresholdTime = new Date(now.getTime() - thresholdMinutes * 60 * 1000);
+  return date > thresholdTime;
+}
+
+/**
  * Formats a duration in seconds as a human-readable string.
  * Examples: "45s", "2m 30s", "1h 15m", "2h 30m"
  * Returns null for null/undefined/negative/NaN/Infinity inputs.

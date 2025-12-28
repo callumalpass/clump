@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { formatRelativeTime, getTimeWithTooltip, formatDuration } from './time';
+import { formatRelativeTime, getTimeWithTooltip, formatDuration, isRecentlyModified } from './time';
 
 describe('formatRelativeTime', () => {
   beforeEach(() => {
@@ -428,6 +428,81 @@ describe('formatDuration', () => {
       expect(formatDuration(3599.999)).toBe('59m 59s');
       // Just over an hour
       expect(formatDuration(3600.001)).toBe('1h');
+    });
+  });
+});
+
+describe('isRecentlyModified', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-06-15T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  describe('with default threshold (10 minutes)', () => {
+    it('returns true for dates within 10 minutes', () => {
+      const now = new Date();
+      expect(isRecentlyModified(now.toISOString())).toBe(true);
+
+      const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+      expect(isRecentlyModified(fiveMinutesAgo.toISOString())).toBe(true);
+
+      const nineMinutesAgo = new Date(now.getTime() - 9 * 60 * 1000);
+      expect(isRecentlyModified(nineMinutesAgo.toISOString())).toBe(true);
+    });
+
+    it('returns false for dates older than 10 minutes', () => {
+      const now = new Date();
+      const elevenMinutesAgo = new Date(now.getTime() - 11 * 60 * 1000);
+      expect(isRecentlyModified(elevenMinutesAgo.toISOString())).toBe(false);
+
+      const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+      expect(isRecentlyModified(oneHourAgo.toISOString())).toBe(false);
+    });
+
+    it('returns false for exactly 10 minutes ago', () => {
+      const now = new Date();
+      const exactlyTenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
+      expect(isRecentlyModified(exactlyTenMinutesAgo.toISOString())).toBe(false);
+    });
+  });
+
+  describe('with custom threshold', () => {
+    it('respects custom threshold in minutes', () => {
+      const now = new Date();
+      const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+
+      // With 3 minute threshold, 5 minutes ago should be false
+      expect(isRecentlyModified(fiveMinutesAgo.toISOString(), 3)).toBe(false);
+
+      // With 10 minute threshold, 5 minutes ago should be true
+      expect(isRecentlyModified(fiveMinutesAgo.toISOString(), 10)).toBe(true);
+
+      // With 30 minute threshold, 25 minutes ago should be true
+      const twentyFiveMinutesAgo = new Date(now.getTime() - 25 * 60 * 1000);
+      expect(isRecentlyModified(twentyFiveMinutesAgo.toISOString(), 30)).toBe(true);
+    });
+  });
+
+  describe('edge cases', () => {
+    it('returns true for future dates', () => {
+      const now = new Date();
+      const future = new Date(now.getTime() + 60 * 60 * 1000);
+      expect(isRecentlyModified(future.toISOString())).toBe(true);
+    });
+
+    it('returns false for invalid date strings', () => {
+      expect(isRecentlyModified('not-a-date')).toBe(false);
+      expect(isRecentlyModified('')).toBe(false);
+      expect(isRecentlyModified('invalid')).toBe(false);
+    });
+
+    it('returns false for malformed dates', () => {
+      expect(isRecentlyModified('2024-13-45')).toBe(false);
+      expect(isRecentlyModified('abc-def-ghi')).toBe(false);
     });
   });
 });
