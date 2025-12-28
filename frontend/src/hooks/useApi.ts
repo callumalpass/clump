@@ -30,6 +30,106 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   return response.json();
 }
 
+// Generic paginated list hook for Issues, PRs, etc.
+interface PaginatedListConfig<TItem, TFilters> {
+  /** Base URL path, e.g., `/repos/${repoId}/issues` */
+  buildUrl: (repoId: number) => string;
+  /** Extract items from response */
+  getItems: (response: unknown) => TItem[];
+  /** Build URLSearchParams from filters */
+  buildParams: (filters: TFilters, page: number, perPage: number) => URLSearchParams;
+  /** Error message when fetch fails */
+  errorMessage: string;
+  /** Dependencies that should trigger a refetch (excluding repoId) */
+  getFilterDeps: (filters: TFilters) => unknown[];
+}
+
+interface PaginatedListResult<TItem> {
+  items: TItem[];
+  loading: boolean;
+  error: string | null;
+  refresh: () => void;
+  page: number;
+  totalPages: number;
+  total: number;
+  goToPage: (page: number) => void;
+}
+
+interface PaginatedResponse {
+  total: number;
+  page: number;
+}
+
+function usePaginatedList<TItem, TFilters>(
+  repoId: number | null,
+  filters: TFilters,
+  config: PaginatedListConfig<TItem, TFilters>
+): PaginatedListResult<TItem> {
+  const [items, setItems] = useState<TItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [perPage] = useState(30);
+  // Start with loading=true if we have a repoId to prevent flash
+  const [loading, setLoading] = useState(repoId !== null);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchPage = useCallback(async (pageNum: number, signal?: AbortSignal) => {
+    if (!repoId) return;
+
+    try {
+      setLoading(true);
+      const params = config.buildParams(filters, pageNum, perPage);
+      const data = await fetchJson<PaginatedResponse>(
+        `${API_BASE}${config.buildUrl(repoId)}?${params}`,
+        { signal }
+      );
+      setItems(config.getItems(data));
+      setTotal(data.total ?? 0);
+      setPage(data.page);
+      setError(null);
+    } catch (e) {
+      // Ignore abort errors
+      if (e instanceof Error && e.name === 'AbortError') return;
+      setError(e instanceof Error ? e.message : config.errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }, [repoId, filters, perPage, config]);
+
+  const refresh = useCallback(() => fetchPage(page), [fetchPage, page]);
+
+  const goToPage = useCallback((pageNum: number) => {
+    setPage(pageNum);
+    fetchPage(pageNum);
+  }, [fetchPage]);
+
+  // Get filter dependencies to track changes
+  const filterDeps = config.getFilterDeps(filters);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    if (!repoId) {
+      setItems([]);
+      setTotal(0);
+      setLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setLoading(true);
+    setPage(1);
+    fetchPage(1, controller.signal);
+
+    return () => controller.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repoId, ...filterDeps]);
+
+  const totalPages = Math.ceil(total / perPage);
+
+  return { items, loading, error, refresh, page, totalPages, total, goToPage };
+}
+
+
 // Repos
 export function useRepos() {
   const [repos, setRepos] = useState<Repo[]>([]);
@@ -71,13 +171,6 @@ export function useRepos() {
 }
 
 // Issues
-interface IssueListResponse {
-  issues: Issue[];
-  total: number;
-  page: number;
-  per_page: number;
-}
-
 export type SessionStatusFilter = 'all' | 'analyzed' | 'unanalyzed';
 
 export interface IssueFilters {
@@ -89,87 +182,52 @@ export interface IssueFilters {
   sessionStatus?: SessionStatusFilter;  // Client-side filter for issues with/without sessions
 }
 
+interface IssueListResponse extends PaginatedResponse {
+  issues: Issue[];
+}
+
+const issuesConfig: PaginatedListConfig<Issue, IssueFilters> = {
+  buildUrl: (repoId) => `/repos/${repoId}/issues`,
+  getItems: (response) => (response as IssueListResponse).issues ?? [],
+  buildParams: (filters, page, perPage) => {
+    const { state = 'open', search, labels, sort = 'created', order = 'desc' } = filters;
+    const params = new URLSearchParams();
+    params.set('state', state);
+    params.set('sort', sort);
+    params.set('order', order);
+    params.set('page', page.toString());
+    params.set('per_page', perPage.toString());
+    if (search) {
+      params.set('search', search);
+    }
+    if (labels && labels.length > 0) {
+      labels.forEach(label => params.append('labels', label));
+    }
+    return params;
+  },
+  errorMessage: 'Failed to fetch issues',
+  getFilterDeps: (filters) => [
+    filters.state ?? 'open',
+    filters.search,
+    filters.labels?.join(',') ?? '',
+    filters.sort ?? 'created',
+    filters.order ?? 'desc',
+  ],
+};
+
 export function useIssues(repoId: number | null, filters: IssueFilters = {}) {
-  const [issues, setIssues] = useState<Issue[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [perPage] = useState(30);
-  // Start with loading=true if we have a repoId to prevent "No issues found" flash
-  const [loading, setLoading] = useState(repoId !== null);
-  const [error, setError] = useState<string | null>(null);
-
-  // Extract filter values with defaults
-  const { state = 'open', search, labels, sort = 'created', order = 'desc' } = filters;
-
-  // Stable reference for labels to avoid re-renders from array reference changes
-  const labelsKey = labels?.join(',') ?? '';
-
-  const fetchPage = useCallback(async (pageNum: number, signal?: AbortSignal) => {
-    if (!repoId) return;
-
-    try {
-      setLoading(true);
-
-      // Build query params
-      const params = new URLSearchParams();
-      params.set('state', state);
-      params.set('sort', sort);
-      params.set('order', order);
-      params.set('page', pageNum.toString());
-      params.set('per_page', perPage.toString());
-
-      if (search) {
-        params.set('search', search);
-      }
-      if (labels && labels.length > 0) {
-        labels.forEach(label => params.append('labels', label));
-      }
-
-      const data = await fetchJson<IssueListResponse>(
-        `${API_BASE}/repos/${repoId}/issues?${params}`,
-        { signal }
-      );
-      setIssues(data.issues ?? []);
-      setTotal(data.total ?? 0);
-      setPage(data.page);
-      setError(null);
-    } catch (e) {
-      // Ignore abort errors
-      if (e instanceof Error && e.name === 'AbortError') return;
-      setError(e instanceof Error ? e.message : 'Failed to fetch issues');
-    } finally {
-      setLoading(false);
-    }
-  }, [repoId, state, search, labels, sort, order, perPage]);
-
-  const refresh = useCallback(() => fetchPage(page), [fetchPage, page]);
-
-  const goToPage = useCallback((pageNum: number) => {
-    setPage(pageNum);
-    fetchPage(pageNum);
-  }, [fetchPage]);
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    if (!repoId) {
-      // Clear issues and reset loading when no repo selected
-      setIssues([]);
-      setTotal(0);
-      setLoading(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    setLoading(true);
-    setPage(1);
-    fetchPage(1, controller.signal);
-
-    return () => controller.abort();
-  }, [repoId, state, search, labelsKey, sort, order]);
-
-  const totalPages = Math.ceil(total / perPage);
-
-  return { issues, loading, error, refresh, page, totalPages, total, goToPage };
+  const result = usePaginatedList(repoId, filters, issuesConfig);
+  // Rename 'items' to 'issues' for API compatibility
+  return {
+    issues: result.items,
+    loading: result.loading,
+    error: result.error,
+    refresh: result.refresh,
+    page: result.page,
+    totalPages: result.totalPages,
+    total: result.total,
+    goToPage: result.goToPage,
+  };
 }
 
 export async function fetchIssue(repoId: number, issueNumber: number): Promise<IssueDetail> {
@@ -180,6 +238,7 @@ export async function fetchIssue(repoId: number, issueNumber: number): Promise<I
 export async function fetchPR(repoId: number, prNumber: number): Promise<PRDetail> {
   return fetchJson<PRDetail>(`${API_BASE}/repos/${repoId}/prs/${prNumber}`);
 }
+
 export interface PRFilters {
   state?: 'open' | 'closed' | 'all';
   search?: string;
@@ -188,88 +247,48 @@ export interface PRFilters {
   sessionStatus?: SessionStatusFilter;  // Client-side filter for PRs with/without sessions
 }
 
-interface PRListResponse {
+interface PRListResponse extends PaginatedResponse {
   prs: PR[];
-  total: number;
-  page: number;
-  per_page: number;
 }
 
+const prsConfig: PaginatedListConfig<PR, PRFilters> = {
+  buildUrl: (repoId) => `/repos/${repoId}/prs`,
+  getItems: (response) => (response as PRListResponse).prs ?? [],
+  buildParams: (filters, page, perPage) => {
+    const { state = 'open', search, sort = 'created', order = 'desc' } = filters;
+    const params = new URLSearchParams();
+    params.set('state', state);
+    params.set('sort', sort);
+    params.set('order', order);
+    params.set('page', page.toString());
+    params.set('per_page', perPage.toString());
+    if (search) {
+      params.set('search', search);
+    }
+    return params;
+  },
+  errorMessage: 'Failed to fetch PRs',
+  getFilterDeps: (filters) => [
+    filters.state ?? 'open',
+    filters.search,
+    filters.sort ?? 'created',
+    filters.order ?? 'desc',
+  ],
+};
+
 export function usePRs(repoId: number | null, filters: PRFilters = {}) {
-  const [prs, setPRs] = useState<PR[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [perPage] = useState(30);
-  // Start with loading=true if we have a repoId to prevent "No PRs" flash
-  const [loading, setLoading] = useState(repoId !== null);
-  const [error, setError] = useState<string | null>(null);
-
-  // Extract filter values with defaults
-  const { state = 'open', search, sort = 'created', order = 'desc' } = filters;
-
-  const fetchPage = useCallback(async (pageNum: number, signal?: AbortSignal) => {
-    if (!repoId) return;
-
-    try {
-      setLoading(true);
-
-      // Build query params
-      const params = new URLSearchParams();
-      params.set('state', state);
-      params.set('sort', sort);
-      params.set('order', order);
-      params.set('page', pageNum.toString());
-      params.set('per_page', perPage.toString());
-
-      if (search) {
-        params.set('search', search);
-      }
-
-      const data = await fetchJson<PRListResponse>(
-        `${API_BASE}/repos/${repoId}/prs?${params}`,
-        { signal }
-      );
-      setPRs(data.prs ?? []);
-      setTotal(data.total ?? 0);
-      setPage(data.page);
-      setError(null);
-    } catch (e) {
-      // Ignore abort errors
-      if (e instanceof Error && e.name === 'AbortError') return;
-      setError(e instanceof Error ? e.message : 'Failed to fetch PRs');
-    } finally {
-      setLoading(false);
-    }
-  }, [repoId, state, search, sort, order, perPage]);
-
-  const refresh = useCallback(() => fetchPage(page), [fetchPage, page]);
-
-  const goToPage = useCallback((pageNum: number) => {
-    setPage(pageNum);
-    fetchPage(pageNum);
-  }, [fetchPage]);
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    if (!repoId) {
-      // Clear PRs and reset loading when no repo selected
-      setPRs([]);
-      setTotal(0);
-      setLoading(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    setLoading(true);
-    setPage(1);
-    fetchPage(1, controller.signal);
-
-    return () => controller.abort();
-  }, [repoId, state, search, sort, order]);
-
-  const totalPages = Math.ceil(total / perPage);
-
-  return { prs, loading, error, refresh, page, totalPages, total, goToPage };
+  const result = usePaginatedList(repoId, filters, prsConfig);
+  // Rename 'items' to 'prs' for API compatibility
+  return {
+    prs: result.items,
+    loading: result.loading,
+    error: result.error,
+    refresh: result.refresh,
+    page: result.page,
+    totalPages: result.totalPages,
+    total: result.total,
+    goToPage: result.goToPage,
+  };
 }
 
 // Processes (PTY processes running Claude Code)
