@@ -1,5 +1,6 @@
 import type { SessionSummary } from '../types';
 import { ElapsedTimer } from './ElapsedTimer';
+import { formatRelativeTime } from '../utils/time';
 
 // Check if a session was modified recently (within last 10 minutes)
 function isRecentlyModified(modifiedAt: string): boolean {
@@ -108,10 +109,17 @@ export function CompactSessionList({
               {session.title || 'Untitled session'}
             </span>
 
-            {/* Duration for active sessions */}
-            {session.is_active && session.start_time && (
+            {/* Duration for active sessions, relative time for inactive */}
+            {session.is_active && session.start_time ? (
               <span className="text-[10px] text-yellow-500/70 tabular-nums flex-shrink-0">
                 <ElapsedTimer startTime={session.start_time} />
+              </span>
+            ) : session.modified_at && (
+              <span
+                className="text-[10px] text-gray-500 flex-shrink-0"
+                title={new Date(session.modified_at).toLocaleString()}
+              >
+                {formatRelativeTime(session.modified_at)}
               </span>
             )}
 
