@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { formatRelativeTime, getTimeWithTooltip } from './time';
+import { formatRelativeTime, getTimeWithTooltip, formatDuration } from './time';
 
 describe('formatRelativeTime', () => {
   beforeEach(() => {
@@ -259,6 +259,125 @@ describe('getTimeWithTooltip', () => {
         // Critically: full should NOT be "Invalid Date"
         expect(result.full).not.toBe('Invalid Date');
       });
+    });
+  });
+});
+
+describe('formatDuration', () => {
+  describe('null/undefined handling', () => {
+    it('returns null for null input', () => {
+      expect(formatDuration(null)).toBeNull();
+    });
+
+    it('returns null for undefined input', () => {
+      expect(formatDuration(undefined)).toBeNull();
+    });
+
+    it('returns null for negative values', () => {
+      expect(formatDuration(-1)).toBeNull();
+      expect(formatDuration(-100)).toBeNull();
+      expect(formatDuration(-999999)).toBeNull();
+    });
+  });
+
+  describe('seconds only', () => {
+    it('formats 0 seconds', () => {
+      expect(formatDuration(0)).toBe('0s');
+    });
+
+    it('formats single-digit seconds', () => {
+      expect(formatDuration(1)).toBe('1s');
+      expect(formatDuration(5)).toBe('5s');
+      expect(formatDuration(9)).toBe('9s');
+    });
+
+    it('formats double-digit seconds', () => {
+      expect(formatDuration(10)).toBe('10s');
+      expect(formatDuration(30)).toBe('30s');
+      expect(formatDuration(45)).toBe('45s');
+      expect(formatDuration(59)).toBe('59s');
+    });
+  });
+
+  describe('minutes and seconds', () => {
+    it('formats exactly 1 minute', () => {
+      expect(formatDuration(60)).toBe('1m');
+    });
+
+    it('formats minutes with remaining seconds', () => {
+      expect(formatDuration(61)).toBe('1m 1s');
+      expect(formatDuration(90)).toBe('1m 30s');
+      expect(formatDuration(119)).toBe('1m 59s');
+    });
+
+    it('formats multiple minutes without remaining seconds', () => {
+      expect(formatDuration(120)).toBe('2m');
+      expect(formatDuration(300)).toBe('5m');
+      expect(formatDuration(600)).toBe('10m');
+    });
+
+    it('formats multiple minutes with remaining seconds', () => {
+      expect(formatDuration(125)).toBe('2m 5s');
+      expect(formatDuration(150)).toBe('2m 30s');
+      expect(formatDuration(3599)).toBe('59m 59s');
+    });
+  });
+
+  describe('hours and minutes', () => {
+    it('formats exactly 1 hour', () => {
+      expect(formatDuration(3600)).toBe('1h');
+    });
+
+    it('formats 1 hour with remaining minutes', () => {
+      expect(formatDuration(3660)).toBe('1h 1m');
+      expect(formatDuration(3900)).toBe('1h 5m');
+      expect(formatDuration(5400)).toBe('1h 30m');
+    });
+
+    it('formats multiple hours without remaining minutes', () => {
+      expect(formatDuration(7200)).toBe('2h');
+      expect(formatDuration(10800)).toBe('3h');
+      expect(formatDuration(36000)).toBe('10h');
+    });
+
+    it('formats multiple hours with remaining minutes', () => {
+      expect(formatDuration(7260)).toBe('2h 1m');
+      expect(formatDuration(9000)).toBe('2h 30m');
+      expect(formatDuration(86340)).toBe('23h 59m');
+    });
+
+    it('drops seconds for hour-level durations', () => {
+      // The function should drop seconds when hours > 0
+      expect(formatDuration(3661)).toBe('1h 1m'); // 1 second dropped
+      expect(formatDuration(3723)).toBe('1h 2m'); // 3 seconds dropped
+    });
+  });
+
+  describe('large values', () => {
+    it('formats 24+ hours', () => {
+      expect(formatDuration(86400)).toBe('24h');
+      expect(formatDuration(90000)).toBe('25h');
+    });
+
+    it('formats very large durations', () => {
+      expect(formatDuration(360000)).toBe('100h');
+      expect(formatDuration(864000)).toBe('240h'); // 10 days in hours
+    });
+  });
+
+  describe('edge cases', () => {
+    it('handles boundary between seconds and minutes', () => {
+      expect(formatDuration(59)).toBe('59s');
+      expect(formatDuration(60)).toBe('1m');
+    });
+
+    it('handles boundary between minutes and hours', () => {
+      expect(formatDuration(3599)).toBe('59m 59s');
+      expect(formatDuration(3600)).toBe('1h');
+    });
+
+    it('handles exactly 0', () => {
+      expect(formatDuration(0)).toBe('0s');
     });
   });
 });
