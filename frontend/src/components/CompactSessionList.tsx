@@ -45,8 +45,14 @@ export function CompactSessionList({
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Sessions</h3>
           </div>
         </div>
-        <div className="flex-1 flex items-center justify-center p-4">
-          <p className="text-xs text-gray-500">No active sessions</p>
+        <div className="flex-1 flex flex-col items-center justify-center p-4 empty-state-enter">
+          <div className="w-10 h-10 rounded-full bg-gray-700/40 flex items-center justify-center mb-2 empty-state-icon-float">
+            <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          </div>
+          <p className="text-xs text-gray-400 font-medium mb-0.5">No active sessions</p>
+          <p className="text-[10px] text-gray-500">Start one from an issue or PR</p>
         </div>
         {onViewAll && (
           <button
