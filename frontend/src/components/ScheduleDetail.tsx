@@ -236,7 +236,7 @@ export function ScheduleDetail({
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50 transition-colors"
+                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {saving ? 'Saving...' : 'Save'}
               </button>
@@ -246,7 +246,7 @@ export function ScheduleDetail({
               <button
                 onClick={handleTrigger}
                 disabled={triggering}
-                className="px-3 py-1.5 text-sm bg-green-600/20 text-green-400 rounded hover:bg-green-600/30 disabled:opacity-50 transition-colors"
+                className="px-3 py-1.5 text-sm bg-green-600/20 text-green-400 rounded hover:bg-green-600/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {triggering ? 'Running...' : 'Run Now'}
               </button>

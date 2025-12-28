@@ -126,7 +126,7 @@ export function StatsView({ stats, loading, error, onRefresh }: StatsViewProps) 
           <button
             onClick={onRefresh}
             disabled={loading}
-            className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded text-sm transition-colors flex items-center gap-2"
+            className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm transition-colors flex items-center gap-2"
           >
             <svg
               className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`}

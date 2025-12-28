@@ -435,7 +435,7 @@ export function SessionList({
             <button
               onClick={() => handleBulkStar(true)}
               disabled={bulkActionLoading}
-              className="px-2 py-1 text-xs bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50 rounded flex items-center gap-1 transition-colors"
+              className="px-2 py-1 text-xs bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed rounded flex items-center gap-1 transition-colors"
               title="Star selected"
             >
               <svg className="w-3 h-3" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
@@ -446,7 +446,7 @@ export function SessionList({
             <button
               onClick={() => handleBulkStar(false)}
               disabled={bulkActionLoading}
-              className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 disabled:opacity-50 rounded flex items-center gap-1 transition-colors"
+              className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded flex items-center gap-1 transition-colors"
               title="Unstar selected"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -460,7 +460,7 @@ export function SessionList({
           <button
             onClick={handleBulkDeleteClick}
             disabled={bulkActionLoading}
-            className="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded flex items-center gap-1 transition-colors"
+            className="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed rounded flex items-center gap-1 transition-colors"
             title="Delete selected"
           >
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
