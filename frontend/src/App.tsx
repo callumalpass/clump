@@ -77,18 +77,26 @@ export default function App() {
   // Ref for collapsible issue/PR context panel
   const contextPanelRef = useRef<PanelImperativeHandle>(null);
 
-  // Track previous repo for saving tabs on switch
-  const prevRepoIdRef = useRef<number | null>(null);
-
-  // Refs for current tab state (used for saving on repo switch)
-  const openSessionIdsRef = useRef<string[]>([]);
-  const activeTabSessionIdRef = useRef<string | null>(null);
-
-  // Keep refs in sync with state
+  // Save session tabs on every change
+  const isRestoringTabsRef = useRef(false);
   useEffect(() => {
-    openSessionIdsRef.current = openSessionIds;
-    activeTabSessionIdRef.current = activeTabSessionId;
-  }, [openSessionIds, activeTabSessionId]);
+    // Skip saving during restore (when switching repos)
+    if (isRestoringTabsRef.current) return;
+    // Only save if we have a selected repo
+    if (!selectedRepo?.id) return;
+
+    const STORAGE_KEY = 'clump:repoSessionTabs';
+    try {
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      stored[selectedRepo.id] = {
+        openSessionIds,
+        activeTabSessionId,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+    } catch (e) {
+      console.error('Failed to save session tabs:', e);
+    }
+  }, [openSessionIds, activeTabSessionId, selectedRepo?.id]);
 
   const { repos, addRepo } = useRepos();
   const {
@@ -108,6 +116,8 @@ export default function App() {
     starred: sessionListFilters.category === 'starred' ? true : undefined,
     hasEntities: sessionListFilters.category === 'with-entities' ? true : undefined,
     isActive: sessionListFilters.category === 'active' ? true : undefined,
+    sort: sessionListFilters.sort,
+    order: sessionListFilters.order,
   };
   const { sessions, loading: sessionsLoading, refresh: refreshSessions, continueSession, deleteSession, updateSessionMetadata, total: sessionsTotal, page: sessionsPage, totalPages: sessionsTotalPages, goToPage: goToSessionsPage } = useSessions(sessionFilters);
   const { tags, createTag } = useTags(selectedRepo?.id ?? null);
@@ -116,23 +126,9 @@ export default function App() {
   const { commands, refresh: refreshCommands } = useCommands(selectedRepo?.local_path);
   const { counts: sessionCounts } = useSessionCounts();
 
-  // Save/restore session tabs when repo changes
+  // Restore session tabs when repo changes
   useEffect(() => {
     const STORAGE_KEY = 'clump:repoSessionTabs';
-
-    // Save tabs for previous repo before switching (use refs for current values)
-    if (prevRepoIdRef.current !== null && prevRepoIdRef.current !== selectedRepo?.id) {
-      try {
-        const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-        stored[prevRepoIdRef.current] = {
-          openSessionIds: openSessionIdsRef.current,
-          activeTabSessionId: activeTabSessionIdRef.current,
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
-      } catch (e) {
-        console.error('Failed to save session tabs:', e);
-      }
-    }
 
     // Clear filters
     setSelectedTagId(null);
@@ -145,6 +141,8 @@ export default function App() {
     setSelectedPR(null);
 
     // Restore tabs for new repo (or clear if none saved)
+    // Set flag to prevent the save effect from re-saving during restore
+    isRestoringTabsRef.current = true;
     if (selectedRepo?.id) {
       try {
         const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
@@ -174,6 +172,10 @@ export default function App() {
       setActiveTabSessionId(null);
       setViewingSessionId(null);
     }
+    // Clear flag after a microtask to allow state updates to settle
+    Promise.resolve().then(() => {
+      isRestoringTabsRef.current = false;
+    });
 
     // Clear process (we'll check if any restored tabs have running processes separately)
     setActiveProcessId(null);
@@ -182,10 +184,7 @@ export default function App() {
     // Clear pending context refs
     pendingIssueContextRef.current = null;
     pendingPRContextRef.current = null;
-
-    // Update ref for next switch
-    prevRepoIdRef.current = selectedRepo?.id ?? null;
-  }, [selectedRepo?.id]); // Note: We intentionally don't include openSessionIds/activeTabSessionId to avoid loops
+  }, [selectedRepo?.id]);
 
   // Handle issue selection from list - clears expanded analysis and PR selection
   const handleSelectIssue = useCallback((issueNumber: number) => {
