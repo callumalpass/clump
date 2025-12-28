@@ -96,7 +96,7 @@ export function SessionTabs({
             }}
             role="tab"
             tabIndex={0}
-            className={`group flex items-center gap-1.5 px-3 py-2 cursor-pointer transition-colors ${focusRing} ${
+            className={`session-tab session-tab-enter group flex items-center gap-1.5 px-3 py-2 cursor-pointer ${focusRing} ${
               isActiveTab
                 ? 'text-white'
                 : sessionNeedsAttention
@@ -170,7 +170,7 @@ export function SessionTabs({
                 e.stopPropagation();
                 onCloseSession(session.session_id);
               }}
-              className={`ml-1 p-0.5 rounded text-gray-600 group-hover:text-gray-400 hover:!bg-red-500/10 hover:!text-red-400 transition-all duration-150 active:scale-90 ${focusRing}`}
+              className={`session-tab-close ml-1 p-0.5 rounded text-gray-600 group-hover:text-gray-400 hover:!bg-red-500/10 hover:!text-red-400 ${focusRing}`}
               title="Close tab"
               aria-label={`Close ${session.title || 'session'}`}
             >

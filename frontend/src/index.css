@@ -655,6 +655,40 @@ button:disabled .kbd-hint {
   filter: drop-shadow(0 0 4px rgba(250, 204, 21, 0.4));
 }
 
+/* Session tab entrance animation - subtle slide-in from above */
+@keyframes session-tab-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.session-tab-enter {
+  animation: session-tab-enter 200ms ease-out forwards;
+}
+
+/* Session tab active state - subtle scale feedback */
+.session-tab {
+  transition: background-color 150ms ease, transform 100ms ease;
+}
+
+.session-tab:active {
+  transform: scale(0.98);
+}
+
+/* Session tab close button - improved visibility and hover feedback */
+.session-tab-close {
+  transition: opacity 150ms ease, background-color 150ms ease, color 150ms ease, transform 100ms ease;
+}
+
+.session-tab-close:active {
+  transform: scale(0.85);
+}
+
 /* Resize handle styling - improved discoverability */
 .resize-handle {
   transition: background-color 150ms ease;
@@ -694,7 +728,8 @@ button:disabled .kbd-hint {
   .star-button-animate,
   .alert-enter,
   .alert-icon-enter,
-  .status-badge-enter {
+  .status-badge-enter,
+  .session-tab-enter {
     animation: none;
   }
 
@@ -742,8 +777,15 @@ button:disabled .kbd-hint {
   .empty-state-enter,
   .message-bubble-enter,
   .dropdown-menu-enter,
-  .status-badge-enter {
+  .status-badge-enter,
+  .session-tab-enter {
     opacity: 1;
+    transform: none;
+  }
+
+  /* Disable session tab active scale */
+  .session-tab:active,
+  .session-tab-close:active {
     transform: none;
   }
 
