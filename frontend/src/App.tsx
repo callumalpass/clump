@@ -193,7 +193,7 @@ export default function App() {
     total: issuesTotal,
     goToPage: goToIssuesPage,
   } = useIssues(selectedRepo?.id ?? null, issueFilters);
-  const { processes, createProcess, killProcess, addProcess } = useProcesses();
+  const { processes, createProcess, killProcess, addProcess, removeProcess, setProcesses, refresh: refreshProcesses } = useProcesses();
   // Build session filters based on UI state
   const sessionFilters: SessionFilters = {
     repoPath: selectedRepo?.local_path,
@@ -224,9 +224,64 @@ export default function App() {
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
   const { prs, loading: prsLoading, refresh: refreshPRs, page: prsPage, totalPages: prsTotalPages, total: prsTotal, goToPage: goToPRsPage } = usePRs(selectedRepo?.id ?? null, prFilters);
   const { commands, refresh: refreshCommands } = useCommands(selectedRepo?.local_path);
-  const { counts: sessionCounts } = useSessionCounts();
+  const { counts: sessionCounts, refresh: refreshSessionCounts, updateCounts } = useSessionCounts();
 
-  // Notifications hook for tracking sessions needing attention
+  // Event-driven updates from WebSocket
+  // Handle session created - add to list and refresh counts
+  const handleSessionCreated = useCallback(() => {
+    // Refresh the session list to pick up the new session
+    refreshSessions();
+    refreshSessionCounts();
+  }, [refreshSessions, refreshSessionCounts]);
+
+  // Handle session updated - update the session in list
+  const handleSessionUpdated = useCallback((_event: { session_id: string; changes: Record<string, unknown> }) => {
+    // Refresh sessions to pick up the changes
+    refreshSessions();
+  }, [refreshSessions]);
+
+  // Handle session completed - update is_active flag
+  const handleSessionCompleted = useCallback((_event: { session_id: string }) => {
+    refreshSessions();
+    refreshSessionCounts();
+  }, [refreshSessions, refreshSessionCounts]);
+
+  // Handle session deleted - remove from list
+  const handleSessionDeleted = useCallback((_event: { session_id: string }) => {
+    refreshSessions();
+    refreshSessionCounts();
+  }, [refreshSessions, refreshSessionCounts]);
+
+  // Handle process started - add to processes list
+  const handleProcessStarted = useCallback((_event: { process_id: string; session_id: string; working_dir: string }) => {
+    // The process was already added optimistically via createProcess
+    // Just refresh to be safe
+    refreshProcesses();
+  }, [refreshProcesses]);
+
+  // Handle process ended - remove from processes list
+  const handleProcessEnded = useCallback((event: { process_id: string; session_id: string }) => {
+    removeProcess(event.process_id);
+  }, [removeProcess]);
+
+  // Handle counts changed
+  const handleCountsChanged = useCallback((event: { counts: Record<string, { repo_id: number; total: number; active: number }> }) => {
+    updateCounts(event.counts);
+  }, [updateCounts]);
+
+  // Handle initial state from WebSocket
+  const handleInitialState = useCallback((event: { processes: Array<{ id: string; session_id: number | null; working_dir: string; created_at: string }> }) => {
+    // Update processes from WebSocket initial state
+    setProcesses(event.processes.map(p => ({
+      id: p.id,
+      session_id: p.session_id,
+      working_dir: p.working_dir,
+      created_at: p.created_at,
+      claude_session_id: null,  // Will be filled in by subsequent events or refresh
+    })));
+  }, [setProcesses]);
+
+  // Notifications hook for tracking sessions needing attention AND real-time events
   const {
     needsAttention,
     clearAttention,
@@ -234,6 +289,14 @@ export default function App() {
   } = useNotifications({
     enableDesktopNotifications: true,
     enableSound: true,
+    onSessionCreated: handleSessionCreated,
+    onSessionUpdated: handleSessionUpdated,
+    onSessionCompleted: handleSessionCompleted,
+    onSessionDeleted: handleSessionDeleted,
+    onProcessStarted: handleProcessStarted,
+    onProcessEnded: handleProcessEnded,
+    onCountsChanged: handleCountsChanged,
+    onInitialState: handleInitialState,
   });
 
   // Update browser tab title when attention is needed
@@ -343,15 +406,8 @@ export default function App() {
     setExpandedSessionId(null);
   }, []);
 
-  // Smart polling: poll frequently when active, slower baseline poll to catch headless sessions
-  const hasActiveSessions = sessions.some(s => s.is_active) || processes.length > 0;
-  useEffect(() => {
-    // Fast polling (3s) when there are active sessions
-    // Slow polling (15s) otherwise to catch newly started headless sessions
-    const pollInterval = hasActiveSessions ? 3000 : 15000;
-    const interval = setInterval(refreshSessions, pollInterval);
-    return () => clearInterval(interval);
-  }, [hasActiveSessions, refreshSessions]);
+  // Note: Session list is now event-driven via WebSocket - no polling needed
+  // Events trigger refreshSessions() when sessions change
 
   // Note: We intentionally do NOT auto-cleanup session tabs based on the sessions list
   // because sessions is paginated. Tabs for sessions on other pages would be incorrectly

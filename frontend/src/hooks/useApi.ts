@@ -273,6 +273,7 @@ export function usePRs(repoId: number | null, filters: PRFilters = {}) {
 }
 
 // Processes (PTY processes running Claude Code)
+// Now event-driven via WebSocket - no polling
 export function useProcesses() {
   const [processes, setProcesses] = useState<Process[]>([]);
   const [loading, setLoading] = useState(true);
@@ -288,10 +289,9 @@ export function useProcesses() {
     }
   }, []);
 
+  // Initial fetch only - updates come via WebSocket events
   useEffect(() => {
     refresh();
-    const interval = setInterval(refresh, 5000);
-    return () => clearInterval(interval);
   }, [refresh]);
 
   const createProcess = async (
@@ -342,7 +342,21 @@ export function useProcesses() {
     setProcesses((prev) => [...prev, process]);
   };
 
-  return { processes, loading, refresh, createProcess, resumeProcess, killProcess, addProcess };
+  const removeProcess = (processId: string) => {
+    setProcesses((prev) => prev.filter((p) => p.id !== processId));
+  };
+
+  return {
+    processes,
+    loading,
+    refresh,
+    createProcess,
+    resumeProcess,
+    killProcess,
+    addProcess,
+    removeProcess,
+    setProcesses,
+  };
 }
 
 // Sessions (transcript-first model)
@@ -451,6 +465,7 @@ export function useSessions(filters: SessionFilters = {}) {
 }
 
 // Session counts per repo (for badges)
+// Now event-driven via WebSocket - no polling
 export function useSessionCounts() {
   const [counts, setCounts] = useState<Map<number, RepoSessionCount>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -470,14 +485,23 @@ export function useSessionCounts() {
     }
   }, []);
 
+  // Initial fetch only - updates come via WebSocket events
   useEffect(() => {
     refresh();
-    // Poll for updates
-    const interval = setInterval(refresh, 5000);
-    return () => clearInterval(interval);
   }, [refresh]);
 
-  return { counts, loading, refresh };
+  // Update counts from WebSocket event
+  const updateCounts = useCallback((newCounts: Record<string, RepoSessionCount>) => {
+    setCounts((prev) => {
+      const updated = new Map(prev);
+      for (const count of Object.values(newCounts)) {
+        updated.set(count.repo_id, count);
+      }
+      return updated;
+    });
+  }, []);
+
+  return { counts, loading, refresh, updateCounts, setCounts };
 }
 
 // Fetch full session detail with transcript

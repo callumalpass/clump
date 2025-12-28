@@ -1,8 +1,14 @@
 """
-Webhook endpoints for Claude Code hooks.
+Webhook endpoints for Claude Code hooks and real-time event streaming.
 
 These endpoints receive notifications from Claude Code's hook system,
 allowing the hub to track when Claude needs user attention.
+
+The WebSocket endpoint at /hooks/ws provides unified real-time events:
+- Notification events (permission requests, idle)
+- Session events (created, updated, completed, deleted)
+- Process events (started, ended)
+- Count updates (session counts per repo)
 
 Configure Claude Code hooks to POST to these endpoints:
 - Notification hook: POST /api/hooks/notification
@@ -14,6 +20,8 @@ from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from app.services.notification_manager import notification_manager, NotificationType, Notification
+from app.services.event_manager import event_manager, Event
+from app.services.session_manager import process_manager
 
 
 router = APIRouter()
@@ -169,57 +177,79 @@ async def get_sessions_needing_attention():
 @router.websocket("/hooks/ws")
 async def notifications_websocket(websocket: WebSocket):
     """
-    WebSocket endpoint for real-time notification updates.
+    WebSocket endpoint for real-time event streaming.
 
-    Clients connect to receive all notification events as they happen.
-    This allows the frontend to update session tab styling and browser
-    title/favicon in real-time when Claude needs attention.
+    Clients connect to receive all events as they happen:
+    - Notification events (permission requests, idle states)
+    - Session events (created, updated, completed, deleted)
+    - Process events (started, ended)
+    - Count updates (session counts per repo)
 
     Messages sent to client:
     {
-        "type": "notification",
-        "session_id": "...",
-        "notification_type": "permission_needed" | "idle" | ...,
-        "data": {...},
+        "type": "notification" | "session_created" | "session_updated" | ...,
+        ...event-specific data,
         "timestamp": "..."
     }
     """
     await websocket.accept()
 
-    # Queue for notifications to send to this client
-    notification_queue: asyncio.Queue[Notification] = asyncio.Queue()
+    # Unified queue for all events (notifications + general events)
+    event_queue: asyncio.Queue[dict] = asyncio.Queue()
 
     def on_notification(notification: Notification):
         """Callback when a notification is received."""
         try:
-            notification_queue.put_nowait(notification)
+            event_queue.put_nowait({
+                "type": "notification",
+                **notification.to_dict(),
+            })
         except asyncio.QueueFull:
             pass
 
-    # Subscribe to global notifications
+    def on_event(event: Event):
+        """Callback when a general event is received."""
+        try:
+            event_queue.put_nowait(event.to_dict())
+        except asyncio.QueueFull:
+            pass
+
+    # Subscribe to both notification and general events
     notification_manager.subscribe_global(on_notification)
+    event_manager.subscribe(on_event)
 
     try:
-        # Send current attention state on connect
+        # Send initial state on connect
         attention_sessions = notification_manager.get_sessions_needing_attention()
-        if attention_sessions:
-            await websocket.send_json({
-                "type": "initial_state",
-                "sessions_needing_attention": attention_sessions,
-            })
+
+        # Get current processes
+        processes = await process_manager.list_processes()
+        process_list = [
+            {
+                "id": p.id,
+                "session_id": p.session_id,
+                "working_dir": p.working_dir,
+                "created_at": p.created_at.isoformat(),
+            }
+            for p in processes
+        ]
+
+        await websocket.send_json({
+            "type": "initial_state",
+            "sessions_needing_attention": attention_sessions,
+            "processes": process_list,
+        })
     except WebSocketDisconnect:
         notification_manager.unsubscribe_global(on_notification)
+        event_manager.unsubscribe(on_event)
         return
 
-    async def send_notifications():
-        """Task to send notifications to the client."""
+    async def send_events():
+        """Task to send events to the client."""
         while True:
             try:
-                notification = await notification_queue.get()
-                await websocket.send_json({
-                    "type": "notification",
-                    **notification.to_dict(),
-                })
+                event = await event_queue.get()
+                await websocket.send_json(event)
             except Exception:
                 break
 
@@ -240,12 +270,13 @@ async def notifications_websocket(websocket: WebSocket):
                 break
 
     # Run both tasks concurrently
-    send_task = asyncio.create_task(send_notifications())
+    send_task = asyncio.create_task(send_events())
     receive_task = asyncio.create_task(receive_messages())
 
     try:
         await asyncio.gather(send_task, receive_task, return_exceptions=True)
     finally:
         notification_manager.unsubscribe_global(on_notification)
+        event_manager.unsubscribe(on_event)
         send_task.cancel()
         receive_task.cancel()

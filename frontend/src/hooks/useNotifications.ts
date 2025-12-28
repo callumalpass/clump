@@ -1,19 +1,90 @@
 /**
- * Hook for managing real-time notifications from Claude Code sessions.
+ * Hook for managing real-time events from the backend.
  *
- * Connects to the notifications WebSocket and tracks which sessions
- * currently need user attention (permission requests, idle state).
+ * Connects to the events WebSocket and handles:
+ * - Notification events (permission requests, idle state)
+ * - Session events (created, updated, completed, deleted)
+ * - Process events (started, ended)
+ * - Counts updates (session counts per repo)
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import type { RepoSessionCount } from '../types';
 
 export type NotificationType = 'permission_needed' | 'idle' | 'session_completed' | 'session_failed';
+
+// Event types from backend
+export type EventType =
+  | 'notification'
+  | 'initial_state'
+  | 'session_created'
+  | 'session_updated'
+  | 'session_completed'
+  | 'session_deleted'
+  | 'process_started'
+  | 'process_ended'
+  | 'counts_changed';
 
 export interface SessionNotification {
   session_id: string;
   notification_type: NotificationType;
   data: Record<string, unknown>;
   timestamp: string;
+}
+
+export interface SessionCreatedEvent {
+  session_id: string;
+  repo_path: string;
+  title: string;
+  is_active: boolean;
+  timestamp: string;
+}
+
+export interface SessionUpdatedEvent {
+  session_id: string;
+  repo_path: string;
+  changes: {
+    title?: string;
+    starred?: boolean;
+    tags?: string[];
+    entities?: Array<{ kind: string; number: number }>;
+  };
+  timestamp: string;
+}
+
+export interface SessionCompletedEvent {
+  session_id: string;
+  repo_path: string;
+  end_time: string;
+  timestamp: string;
+}
+
+export interface SessionDeletedEvent {
+  session_id: string;
+  repo_path: string;
+  timestamp: string;
+}
+
+export interface ProcessEvent {
+  process_id: string;
+  session_id: string;
+  working_dir: string;
+  timestamp: string;
+}
+
+export interface CountsChangedEvent {
+  counts: Record<string, RepoSessionCount>;
+  timestamp: string;
+}
+
+export interface InitialStateEvent {
+  sessions_needing_attention: string[];
+  processes: Array<{
+    id: string;
+    session_id: number | null;
+    working_dir: string;
+    created_at: string;
+  }>;
 }
 
 interface UseNotificationsOptions {
@@ -23,6 +94,22 @@ interface UseNotificationsOptions {
   enableSound?: boolean;
   /** Callback when any session needs attention */
   onAttentionNeeded?: (notification: SessionNotification) => void;
+  /** Callback when a session is created */
+  onSessionCreated?: (event: SessionCreatedEvent) => void;
+  /** Callback when a session is updated */
+  onSessionUpdated?: (event: SessionUpdatedEvent) => void;
+  /** Callback when a session is completed */
+  onSessionCompleted?: (event: SessionCompletedEvent) => void;
+  /** Callback when a session is deleted */
+  onSessionDeleted?: (event: SessionDeletedEvent) => void;
+  /** Callback when a process starts */
+  onProcessStarted?: (event: ProcessEvent) => void;
+  /** Callback when a process ends */
+  onProcessEnded?: (event: ProcessEvent) => void;
+  /** Callback when session counts change */
+  onCountsChanged?: (event: CountsChangedEvent) => void;
+  /** Callback for initial state (processes list) */
+  onInitialState?: (event: InitialStateEvent) => void;
 }
 
 interface UseNotificationsReturn {
@@ -79,7 +166,37 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
     enableDesktopNotifications = true,
     enableSound = true,
     onAttentionNeeded,
+    onSessionCreated,
+    onSessionUpdated,
+    onSessionCompleted,
+    onSessionDeleted,
+    onProcessStarted,
+    onProcessEnded,
+    onCountsChanged,
+    onInitialState,
   } = options;
+
+  // Store callbacks in refs to avoid reconnecting WebSocket when callbacks change
+  const callbacksRef = useRef({
+    onSessionCreated,
+    onSessionUpdated,
+    onSessionCompleted,
+    onSessionDeleted,
+    onProcessStarted,
+    onProcessEnded,
+    onCountsChanged,
+    onInitialState,
+  });
+  callbacksRef.current = {
+    onSessionCreated,
+    onSessionUpdated,
+    onSessionCompleted,
+    onSessionDeleted,
+    onProcessStarted,
+    onProcessEnded,
+    onCountsChanged,
+    onInitialState,
+  };
 
   const [sessionsNeedingAttention, setSessionsNeedingAttention] = useState<Set<string>>(new Set());
   const [isConnected, setIsConnected] = useState(false);
@@ -188,15 +305,49 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          const callbacks = callbacksRef.current;
 
-          if (data.type === 'initial_state') {
-            // Set initial attention state
-            setSessionsNeedingAttention(new Set(data.sessions_needing_attention || []));
-          } else if (data.type === 'notification') {
-            handleNotification(data as SessionNotification);
+          switch (data.type) {
+            case 'initial_state':
+              // Set initial attention state
+              setSessionsNeedingAttention(new Set(data.sessions_needing_attention || []));
+              callbacks.onInitialState?.(data as InitialStateEvent);
+              break;
+
+            case 'notification':
+              handleNotification(data as SessionNotification);
+              break;
+
+            case 'session_created':
+              callbacks.onSessionCreated?.(data as SessionCreatedEvent);
+              break;
+
+            case 'session_updated':
+              callbacks.onSessionUpdated?.(data as SessionUpdatedEvent);
+              break;
+
+            case 'session_completed':
+              callbacks.onSessionCompleted?.(data as SessionCompletedEvent);
+              break;
+
+            case 'session_deleted':
+              callbacks.onSessionDeleted?.(data as SessionDeletedEvent);
+              break;
+
+            case 'process_started':
+              callbacks.onProcessStarted?.(data as ProcessEvent);
+              break;
+
+            case 'process_ended':
+              callbacks.onProcessEnded?.(data as ProcessEvent);
+              break;
+
+            case 'counts_changed':
+              callbacks.onCountsChanged?.(data as CountsChangedEvent);
+              break;
           }
         } catch (e) {
-          console.warn('Failed to parse notification message:', e);
+          console.warn('Failed to parse WebSocket message:', e);
         }
       };
     }

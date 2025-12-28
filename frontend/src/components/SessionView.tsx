@@ -164,12 +164,13 @@ export function SessionView({
   const isActiveProcess = !!processId || session.is_active;
 
   // Check if Claude is waiting for user input (permission request, idle)
-  const waitingForInput = session.claude_session_id
-    ? needsAttention?.(session.claude_session_id) ?? false
+  // session_id is the UUID which is the same as claude_session_id
+  const waitingForInput = session.session_id
+    ? needsAttention?.(session.session_id) ?? false
     : false;
 
   // WebSocket for sending input to active sessions
-  const { sendInput, isConnected: wsConnected } = useWebSocket(processId ?? null);
+  const { sendInput } = useWebSocket(processId ?? null);
 
   // Handler to send messages to Claude via WebSocket
   const handleSendMessage = useCallback(async (message: string) => {
@@ -357,45 +358,33 @@ export function SessionView({
     return () => document.removeEventListener('click', handleClick);
   }, [showActionsMenu]);
 
-  // Fetch session detail (with polling for active sessions)
+  // Fetch session detail on mount and when session changes
+  // No polling needed - real-time updates come via terminal WebSocket for active sessions
+  // Session completion events will trigger parent to refresh session list
   useEffect(() => {
     let isMounted = true;
-    let pollInterval: ReturnType<typeof setInterval> | null = null;
 
-    const fetchDetail = (isInitial = false) => {
-      if (isInitial) {
-        setLoading(true);
-        setError(null);
-      }
+    setLoading(true);
+    setError(null);
 
-      fetchSessionDetail(session.session_id)
-        .then((data) => {
-          if (isMounted) {
-            setDetail(data);
-            if (isInitial) setLoading(false);
-          }
-        })
-        .catch((err) => {
-          if (isMounted && isInitial) {
-            setError(err.message || 'Failed to load session');
-            setLoading(false);
-          }
-        });
-    };
-
-    // Initial fetch
-    fetchDetail(true);
-
-    // Poll for updates if session is active
-    if (isActiveProcess) {
-      pollInterval = setInterval(() => fetchDetail(false), 2000);
-    }
+    fetchSessionDetail(session.session_id)
+      .then((data) => {
+        if (isMounted) {
+          setDetail(data);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          setError(err.message || 'Failed to load session');
+          setLoading(false);
+        }
+      });
 
     return () => {
       isMounted = false;
-      if (pollInterval) clearInterval(pollInterval);
     };
-  }, [session.session_id, isActiveProcess]);
+  }, [session.session_id]);
 
   // Reset search when session changes
   useEffect(() => {

@@ -20,15 +20,50 @@ from app.database import get_repo_db
 from app.db_helpers import get_repo_or_404
 from app.models import Session, SessionStatus, SessionEntity
 from app.services.session_manager import process_manager
+from app.services.event_manager import event_manager, EventType
 from app.storage import (
     get_repo_by_path,
     encode_path,
     save_session_metadata,
     SessionMetadata,
     EntityLink,
+    load_repos,
 )
 
 router = APIRouter()
+
+
+async def _emit_counts_changed():
+    """Emit counts_changed event with current session counts per repo."""
+    from app.services.headless_analyzer import headless_analyzer
+
+    repos = load_repos()
+    processes = await process_manager.list_processes()
+
+    # Get active session IDs
+    active_session_ids = {
+        proc.claude_session_id
+        for proc in processes
+        if proc.claude_session_id
+    }
+    active_session_ids.update(headless_analyzer.list_running())
+
+    # Build counts dict keyed by repo_id
+    counts = {}
+    for repo in repos:
+        encoded = encode_path(repo["local_path"])
+        # Count processes in this repo
+        repo_processes = [
+            p for p in processes
+            if encode_path(p.working_dir) == encoded
+        ]
+        counts[str(repo["id"])] = {
+            "repo_id": repo["id"],
+            "total": len(repo_processes),  # Will be updated by frontend from session list
+            "active": len(repo_processes),
+        }
+
+    await event_manager.emit_counts_changed(counts)
 
 
 class EntityInput(BaseModel):
@@ -130,7 +165,7 @@ async def create_process(data: ProcessCreate):
             )
             save_session_metadata(encoded, process.claude_session_id, metadata)
 
-        return ProcessResponse(
+        response = ProcessResponse(
             id=process.id,
             working_dir=process.working_dir,
             created_at=process.created_at.isoformat(),
@@ -138,12 +173,30 @@ async def create_process(data: ProcessCreate):
             claude_session_id=process.claude_session_id,
         )
 
+        # Emit WebSocket events for real-time updates
+        await event_manager.emit(EventType.SESSION_CREATED, {
+            "session_id": process.claude_session_id,
+            "repo_path": repo["local_path"],
+            "title": data.title,
+            "is_active": True,
+        })
+        await event_manager.emit(EventType.PROCESS_STARTED, {
+            "process_id": process.id,
+            "session_id": process.claude_session_id,
+            "working_dir": process.working_dir,
+        })
+        # Emit counts changed (triggers frontend to refresh counts)
+        await _emit_counts_changed()
+
+        return response
+
 
 @router.get("/processes", response_model=ProcessListResponse)
 async def list_processes():
     """List all active PTY processes."""
     # First, check for dead processes and update their session status
     dead_process_info = await process_manager.get_dead_process_info()
+    had_dead_processes = False
 
     for session_id, transcript, claude_session_id, working_dir in dead_process_info:
         repo = get_repo_by_path(working_dir)
@@ -161,6 +214,22 @@ async def list_processes():
                     if claude_session_id:
                         session.claude_session_id = claude_session_id
                     await db.commit()
+                    had_dead_processes = True
+
+                    # Emit events for the completed session
+                    await event_manager.emit(EventType.PROCESS_ENDED, {
+                        "session_id": claude_session_id,
+                        "working_dir": working_dir,
+                    })
+                    await event_manager.emit(EventType.SESSION_COMPLETED, {
+                        "session_id": claude_session_id,
+                        "repo_path": repo["local_path"],
+                        "end_time": datetime.utcnow().isoformat(),
+                    })
+
+    # Emit counts changed if any processes ended
+    if had_dead_processes:
+        await _emit_counts_changed()
 
     # Now list only actually running processes
     processes = await process_manager.list_processes()
@@ -185,6 +254,10 @@ async def kill_process(process_id: str):
     if not process:
         raise HTTPException(status_code=404, detail="Process not found")
 
+    # Capture info before killing
+    claude_session_id = process.claude_session_id
+    working_dir = process.working_dir
+
     # Update session status if linked
     if process.session_id and process.working_dir:
         repo = get_repo_by_path(process.working_dir)
@@ -203,6 +276,22 @@ async def kill_process(process_id: str):
                     await db.commit()
 
     await process_manager.kill(process_id)
+
+    # Emit events after killing
+    await event_manager.emit(EventType.PROCESS_ENDED, {
+        "process_id": process_id,
+        "session_id": claude_session_id,
+        "working_dir": working_dir,
+    })
+    if claude_session_id:
+        repo = get_repo_by_path(working_dir) if working_dir else None
+        await event_manager.emit(EventType.SESSION_COMPLETED, {
+            "session_id": claude_session_id,
+            "repo_path": repo["local_path"] if repo else None,
+            "end_time": datetime.utcnow().isoformat(),
+        })
+    await _emit_counts_changed()
+
     return {"status": "killed"}
 
 

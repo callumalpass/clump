@@ -7,8 +7,18 @@ with optional sidecar metadata stored in ~/.clump/projects/
 
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TypedDict
 import time
+
+
+class QuickScanResult(TypedDict):
+    """Result of a quick transcript scan for summary info."""
+
+    title: Optional[str]
+    model: Optional[str]
+    start_time: Optional[str]
+    end_time: Optional[str]
+    message_count: int
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
@@ -53,6 +63,7 @@ from app.storage import (
 )
 from app.services.transcript_parser import parse_transcript, ParsedTranscript, TranscriptMessage
 from app.services.session_manager import process_manager
+from app.services.event_manager import event_manager, EventType
 
 router = APIRouter()
 
@@ -327,15 +338,13 @@ def _find_session_by_id(
     return next((s for s in sessions if s.session_id == session_id), None)
 
 
-def _quick_scan_transcript(transcript_path: Path) -> dict:
+def _quick_scan_transcript(transcript_path: Path) -> QuickScanResult:
     """
     Quickly scan a transcript file for summary info without full parsing.
-
-    Returns dict with: title, model, start_time, end_time, message_count
     """
     import json
 
-    result = {
+    result: QuickScanResult = {
         "title": None,
         "model": None,
         "start_time": None,
@@ -788,6 +797,17 @@ async def update_session_metadata(session_id: str, data: SessionMetadataUpdate):
     # Save
     save_session_metadata(session.encoded_path, session_id, metadata)
 
+    # Emit session updated event
+    await event_manager.emit(EventType.SESSION_UPDATED, {
+        "session_id": session_id,
+        "repo_path": decode_path(session.encoded_path),
+        "changes": {
+            "title": metadata.title,
+            "starred": metadata.starred,
+            "tags": metadata.tags,
+        },
+    })
+
     return _build_metadata_response(session_id, metadata)
 
 
@@ -825,6 +845,15 @@ async def add_entity_to_session(session_id: str, data: AddEntityRequest):
     # Save
     save_session_metadata(session.encoded_path, session_id, metadata)
 
+    # Emit session updated event
+    await event_manager.emit(EventType.SESSION_UPDATED, {
+        "session_id": session_id,
+        "repo_path": decode_path(session.encoded_path),
+        "changes": {
+            "entities": [{"kind": e.kind, "number": e.number} for e in metadata.entities],
+        },
+    })
+
     return EntityLinkResponse(kind=data.kind, number=data.number)
 
 
@@ -853,6 +882,15 @@ async def remove_entity_from_session(session_id: str, entity_idx: int):
 
     # Save
     save_session_metadata(session.encoded_path, session_id, session.metadata)
+
+    # Emit session updated event
+    await event_manager.emit(EventType.SESSION_UPDATED, {
+        "session_id": session_id,
+        "repo_path": decode_path(session.encoded_path),
+        "changes": {
+            "entities": [{"kind": e.kind, "number": e.number} for e in session.metadata.entities],
+        },
+    })
 
     return {"status": "deleted"}
 
@@ -957,6 +995,12 @@ async def delete_session(session_id: str):
 
     # Invalidate cache after deletion
     invalidate_session_cache()
+
+    # Emit session deleted event
+    await event_manager.emit(EventType.SESSION_DELETED, {
+        "session_id": session_id,
+        "repo_path": decode_path(session.encoded_path),
+    })
 
     return {
         "status": "deleted",
