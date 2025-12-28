@@ -21,7 +21,7 @@ from app.storage import load_repos, get_repo_by_id, encode_path, SessionMetadata
 from app.services.headless_analyzer import headless_analyzer
 from app.services.github_client import GitHubClient
 from app.services.event_manager import event_manager, EventType
-from app.routers.commands import get_builtin_commands_dir, get_repo_commands_dir, get_user_commands_dir, parse_command_file
+from app.routers.commands import find_command_file, parse_command_file
 
 logger = logging.getLogger(__name__)
 
@@ -90,32 +90,13 @@ def parse_filter_query(filter_query: str | None) -> dict:
 
 def get_command_template(command_id: str, category: str, repo_path: str | None) -> str | None:
     """Get a command's template by ID and category."""
-    # Try repo-specific first (highest priority)
-    if repo_path:
-        repo_dir = get_repo_commands_dir(repo_path)
-        repo_file = repo_dir / category / f"{command_id}.md"
-        if repo_file.exists():
-            cmd = parse_command_file(repo_file, category, "repo")
-            if cmd:
-                return cmd.template
+    file_path, source = find_command_file(command_id, category, repo_path)
 
-    # Try user's global commands (~/.claude/commands/)
-    user_dir = get_user_commands_dir()
-    user_file = user_dir / category / f"{command_id}.md"
-    if user_file.exists():
-        cmd = parse_command_file(user_file, category, "user")
-        if cmd:
-            return cmd.template
+    if not file_path:
+        return None
 
-    # Fall back to built-in
-    builtin_dir = get_builtin_commands_dir()
-    builtin_file = builtin_dir / category / f"{command_id}.md"
-    if builtin_file.exists():
-        cmd = parse_command_file(builtin_file, category, "builtin")
-        if cmd:
-            return cmd.template
-
-    return None
+    cmd = parse_command_file(file_path, category, source)
+    return cmd.template if cmd else None
 
 
 def build_prompt_from_template(template: str, context: dict) -> str:

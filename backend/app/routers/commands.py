@@ -65,6 +65,47 @@ def get_repo_commands_dir(repo_path: str) -> Path:
     return Path(repo_path) / ".claude" / "commands"
 
 
+def find_command_file(
+    command_id: str, category: str, repo_path: Optional[str] = None
+) -> tuple[Optional[Path], str]:
+    """
+    Find a command file by searching the 3-tier hierarchy.
+
+    Search order (highest to lowest priority):
+    1. Repo-specific commands (if repo_path provided)
+    2. User's global commands (~/.claude/commands/)
+    3. Built-in commands
+
+    Args:
+        command_id: The command filename without extension
+        category: The command category (issue, pr, general)
+        repo_path: Optional path to a repo for repo-specific commands
+
+    Returns:
+        A tuple of (file_path, source) where source is one of:
+        "repo", "user", or "builtin". Returns (None, "") if not found.
+    """
+    filename = f"{command_id}.md"
+
+    # Try repo-specific first (highest priority)
+    if repo_path:
+        repo_file = get_repo_commands_dir(repo_path) / category / filename
+        if repo_file.exists():
+            return repo_file, "repo"
+
+    # Try user's global commands (~/.claude/commands/)
+    user_file = get_user_commands_dir() / category / filename
+    if user_file.exists():
+        return user_file, "user"
+
+    # Fall back to built-in
+    builtin_file = get_builtin_commands_dir() / category / filename
+    if builtin_file.exists():
+        return builtin_file, "builtin"
+
+    return None, ""
+
+
 def parse_command_file(file_path: Path, category: str, source: str = "builtin") -> Optional[CommandMetadata]:
     """Parse a command markdown file with YAML frontmatter"""
     try:
@@ -206,31 +247,12 @@ async def get_command(
     if category not in COMMAND_CATEGORIES:
         raise HTTPException(status_code=400, detail=f"Category must be one of: {', '.join(sorted(COMMAND_CATEGORIES))}")
 
-    # Try repo-specific first if path provided (highest priority)
-    if repo_path:
-        repo_dir = get_repo_commands_dir(repo_path)
-        repo_file = repo_dir / category / f"{command_id}.md"
-        if repo_file.exists():
-            command = parse_command_file(repo_file, category, "repo")
-            if command:
-                return command
+    file_path, source = find_command_file(command_id, category, repo_path)
 
-    # Try user's global commands (~/.claude/commands/)
-    user_dir = get_user_commands_dir()
-    user_file = user_dir / category / f"{command_id}.md"
-    if user_file.exists():
-        command = parse_command_file(user_file, category, "user")
-        if command:
-            return command
-
-    # Fall back to built-in
-    builtin_dir = get_builtin_commands_dir()
-    builtin_file = builtin_dir / category / f"{command_id}.md"
-
-    if not builtin_file.exists():
+    if not file_path:
         raise HTTPException(status_code=404, detail=f"Command '{command_id}' not found")
 
-    command = parse_command_file(builtin_file, category, "builtin")
+    command = parse_command_file(file_path, category, source)
     if not command:
         raise HTTPException(status_code=500, detail="Failed to parse command file")
 
@@ -295,21 +317,7 @@ async def update_command(
     if category not in COMMAND_CATEGORIES:
         raise HTTPException(status_code=400, detail=f"Category must be one of: {', '.join(sorted(COMMAND_CATEGORIES))}")
 
-    # Find the command file
-    file_path = None
-    source = "builtin"
-
-    if repo_path:
-        repo_file = get_repo_commands_dir(repo_path) / category / f"{command_id}.md"
-        if repo_file.exists():
-            file_path = repo_file
-            source = "repo"
-
-    if not file_path:
-        builtin_file = get_builtin_commands_dir() / category / f"{command_id}.md"
-        if builtin_file.exists():
-            file_path = builtin_file
-            source = "builtin"
+    file_path, source = find_command_file(command_id, category, repo_path)
 
     if not file_path:
         raise HTTPException(status_code=404, detail=f"Command '{command_id}' not found")
@@ -339,18 +347,7 @@ async def delete_command(
     if category not in COMMAND_CATEGORIES:
         raise HTTPException(status_code=400, detail=f"Category must be one of: {', '.join(sorted(COMMAND_CATEGORIES))}")
 
-    # Find the command file
-    file_path = None
-
-    if repo_path:
-        repo_file = get_repo_commands_dir(repo_path) / category / f"{command_id}.md"
-        if repo_file.exists():
-            file_path = repo_file
-
-    if not file_path:
-        builtin_file = get_builtin_commands_dir() / category / f"{command_id}.md"
-        if builtin_file.exists():
-            file_path = builtin_file
+    file_path, _ = find_command_file(command_id, category, repo_path)
 
     if not file_path:
         raise HTTPException(status_code=404, detail=f"Command '{command_id}' not found")
