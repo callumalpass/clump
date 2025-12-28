@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import type { CommandMetadata } from '../types';
 import { focusRingInset } from '../utils/styles';
 
@@ -20,7 +20,9 @@ interface StartSessionButtonProps {
 export function StartSessionButton({ issue, commands, onStart, size = 'md', className = '' }: StartSessionButtonProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedCommand, setSelectedCommand] = useState<CommandMetadata | null>(null);
+  const [focusedIndex, setFocusedIndex] = useState(-1);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
 
   // Set default selected command when commands load
   useEffect(() => {
@@ -34,11 +36,59 @@ export function StartSessionButton({ issue, commands, onStart, size = 'md', clas
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowDropdown(false);
+        setFocusedIndex(-1);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Reset focused index when dropdown closes
+  useEffect(() => {
+    if (!showDropdown) {
+      setFocusedIndex(-1);
+    } else {
+      // Focus the currently selected command when dropdown opens
+      const selectedIndex = commands.findIndex(cmd => cmd.id === selectedCommand?.id);
+      setFocusedIndex(selectedIndex >= 0 ? selectedIndex : 0);
+    }
+  }, [showDropdown, commands, selectedCommand?.id]);
+
+  // Focus the item when focusedIndex changes
+  useEffect(() => {
+    if (showDropdown && focusedIndex >= 0) {
+      const element = itemRefs.current.get(focusedIndex);
+      element?.focus();
+    }
+  }, [focusedIndex, showDropdown]);
+
+  // Handle keyboard navigation
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (!showDropdown) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setFocusedIndex(prev => (prev + 1) % commands.length);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setFocusedIndex(prev => (prev - 1 + commands.length) % commands.length);
+        break;
+      case 'Escape':
+        e.preventDefault();
+        setShowDropdown(false);
+        break;
+      case 'Home':
+        e.preventDefault();
+        setFocusedIndex(0);
+        break;
+      case 'End':
+        e.preventDefault();
+        setFocusedIndex(commands.length - 1);
+        break;
+    }
+  }, [showDropdown, commands.length]);
 
   const handleMainClick = () => {
     if (selectedCommand) {
@@ -107,13 +157,27 @@ export function StartSessionButton({ issue, commands, onStart, size = 'md', clas
         className="absolute right-0 top-full mt-1 w-64 bg-gray-800 border border-gray-600 rounded-md shadow-lg z-20 dropdown-menu-enter"
         role="listbox"
         aria-label="Select session command"
+        aria-activedescendant={focusedIndex >= 0 ? `command-option-${commands[focusedIndex]?.id}` : undefined}
+        onKeyDown={handleKeyDown}
       >
-        {commands.map((command) => (
+        {commands.map((command, index) => (
             <button
               key={command.id}
+              id={`command-option-${command.id}`}
+              ref={(el) => {
+                if (el) itemRefs.current.set(index, el);
+              }}
+              role="option"
+              aria-selected={selectedCommand?.id === command.id}
               onClick={(e) => {
                 e.stopPropagation();
                 handleCommandSelect(command);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleCommandSelect(command);
+                }
               }}
               className={`w-full px-3 py-2 text-left hover:bg-gray-700 first:rounded-t-md last:rounded-b-md focus:bg-gray-700 ${focusRingInset} ${
                 selectedCommand?.id === command.id ? 'bg-gray-700' : ''
@@ -122,7 +186,7 @@ export function StartSessionButton({ issue, commands, onStart, size = 'md', clas
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-white">{command.name}</span>
                 {selectedCommand?.id === command.id && (
-                  <svg className="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
                 )}
