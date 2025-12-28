@@ -51,9 +51,10 @@ export function AlertMessage({ type, message, className = '' }: AlertMessageProp
         '--alert-glow': typeStyles.glowColor,
       } as React.CSSProperties}
       role="alert"
+      aria-live="polite"
     >
       <svg
-        className={`w-4 h-4 mt-0.5 shrink-0 ${typeStyles.icon}`}
+        className={`w-4 h-4 mt-0.5 shrink-0 alert-icon-enter ${typeStyles.icon}`}
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"

@@ -306,6 +306,31 @@ textarea::placeholder {
   box-shadow: 0 0 12px var(--alert-glow);
 }
 
+/* Alert icon entrance animation - subtle attention-grabbing bounce */
+@keyframes alert-icon-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  75% {
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.alert-icon-enter {
+  animation: alert-icon-enter 300ms ease-out forwards;
+  animation-delay: 50ms;
+  opacity: 0;
+}
+
 /* Toggle button group styling */
 .toggle-btn {
   transition: background-color 150ms ease, color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
@@ -645,6 +670,7 @@ button:active:not(:disabled) .kbd-hint {
   .active-badge-glow,
   .star-button-animate,
   .alert-enter,
+  .alert-icon-enter,
   .status-badge-enter {
     animation: none;
   }
@@ -655,7 +681,8 @@ button:active:not(:disabled) .kbd-hint {
   }
 
   /* Ensure alert is visible immediately */
-  .alert-enter {
+  .alert-enter,
+  .alert-icon-enter {
     opacity: 1;
     transform: none;
   }
