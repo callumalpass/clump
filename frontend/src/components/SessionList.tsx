@@ -14,6 +14,7 @@ import {
   ActiveFiltersIndicator,
   filterBarStyles,
 } from './FilterBar';
+import { ConfirmDialog } from './ConfirmDialog';
 
 // Check if a session was modified recently (within last 10 minutes)
 function isRecentlyModified(modifiedAt: string): boolean {
@@ -277,6 +278,7 @@ export function SessionList({
   // Selection state for bulk operations
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Check if bulk operations are available
   const hasBulkOperations = !!onBulkDelete || !!onBulkStar;
@@ -313,14 +315,15 @@ export function SessionList({
     setSelectedIds(new Set());
   }, []);
 
-  // Bulk delete handler
-  const handleBulkDelete = useCallback(async () => {
+  // Bulk delete handler - shows confirmation dialog
+  const handleBulkDeleteClick = useCallback(() => {
     if (!onBulkDelete || selectedIds.size === 0) return;
+    setShowDeleteConfirm(true);
+  }, [onBulkDelete, selectedIds.size]);
 
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${selectedIds.size} session${selectedIds.size > 1 ? 's' : ''}? This cannot be undone.`
-    );
-    if (!confirmed) return;
+  // Actual delete after confirmation
+  const handleBulkDeleteConfirm = useCallback(async () => {
+    if (!onBulkDelete || selectedIds.size === 0) return;
 
     setBulkActionLoading(true);
     try {
@@ -329,12 +332,9 @@ export function SessionList({
       if (result.deleted && result.deleted > 0) {
         setSelectedIds(new Set());
       }
-      if (result.failed > 0) {
-        alert(`${result.failed} session${result.failed > 1 ? 's' : ''} could not be deleted`);
-      }
+      setShowDeleteConfirm(false);
     } catch (e) {
       console.error('Bulk delete failed:', e);
-      alert('Failed to delete sessions');
     } finally {
       setBulkActionLoading(false);
     }
@@ -444,7 +444,7 @@ export function SessionList({
         )}
         {onBulkDelete && (
           <button
-            onClick={handleBulkDelete}
+            onClick={handleBulkDeleteClick}
             disabled={bulkActionLoading}
             className="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded flex items-center gap-1 transition-colors"
             title="Delete selected"
@@ -602,38 +602,53 @@ export function SessionList({
   }, [toggleSelectSession]);
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
-      {filterBar}
-      {bulkActionsBar}
-      <div className="divide-y divide-gray-700 overflow-auto flex-1 min-h-0">
-        {sessions.map((session, index) => (
-          <SessionListItem
-            key={session.session_id}
-            session={session}
-            index={index}
-            onSelect={() => onSelectSession(session)}
-            onContinue={(e) => handleContinue(e, session)}
-            onToggleStar={(e) => handleToggleStar(e, session)}
-            showContinueButton={!!onContinueSession}
-            showStarButton={!!onToggleStar}
-            isSelected={selectedIds.has(session.session_id)}
-            onToggleSelect={hasBulkOperations ? (e) => handleToggleSelect(e, session) : undefined}
-            selectionMode={hasBulkOperations}
+    <>
+      <div className="flex flex-col flex-1 min-h-0">
+        {filterBar}
+        {bulkActionsBar}
+        <div className="divide-y divide-gray-700 overflow-auto flex-1 min-h-0">
+          {sessions.map((session, index) => (
+            <SessionListItem
+              key={session.session_id}
+              session={session}
+              index={index}
+              onSelect={() => onSelectSession(session)}
+              onContinue={(e) => handleContinue(e, session)}
+              onToggleStar={(e) => handleToggleStar(e, session)}
+              showContinueButton={!!onContinueSession}
+              showStarButton={!!onToggleStar}
+              isSelected={selectedIds.has(session.session_id)}
+              onToggleSelect={hasBulkOperations ? (e) => handleToggleSelect(e, session) : undefined}
+              selectionMode={hasBulkOperations}
+            />
+          ))}
+        </div>
+
+        {/* Pagination - always visible to prevent layout shift */}
+        <div className="shrink-0 border-t border-gray-700 p-2 flex items-center justify-between text-sm">
+          <span className="text-gray-400">
+            {total} sessions
+          </span>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPageChange={onPageChange}
           />
-        ))}
+        </div>
       </div>
 
-      {/* Pagination - always visible to prevent layout shift */}
-      <div className="shrink-0 border-t border-gray-700 p-2 flex items-center justify-between text-sm">
-        <span className="text-gray-400">
-          {total} sessions
-        </span>
-        <Pagination
-          page={page}
-          totalPages={totalPages}
-          onPageChange={onPageChange}
-        />
-      </div>
-    </div>
+      {/* Bulk delete confirmation dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onConfirm={handleBulkDeleteConfirm}
+        onCancel={() => setShowDeleteConfirm(false)}
+        title="Delete Sessions"
+        message={`Are you sure you want to delete ${selectedIds.size} session${selectedIds.size !== 1 ? 's' : ''}? This action cannot be undone.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        loading={bulkActionLoading}
+      />
+    </>
   );
 }
