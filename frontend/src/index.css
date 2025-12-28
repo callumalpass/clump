@@ -332,6 +332,20 @@ textarea::placeholder {
   animation: dropdown-slide-in 100ms ease-out forwards;
 }
 
+/* Active status badge glow effect - subtle pulsing glow for active sessions */
+@keyframes active-badge-glow {
+  0%, 100% {
+    box-shadow: 0 0 4px rgba(234, 179, 8, 0.3), 0 0 8px rgba(234, 179, 8, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 8px rgba(234, 179, 8, 0.5), 0 0 16px rgba(234, 179, 8, 0.2);
+  }
+}
+
+.active-badge-glow {
+  animation: active-badge-glow 2s ease-in-out infinite;
+}
+
 /* Respect user's motion preferences for accessibility */
 @media (prefers-reduced-motion: reduce) {
   /* Disable all custom animations */
@@ -342,8 +356,14 @@ textarea::placeholder {
   .empty-state-icon-float,
   .message-bubble-enter,
   .dropdown-menu-enter,
-  .list-item-enter {
+  .list-item-enter,
+  .active-badge-glow {
     animation: none;
+  }
+
+  /* Keep static glow for active badge when motion is reduced */
+  .active-badge-glow {
+    box-shadow: 0 0 6px rgba(234, 179, 8, 0.4);
   }
 
   /* Ensure list items are visible immediately */
