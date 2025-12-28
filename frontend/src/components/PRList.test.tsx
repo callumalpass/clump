@@ -348,10 +348,12 @@ describe('PRList', () => {
       render(<PRList {...defaultProps} filters={{ state: 'closed' }} />);
 
       const closedButton = screen.getByText('Closed');
-      expect(closedButton).toHaveClass('bg-blue-600');
+      // StateToggle uses a sliding indicator div (not button background) for active state
+      // The button has aria-pressed="true" when active
+      expect(closedButton).toHaveAttribute('aria-pressed', 'true');
 
       const openButton = screen.getByText('Open');
-      expect(openButton).not.toHaveClass('bg-blue-600');
+      expect(openButton).toHaveAttribute('aria-pressed', 'false');
     });
 
     it('calls onFiltersChange when filter is clicked', () => {

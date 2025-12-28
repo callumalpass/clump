@@ -181,7 +181,9 @@ describe('IssueFilters', () => {
       render(<IssueFilters {...defaultProps} filters={{ state: 'open' }} />);
 
       const openButton = screen.getByRole('button', { name: 'Open' });
-      expect(openButton).toHaveClass('bg-blue-600');
+      // StateToggle uses a sliding indicator div (not button background) for active state
+      // The button has aria-pressed="true" when active
+      expect(openButton).toHaveAttribute('aria-pressed', 'true');
     });
 
     it('calls onFiltersChange when state button is clicked', () => {

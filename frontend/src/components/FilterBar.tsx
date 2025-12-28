@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, ReactNode } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect, ReactNode } from 'react';
 import { focusRing, focusRingInset } from '../utils/styles';
 
 // Shared filter bar styling constants
@@ -6,12 +6,12 @@ export const filterBarStyles = {
   container: 'flex flex-col gap-2 p-2 border-b border-gray-700 bg-gray-800/30',
   row: 'flex items-center gap-2',
   // Toggle button group (connected buttons)
-  toggleGroup: 'flex rounded-md overflow-hidden border border-gray-600',
+  toggleGroup: 'relative flex rounded-md overflow-hidden border border-gray-600 bg-gray-800',
   toggleButton: (isActive: boolean) =>
-    `toggle-btn px-2.5 py-1 text-xs transition-transform active:scale-95 ${focusRing} focus:z-10 ${
+    `toggle-btn relative z-10 px-2.5 py-1 text-xs transition-colors duration-150 active:scale-95 ${focusRing} focus:z-10 ${
       isActive
-        ? 'bg-blue-600 text-white'
-        : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white'
+        ? 'text-white'
+        : 'text-gray-300 hover:text-white'
     }`,
   // Standalone pill buttons (for category filters)
   pillButton: (isActive: boolean) =>
@@ -104,11 +104,43 @@ interface StateToggleProps {
 
 export function StateToggle({ value, onChange }: StateToggleProps) {
   const states: ('open' | 'closed' | 'all')[] = ['open', 'closed', 'all'];
+  const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
+
+  // Update the sliding indicator position when active state changes
+  useLayoutEffect(() => {
+    const updateIndicator = () => {
+      const container = containerRef.current;
+      const activeButton = buttonRefs.current.get(value);
+      if (container && activeButton) {
+        const containerRect = container.getBoundingClientRect();
+        const buttonRect = activeButton.getBoundingClientRect();
+        setIndicatorStyle({
+          left: buttonRect.left - containerRect.left,
+          width: buttonRect.width,
+        });
+      }
+    };
+    updateIndicator();
+    window.addEventListener('resize', updateIndicator);
+    return () => window.removeEventListener('resize', updateIndicator);
+  }, [value]);
+
   return (
-    <div className={filterBarStyles.toggleGroup} role="group" aria-label="Filter by state">
+    <div ref={containerRef} className={filterBarStyles.toggleGroup} role="group" aria-label="Filter by state">
+      {/* Sliding background indicator */}
+      <div
+        className="toggle-indicator absolute top-0 bottom-0 bg-blue-600 rounded-[3px]"
+        style={{
+          transform: `translateX(${indicatorStyle.left}px)`,
+          width: indicatorStyle.width,
+        }}
+      />
       {states.map((state) => (
         <button
           key={state}
+          ref={(el) => { if (el) buttonRefs.current.set(state, el); }}
           onClick={() => onChange(state)}
           className={filterBarStyles.toggleButton(value === state)}
           aria-pressed={value === state}
@@ -134,11 +166,43 @@ export function SessionStatusToggle({ value, onChange }: SessionStatusToggleProp
     { value: 'analyzed', label: 'Analyzed' },
     { value: 'unanalyzed', label: 'New' },
   ];
+  const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
+
+  // Update the sliding indicator position when active status changes
+  useLayoutEffect(() => {
+    const updateIndicator = () => {
+      const container = containerRef.current;
+      const activeButton = buttonRefs.current.get(value);
+      if (container && activeButton) {
+        const containerRect = container.getBoundingClientRect();
+        const buttonRect = activeButton.getBoundingClientRect();
+        setIndicatorStyle({
+          left: buttonRect.left - containerRect.left,
+          width: buttonRect.width,
+        });
+      }
+    };
+    updateIndicator();
+    window.addEventListener('resize', updateIndicator);
+    return () => window.removeEventListener('resize', updateIndicator);
+  }, [value]);
+
   return (
-    <div className={filterBarStyles.toggleGroup} role="group" aria-label="Filter by session status">
+    <div ref={containerRef} className={filterBarStyles.toggleGroup} role="group" aria-label="Filter by session status">
+      {/* Sliding background indicator */}
+      <div
+        className="toggle-indicator absolute top-0 bottom-0 bg-blue-600 rounded-[3px]"
+        style={{
+          transform: `translateX(${indicatorStyle.left}px)`,
+          width: indicatorStyle.width,
+        }}
+      />
       {statuses.map((status) => (
         <button
           key={status.value}
+          ref={(el) => { if (el) buttonRefs.current.set(status.value, el); }}
           onClick={() => onChange(status.value)}
           className={filterBarStyles.toggleButton(value === status.value)}
           aria-pressed={value === status.value}
