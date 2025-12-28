@@ -112,6 +112,7 @@ def create_mock_pr(
     additions: int = 50,
     deletions: int = 10,
     changed_files: int = 3,
+    comments: int = 0,
     url: str = "https://github.com/owner/repo/pull/123",
 ):
     """Helper to create a mock GitHub PullRequest object."""
@@ -123,6 +124,7 @@ def create_mock_pr(
     mock_pr.additions = additions
     mock_pr.deletions = deletions
     mock_pr.changed_files = changed_files
+    mock_pr.comments = comments
     mock_pr.html_url = url
     mock_pr.created_at = datetime(2024, 1, 10, 8, 0, 0)
     mock_pr.updated_at = datetime(2024, 1, 15, 14, 0, 0)
@@ -478,6 +480,7 @@ class TestListPRs:
             base_ref="develop",
             additions=100,
             deletions=50,
+            comments=5,
             labels=["feature", "ready"],
         )
         # Mock search results
@@ -498,6 +501,7 @@ class TestListPRs:
         assert prs[0].base_ref == "develop"
         assert prs[0].additions == 100
         assert prs[0].deletions == 50
+        assert prs[0].comments_count == 5
         assert prs[0].labels == ["feature", "ready"]
 
 

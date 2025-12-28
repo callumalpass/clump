@@ -109,11 +109,17 @@ class EventManager:
         """Emit counts after debounce delay."""
         try:
             await asyncio.sleep(0.1)  # 100ms debounce
+            # Capture counts under lock, then emit outside lock
+            # This prevents holding the lock during potentially slow emit callbacks
+            counts_to_emit = None
             async with self._lock:
                 if self._pending_counts is not None:
-                    await self.emit(EventType.COUNTS_CHANGED, {"counts": self._pending_counts})
+                    counts_to_emit = self._pending_counts
                     self._pending_counts = None
                     self._counts_task = None
+            # Emit outside the lock to avoid blocking other operations
+            if counts_to_emit is not None:
+                await self.emit(EventType.COUNTS_CHANGED, {"counts": counts_to_emit})
         except asyncio.CancelledError:
             pass
 

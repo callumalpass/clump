@@ -453,3 +453,39 @@ class TestEventManagerIntegration:
         assert len(async_calls) == 1
         assert sync_calls[0].data["code"] == 0
         assert async_calls[0].data["code"] == 0
+
+    @pytest.mark.asyncio
+    async def test_counts_emit_does_not_block_new_counts(self):
+        """emit_counts_changed allows new counts during slow callback."""
+        manager = EventManager()
+        emit_started = asyncio.Event()
+        emit_can_continue = asyncio.Event()
+        received_events = []
+
+        async def slow_callback(event):
+            # Signal that emit has started
+            emit_started.set()
+            # Wait for permission to continue
+            await emit_can_continue.wait()
+            received_events.append(event)
+
+        manager.subscribe(slow_callback)
+
+        # Start the first emit
+        await manager.emit_counts_changed({"repo1": {"total": 1}})
+
+        # Wait for debounce and for emit to start calling callback
+        await asyncio.sleep(0.15)
+
+        # While slow_callback is running, we should be able to emit new counts
+        # without blocking (since lock is released before emit)
+        await manager.emit_counts_changed({"repo1": {"total": 2}})
+
+        # Allow slow callback to complete
+        emit_can_continue.set()
+
+        # Wait for second debounce
+        await asyncio.sleep(0.15)
+
+        # Should have received both events
+        assert len(received_events) == 2
