@@ -221,32 +221,6 @@ async def notifications_websocket(websocket: WebSocket):
     notification_manager.subscribe_global(on_notification)
     event_manager.subscribe(on_event)
 
-    try:
-        # Send initial state on connect
-        attention_sessions = notification_manager.get_sessions_needing_attention()
-
-        # Get current processes
-        processes = await process_manager.list_processes()
-        process_list = [
-            {
-                "id": p.id,
-                "session_id": p.session_id,
-                "working_dir": p.working_dir,
-                "created_at": p.created_at.isoformat(),
-            }
-            for p in processes
-        ]
-
-        await websocket.send_json({
-            "type": "initial_state",
-            "sessions_needing_attention": attention_sessions,
-            "processes": process_list,
-        })
-    except WebSocketDisconnect:
-        notification_manager.unsubscribe_global(on_notification)
-        event_manager.unsubscribe(on_event)
-        return
-
     async def send_events():
         """Task to send events to the client."""
         while True:
@@ -271,6 +245,33 @@ async def notifications_websocket(websocket: WebSocket):
                 break
             except Exception:
                 break
+
+    try:
+        # Send initial state on connect
+        attention_sessions = notification_manager.get_sessions_needing_attention()
+
+        # Get current processes
+        processes = await process_manager.list_processes()
+        process_list = [
+            {
+                "id": p.id,
+                "session_id": p.session_id,
+                "working_dir": p.working_dir,
+                "created_at": p.created_at.isoformat(),
+                "claude_session_id": p.claude_session_id,
+            }
+            for p in processes
+        ]
+
+        await websocket.send_json({
+            "type": "initial_state",
+            "sessions_needing_attention": attention_sessions,
+            "processes": process_list,
+        })
+    except WebSocketDisconnect:
+        notification_manager.unsubscribe_global(on_notification)
+        event_manager.unsubscribe(on_event)
+        return
 
     # Run both tasks concurrently
     send_task = asyncio.create_task(send_events())

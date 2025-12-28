@@ -1,0 +1,65 @@
+import { useEffect } from 'react';
+import type { StatsResponse } from '../types';
+import { StatsView } from './StatsView';
+
+interface StatsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  stats: StatsResponse | null;
+  loading: boolean;
+  error: string | null;
+  onRefresh: () => void;
+}
+
+export function StatsModal({ isOpen, onClose, stats, loading, error, onRefresh }: StatsModalProps) {
+  // Handle Escape key to close modal
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop-enter">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div className="relative bg-[#161b22] border border-gray-700 rounded-lg shadow-xl w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col mx-4 modal-content-enter">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+          <h2 className="text-lg font-semibold">Usage Statistics</h2>
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
+            aria-label="Close"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-hidden">
+          <StatsView
+            stats={stats}
+            loading={loading}
+            error={error}
+            onRefresh={onRefresh}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
