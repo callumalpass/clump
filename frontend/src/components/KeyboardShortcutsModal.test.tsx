@@ -50,6 +50,14 @@ describe('KeyboardShortcutsModal', () => {
       expect(screen.getByText('Send multiline input (Mac: Option+Enter)')).toBeInTheDocument();
     });
 
+    it('renders session actions section', () => {
+      render(<KeyboardShortcutsModal {...defaultProps} />);
+
+      expect(screen.getByText('Session Actions')).toBeInTheDocument();
+      expect(screen.getByText('Toggle star on current session')).toBeInTheDocument();
+      expect(screen.getByText('Toggle transcript/terminal view')).toBeInTheDocument();
+    });
+
     it('renders quick tips section', () => {
       render(<KeyboardShortcutsModal {...defaultProps} />);
 
@@ -184,11 +192,12 @@ describe('KeyboardShortcutsModal', () => {
 
       // Section titles should be h3
       const h3Elements = screen.getAllByRole('heading', { level: 3 });
-      expect(h3Elements).toHaveLength(4);
+      expect(h3Elements).toHaveLength(5);
       expect(h3Elements[0]).toHaveTextContent('Navigation');
       expect(h3Elements[1]).toHaveTextContent('Session Tabs');
-      expect(h3Elements[2]).toHaveTextContent('Terminal');
-      expect(h3Elements[3]).toHaveTextContent('Quick Tips');
+      expect(h3Elements[2]).toHaveTextContent('Session Actions');
+      expect(h3Elements[3]).toHaveTextContent('Terminal');
+      expect(h3Elements[4]).toHaveTextContent('Quick Tips');
     });
 
     it('close button is focusable', () => {

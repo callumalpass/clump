@@ -5,12 +5,17 @@ Note: Repo information is stored in ~/.clump/repos.json, not in the database.
 These models are for the per-repo data stored in ~/.clump/projects/{hash}/data.db.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from sqlalchemy import String, Text, DateTime, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+
+def utc_now() -> datetime:
+    """Return current UTC time as a timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
 
 class SessionKind(str, Enum):
@@ -48,7 +53,7 @@ class Session(Base):
     status: Mapped[str] = mapped_column(String(50), default=SessionStatus.RUNNING.value)
     process_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     claude_session_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     actions: Mapped[list["Action"]] = relationship(back_populates="session", cascade="all, delete-orphan")
@@ -64,7 +69,7 @@ class Action(Base):
     type: Mapped[str] = mapped_column(String(50))
     payload: Mapped[str] = mapped_column(Text)  # JSON
     status: Mapped[str] = mapped_column(String(50), default="completed")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     session: Mapped["Session"] = relationship(back_populates="actions")
 
@@ -77,7 +82,7 @@ class Tag(Base):
     repo_id: Mapped[int] = mapped_column(Integer)  # References repos.json entry
     name: Mapped[str] = mapped_column(String(100))
     color: Mapped[str | None] = mapped_column(String(7), nullable=True)  # hex color e.g. #ff0000
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     issue_tags: Mapped[list["IssueTag"]] = relationship(back_populates="tag", cascade="all, delete-orphan")
 
@@ -90,7 +95,7 @@ class IssueTag(Base):
     tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id", ondelete="CASCADE"))
     repo_id: Mapped[int] = mapped_column(Integer)  # References repos.json entry
     issue_number: Mapped[int] = mapped_column(Integer)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     tag: Mapped["Tag"] = relationship(back_populates="issue_tags")
 
@@ -104,7 +109,7 @@ class SessionEntity(Base):
     repo_id: Mapped[int] = mapped_column(Integer)  # References repos.json entry
     entity_kind: Mapped[str] = mapped_column(String(50))  # "issue" or "pr"
     entity_number: Mapped[int] = mapped_column(Integer)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     session: Mapped["Session"] = relationship(back_populates="entities")
 
@@ -157,8 +162,8 @@ class ScheduledJob(Base):
     last_run_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     run_count: Mapped[int] = mapped_column(Integer, default=0)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Relationship to runs
     runs: Mapped[list["ScheduledJobRun"]] = relationship(back_populates="job", cascade="all, delete-orphan")
@@ -174,7 +179,7 @@ class ScheduledJobRun(Base):
 
     # Run status
     status: Mapped[str] = mapped_column(String(50))  # pending, running, completed, failed
-    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Items processed

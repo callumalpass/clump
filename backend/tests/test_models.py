@@ -9,7 +9,7 @@ Tests cover:
 """
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import patch, MagicMock
 from sqlalchemy import inspect
 from sqlalchemy.orm import Session as SqlSession
@@ -23,6 +23,7 @@ from app.models import (
     Tag,
     IssueTag,
     SessionEntity,
+    utc_now,
 )
 from app.database import Base
 
@@ -400,3 +401,47 @@ class TestModelBackPopulates:
 
         assert tag_rels["issue_tags"].back_populates == "tag"
         assert issue_tag_rels["tag"].back_populates == "issue_tags"
+
+
+class TestUtcNowHelper:
+    """Tests for the utc_now helper function."""
+
+    def test_utc_now_returns_datetime(self):
+        """Test that utc_now returns a datetime object."""
+        result = utc_now()
+        assert isinstance(result, datetime)
+
+    def test_utc_now_is_timezone_aware(self):
+        """Test that utc_now returns a timezone-aware datetime."""
+        result = utc_now()
+        assert result.tzinfo is not None
+        assert result.tzinfo == timezone.utc
+
+    def test_utc_now_is_utc(self):
+        """Test that utc_now returns UTC timezone."""
+        result = utc_now()
+        # Check timezone offset is zero (UTC)
+        assert result.utcoffset().total_seconds() == 0
+
+    def test_utc_now_returns_current_time(self):
+        """Test that utc_now returns approximately the current time."""
+        before = datetime.now(timezone.utc)
+        result = utc_now()
+        after = datetime.now(timezone.utc)
+
+        assert before <= result <= after
+
+    def test_utc_now_consecutive_calls_are_ordered(self):
+        """Test that consecutive calls return increasing times."""
+        first = utc_now()
+        second = utc_now()
+
+        assert first <= second
+
+    def test_utc_now_isoformat_includes_timezone(self):
+        """Test that isoformat output includes timezone info."""
+        result = utc_now()
+        iso_string = result.isoformat()
+
+        # Should end with +00:00 (UTC offset)
+        assert iso_string.endswith("+00:00")

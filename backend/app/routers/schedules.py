@@ -2,7 +2,7 @@
 Router for managing scheduled jobs.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from croniter import croniter
@@ -360,7 +360,7 @@ async def update_scheduled_job(
         if "cron_expression" in update_data or "timezone" in update_data:
             job.next_run_at = calculate_next_run(job.cron_expression, job.timezone)
 
-        job.updated_at = datetime.utcnow()
+        job.updated_at = datetime.now(timezone.utc)
 
         await db.commit()
         await db.refresh(job)
@@ -431,7 +431,7 @@ async def pause_job(repo_id: int, job_id: int) -> ScheduledJobResponse:
             raise HTTPException(status_code=404, detail="Scheduled job not found")
 
         job.status = ScheduledJobStatus.PAUSED.value
-        job.updated_at = datetime.utcnow()
+        job.updated_at = datetime.now(timezone.utc)
 
         await db.commit()
         await db.refresh(job)
@@ -460,7 +460,7 @@ async def resume_job(repo_id: int, job_id: int) -> ScheduledJobResponse:
 
         job.status = ScheduledJobStatus.ACTIVE.value
         job.next_run_at = calculate_next_run(job.cron_expression, job.timezone)
-        job.updated_at = datetime.utcnow()
+        job.updated_at = datetime.now(timezone.utc)
 
         await db.commit()
         await db.refresh(job)

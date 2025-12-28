@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import json
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.database import get_repo_db
 from app.db_helpers import get_repo_or_404
@@ -89,7 +89,7 @@ async def run_headless_session(data: HeadlessSessionCreate):
             session_id=claude_session_id,
             title=data.title,
             repo_path=repo["local_path"],
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
         )
         save_session_metadata(encoded_path, claude_session_id, metadata)
 
@@ -186,7 +186,7 @@ async def run_headless_session_stream(data: HeadlessSessionCreate):
         session_id=claude_session_id,
         title=data.title,
         repo_path=repo["local_path"],
-        created_at=datetime.utcnow().isoformat(),
+        created_at=datetime.now(timezone.utc).isoformat(),
     )
     save_session_metadata(encoded_path, claude_session_id, metadata)
 

@@ -11,7 +11,7 @@ import asyncio
 DEFAULT_TERMINAL_ROWS = 24
 DEFAULT_TERMINAL_COLS = 80
 
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -161,7 +161,7 @@ async def create_process(data: ProcessCreate):
                     EntityLink(kind=e.kind, number=e.number)
                     for e in data.entities
                 ],
-                created_at=datetime.utcnow().isoformat(),
+                created_at=datetime.now(timezone.utc).isoformat(),
             )
             save_session_metadata(encoded, process.claude_session_id, metadata)
 
@@ -210,7 +210,7 @@ async def list_processes():
                 if session and session.status == SessionStatus.RUNNING.value:
                     session.status = SessionStatus.COMPLETED.value
                     session.transcript = transcript
-                    session.completed_at = datetime.utcnow()
+                    session.completed_at = datetime.now(timezone.utc)
                     if claude_session_id:
                         session.claude_session_id = claude_session_id
                     await db.commit()
@@ -224,7 +224,7 @@ async def list_processes():
                     await event_manager.emit(EventType.SESSION_COMPLETED, {
                         "session_id": claude_session_id,
                         "repo_path": repo["local_path"],
-                        "end_time": datetime.utcnow().isoformat(),
+                        "end_time": datetime.now(timezone.utc).isoformat(),
                     })
 
     # Emit counts changed if any processes ended
@@ -288,7 +288,7 @@ async def kill_process(process_id: str):
         await event_manager.emit(EventType.SESSION_COMPLETED, {
             "session_id": claude_session_id,
             "repo_path": repo["local_path"] if repo else None,
-            "end_time": datetime.utcnow().isoformat(),
+            "end_time": datetime.now(timezone.utc).isoformat(),
         })
     await _emit_counts_changed()
 

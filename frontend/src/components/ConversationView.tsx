@@ -141,6 +141,69 @@ function TimeGapIndicator({ gapMs }: { gapMs: number }) {
   );
 }
 
+// Count tool usage from transcript messages
+function countToolUsage(messages: TranscriptMessage[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const message of messages) {
+    for (const tool of message.tool_uses) {
+      counts[tool.name] = (counts[tool.name] || 0) + 1;
+    }
+  }
+  return counts;
+}
+
+// Tool styling configuration for the summary
+const TOOL_STYLES: Record<string, { color: string; label: string }> = {
+  Edit: { color: 'text-emerald-400', label: 'edits' },
+  Read: { color: 'text-blue-400', label: 'reads' },
+  Write: { color: 'text-cyan-400', label: 'writes' },
+  Bash: { color: 'text-amber-400', label: 'cmds' },
+  Grep: { color: 'text-orange-400', label: 'searches' },
+  Glob: { color: 'text-violet-400', label: 'globs' },
+  Task: { color: 'text-purple-400', label: 'agents' },
+  WebFetch: { color: 'text-pink-400', label: 'fetches' },
+  WebSearch: { color: 'text-rose-400', label: 'searches' },
+  LSP: { color: 'text-teal-400', label: 'lsp' },
+};
+
+// Component to display tool usage summary
+function ToolUsageSummary({ toolCounts }: { toolCounts: Record<string, number> }) {
+  const entries = Object.entries(toolCounts);
+  if (entries.length === 0) return null;
+
+  // Sort by count descending, take top 5
+  const sorted = entries
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+
+  const total = entries.reduce((sum, [, count]) => sum + count, 0);
+  const shown = sorted.reduce((sum, [, count]) => sum + count, 0);
+  const othersCount = total - shown;
+
+  return (
+    <div className="flex items-center gap-1.5 text-xs">
+      <span className="text-gray-500">Tools:</span>
+      {sorted.map(([name, count]) => {
+        const style = TOOL_STYLES[name] || { color: 'text-gray-400', label: name.toLowerCase() };
+        return (
+          <span
+            key={name}
+            className={`${style.color} tabular-nums`}
+            title={`${count} ${name} call${count !== 1 ? 's' : ''}`}
+          >
+            {count} {style.label}
+          </span>
+        );
+      })}
+      {othersCount > 0 && (
+        <span className="text-gray-500" title={`${othersCount} other tool calls`}>
+          +{othersCount}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function SessionStats({ transcript }: { transcript: ParsedTranscript }) {
   const totalInput = transcript.total_input_tokens ?? 0;
   const totalOutput = transcript.total_output_tokens ?? 0;
@@ -154,6 +217,9 @@ function SessionStats({ transcript }: { transcript: ParsedTranscript }) {
     totalCacheCreation,
     transcript.model
   );
+
+  // Calculate tool usage
+  const toolCounts = useMemo(() => countToolUsage(transcript.messages), [transcript.messages]);
 
   return (
     <div className="bg-gray-850 border-b border-gray-700 px-3 py-2">
@@ -218,6 +284,13 @@ function SessionStats({ transcript }: { transcript: ParsedTranscript }) {
           </span>
         )}
       </div>
+
+      {/* Tool usage summary */}
+      {Object.keys(toolCounts).length > 0 && (
+        <div className="mt-1.5">
+          <ToolUsageSummary toolCounts={toolCounts} />
+        </div>
+      )}
 
       {/* Summary if available */}
       {transcript.summary && (

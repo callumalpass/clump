@@ -140,7 +140,7 @@ class SchedulerService:
 
                     for session in orphaned:
                         session.status = SessionStatus.FAILED.value
-                        session.completed_at = datetime.utcnow()
+                        session.completed_at = datetime.now(timezone.utc)
                         total_cleaned += 1
 
                     if orphaned:
@@ -273,7 +273,7 @@ class SchedulerService:
                 logger.error(f"Job {job.id} execution failed: {e}")
 
             finally:
-                run.completed_at = datetime.utcnow()
+                run.completed_at = datetime.now(timezone.utc)
 
                 # Update job with next run time
                 job.last_run_at = run.started_at
@@ -428,7 +428,7 @@ class SchedulerService:
             title=title,
             repo_path=repo["local_path"],
             entities=entities,
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
             scheduled_job_id=job.id,  # Link session to the schedule that created it
         )
         save_session_metadata(encoded_path, session_id, metadata)
@@ -467,7 +467,7 @@ class SchedulerService:
                         SessionStatus.COMPLETED.value if result.success else SessionStatus.FAILED.value
                     )
                     db_session.transcript = result.result
-                    db_session.completed_at = datetime.utcnow()
+                    db_session.completed_at = datetime.now(timezone.utc)
                     await db.commit()
 
             if result.success:
@@ -485,7 +485,7 @@ class SchedulerService:
                 db_session = db_result.scalar_one_or_none()
                 if db_session:
                     db_session.status = SessionStatus.FAILED.value
-                    db_session.completed_at = datetime.utcnow()
+                    db_session.completed_at = datetime.now(timezone.utc)
                     await db.commit()
             logger.error(f"Session error for job {job.id}: {e}")
             return None

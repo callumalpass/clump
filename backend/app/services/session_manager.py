@@ -21,7 +21,7 @@ import signal
 import struct
 import termios
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable, TypedDict
 from uuid import uuid4
 
@@ -72,7 +72,7 @@ class Process:
     pid: int
     fd: int
     working_dir: str
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     session_id: int | None = None  # Links to Session (formerly Analysis) record
     transcript: str = ""
     subscribers: list[Callable[[bytes], None]] = field(default_factory=list)

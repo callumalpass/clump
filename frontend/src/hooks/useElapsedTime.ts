@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 
 /**
  * Parse a timestamp string, treating naive ISO strings (without timezone) as UTC.
- * Backend uses datetime.utcnow() which produces naive datetimes, serialized without 'Z'.
+ * Backend uses datetime.now(timezone.utc) which produces UTC-aware datetimes with '+00:00'.
+ * This function also handles legacy naive datetimes (without 'Z') as UTC for backwards compatibility.
  */
 function parseAsUtc(timestamp: string): Date {
   // If the string has no timezone indicator, assume UTC by appending 'Z'
