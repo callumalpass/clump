@@ -130,6 +130,7 @@ class SchedulerService:
         self._running = False
         self._task: asyncio.Task | None = None
         self._running_jobs: set[int] = set()  # Track currently executing job IDs
+        self._running_jobs_lock = asyncio.Lock()  # Protect access to _running_jobs
         self._check_interval = 60  # Check every 60 seconds
 
     async def start(self):
@@ -225,12 +226,12 @@ class SchedulerService:
             due_jobs = result.scalars().all()
 
             for job in due_jobs:
-                # Skip if already running
-                if job.id in self._running_jobs:
-                    continue
-
-                # Run job in background (don't await)
-                self._running_jobs.add(job.id)
+                # Skip if already running (check under lock)
+                async with self._running_jobs_lock:
+                    if job.id in self._running_jobs:
+                        continue
+                    # Run job in background (don't await)
+                    self._running_jobs.add(job.id)
                 asyncio.create_task(self._execute_job_safe(job.id, repo))
 
     async def _execute_job_safe(self, job_id: int, repo: dict):
@@ -240,7 +241,8 @@ class SchedulerService:
         except Exception as e:
             logger.error(f"Job {job_id} failed: {e}", exc_info=True)
         finally:
-            self._running_jobs.discard(job_id)
+            async with self._running_jobs_lock:
+                self._running_jobs.discard(job_id)
 
     async def _execute_job(self, job_id: int, repo: dict):
         """Execute a single scheduled job."""
@@ -535,9 +537,10 @@ class SchedulerService:
         Returns a tuple of (run_record, error_message).
         If the job is already running, returns (None, "already_running").
         """
-        # Check if already running before doing any DB work
-        if job_id in self._running_jobs:
-            return None, "already_running"
+        # Check if already running before doing any DB work (under lock)
+        async with self._running_jobs_lock:
+            if job_id in self._running_jobs:
+                return None, "already_running"
 
         repo = get_repo_by_id(repo_id)
         if not repo:
@@ -552,12 +555,13 @@ class SchedulerService:
             if not job:
                 return None, None
 
-            # Double-check after DB query (in case of race)
-            if job.id in self._running_jobs:
-                return None, "already_running"
+            # Check and add under lock to prevent race conditions
+            async with self._running_jobs_lock:
+                if job.id in self._running_jobs:
+                    return None, "already_running"
+                # Execute immediately in background
+                self._running_jobs.add(job.id)
 
-            # Execute immediately in background
-            self._running_jobs.add(job.id)
             asyncio.create_task(self._execute_job_safe(job.id, repo))
 
             # Return a pending run record

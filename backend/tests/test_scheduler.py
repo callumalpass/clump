@@ -745,3 +745,296 @@ class TestCalculateNextRun:
         # Should not raise exception even around DST transition times
         assert isinstance(next_run, datetime)
         assert next_run.tzinfo is None
+
+
+class TestSchedulerServiceInit:
+    """Tests for SchedulerService initialization."""
+
+    def test_init_creates_empty_running_jobs(self):
+        """Init creates an empty running jobs set."""
+        from app.services.scheduler import SchedulerService
+        scheduler = SchedulerService()
+        assert scheduler._running_jobs == set()
+
+    def test_init_creates_running_jobs_lock(self):
+        """Init creates an asyncio Lock for thread safety."""
+        import asyncio
+        from app.services.scheduler import SchedulerService
+        scheduler = SchedulerService()
+        assert isinstance(scheduler._running_jobs_lock, asyncio.Lock)
+
+    def test_init_sets_check_interval(self):
+        """Init sets default check interval to 60 seconds."""
+        from app.services.scheduler import SchedulerService
+        scheduler = SchedulerService()
+        assert scheduler._check_interval == 60
+
+    def test_init_not_running(self):
+        """Init sets running flag to False."""
+        from app.services.scheduler import SchedulerService
+        scheduler = SchedulerService()
+        assert scheduler._running is False
+        assert scheduler._task is None
+
+
+class TestSchedulerServiceRunningJobsLock:
+    """Tests for SchedulerService running jobs lock behavior."""
+
+    @pytest.fixture
+    def scheduler(self):
+        """Create a SchedulerService instance."""
+        from app.services.scheduler import SchedulerService
+        return SchedulerService()
+
+    @pytest.mark.asyncio
+    async def test_execute_job_safe_removes_job_under_lock(self, scheduler):
+        """_execute_job_safe removes job ID from _running_jobs under lock."""
+        # Add a job ID to the running jobs set
+        scheduler._running_jobs.add(123)
+
+        # Mock _execute_job to do nothing
+        async def mock_execute_job(job_id, repo):
+            pass
+
+        scheduler._execute_job = mock_execute_job
+
+        # Execute the safe wrapper
+        await scheduler._execute_job_safe(123, {"local_path": "/test"})
+
+        # Job should be removed from running jobs
+        assert 123 not in scheduler._running_jobs
+
+    @pytest.mark.asyncio
+    async def test_execute_job_safe_removes_job_on_exception(self, scheduler):
+        """_execute_job_safe removes job ID even when _execute_job raises."""
+        # Add a job ID to the running jobs set
+        scheduler._running_jobs.add(456)
+
+        # Mock _execute_job to raise an exception
+        async def mock_execute_job(job_id, repo):
+            raise RuntimeError("Job failed!")
+
+        scheduler._execute_job = mock_execute_job
+
+        # Execute the safe wrapper - should not raise
+        await scheduler._execute_job_safe(456, {"local_path": "/test"})
+
+        # Job should still be removed from running jobs
+        assert 456 not in scheduler._running_jobs
+
+    @pytest.mark.asyncio
+    async def test_concurrent_job_removal(self, scheduler):
+        """Multiple concurrent jobs can be removed without race conditions."""
+        import asyncio
+
+        # Add multiple job IDs
+        job_ids = list(range(100, 110))
+        for job_id in job_ids:
+            scheduler._running_jobs.add(job_id)
+
+        # Mock _execute_job to do nothing
+        async def mock_execute_job(job_id, repo):
+            await asyncio.sleep(0.01)  # Small delay to encourage interleaving
+
+        scheduler._execute_job = mock_execute_job
+
+        # Run all jobs concurrently
+        await asyncio.gather(*[
+            scheduler._execute_job_safe(job_id, {"local_path": "/test"})
+            for job_id in job_ids
+        ])
+
+        # All jobs should be removed
+        assert scheduler._running_jobs == set()
+
+
+class TestSchedulerServiceTriggerJob:
+    """Tests for SchedulerService.trigger_job method."""
+
+    @pytest.fixture
+    def scheduler(self):
+        """Create a SchedulerService instance."""
+        from app.services.scheduler import SchedulerService
+        return SchedulerService()
+
+    @pytest.mark.asyncio
+    async def test_trigger_job_returns_already_running(self, scheduler):
+        """trigger_job returns 'already_running' if job is in _running_jobs."""
+        # Add the job to running jobs
+        scheduler._running_jobs.add(42)
+
+        run, error = await scheduler.trigger_job(42, 1)
+
+        assert run is None
+        assert error == "already_running"
+
+    @pytest.mark.asyncio
+    async def test_trigger_job_returns_none_for_missing_repo(self, scheduler):
+        """trigger_job returns (None, None) if repo doesn't exist."""
+        with patch("app.services.scheduler.get_repo_by_id", return_value=None):
+            run, error = await scheduler.trigger_job(42, 999)
+
+        assert run is None
+        assert error is None
+
+    @pytest.mark.asyncio
+    async def test_trigger_job_returns_none_for_missing_job(self, scheduler):
+        """trigger_job returns (None, None) if job doesn't exist."""
+        mock_repo = {"id": 1, "local_path": "/test/path"}
+
+        with patch("app.services.scheduler.get_repo_by_id", return_value=mock_repo):
+            with patch("app.services.scheduler.get_repo_db") as mock_db_ctx:
+                # Create a mock async context manager
+                mock_db = AsyncMock()
+                mock_db.__aenter__ = AsyncMock(return_value=mock_db)
+                mock_db.__aexit__ = AsyncMock(return_value=None)
+                mock_db_ctx.return_value = mock_db
+
+                # Mock the database query to return None
+                mock_result = MagicMock()
+                mock_result.scalar_one_or_none.return_value = None
+                mock_db.execute = AsyncMock(return_value=mock_result)
+
+                run, error = await scheduler.trigger_job(42, 1)
+
+        assert run is None
+        assert error is None
+
+    @pytest.mark.asyncio
+    async def test_trigger_job_adds_job_to_running_under_lock(self, scheduler):
+        """trigger_job adds job ID to _running_jobs under lock."""
+        mock_repo = {"id": 1, "local_path": "/test/path"}
+        mock_job = MagicMock()
+        mock_job.id = 42
+        mock_job.repo_id = 1
+
+        with patch("app.services.scheduler.get_repo_by_id", return_value=mock_repo):
+            with patch("app.services.scheduler.get_repo_db") as mock_db_ctx:
+                mock_db = AsyncMock()
+                mock_db.__aenter__ = AsyncMock(return_value=mock_db)
+                mock_db.__aexit__ = AsyncMock(return_value=None)
+                mock_db_ctx.return_value = mock_db
+
+                mock_result = MagicMock()
+                mock_result.scalar_one_or_none.return_value = mock_job
+                mock_db.execute = AsyncMock(return_value=mock_result)
+
+                # Mock _execute_job_safe so it doesn't actually run
+                scheduler._execute_job_safe = AsyncMock()
+
+                run, error = await scheduler.trigger_job(42, 1)
+
+        # Job should be in running jobs
+        assert 42 in scheduler._running_jobs
+        assert error is None
+        assert run is not None
+
+    @pytest.mark.asyncio
+    async def test_trigger_job_concurrent_calls_only_one_runs(self, scheduler):
+        """Concurrent trigger_job calls for same job only run once."""
+        import asyncio
+
+        mock_repo = {"id": 1, "local_path": "/test/path"}
+        mock_job = MagicMock()
+        mock_job.id = 42
+        mock_job.repo_id = 1
+
+        trigger_count = 0
+
+        async def mock_execute_job_safe(job_id, repo):
+            nonlocal trigger_count
+            trigger_count += 1
+            await asyncio.sleep(0.1)  # Simulate job execution
+
+        scheduler._execute_job_safe = mock_execute_job_safe
+
+        with patch("app.services.scheduler.get_repo_by_id", return_value=mock_repo):
+            with patch("app.services.scheduler.get_repo_db") as mock_db_ctx:
+                mock_db = AsyncMock()
+                mock_db.__aenter__ = AsyncMock(return_value=mock_db)
+                mock_db.__aexit__ = AsyncMock(return_value=None)
+                mock_db_ctx.return_value = mock_db
+
+                mock_result = MagicMock()
+                mock_result.scalar_one_or_none.return_value = mock_job
+                mock_db.execute = AsyncMock(return_value=mock_result)
+
+                # Trigger the same job multiple times concurrently
+                results = await asyncio.gather(
+                    scheduler.trigger_job(42, 1),
+                    scheduler.trigger_job(42, 1),
+                    scheduler.trigger_job(42, 1),
+                )
+
+        # Only one should have been triggered successfully
+        successful_runs = [r for r, e in results if r is not None]
+        already_running = [e for r, e in results if e == "already_running"]
+
+        assert len(successful_runs) == 1
+        assert len(already_running) == 2
+
+
+class TestSchedulerServiceCheckRepoJobs:
+    """Tests for SchedulerService._check_repo_jobs method."""
+
+    @pytest.fixture
+    def scheduler(self):
+        """Create a SchedulerService instance."""
+        from app.services.scheduler import SchedulerService
+        return SchedulerService()
+
+    @pytest.mark.asyncio
+    async def test_check_repo_jobs_skips_running_jobs(self, scheduler):
+        """_check_repo_jobs skips jobs that are already running."""
+        # Add job 42 to running jobs
+        scheduler._running_jobs.add(42)
+
+        mock_job = MagicMock()
+        mock_job.id = 42
+
+        mock_repo = {"id": 1, "local_path": "/test/path"}
+        now = datetime.now()
+
+        with patch("app.services.scheduler.get_repo_db") as mock_db_ctx:
+            mock_db = AsyncMock()
+            mock_db.__aenter__ = AsyncMock(return_value=mock_db)
+            mock_db.__aexit__ = AsyncMock(return_value=None)
+            mock_db_ctx.return_value = mock_db
+
+            mock_result = MagicMock()
+            mock_result.scalars.return_value.all.return_value = [mock_job]
+            mock_db.execute = AsyncMock(return_value=mock_result)
+
+            # Mock _execute_job_safe to track if it's called
+            scheduler._execute_job_safe = AsyncMock()
+
+            await scheduler._check_repo_jobs(mock_repo, now)
+
+        # Should not have tried to execute the running job
+        scheduler._execute_job_safe.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_check_repo_jobs_adds_job_to_running_under_lock(self, scheduler):
+        """_check_repo_jobs adds job ID to _running_jobs under lock."""
+        mock_job = MagicMock()
+        mock_job.id = 99
+
+        mock_repo = {"id": 1, "local_path": "/test/path"}
+        now = datetime.now()
+
+        with patch("app.services.scheduler.get_repo_db") as mock_db_ctx:
+            mock_db = AsyncMock()
+            mock_db.__aenter__ = AsyncMock(return_value=mock_db)
+            mock_db.__aexit__ = AsyncMock(return_value=None)
+            mock_db_ctx.return_value = mock_db
+
+            mock_result = MagicMock()
+            mock_result.scalars.return_value.all.return_value = [mock_job]
+            mock_db.execute = AsyncMock(return_value=mock_result)
+
+            scheduler._execute_job_safe = AsyncMock()
+
+            await scheduler._check_repo_jobs(mock_repo, now)
+
+        # Job should be in running jobs
+        assert 99 in scheduler._running_jobs
