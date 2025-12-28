@@ -15,10 +15,16 @@ describe('getModelDisplayName', () => {
     expect(getModelDisplayName('')).toBe('Unknown');
   });
 
-  it('returns "Opus 4.5" for models containing "opus"', () => {
+  it('returns "Opus 4.5" for models containing "opus-4-5" or "opus-4.5"', () => {
     expect(getModelDisplayName('claude-opus-4-5-20251101')).toBe('Opus 4.5');
-    expect(getModelDisplayName('opus')).toBe('Opus 4.5');
-    expect(getModelDisplayName('claude-3-opus')).toBe('Opus 4.5');
+    expect(getModelDisplayName('opus-4.5')).toBe('Opus 4.5');
+    expect(getModelDisplayName('opus-4-5')).toBe('Opus 4.5');
+  });
+
+  it('returns "Opus 4" for other opus models', () => {
+    expect(getModelDisplayName('claude-opus-4-20250514')).toBe('Opus 4');
+    expect(getModelDisplayName('opus')).toBe('Opus 4');
+    expect(getModelDisplayName('claude-3-opus')).toBe('Opus 4');
   });
 
   it('returns "Sonnet" for models containing "sonnet"', () => {

@@ -6,10 +6,13 @@
 /**
  * Get the full human-readable model name for display in detail views.
  * @example getModelDisplayName('claude-opus-4-5-20251101') // 'Opus 4.5'
+ * @example getModelDisplayName('claude-opus-4-20250514') // 'Opus 4'
  */
 export function getModelDisplayName(model?: string): string {
   if (!model) return 'Unknown';
-  if (model.includes('opus')) return 'Opus 4.5';
+  // Check for specific Opus versions (4.5 vs 4)
+  if (model.includes('opus-4-5') || model.includes('opus-4.5')) return 'Opus 4.5';
+  if (model.includes('opus')) return 'Opus 4';
   if (model.includes('sonnet')) return 'Sonnet';
   if (model.includes('haiku')) return 'Haiku';
   // Fallback: extract last segment from model ID

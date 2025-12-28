@@ -148,7 +148,8 @@ describe('ConversationView', () => {
     it('displays model name', () => {
       render(<ConversationView {...defaultProps} />);
 
-      expect(screen.getByText('Opus 4.5')).toBeInTheDocument();
+      // Default mock uses claude-3-opus which shows as "Opus 4"
+      expect(screen.getByText('Opus 4')).toBeInTheDocument();
     });
 
     it('displays token counts', () => {
@@ -662,10 +663,16 @@ describe('Helper Functions', () => {
   });
 
   describe('getModelName', () => {
-    it('shows Opus 4.5 for opus models', () => {
-      const transcript = createMockTranscript({ model: 'claude-3-opus-20240229' });
+    it('shows Opus 4.5 for opus-4-5 models', () => {
+      const transcript = createMockTranscript({ model: 'claude-opus-4-5-20251101' });
       render(<ConversationView transcript={transcript} />);
       expect(screen.getByText('Opus 4.5')).toBeInTheDocument();
+    });
+
+    it('shows Opus 4 for other opus models', () => {
+      const transcript = createMockTranscript({ model: 'claude-3-opus-20240229' });
+      render(<ConversationView transcript={transcript} />);
+      expect(screen.getByText('Opus 4')).toBeInTheDocument();
     });
 
     it('shows Sonnet for sonnet models', () => {
