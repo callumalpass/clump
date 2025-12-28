@@ -1865,10 +1865,15 @@ export default function App() {
                       needsAttention={needsAttention}
                     />
                   ) : (
-                    <div className="h-full flex items-center justify-center">
-                      <div className="text-center text-gray-400">
-                        <p className="text-sm">Select a session above</p>
-                        <p className="text-xs mt-1">or select an issue/PR from the sidebar</p>
+                    <div className="h-full flex items-center justify-center p-8">
+                      <div className="text-center p-6 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-xs empty-state-enter">
+                        <div className="w-12 h-12 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4 empty-state-icon-float">
+                          <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                          </svg>
+                        </div>
+                        <p className="text-gray-300 font-medium mb-1">Select a session</p>
+                        <p className="text-gray-400 text-sm">Click a tab above to view the conversation</p>
                       </div>
                     </div>
                   )}
