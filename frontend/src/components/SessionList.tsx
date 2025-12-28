@@ -215,7 +215,7 @@ const SessionListItem = memo(function SessionListItem({
   );
 });
 
-export type SessionFilter = 'all' | 'active' | 'starred' | 'with-entities';
+export type SessionFilter = 'all' | 'active' | 'completed' | 'starred' | 'with-entities';
 export type ModelFilter = 'all' | 'sonnet' | 'opus' | 'haiku';
 export type DateRangePreset = 'all' | 'today' | 'yesterday' | 'week' | 'month';
 
@@ -249,6 +249,7 @@ interface SessionListProps {
 const CATEGORY_FILTERS: { value: SessionFilter; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'active', label: 'Active' },
+  { value: 'completed', label: 'Completed' },
   { value: 'starred', label: 'Starred' },
   { value: 'with-entities', label: 'Linked' },
 ];

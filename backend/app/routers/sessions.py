@@ -612,6 +612,7 @@ async def list_sessions(
     repo_path: Optional[str] = None,
     starred: Optional[bool] = None,
     has_entities: Optional[bool] = None,
+    is_active: Optional[bool] = None,
     search: Optional[str] = None,
     model: Optional[ModelFilter] = None,
     date_from: Optional[str] = None,
@@ -628,7 +629,9 @@ async def list_sessions(
     Also includes "pending" sessions from active processes that don't have
     transcript files yet (Claude is still starting up).
 
-    Optional filtering by repo path, starred status, search term, or date range.
+    Optional filtering by repo path, starred status, active status, search term,
+    or date range. Use is_active=true for running sessions, is_active=false for
+    completed sessions.
     Date range filters (date_from, date_to) use ISO 8601 format (YYYY-MM-DD).
 
     Uses caching to avoid redundant filesystem scans when polling frequently.
@@ -671,6 +674,9 @@ async def list_sessions(
             summaries = [s for s in summaries if len(s.entities) > 0]
         else:
             summaries = [s for s in summaries if len(s.entities) == 0]
+
+    if is_active is not None:
+        summaries = [s for s in summaries if s.is_active == is_active]
 
     if model:
         # Filter by model name (sonnet, opus, haiku)

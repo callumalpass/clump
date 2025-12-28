@@ -202,7 +202,8 @@ export default function App() {
     search: sessionListFilters.search || undefined,
     starred: sessionListFilters.category === 'starred' ? true : undefined,
     hasEntities: sessionListFilters.category === 'with-entities' ? true : undefined,
-    isActive: sessionListFilters.category === 'active' ? true : undefined,
+    isActive: sessionListFilters.category === 'active' ? true :
+              sessionListFilters.category === 'completed' ? false : undefined,
     model: sessionListFilters.model,
     sort: sessionListFilters.sort,
     order: sessionListFilters.order,
