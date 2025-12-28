@@ -79,6 +79,29 @@ class QuickScanResult(TypedDict):
     message_count: int
 
 
+def _parse_datetime_naive(timestamp: str) -> Optional[datetime]:
+    """
+    Parse an ISO timestamp string to a naive datetime (no timezone).
+
+    Handles:
+    - UTC "Z" suffix: "2025-01-01T10:00:00Z"
+    - Positive offsets: "2025-01-01T10:00:00+05:00"
+    - Negative offsets: "2025-01-01T10:00:00-05:00"
+    - No timezone: "2025-01-01T10:00:00"
+
+    Returns a naive datetime (tzinfo=None) for simple comparisons,
+    or None if parsing fails.
+    """
+    try:
+        # Normalize "Z" suffix to "+00:00" for fromisoformat
+        normalized = timestamp.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(normalized)
+        # Remove timezone info for naive comparison
+        return dt.replace(tzinfo=None)
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
 def _calculate_duration_seconds(start_time: Optional[str], end_time: Optional[str]) -> Optional[int]:
     """
     Calculate session duration in seconds from start and end timestamps.
@@ -670,7 +693,7 @@ async def list_sessions(
             from_date = from_date.replace(hour=0, minute=0, second=0, microsecond=0)
             summaries = [
                 s for s in summaries
-                if s.modified_at and datetime.fromisoformat(s.modified_at.replace("Z", "+00:00").split("+")[0]) >= from_date
+                if s.modified_at and _parse_datetime_naive(s.modified_at) >= from_date
             ]
         except ValueError:
             pass  # Invalid date format - skip filter
@@ -682,7 +705,7 @@ async def list_sessions(
             to_date = to_date.replace(hour=23, minute=59, second=59, microsecond=999999)
             summaries = [
                 s for s in summaries
-                if s.modified_at and datetime.fromisoformat(s.modified_at.replace("Z", "+00:00").split("+")[0]) <= to_date
+                if s.modified_at and _parse_datetime_naive(s.modified_at) <= to_date
             ]
         except ValueError:
             pass  # Invalid date format - skip filter

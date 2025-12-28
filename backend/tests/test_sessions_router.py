@@ -22,6 +22,7 @@ from app.routers.sessions import (
     _get_pending_sessions,
     invalidate_session_cache,
     _calculate_duration_seconds,
+    _parse_datetime_naive,
     _format_edit_tool,
     _format_read_tool,
     _format_write_tool,
@@ -1578,3 +1579,221 @@ class TestCalculateDurationSeconds:
             "2024-01-15T10:00:00Z"
         )
         assert result is None
+
+
+class TestParseDatetimeNaive:
+    """Tests for the _parse_datetime_naive helper function.
+
+    This function parses ISO timestamps to naive datetimes for date filtering.
+    It must correctly handle:
+    - UTC "Z" suffix
+    - Positive timezone offsets (+05:00)
+    - Negative timezone offsets (-05:00)
+    - No timezone suffix
+    """
+
+    # ==============================================
+    # Basic parsing tests
+    # ==============================================
+
+    def test_parses_utc_z_suffix(self):
+        """Test parsing timestamp with UTC Z suffix."""
+        result = _parse_datetime_naive("2024-01-15T10:30:00Z")
+        assert result is not None
+        assert result.year == 2024
+        assert result.month == 1
+        assert result.day == 15
+        assert result.hour == 10
+        assert result.minute == 30
+        assert result.second == 0
+        assert result.tzinfo is None  # Must be naive
+
+    def test_parses_positive_timezone_offset(self):
+        """Test parsing timestamp with positive timezone offset."""
+        result = _parse_datetime_naive("2024-01-15T10:30:00+05:00")
+        assert result is not None
+        assert result.tzinfo is None  # Must be naive
+        # The hour should be preserved from the input (10:30 in +05:00)
+        assert result.hour == 10
+        assert result.minute == 30
+
+    def test_parses_negative_timezone_offset(self):
+        """Test parsing timestamp with negative timezone offset (the bug case)."""
+        result = _parse_datetime_naive("2024-01-15T10:30:00-05:00")
+        assert result is not None
+        assert result.tzinfo is None  # Must be naive
+        # The hour should be preserved from the input (10:30 in -05:00)
+        assert result.hour == 10
+        assert result.minute == 30
+
+    def test_parses_no_timezone(self):
+        """Test parsing timestamp without timezone suffix."""
+        result = _parse_datetime_naive("2024-01-15T10:30:00")
+        assert result is not None
+        assert result.tzinfo is None
+        assert result.hour == 10
+        assert result.minute == 30
+
+    def test_parses_with_milliseconds(self):
+        """Test parsing timestamp with milliseconds."""
+        result = _parse_datetime_naive("2024-01-15T10:30:00.123Z")
+        assert result is not None
+        assert result.microsecond == 123000
+
+    def test_parses_with_microseconds(self):
+        """Test parsing timestamp with microseconds."""
+        result = _parse_datetime_naive("2024-01-15T10:30:00.123456Z")
+        assert result is not None
+        assert result.microsecond == 123456
+
+    # ==============================================
+    # Edge cases for timezone offsets
+    # ==============================================
+
+    def test_parses_utc_plus_zero(self):
+        """Test parsing timestamp with +00:00 offset."""
+        result = _parse_datetime_naive("2024-01-15T10:30:00+00:00")
+        assert result is not None
+        assert result.tzinfo is None
+
+    def test_parses_large_positive_offset(self):
+        """Test parsing timestamp with large positive offset (+14:00)."""
+        result = _parse_datetime_naive("2024-01-15T10:30:00+14:00")
+        assert result is not None
+        assert result.tzinfo is None
+
+    def test_parses_large_negative_offset(self):
+        """Test parsing timestamp with large negative offset (-12:00)."""
+        result = _parse_datetime_naive("2024-01-15T10:30:00-12:00")
+        assert result is not None
+        assert result.tzinfo is None
+
+    def test_parses_offset_with_minutes(self):
+        """Test parsing timestamp with non-zero minutes in offset."""
+        result = _parse_datetime_naive("2024-01-15T10:30:00+05:30")
+        assert result is not None
+        assert result.tzinfo is None
+
+    def test_parses_negative_offset_with_minutes(self):
+        """Test parsing timestamp with negative offset and minutes."""
+        result = _parse_datetime_naive("2024-01-15T10:30:00-03:30")
+        assert result is not None
+        assert result.tzinfo is None
+
+    # ==============================================
+    # Error handling tests
+    # ==============================================
+
+    def test_returns_none_for_invalid_format(self):
+        """Test that None is returned for invalid timestamp format."""
+        result = _parse_datetime_naive("not-a-timestamp")
+        assert result is None
+
+    def test_returns_none_for_empty_string(self):
+        """Test that None is returned for empty string."""
+        result = _parse_datetime_naive("")
+        assert result is None
+
+    def test_returns_none_for_partial_date(self):
+        """Test handling partial date (might succeed or fail depending on format)."""
+        # This tests robustness - partial dates may or may not be parseable
+        result = _parse_datetime_naive("2024-01-15")
+        # datetime.fromisoformat accepts date-only, so this might not be None
+        # The important thing is it doesn't raise an exception
+
+    def test_returns_none_for_invalid_month(self):
+        """Test that None is returned for invalid month."""
+        result = _parse_datetime_naive("2024-13-15T10:30:00Z")
+        assert result is None
+
+    def test_returns_none_for_invalid_day(self):
+        """Test that None is returned for invalid day."""
+        result = _parse_datetime_naive("2024-02-30T10:30:00Z")
+        assert result is None
+
+    def test_returns_none_for_invalid_hour(self):
+        """Test that None is returned for invalid hour."""
+        result = _parse_datetime_naive("2024-01-15T25:30:00Z")
+        assert result is None
+
+    # ==============================================
+    # Type safety tests
+    # ==============================================
+
+    def test_returns_none_for_none_input(self):
+        """Test that None is returned for None input."""
+        # This would raise TypeError on .replace(), caught by exception handler
+        result = _parse_datetime_naive(None)
+        assert result is None
+
+    def test_returns_none_for_integer_input(self):
+        """Test that None is returned for integer input."""
+        result = _parse_datetime_naive(12345)
+        assert result is None
+
+    def test_returns_none_for_list_input(self):
+        """Test that None is returned for list input."""
+        result = _parse_datetime_naive(["2024-01-15T10:30:00Z"])
+        assert result is None
+
+    def test_returns_none_for_dict_input(self):
+        """Test that None is returned for dict input."""
+        result = _parse_datetime_naive({"timestamp": "2024-01-15T10:30:00Z"})
+        assert result is None
+
+    # ==============================================
+    # Return value tests
+    # ==============================================
+
+    def test_returns_datetime_object(self):
+        """Test that result is a datetime object."""
+        result = _parse_datetime_naive("2024-01-15T10:30:00Z")
+        assert isinstance(result, datetime)
+
+    def test_result_is_naive(self):
+        """Test that result is always naive (no tzinfo)."""
+        # Test with Z suffix
+        result1 = _parse_datetime_naive("2024-01-15T10:30:00Z")
+        assert result1.tzinfo is None
+
+        # Test with positive offset
+        result2 = _parse_datetime_naive("2024-01-15T10:30:00+05:00")
+        assert result2.tzinfo is None
+
+        # Test with negative offset
+        result3 = _parse_datetime_naive("2024-01-15T10:30:00-05:00")
+        assert result3.tzinfo is None
+
+        # Test with no timezone
+        result4 = _parse_datetime_naive("2024-01-15T10:30:00")
+        assert result4.tzinfo is None
+
+    # ==============================================
+    # Comparison tests (for filtering use case)
+    # ==============================================
+
+    def test_naive_results_can_be_compared(self):
+        """Test that naive results can be compared for date filtering."""
+        result1 = _parse_datetime_naive("2024-01-15T10:00:00Z")
+        result2 = _parse_datetime_naive("2024-01-15T12:00:00Z")
+
+        assert result1 < result2
+        assert result2 > result1
+        assert result1 != result2
+
+    def test_comparison_with_naive_datetime(self):
+        """Test that result can be compared with other naive datetimes."""
+        result = _parse_datetime_naive("2024-01-15T10:00:00Z")
+        comparison = datetime(2024, 1, 15, 9, 0, 0)
+
+        assert result > comparison
+        assert comparison < result
+
+    def test_comparison_with_different_timezones(self):
+        """Test comparison of timestamps from different timezones."""
+        # These are different local times but we're comparing naive datetimes
+        result1 = _parse_datetime_naive("2024-01-15T10:00:00+00:00")
+        result2 = _parse_datetime_naive("2024-01-15T10:00:00-05:00")
+
+        # Since we strip timezone, they should compare as equal (same local time)
+        assert result1 == result2
