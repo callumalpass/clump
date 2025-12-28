@@ -282,10 +282,10 @@ export function CommandPalette({ isOpen, onClose, commands }: CommandPaletteProp
                   data-index={item.index}
                   onClick={() => handleItemClick(cmd)}
                   onMouseEnter={() => setSelectedIndex(item.index!)}
-                  className={`w-full flex items-center gap-3 px-4 py-2 text-left transition-colors ${
+                  className={`w-full flex items-center gap-3 px-4 py-2 text-left transition-all duration-150 border-l-2 ${
                     isSelected
-                      ? 'bg-blue-600/20 text-white'
-                      : 'text-gray-300 hover:bg-gray-800'
+                      ? 'bg-blue-600/20 text-white border-blue-500 pl-[14px]'
+                      : 'text-gray-300 hover:bg-gray-800 border-transparent'
                   }`}
                 >
                   {/* Icon */}
