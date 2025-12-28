@@ -358,33 +358,47 @@ export function SessionView({
     return () => document.removeEventListener('click', handleClick);
   }, [showActionsMenu]);
 
-  // Fetch session detail on mount and when session changes
-  // No polling needed - real-time updates come via terminal WebSocket for active sessions
-  // Session completion events will trigger parent to refresh session list
+  // Fetch session detail on mount, with polling for active sessions
+  // Active sessions need polling to pick up new transcript messages
+  // Completed sessions don't need polling - they're static
   useEffect(() => {
     let isMounted = true;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
 
-    setLoading(true);
-    setError(null);
+    const fetchDetail = (isInitial = false) => {
+      if (isInitial) {
+        setLoading(true);
+        setError(null);
+      }
 
-    fetchSessionDetail(session.session_id)
-      .then((data) => {
-        if (isMounted) {
-          setDetail(data);
-          setLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (isMounted) {
-          setError(err.message || 'Failed to load session');
-          setLoading(false);
-        }
-      });
+      fetchSessionDetail(session.session_id)
+        .then((data) => {
+          if (isMounted) {
+            setDetail(data);
+            if (isInitial) setLoading(false);
+          }
+        })
+        .catch((err) => {
+          if (isMounted && isInitial) {
+            setError(err.message || 'Failed to load session');
+            setLoading(false);
+          }
+        });
+    };
+
+    // Initial fetch
+    fetchDetail(true);
+
+    // Poll for transcript updates only if session is active
+    if (isActiveProcess) {
+      pollInterval = setInterval(() => fetchDetail(false), 2000);
+    }
 
     return () => {
       isMounted = false;
+      if (pollInterval) clearInterval(pollInterval);
     };
-  }, [session.session_id]);
+  }, [session.session_id, isActiveProcess]);
 
   // Reset search when session changes
   useEffect(() => {
