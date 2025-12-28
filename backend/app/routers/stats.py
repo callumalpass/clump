@@ -7,7 +7,6 @@ Provides aggregate usage data, daily activity, and cost estimates.
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -119,13 +118,13 @@ class StatsResponse(BaseModel):
     last_computed_date: str
     total_sessions: int
     total_messages: int
-    first_session_date: Optional[str] = None
-    longest_session_minutes: Optional[int] = None
+    first_session_date: str | None = None
+    longest_session_minutes: int | None = None
     daily_activity: list[DailyActivity]
     daily_model_tokens: list[DailyModelTokens]
     model_usage: list[ModelUsage]
     hourly_distribution: list[HourlyDistribution]
-    today_stats: Optional[DailyActivity] = None
+    today_stats: DailyActivity | None = None
     week_stats: DailyActivity
     total_estimated_cost_usd: float
 
