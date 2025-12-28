@@ -69,7 +69,19 @@ export interface PR {
   additions: number;
   deletions: number;
   changed_files: number;
+  comments_count: number;
   url: string;
+}
+
+export interface PRComment {
+  id: number;
+  author: string;
+  body: string;
+  created_at: string;
+}
+
+export interface PRDetail extends PR {
+  comments: PRComment[];
 }
 
 export interface Process {
@@ -295,4 +307,78 @@ export interface CommandCreate {
 export interface CommandsResponse {
   issue: CommandMetadata[];
   pr: CommandMetadata[];
+}
+
+// Scheduled Jobs
+export type ScheduledJobStatus = 'active' | 'paused' | 'disabled';
+export type ScheduledJobTargetType = 'issues' | 'prs' | 'codebase' | 'custom';
+
+export interface ScheduledJob {
+  id: number;
+  name: string;
+  description: string | null;
+  status: ScheduledJobStatus;
+  cron_expression: string;
+  timezone: string;
+  target_type: ScheduledJobTargetType;
+  filter_query: string | null;
+  command_id: string | null;
+  custom_prompt: string | null;
+  max_items: number;
+  permission_mode: string | null;
+  allowed_tools: string[] | null;
+  max_turns: number | null;
+  model: string | null;
+  next_run_at: string | null;
+  last_run_at: string | null;
+  last_run_status: string | null;
+  run_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduledJobRun {
+  id: number;
+  job_id: number;
+  status: string;
+  started_at: string;
+  completed_at: string | null;
+  items_found: number;
+  items_processed: number;
+  items_skipped: number;
+  items_failed: number;
+  error_message: string | null;
+  session_ids: string[] | null;
+}
+
+export interface ScheduledJobCreate {
+  name: string;
+  description?: string;
+  cron_expression: string;
+  timezone?: string;
+  target_type: ScheduledJobTargetType;
+  filter_query?: string;
+  command_id?: string;
+  custom_prompt?: string;
+  max_items?: number;
+  permission_mode?: string;
+  allowed_tools?: string[];
+  max_turns?: number;
+  model?: string;
+}
+
+export interface ScheduledJobUpdate {
+  name?: string;
+  description?: string;
+  cron_expression?: string;
+  timezone?: string;
+  target_type?: ScheduledJobTargetType;
+  filter_query?: string;
+  command_id?: string;
+  custom_prompt?: string;
+  max_items?: number;
+  permission_mode?: string;
+  allowed_tools?: string[];
+  max_turns?: number;
+  model?: string;
 }

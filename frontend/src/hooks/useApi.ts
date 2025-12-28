@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type {
-  Repo, Issue, IssueDetail, PR, Process,
+  Repo, Issue, IssueDetail, PR, PRDetail, Process,
   SessionSummary, SessionDetail, SessionListResponse, EntityLink,
   ClaudeCodeSettings, ProcessCreateOptions, Tag, IssueTagsMap, GitHubLabel,
   CommandsResponse, CommandMetadata, SubsessionDetail,
@@ -174,6 +174,9 @@ export async function fetchIssue(repoId: number, issueNumber: number): Promise<I
 }
 
 // PRs
+export async function fetchPR(repoId: number, prNumber: number): Promise<PRDetail> {
+  return fetchJson<PRDetail>(`${API_BASE}/repos/${repoId}/prs/${prNumber}`);
+}
 export interface PRFilters {
   state?: 'open' | 'closed' | 'all';
   search?: string;

@@ -1071,9 +1071,10 @@ export default function App() {
                             onCreateTag={createTag}
                           />
                         )}
-                        {showPRSideBySide && activePR && (
+                        {showPRSideBySide && activePR && selectedRepo && (
                           <PRDetail
-                            pr={activePR}
+                            repoId={selectedRepo.id}
+                            prNumber={activePR.number}
                             prCommands={commands.pr}
                             onStartSession={(command) => handleStartPRSession(activePR, command)}
                             sessions={sessions}
@@ -1203,7 +1204,8 @@ export default function App() {
             {selectedPRData && selectedRepo && !showSideBySide && (
               <div className="flex-1 border-r border-gray-700 overflow-auto">
                 <PRDetail
-                  pr={selectedPRData}
+                  repoId={selectedRepo.id}
+                  prNumber={selectedPRData.number}
                   prCommands={commands.pr}
                   onStartSession={(command) => handleStartPRSession(selectedPRData, command)}
                   sessions={sessions}

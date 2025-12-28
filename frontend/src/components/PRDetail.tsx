@@ -1,10 +1,12 @@
-import { useState } from 'react';
-import type { PR, SessionSummary, Process, CommandMetadata } from '../types';
+import { useState, useEffect } from 'react';
+import type { PRDetail as PRDetailType, SessionSummary, Process, CommandMetadata } from '../types';
+import { fetchPR } from '../hooks/useApi';
 import { Markdown } from './Markdown';
 import { PRStartSessionButton } from './PRStartSessionButton';
 
 interface PRDetailProps {
-  pr: PR;
+  repoId: number;
+  prNumber: number;
   prCommands: CommandMetadata[];
   onStartSession: (command: CommandMetadata) => void;
   sessions?: SessionSummary[];
@@ -14,7 +16,8 @@ interface PRDetailProps {
 }
 
 export function PRDetail({
-  pr,
+  repoId,
+  prNumber,
   prCommands,
   onStartSession,
   sessions = [],
@@ -22,12 +25,69 @@ export function PRDetail({
   onSelectSession,
   onContinueSession,
 }: PRDetailProps) {
+  const [pr, setPR] = useState<PRDetailType | null>(null);
+  const [loading, setLoading] = useState(true);
   const [continuingSessionId, setContinuingSessionId] = useState<string | null>(null);
+
+  const loadPR = () => {
+    setLoading(true);
+    fetchPR(repoId, prNumber)
+      .then(setPR)
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadPR();
+  }, [repoId, prNumber]);
 
   // Filter sessions that have this PR linked
   const prSessions = sessions.filter(
-    s => s.entities?.some(e => e.kind === 'pr' && e.number === pr.number)
+    s => s.entities?.some(e => e.kind === 'pr' && e.number === prNumber)
   ).sort((a, b) => new Date(b.modified_at).getTime() - new Date(a.modified_at).getTime());
+
+  if (loading) {
+    return (
+      <div className="p-4">
+        {/* Title skeleton */}
+        <div className="mb-4">
+          <div className="h-6 w-3/4 rounded mb-3 skeleton-shimmer" />
+          <div className="flex items-center gap-2">
+            <div className="h-5 w-14 rounded-full skeleton-shimmer" />
+            <div className="h-5 w-20 rounded-full skeleton-shimmer" />
+            <div className="h-4 w-32 rounded skeleton-shimmer" />
+          </div>
+        </div>
+        {/* Branch info skeleton */}
+        <div className="flex items-center gap-2 mb-4">
+          <div className="h-6 w-24 rounded skeleton-shimmer" />
+          <div className="h-4 w-4 rounded skeleton-shimmer" />
+          <div className="h-6 w-20 rounded skeleton-shimmer" />
+        </div>
+        {/* Body skeleton */}
+        <div className="bg-gray-800 rounded-lg p-4 mb-6">
+          <div className="h-4 w-full rounded mb-2 skeleton-shimmer" />
+          <div className="h-4 w-5/6 rounded mb-2 skeleton-shimmer" />
+          <div className="h-4 w-4/6 rounded mb-2 skeleton-shimmer" />
+          <div className="h-4 w-3/4 rounded skeleton-shimmer" />
+        </div>
+        {/* Comments skeleton */}
+        <div className="h-5 w-32 rounded mb-3 skeleton-shimmer" />
+        <div className="space-y-3">
+          {[1, 2].map((i) => (
+            <div key={i} className="bg-gray-800 rounded-lg p-4">
+              <div className="h-3 w-40 rounded mb-2 skeleton-shimmer" />
+              <div className="h-4 w-full rounded mb-1 skeleton-shimmer" />
+              <div className="h-4 w-2/3 rounded skeleton-shimmer" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!pr) {
+    return <div className="p-4 text-gray-400">Pull request not found</div>;
+  }
 
   return (
     <div className="p-4 overflow-auto h-full">
@@ -191,6 +251,28 @@ export function PRDetail({
           </div>
         </div>
       )}
+
+      {/* Comments */}
+      <div className="mb-6">
+        <h3 className="text-lg font-medium text-white mb-3">
+          Comments ({pr.comments.length})
+        </h3>
+
+        {pr.comments.length > 0 ? (
+          <div className="space-y-3">
+            {pr.comments.map((comment) => (
+              <div key={comment.id} className="bg-gray-800 rounded-lg p-4">
+                <div className="text-sm text-gray-400 mb-2">
+                  <span className="text-gray-300">{comment.author}</span> · {new Date(comment.created_at).toLocaleDateString()}
+                </div>
+                <Markdown>{comment.body}</Markdown>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-gray-500">No comments yet.</p>
+        )}
+      </div>
     </div>
   );
 }

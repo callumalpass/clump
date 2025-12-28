@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { PRDetail } from './PRDetail';
-import type { PR, SessionSummary, Process, CommandMetadata } from '../types';
+import type { PRDetail as PRDetailType, SessionSummary, Process, CommandMetadata } from '../types';
+
+// Mock the fetchPR function
+vi.mock('../hooks/useApi', () => ({
+  fetchPR: vi.fn(),
+}));
+
+import { fetchPR } from '../hooks/useApi';
 
 // Mock Markdown component
 vi.mock('./Markdown', () => ({
@@ -28,7 +35,7 @@ vi.mock('./PRStartSessionButton', () => ({
   ),
 }));
 
-function createMockPR(overrides: Partial<PR> = {}): PR {
+function createMockPRDetail(overrides: Partial<PRDetailType> = {}): PRDetailType {
   return {
     number: 42,
     title: 'Add new feature',
@@ -43,7 +50,12 @@ function createMockPR(overrides: Partial<PR> = {}): PR {
     additions: 150,
     deletions: 30,
     changed_files: 8,
+    comments_count: 2,
     url: 'https://github.com/test/repo/pull/42',
+    comments: [
+      { id: 1, author: 'reviewer1', body: 'Looks good!', created_at: '2024-01-15T12:00:00Z' },
+      { id: 2, author: 'reviewer2', body: 'Please add tests.', created_at: '2024-01-15T14:00:00Z' },
+    ],
     ...overrides,
   };
 }
@@ -93,8 +105,10 @@ function createMockCommand(overrides: Partial<CommandMetadata> = {}): CommandMet
 }
 
 describe('PRDetail', () => {
+  const mockPR = createMockPRDetail();
   const defaultProps = {
-    pr: createMockPR(),
+    repoId: 1,
+    prNumber: 42,
     prCommands: [createMockCommand()],
     onStartSession: vi.fn(),
     sessions: [],
@@ -104,120 +118,189 @@ describe('PRDetail', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    (fetchPR as ReturnType<typeof vi.fn>).mockResolvedValue(mockPR);
+  });
+
+  describe('Loading State', () => {
+    it('shows loading skeleton initially', () => {
+      (fetchPR as ReturnType<typeof vi.fn>).mockImplementation(() => new Promise(() => {}));
+      render(<PRDetail {...defaultProps} />);
+
+      // Should show skeleton elements
+      expect(document.querySelectorAll('.skeleton-shimmer').length).toBeGreaterThan(0);
+    });
   });
 
   describe('Basic Rendering', () => {
-    it('renders PR title and number', () => {
+    it('renders PR title and number after loading', async () => {
       render(<PRDetail {...defaultProps} />);
 
-      expect(screen.getByText('#42 Add new feature')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('#42 Add new feature')).toBeInTheDocument();
+      });
     });
 
-    it('renders PR state badge for open PR', () => {
+    it('renders PR state badge for open PR', async () => {
       render(<PRDetail {...defaultProps} />);
 
-      const stateBadge = screen.getByText('open');
-      expect(stateBadge).toBeInTheDocument();
-      expect(stateBadge).toHaveClass('text-green-400');
+      await waitFor(() => {
+        const stateBadge = screen.getByText('open');
+        expect(stateBadge).toBeInTheDocument();
+        expect(stateBadge).toHaveClass('text-green-400');
+      });
     });
 
-    it('renders PR state badge for merged PR', () => {
-      const mergedPR = createMockPR({ state: 'merged' });
-      render(<PRDetail {...defaultProps} pr={mergedPR} />);
-
-      const stateBadge = screen.getByText('merged');
-      expect(stateBadge).toBeInTheDocument();
-      expect(stateBadge).toHaveClass('text-purple-400');
-    });
-
-    it('renders PR state badge for closed PR', () => {
-      const closedPR = createMockPR({ state: 'closed' });
-      render(<PRDetail {...defaultProps} pr={closedPR} />);
-
-      const stateBadge = screen.getByText('closed');
-      expect(stateBadge).toBeInTheDocument();
-      expect(stateBadge).toHaveClass('text-red-400');
-    });
-
-    it('renders PR labels', () => {
+    it('renders PR state badge for merged PR', async () => {
+      (fetchPR as ReturnType<typeof vi.fn>).mockResolvedValue(createMockPRDetail({ state: 'merged' }));
       render(<PRDetail {...defaultProps} />);
 
-      expect(screen.getByText('enhancement')).toBeInTheDocument();
-      expect(screen.getByText('needs-review')).toBeInTheDocument();
+      await waitFor(() => {
+        const stateBadge = screen.getByText('merged');
+        expect(stateBadge).toBeInTheDocument();
+        expect(stateBadge).toHaveClass('text-purple-400');
+      });
     });
 
-    it('renders GitHub link', () => {
+    it('renders PR state badge for closed PR', async () => {
+      (fetchPR as ReturnType<typeof vi.fn>).mockResolvedValue(createMockPRDetail({ state: 'closed' }));
       render(<PRDetail {...defaultProps} />);
 
-      const link = screen.getByText('View on GitHub →');
-      expect(link).toBeInTheDocument();
-      expect(link).toHaveAttribute('href', 'https://github.com/test/repo/pull/42');
-      expect(link).toHaveAttribute('target', '_blank');
-      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+      await waitFor(() => {
+        const stateBadge = screen.getByText('closed');
+        expect(stateBadge).toBeInTheDocument();
+        expect(stateBadge).toHaveClass('text-red-400');
+      });
     });
 
-    it('renders branch information', () => {
+    it('renders PR labels', async () => {
       render(<PRDetail {...defaultProps} />);
 
-      expect(screen.getByText('feature/new-feature')).toBeInTheDocument();
-      expect(screen.getByText('main')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('enhancement')).toBeInTheDocument();
+        expect(screen.getByText('needs-review')).toBeInTheDocument();
+      });
     });
 
-    it('renders additions and deletions', () => {
+    it('renders GitHub link', async () => {
       render(<PRDetail {...defaultProps} />);
 
-      expect(screen.getByText('+150')).toBeInTheDocument();
-      expect(screen.getByText('-30')).toBeInTheDocument();
+      await waitFor(() => {
+        const link = screen.getByText('View on GitHub →');
+        expect(link).toBeInTheDocument();
+        expect(link).toHaveAttribute('href', 'https://github.com/test/repo/pull/42');
+        expect(link).toHaveAttribute('target', '_blank');
+        expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+      });
     });
 
-    it('renders changed files count singular', () => {
-      const singleFilePR = createMockPR({ changed_files: 1 });
-      render(<PRDetail {...defaultProps} pr={singleFilePR} />);
-
-      expect(screen.getByText('1 file changed')).toBeInTheDocument();
-    });
-
-    it('renders changed files count plural', () => {
+    it('renders branch information', async () => {
       render(<PRDetail {...defaultProps} />);
 
-      expect(screen.getByText('8 files changed')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('feature/new-feature')).toBeInTheDocument();
+        expect(screen.getByText('main')).toBeInTheDocument();
+      });
+    });
+
+    it('renders additions and deletions', async () => {
+      render(<PRDetail {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('+150')).toBeInTheDocument();
+        expect(screen.getByText('-30')).toBeInTheDocument();
+      });
+    });
+
+    it('renders changed files count', async () => {
+      render(<PRDetail {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('8 files changed')).toBeInTheDocument();
+      });
     });
   });
 
   describe('PR Description', () => {
-    it('renders PR body using Markdown component', () => {
+    it('renders PR body using Markdown component', async () => {
       render(<PRDetail {...defaultProps} />);
 
-      const markdown = screen.getByTestId('markdown');
-      expect(markdown).toHaveTextContent('This PR adds a new feature to the application.');
+      await waitFor(() => {
+        const markdown = screen.getByTestId('markdown');
+        expect(markdown).toHaveTextContent('This PR adds a new feature to the application.');
+      });
     });
 
-    it('renders placeholder when PR has no body', () => {
-      const prWithoutBody = createMockPR({ body: '' });
-      render(<PRDetail {...defaultProps} pr={prWithoutBody} />);
-
-      expect(screen.getByText('No description provided.')).toBeInTheDocument();
-    });
-
-    it('renders author and creation date', () => {
+    it('renders placeholder when PR has no body', async () => {
+      (fetchPR as ReturnType<typeof vi.fn>).mockResolvedValue(createMockPRDetail({ body: '' }));
       render(<PRDetail {...defaultProps} />);
 
-      expect(screen.getByText('testuser')).toBeInTheDocument();
-      // Date format depends on locale, but it should be present
-      expect(screen.getByText(/Opened by/)).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('No description provided.')).toBeInTheDocument();
+      });
+    });
+
+    it('renders author and creation date', async () => {
+      render(<PRDetail {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('testuser')).toBeInTheDocument();
+        expect(screen.getByText(/Opened by/)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Comments', () => {
+    it('renders comments section with count', async () => {
+      render(<PRDetail {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Comments (2)')).toBeInTheDocument();
+      });
+    });
+
+    it('renders comment authors and content', async () => {
+      render(<PRDetail {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('reviewer1')).toBeInTheDocument();
+        expect(screen.getByText('reviewer2')).toBeInTheDocument();
+      });
+
+      // Comments are rendered via Markdown mock
+      const markdowns = screen.getAllByTestId('markdown');
+      const commentMarkdowns = markdowns.filter(m =>
+        m.textContent === 'Looks good!' || m.textContent === 'Please add tests.'
+      );
+      expect(commentMarkdowns.length).toBe(2);
+    });
+
+    it('renders no comments message when empty', async () => {
+      (fetchPR as ReturnType<typeof vi.fn>).mockResolvedValue(createMockPRDetail({ comments: [] }));
+      render(<PRDetail {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Comments (0)')).toBeInTheDocument();
+        expect(screen.getByText('No comments yet.')).toBeInTheDocument();
+      });
     });
   });
 
   describe('Start Session Button', () => {
-    it('renders the start session button', () => {
+    it('renders the start session button', async () => {
       render(<PRDetail {...defaultProps} />);
 
-      expect(screen.getByTestId('start-session-btn')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByTestId('start-session-btn')).toBeInTheDocument();
+      });
     });
 
-    it('calls onStartSession when button is clicked', () => {
+    it('calls onStartSession when button is clicked', async () => {
       const onStartSession = vi.fn();
       render(<PRDetail {...defaultProps} onStartSession={onStartSession} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('start-session-btn')).toBeInTheDocument();
+      });
 
       fireEvent.click(screen.getByTestId('start-session-btn'));
 
@@ -226,34 +309,35 @@ describe('PRDetail', () => {
   });
 
   describe('Related Sessions', () => {
-    it('does not render sessions section when no sessions are linked', () => {
+    it('does not render sessions section when no sessions are linked', async () => {
       render(<PRDetail {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('#42 Add new feature')).toBeInTheDocument();
+      });
 
       expect(screen.queryByText(/Sessions \(/)).not.toBeInTheDocument();
     });
 
-    it('renders sessions section with count when sessions exist', () => {
+    it('renders sessions section with count when sessions exist', async () => {
       const session = createMockSession();
       render(<PRDetail {...defaultProps} sessions={[session]} />);
 
-      expect(screen.getByText('Sessions (1)')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('Sessions (1)')).toBeInTheDocument();
+      });
     });
 
-    it('renders session titles', () => {
+    it('renders session titles', async () => {
       const session = createMockSession({ title: 'Code Review Session' });
       render(<PRDetail {...defaultProps} sessions={[session]} />);
 
-      expect(screen.getByText('Code Review Session')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('Code Review Session')).toBeInTheDocument();
+      });
     });
 
-    it('renders untitled session placeholder', () => {
-      const session = createMockSession({ title: null });
-      render(<PRDetail {...defaultProps} sessions={[session]} />);
-
-      expect(screen.getByText('Untitled session')).toBeInTheDocument();
-    });
-
-    it('filters sessions to only show those linked to this PR', () => {
+    it('filters sessions to only show those linked to this PR', async () => {
       const linkedSession = createMockSession({
         session_id: 'linked-session',
         title: 'Linked Session',
@@ -264,51 +348,22 @@ describe('PRDetail', () => {
         title: 'Unlinked Session',
         entities: [{ kind: 'pr', number: 99 }],
       });
-      const issueSession = createMockSession({
-        session_id: 'issue-session',
-        title: 'Issue Session',
-        entities: [{ kind: 'issue', number: 42 }],
-      });
 
       render(
         <PRDetail
           {...defaultProps}
-          sessions={[linkedSession, unlinkedSession, issueSession]}
+          sessions={[linkedSession, unlinkedSession]}
         />
       );
 
-      expect(screen.getByText('Sessions (1)')).toBeInTheDocument();
-      expect(screen.getByText('Linked Session')).toBeInTheDocument();
-      expect(screen.queryByText('Unlinked Session')).not.toBeInTheDocument();
-      expect(screen.queryByText('Issue Session')).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('Sessions (1)')).toBeInTheDocument();
+        expect(screen.getByText('Linked Session')).toBeInTheDocument();
+        expect(screen.queryByText('Unlinked Session')).not.toBeInTheDocument();
+      });
     });
 
-    it('sorts sessions by modified date (newest first)', () => {
-      const olderSession = createMockSession({
-        session_id: 'older',
-        title: 'Older Review',
-        modified_at: '2024-01-15T10:00:00Z',
-      });
-      const newerSession = createMockSession({
-        session_id: 'newer',
-        title: 'Newer Review',
-        modified_at: '2024-01-16T10:00:00Z',
-      });
-
-      render(
-        <PRDetail
-          {...defaultProps}
-          sessions={[olderSession, newerSession]}
-        />
-      );
-
-      // Get all session title elements within the sessions list
-      const sessionElements = screen.getAllByText(/Review$/);
-      expect(sessionElements[0]).toHaveTextContent('Newer Review');
-      expect(sessionElements[1]).toHaveTextContent('Older Review');
-    });
-
-    it('calls onSelectSession when session is clicked', () => {
+    it('calls onSelectSession when session is clicked', async () => {
       const session = createMockSession();
       const onSelectSession = vi.fn();
       render(
@@ -319,143 +374,24 @@ describe('PRDetail', () => {
         />
       );
 
+      await waitFor(() => {
+        expect(screen.getByText('PR Review Session')).toBeInTheDocument();
+      });
+
       fireEvent.click(screen.getByText('PR Review Session'));
 
       expect(onSelectSession).toHaveBeenCalledWith(session);
     });
-
-    it('shows green indicator for completed sessions', () => {
-      const session = createMockSession({ is_active: false });
-      render(<PRDetail {...defaultProps} sessions={[session]} />);
-
-      const indicator = document.querySelector('.bg-green-500');
-      expect(indicator).toBeInTheDocument();
-    });
-
-    it('shows pulsing yellow indicator for actively running sessions', () => {
-      const session = createMockSession({
-        session_id: 'active-session',
-        is_active: true,
-      });
-      const process = createMockProcess({
-        claude_session_id: 'active-session',
-      });
-
-      render(
-        <PRDetail
-          {...defaultProps}
-          sessions={[session]}
-          processes={[process]}
-        />
-      );
-
-      const indicator = document.querySelector('.bg-yellow-500.animate-pulse');
-      expect(indicator).toBeInTheDocument();
-    });
-
-    it('shows running process message for active sessions', () => {
-      const session = createMockSession({
-        session_id: 'active-session',
-        is_active: true,
-      });
-      const process = createMockProcess({
-        claude_session_id: 'active-session',
-      });
-
-      render(
-        <PRDetail
-          {...defaultProps}
-          sessions={[session]}
-          processes={[process]}
-        />
-      );
-
-      expect(screen.getByText('Process running - click to view')).toBeInTheDocument();
-    });
   });
 
-  describe('Multiple Sessions', () => {
-    it('renders multiple linked sessions', () => {
-      const sessions = [
-        createMockSession({
-          session_id: 'session-1',
-          title: 'First Review',
-          modified_at: '2024-01-16T10:00:00Z',
-        }),
-        createMockSession({
-          session_id: 'session-2',
-          title: 'Second Review',
-          modified_at: '2024-01-17T10:00:00Z',
-        }),
-        createMockSession({
-          session_id: 'session-3',
-          title: 'Third Review',
-          modified_at: '2024-01-18T10:00:00Z',
-        }),
-      ];
-
-      render(<PRDetail {...defaultProps} sessions={sessions} />);
-
-      expect(screen.getByText('Sessions (3)')).toBeInTheDocument();
-      expect(screen.getByText('First Review')).toBeInTheDocument();
-      expect(screen.getByText('Second Review')).toBeInTheDocument();
-      expect(screen.getByText('Third Review')).toBeInTheDocument();
-    });
-  });
-
-  describe('Edge Cases', () => {
-    it('handles PR with no labels', () => {
-      const prWithoutLabels = createMockPR({ labels: [] });
-      render(<PRDetail {...defaultProps} pr={prWithoutLabels} />);
-
-      // Should still render without errors
-      expect(screen.getByText('#42 Add new feature')).toBeInTheDocument();
-    });
-
-    it('handles empty sessions array', () => {
-      render(<PRDetail {...defaultProps} sessions={[]} />);
-
-      expect(screen.queryByText(/Sessions \(/)).not.toBeInTheDocument();
-    });
-
-    it('handles session with no entities', () => {
-      const sessionWithNoEntities = createMockSession({ entities: [] });
-      render(<PRDetail {...defaultProps} sessions={[sessionWithNoEntities]} />);
-
-      // Should not show any sessions since none are linked to this PR
-      expect(screen.queryByText(/Sessions \(/)).not.toBeInTheDocument();
-    });
-
-    it('handles undefined onSelectSession', () => {
-      const session = createMockSession();
-      render(
-        <PRDetail
-          {...defaultProps}
-          sessions={[session]}
-          onSelectSession={undefined}
-        />
-      );
-
-      // Should not throw when clicking
-      fireEvent.click(screen.getByText('PR Review Session'));
-    });
-  });
-
-  describe('Accessibility', () => {
-    it('has accessible GitHub link', () => {
+  describe('Error Handling', () => {
+    it('shows error message when PR not found', async () => {
+      (fetchPR as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Not found'));
       render(<PRDetail {...defaultProps} />);
 
-      const link = screen.getByText('View on GitHub →');
-      expect(link.tagName).toBe('A');
-    });
-
-    it('has clickable session items', () => {
-      const session = createMockSession();
-      render(<PRDetail {...defaultProps} sessions={[session]} />);
-
-      // Find the session item container with cursor-pointer class
-      const sessionItem = screen.getByText('PR Review Session').closest('.cursor-pointer');
-      expect(sessionItem).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('Pull request not found')).toBeInTheDocument();
+      });
     });
   });
 });

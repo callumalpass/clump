@@ -166,6 +166,7 @@ function createMockPR(overrides: Partial<PR> = {}): PR {
     additions: 50,
     deletions: 10,
     changed_files: 3,
+    comments_count: 0,
     url: 'https://github.com/owner/repo/pull/123',
     ...overrides,
   };

@@ -36,6 +36,14 @@ class IssueData:
 
 
 @dataclass
+class PRComment:
+    id: int
+    author: str
+    body: str
+    created_at: datetime
+
+
+@dataclass
 class PRData:
     number: int
     title: str
@@ -50,6 +58,8 @@ class PRData:
     additions: int
     deletions: int
     changed_files: int
+    comments_count: int = 0
+    comments: list[PRComment] | None = None
     url: str = ""
 
 
@@ -197,10 +207,23 @@ class GitHubClient:
         return prs
 
     def get_pr(self, owner: str, name: str, number: int) -> PRData:
-        """Get a single pull request."""
+        """Get a single pull request with comments."""
         repo = self.get_repo(owner, name)
         pr = repo.get_pull(number)
-        return self._pr_to_data(pr)
+
+        data = self._pr_to_data(pr)
+        # PR comments come from the issue comments endpoint (PRs are issues)
+        issue = repo.get_issue(number)
+        data.comments = [
+            PRComment(
+                id=c.id,
+                author=c.user.login if c.user else "unknown",
+                body=c.body or "",
+                created_at=c.created_at,
+            )
+            for c in issue.get_comments()
+        ]
+        return data
 
     def _pr_to_data(self, pr: PullRequest) -> PRData:
         """Convert GitHub PullRequest to PRData."""
@@ -218,6 +241,7 @@ class GitHubClient:
             additions=pr.additions,
             deletions=pr.deletions,
             changed_files=pr.changed_files,
+            comments_count=pr.comments,
             url=pr.html_url,
         )
 

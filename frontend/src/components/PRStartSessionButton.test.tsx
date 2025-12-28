@@ -8,24 +8,19 @@ function createMockPR(overrides: Partial<PR> = {}): PR {
   return {
     number: 42,
     title: 'Test PR',
+    body: 'Test body',
     state: 'open',
-    html_url: 'https://github.com/test/repo/pull/42',
-    user: {
-      login: 'testuser',
-      avatar_url: 'https://github.com/testuser.png',
-    },
+    labels: [],
+    author: 'testuser',
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-02T00:00:00Z',
-    body: 'Test body',
-    labels: [],
-    draft: false,
-    head: {
-      ref: 'feature-branch',
-      sha: 'abc123',
-    },
-    base: {
-      ref: 'main',
-    },
+    head_ref: 'feature-branch',
+    base_ref: 'main',
+    additions: 100,
+    deletions: 50,
+    changed_files: 5,
+    comments_count: 0,
+    url: 'https://github.com/test/repo/pull/42',
     ...overrides,
   };
 }
@@ -38,24 +33,27 @@ function createMockCommands(): CommandMetadata[] {
       name: 'Review PR',
       shortName: 'Review',
       description: 'Review this pull request',
-      prompt_template: 'Review PR #{number}',
-      scope: 'global',
+      category: 'pr',
+      template: 'Review PR #{number}',
+      source: 'builtin',
     },
     {
       id: 'pr-test',
       name: 'Test PR',
       shortName: 'Test',
       description: 'Test the changes in this PR',
-      prompt_template: 'Test PR #{number}',
-      scope: 'global',
+      category: 'pr',
+      template: 'Test PR #{number}',
+      source: 'builtin',
     },
     {
       id: 'pr-merge',
       name: 'Prepare Merge',
       shortName: 'Merge',
       description: 'Prepare this PR for merging',
-      prompt_template: 'Prepare PR #{number} for merge',
-      scope: 'global',
+      category: 'pr',
+      template: 'Prepare PR #{number} for merge',
+      source: 'builtin',
     },
   ];
 }
@@ -506,9 +504,11 @@ describe('PRStartSessionButton', () => {
         {
           id: 'pr-review',
           name: 'Review PR',
+          shortName: '',
           description: 'Review this pull request',
-          prompt_template: 'Review PR #{number}',
-          scope: 'global',
+          category: 'pr',
+          template: 'Review PR #{number}',
+          source: 'builtin',
         },
       ];
 

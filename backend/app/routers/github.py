@@ -141,7 +141,12 @@ class PRResponse(BaseModel):
     additions: int
     deletions: int
     changed_files: int
+    comments_count: int
     url: str
+
+
+class PRDetailResponse(PRResponse):
+    comments: list[dict]
 
 
 # Repo endpoints
@@ -389,6 +394,28 @@ async def list_prs(
     return [_pr_to_response(p) for p in prs]
 
 
+@router.get("/repos/{repo_id}/prs/{pr_number}", response_model=PRDetailResponse)
+async def get_pr(
+    repo_id: int,
+    pr_number: int,
+):
+    """Get a single pull request with comments."""
+    repo = get_repo_or_404(repo_id)
+    pr = github_client.get_pr(repo["owner"], repo["name"], pr_number)
+    response = _pr_to_response(pr)
+    response_dict = response.model_dump()
+    response_dict["comments"] = [
+        {
+            "id": c.id,
+            "author": c.author,
+            "body": c.body,
+            "created_at": c.created_at.isoformat(),
+        }
+        for c in (pr.comments or [])
+    ]
+    return response_dict
+
+
 def _issue_to_response(issue: IssueData) -> IssueResponse:
     return IssueResponse(
         number=issue.number,
@@ -419,5 +446,6 @@ def _pr_to_response(pr: PRData) -> PRResponse:
         additions=pr.additions,
         deletions=pr.deletions,
         changed_files=pr.changed_files,
+        comments_count=pr.comments_count,
         url=pr.url,
     )
