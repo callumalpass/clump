@@ -79,6 +79,9 @@ async def run_headless_session(data: HeadlessSessionCreate):
         await db.commit()
         await db.refresh(session)
 
+        # Register session as running for reliable status tracking
+        headless_analyzer.register_running(claude_session_id)
+
         try:
             # Run headless session with our pre-generated session ID
             result = await headless_analyzer.analyze(
@@ -116,6 +119,10 @@ async def run_headless_session(data: HeadlessSessionCreate):
             await db.commit()
             raise HTTPException(status_code=500, detail=str(e))
 
+        finally:
+            # Always unregister when done
+            headless_analyzer.unregister_running(claude_session_id)
+
 
 @router.post("/headless/run/stream")
 async def run_headless_session_stream(data: HeadlessSessionCreate):
@@ -144,6 +151,9 @@ async def run_headless_session_stream(data: HeadlessSessionCreate):
         await db.commit()
         await db.refresh(session)
         session_id = session.id
+
+    # Register session as running BEFORE the generator starts
+    headless_analyzer.register_running(claude_session_id)
 
     async def generate():
         """Generate streaming response."""
@@ -202,6 +212,10 @@ async def run_headless_session_stream(data: HeadlessSessionCreate):
                 if session:
                     session.status = SessionStatus.FAILED.value
                     await db.commit()
+
+        finally:
+            # Always unregister when generator completes
+            headless_analyzer.unregister_running(claude_session_id)
 
     return StreamingResponse(
         generate(),

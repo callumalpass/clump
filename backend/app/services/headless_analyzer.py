@@ -53,6 +53,16 @@ class HeadlessAnalyzer:
 
     def __init__(self):
         self._running_sessions: dict[str, subprocess.Popen] = {}
+        # Explicit tracking set - more reliable than process dict for status checks
+        self._active_session_ids: set[str] = set()
+
+    def register_running(self, session_id: str) -> None:
+        """Register a session as running. Call before starting the session."""
+        self._active_session_ids.add(session_id)
+
+    def unregister_running(self, session_id: str) -> None:
+        """Unregister a session as running. Call when session completes."""
+        self._active_session_ids.discard(session_id)
 
     def _build_command(
         self,
@@ -75,6 +85,10 @@ class HeadlessAnalyzer:
         # Output format
         fmt = output_format or settings.claude_output_format
         cmd.extend(["--output-format", fmt])
+
+        # stream-json requires --verbose when using -p (print mode)
+        if fmt == "stream-json":
+            cmd.append("--verbose")
 
         # Session management
         if session_id:
@@ -310,7 +324,9 @@ class HeadlessAnalyzer:
 
     def list_running(self) -> list[str]:
         """List IDs of running sessions."""
-        return list(self._running_sessions.keys())
+        # Combine both tracking mechanisms for robustness
+        all_running = set(self._running_sessions.keys()) | self._active_session_ids
+        return list(all_running)
 
 
 # Global analyzer instance

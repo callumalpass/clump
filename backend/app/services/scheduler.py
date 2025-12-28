@@ -111,9 +111,46 @@ class SchedulerService:
         if self._running:
             return
 
+        # Clean up any orphaned sessions from previous runs
+        await self._cleanup_orphaned_sessions()
+
         self._running = True
         self._task = asyncio.create_task(self._run_loop())
         logger.info("Scheduler service started")
+
+    async def _cleanup_orphaned_sessions(self):
+        """
+        Mark any sessions with status=RUNNING as FAILED on startup.
+
+        These are orphaned sessions from a previous server run that never completed.
+        Since in-memory tracking is lost on restart, we can't tell if they're actually
+        running, so we mark them as failed.
+        """
+        repos = load_repos()
+        total_cleaned = 0
+
+        for repo in repos:
+            try:
+                async with get_repo_db(repo["local_path"]) as db:
+                    result = await db.execute(
+                        select(Session).where(Session.status == SessionStatus.RUNNING.value)
+                    )
+                    orphaned = result.scalars().all()
+
+                    for session in orphaned:
+                        session.status = SessionStatus.FAILED.value
+                        session.completed_at = datetime.utcnow()
+                        total_cleaned += 1
+
+                    if orphaned:
+                        await db.commit()
+                        logger.info(f"Cleaned up {len(orphaned)} orphaned sessions in {repo['local_path']}")
+
+            except Exception as e:
+                logger.error(f"Error cleaning up orphaned sessions for {repo.get('local_path', 'unknown')}: {e}")
+
+        if total_cleaned:
+            logger.info(f"Total orphaned sessions cleaned up: {total_cleaned}")
 
     async def stop(self):
         """Stop the scheduler."""
@@ -394,6 +431,9 @@ class SchedulerService:
         )
         save_session_metadata(encoded_path, session_id, metadata)
 
+        # Register session as running BEFORE starting (belt and suspenders with analyze_stream tracking)
+        headless_analyzer.register_running(session_id)
+
         try:
             # Run headless session with our pre-generated session ID
             result = await headless_analyzer.analyze(
@@ -439,6 +479,10 @@ class SchedulerService:
                     await db.commit()
             logger.error(f"Session error for job {job.id}: {e}")
             return None
+
+        finally:
+            # Always unregister when done (success, failure, or exception)
+            headless_analyzer.unregister_running(session_id)
 
     def _calculate_next_run(self, job: ScheduledJob) -> datetime:
         """Calculate the next run time based on cron expression."""
