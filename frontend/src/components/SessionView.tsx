@@ -9,26 +9,50 @@ import { fetchSessionDetail, addEntityToSession, removeEntityFromSession } from 
 import { useWebSocket } from '../hooks/useWebSocket';
 import { formatDuration } from '../utils/time';
 
+// Extract common session metadata for export formatters
+interface SessionMetadata {
+  title: string;
+  path: string;
+  date: string | null;
+  model: string | null;
+  totalTokens: number | null;
+  branch: string | null;
+}
+
+function extractSessionMetadata(detail: SessionDetail): SessionMetadata {
+  const totalTokens = detail.total_input_tokens || detail.total_output_tokens
+    ? detail.total_input_tokens + detail.total_output_tokens
+    : null;
+
+  return {
+    title: detail.metadata?.title || 'Session',
+    path: detail.repo_path,
+    date: detail.start_time ? new Date(detail.start_time).toLocaleString() : null,
+    model: detail.model || null,
+    totalTokens,
+    branch: detail.git_branch || null,
+  };
+}
+
 // Format transcript as markdown for export
 function formatTranscriptAsMarkdown(detail: SessionDetail): string {
   const lines: string[] = [];
-  const title = detail.metadata?.title || 'Session';
+  const meta = extractSessionMetadata(detail);
 
-  lines.push(`# ${title}`);
+  lines.push(`# ${meta.title}`);
   lines.push('');
-  lines.push(`**Path:** ${detail.repo_path}`);
-  if (detail.start_time) {
-    lines.push(`**Date:** ${new Date(detail.start_time).toLocaleString()}`);
+  lines.push(`**Path:** ${meta.path}`);
+  if (meta.date) {
+    lines.push(`**Date:** ${meta.date}`);
   }
-  if (detail.model) {
-    lines.push(`**Model:** ${detail.model}`);
+  if (meta.model) {
+    lines.push(`**Model:** ${meta.model}`);
   }
-  if (detail.total_input_tokens || detail.total_output_tokens) {
-    const total = detail.total_input_tokens + detail.total_output_tokens;
-    lines.push(`**Tokens:** ${total.toLocaleString()}`);
+  if (meta.totalTokens !== null) {
+    lines.push(`**Tokens:** ${meta.totalTokens.toLocaleString()}`);
   }
-  if (detail.git_branch) {
-    lines.push(`**Branch:** ${detail.git_branch}`);
+  if (meta.branch) {
+    lines.push(`**Branch:** ${meta.branch}`);
   }
   lines.push('');
   lines.push('---');
@@ -71,17 +95,17 @@ function formatTranscriptAsMarkdown(detail: SessionDetail): string {
 // Format transcript as plain text
 function formatTranscriptAsText(detail: SessionDetail): string {
   const lines: string[] = [];
-  const title = detail.metadata?.title || 'Session';
+  const meta = extractSessionMetadata(detail);
 
-  lines.push(title);
-  lines.push('='.repeat(title.length));
+  lines.push(meta.title);
+  lines.push('='.repeat(meta.title.length));
   lines.push('');
-  lines.push(`Path: ${detail.repo_path}`);
-  if (detail.start_time) {
-    lines.push(`Date: ${new Date(detail.start_time).toLocaleString()}`);
+  lines.push(`Path: ${meta.path}`);
+  if (meta.date) {
+    lines.push(`Date: ${meta.date}`);
   }
-  if (detail.model) {
-    lines.push(`Model: ${detail.model}`);
+  if (meta.model) {
+    lines.push(`Model: ${meta.model}`);
   }
   lines.push('');
   lines.push('-'.repeat(50));
