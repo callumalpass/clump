@@ -265,12 +265,12 @@ interface StatCardProps {
 
 function StatCard({ label, value, subtext, highlight }: StatCardProps) {
   return (
-    <div className="bg-gray-800/50 rounded-lg p-4">
-      <div className="text-xs text-gray-500 mb-1">{label}</div>
-      <div className={`text-xl font-semibold tabular-nums ${highlight ? 'text-green-400' : 'text-white'}`}>
+    <div className="stat-card bg-gray-800/50 rounded-lg p-4 border border-transparent transition-all duration-200 hover:bg-gray-800/70 hover:border-gray-700/50">
+      <div className="text-xs text-gray-500 mb-1 transition-colors duration-200 group-hover:text-gray-400">{label}</div>
+      <div className={`text-xl font-semibold tabular-nums transition-colors duration-200 ${highlight ? 'text-green-400' : 'text-white'}`}>
         {value}
       </div>
-      {subtext && <div className="text-xs text-gray-600 mt-1">{subtext}</div>}
+      {subtext && <div className="text-xs text-gray-600 mt-1 transition-colors duration-200">{subtext}</div>}
     </div>
   );
 }
