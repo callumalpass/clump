@@ -85,9 +85,25 @@ export function HourlyHeatmap({ data }: HourlyHeatmapProps) {
 
       {/* Hour labels */}
       <div className="grid grid-cols-12 gap-1 text-[10px] text-gray-500">
-        {HOUR_LABELS.filter((_, i) => i % 2 === 0).map((label, i) => (
+        {HOUR_LABELS.filter((_, i) => i % 2 === 0).map((label) => (
           <div key={label} className="col-span-2 text-center">{label}</div>
         ))}
+      </div>
+
+      {/* Intensity scale legend */}
+      <div className="flex items-center justify-between text-[10px] text-gray-500 px-1">
+        <span>Less</span>
+        <div className="flex gap-0.5 mx-2">
+          {[0, 0.25, 0.5, 0.75, 1].map((intensity) => (
+            <div
+              key={intensity}
+              className="w-3 h-3 rounded-sm"
+              style={{ backgroundColor: getColor(intensity) }}
+              title={intensity === 0 ? 'No activity' : `${Math.round(intensity * 100)}% intensity`}
+            />
+          ))}
+        </div>
+        <span>More</span>
       </div>
 
       {/* Period breakdown */}
