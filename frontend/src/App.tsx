@@ -1482,8 +1482,8 @@ export default function App() {
                 )}
               </div>
 
-              {/* List content */}
-              <div className="flex-1 min-h-0 flex flex-col">
+              {/* List content - key triggers fade animation on tab switch */}
+              <div key={activeTab} className="flex-1 min-h-0 flex flex-col tab-content-enter">
                 {activeTab === 'issues' && selectedRepo && (
                   <IssueList
                     issues={issues}
