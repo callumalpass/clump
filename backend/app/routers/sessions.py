@@ -56,6 +56,17 @@ from app.services.event_manager import event_manager, EventType
 _session_cache: dict[str, tuple[list, float]] = {}  # key -> (sessions, timestamp)
 SESSION_CACHE_TTL = 5.0  # seconds (increased from 2s to reduce filesystem I/O)
 
+# Pagination defaults
+DEFAULT_PAGE_SIZE = 50
+MAX_PAGE_SIZE = 200
+
+# Cache management
+MAX_CACHE_ENTRIES = 100
+
+# Text truncation limits
+TITLE_PREVIEW_LENGTH = 100  # First user message preview for title fallback
+EXPORT_TITLE_LENGTH = 50  # Safe filename title truncation
+
 
 class QuickScanResult(TypedDict):
     """Result of a quick transcript scan for summary info."""
@@ -117,7 +128,7 @@ def _get_cached_sessions(repo_path: Optional[str] = None) -> list[DiscoveredSess
     _session_cache[cache_key] = (sessions, now)
 
     # Clean up old cache entries (keep cache size bounded)
-    if len(_session_cache) > 100:
+    if len(_session_cache) > MAX_CACHE_ENTRIES:
         cutoff = now - SESSION_CACHE_TTL * 10  # Remove entries older than 10x TTL
         _session_cache = {
             k: v for k, v in _session_cache.items()
@@ -422,13 +433,13 @@ def _quick_scan_transcript(transcript_path: Path) -> QuickScanResult:
                         msg = entry.get('message', {})
                         content = msg.get('content', '')
                         if isinstance(content, str):
-                            first_user_message = content[:100]
+                            first_user_message = content[:TITLE_PREVIEW_LENGTH]
                         elif isinstance(content, list):
                             for part in content:
                                 if isinstance(part, dict) and part.get('type') == 'text':
                                     text = part.get('text')
                                     if text:  # Skip None or empty text blocks
-                                        first_user_message = text[:100]
+                                        first_user_message = text[:TITLE_PREVIEW_LENGTH]
                                         break
 
                     # Capture model
@@ -556,7 +567,7 @@ async def list_sessions(
     model: Optional[str] = Query(default=None, regex="^(sonnet|opus|haiku)$"),
     sort: Optional[str] = Query(default="updated", regex="^(created|updated|messages)$"),
     order: Optional[str] = Query(default="desc", regex="^(asc|desc)$"),
-    limit: int = Query(default=50, le=200),
+    limit: int = Query(default=DEFAULT_PAGE_SIZE, le=MAX_PAGE_SIZE),
     offset: int = 0,
 ):
     """
@@ -1220,7 +1231,7 @@ async def export_session(
 
     # Generate filename
     title = session.metadata.title if session.metadata and session.metadata.title else "session"
-    safe_title = "".join(c if c.isalnum() or c in "-_ " else "" for c in title)[:50].strip()
+    safe_title = "".join(c if c.isalnum() or c in "-_ " else "" for c in title)[:EXPORT_TITLE_LENGTH].strip()
     safe_title = safe_title.replace(" ", "-").lower() or "session"
     filename = f"{safe_title}-{session_id[:8]}.md"
 
