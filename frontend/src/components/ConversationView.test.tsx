@@ -174,8 +174,8 @@ describe('ConversationView', () => {
     it('displays duration', () => {
       render(<ConversationView {...defaultProps} />);
 
-      // 5 minutes
-      expect(screen.getByText('5m')).toBeInTheDocument();
+      // 5 minutes - uses shared formatDuration from useElapsedTime
+      expect(screen.getByText('5m 0s')).toBeInTheDocument();
     });
 
     it('displays git branch when present', () => {
@@ -310,7 +310,8 @@ describe('ConversationView', () => {
       render(<ConversationView transcript={transcript} />);
 
       expect(screen.getByText('Grep')).toBeInTheDocument();
-      expect(screen.getByText('TODO')).toBeInTheDocument();
+      // 'TODO' appears in both the collapsed header and expanded details
+      expect(screen.getAllByText('TODO').length).toBeGreaterThan(0);
     });
 
     it('renders Glob tool display', () => {
@@ -694,7 +695,7 @@ describe('Helper Functions', () => {
     });
   });
 
-  describe('getDuration', () => {
+  describe('duration display', () => {
     it('shows seconds for short durations', () => {
       const transcript = createMockTranscript({
         start_time: '2024-01-15T10:30:00Z',
@@ -704,22 +705,22 @@ describe('Helper Functions', () => {
       expect(screen.getByText('45s')).toBeInTheDocument();
     });
 
-    it('shows minutes for medium durations', () => {
+    it('shows minutes and seconds for medium durations', () => {
       const transcript = createMockTranscript({
         start_time: '2024-01-15T10:30:00Z',
         end_time: '2024-01-15T10:45:00Z',
       });
       render(<ConversationView transcript={transcript} />);
-      expect(screen.getByText('15m')).toBeInTheDocument();
+      expect(screen.getByText('15m 0s')).toBeInTheDocument();
     });
 
-    it('shows hours for long durations', () => {
+    it('shows hours and minutes for long durations', () => {
       const transcript = createMockTranscript({
         start_time: '2024-01-15T10:00:00Z',
         end_time: '2024-01-15T12:30:00Z',
       });
       render(<ConversationView transcript={transcript} />);
-      expect(screen.getByText('2.5h')).toBeInTheDocument();
+      expect(screen.getByText('2h 30m')).toBeInTheDocument();
     });
 
     it('shows dash when timestamps are missing', () => {
