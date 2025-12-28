@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { IssueList } from './IssueList';
-import type { Issue, SessionSummary, Tag, IssueTagsMap, CommandMetadata, Process } from '../types';
+import type { Issue, SessionSummary, Tag, IssueTagsMap, CommandMetadata } from '../types';
 
 // Mock IssueFilters component
 vi.mock('./IssueFilters', () => ({

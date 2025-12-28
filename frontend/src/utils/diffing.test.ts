@@ -4,7 +4,6 @@ import {
   computeInlineDiff,
   similarity,
   computeLineDiff,
-  type DiffSegment,
   type DiffLine,
 } from './diffing';
 

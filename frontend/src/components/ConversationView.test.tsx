@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ConversationView, RawTranscriptView } from './ConversationView';
-import type { ParsedTranscript, TranscriptMessage, ToolUse } from '../types';
+import type { ParsedTranscript, TranscriptMessage } from '../types';
 
 // Mock scrollTo for jsdom
 beforeEach(() => {
