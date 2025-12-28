@@ -7,6 +7,7 @@ for programmatic analysis of issues, PRs, and code.
 
 import asyncio
 import json
+import logging
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -14,6 +15,8 @@ from typing import AsyncGenerator, Callable
 from uuid import uuid4
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -58,14 +61,12 @@ class HeadlessAnalyzer:
 
     def register_running(self, session_id: str) -> None:
         """Register a session as running. Call before starting the session."""
-        import logging
-        logging.getLogger(__name__).info(f"Registering session as running: {session_id}")
+        logger.info("Registering session as running: %s", session_id)
         self._active_session_ids.add(session_id)
 
     def unregister_running(self, session_id: str) -> None:
         """Unregister a session as running. Call when session completes."""
-        import logging
-        logging.getLogger(__name__).info(f"Unregistering session (completed): {session_id}")
+        logger.info("Unregistering session (completed): %s", session_id)
         self._active_session_ids.discard(session_id)
 
     def _build_command(
@@ -332,9 +333,8 @@ class HeadlessAnalyzer:
         """List IDs of running sessions."""
         # Combine both tracking mechanisms for robustness
         all_running = set(self._running_sessions.keys()) | self._active_session_ids
-        import logging
         if all_running:
-            logging.getLogger(__name__).debug(f"list_running: {all_running}")
+            logger.debug("list_running: %s", all_running)
         return list(all_running)
 
 
