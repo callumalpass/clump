@@ -7,14 +7,25 @@ Provides aggregate usage data, daily activity, and cost estimates.
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import TypedDict
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 router = APIRouter()
 
+
+class ModelPricing(TypedDict):
+    """Pricing structure for a Claude model (per 1M tokens in USD)."""
+
+    input: float
+    output: float
+    cache_read: float
+    cache_write: float
+
+
 # Model pricing per 1M tokens (USD) - matches frontend/src/utils/costs.ts
-MODEL_PRICING = {
+MODEL_PRICING: dict[str, ModelPricing] = {
     # Claude 4.5 models (latest)
     "claude-opus-4-5-20251101": {
         "input": 15.00,
@@ -51,7 +62,7 @@ MODEL_PRICING = {
 }
 
 # Default pricing (Sonnet)
-DEFAULT_PRICING = {
+DEFAULT_PRICING: ModelPricing = {
     "input": 3.00,
     "output": 15.00,
     "cache_read": 0.30,
@@ -59,7 +70,7 @@ DEFAULT_PRICING = {
 }
 
 
-def get_pricing(model: str) -> dict:
+def get_pricing(model: str) -> ModelPricing:
     """Get pricing for a model, with fallback to default pricing."""
     # Try exact match
     if model in MODEL_PRICING:
