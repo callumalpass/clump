@@ -97,21 +97,25 @@ class NotificationManager:
 
             self._state[session_id] = notification_type
 
+            # Copy subscriber lists while holding the lock to avoid race conditions
+            # where subscribers could be modified during iteration
+            session_subscribers = list(self._subscribers.get(session_id, []))
+            global_subscribers = list(self._global_subscribers)
+
         notification = Notification(
             session_id=session_id,
             type=notification_type,
             data=data or {},
         )
 
-        # Notify session-specific subscribers
-        subscribers = self._subscribers.get(session_id, [])
-        for callback in subscribers:
+        # Notify session-specific subscribers (using snapshot taken under lock)
+        for callback in session_subscribers:
             await self._invoke_callback_safe(
                 callback, notification, f"session {session_id}"
             )
 
-        # Notify global subscribers
-        for callback in self._global_subscribers:
+        # Notify global subscribers (using snapshot taken under lock)
+        for callback in global_subscribers:
             await self._invoke_callback_safe(
                 callback, notification, f"global subscriber (session {session_id})"
             )
