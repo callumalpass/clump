@@ -26,6 +26,21 @@ from app.services.notification_manager import notification_manager, Notification
 from app.services.event_manager import event_manager, Event
 from app.services.session_manager import process_manager
 
+# Constants for Claude Code's notification_type field values
+# These are the values Claude Code sends in its hook payloads
+CLAUDE_CODE_PERMISSION_PROMPT = "permission_prompt"
+CLAUDE_CODE_IDLE_PROMPT = "idle_prompt"
+
+# Mapping from Claude Code notification types to our internal NotificationType enum
+NOTIFICATION_TYPE_MAPPING: dict[str, NotificationType] = {
+    CLAUDE_CODE_PERMISSION_PROMPT: NotificationType.PERMISSION_NEEDED,
+    CLAUDE_CODE_IDLE_PROMPT: NotificationType.IDLE,
+}
+
+# Keywords for fallback message parsing when notification_type is not provided
+PERMISSION_KEYWORDS = ("permission",)
+IDLE_KEYWORDS = ("waiting", "idle")
+
 
 router = APIRouter()
 
@@ -92,16 +107,14 @@ async def handle_notification_hook(payload: NotificationHookPayload):
     ```
     """
     # Use Claude Code's notification_type field if available
-    if payload.notification_type == "permission_prompt":
-        notification_type = NotificationType.PERMISSION_NEEDED
-    elif payload.notification_type == "idle_prompt":
-        notification_type = NotificationType.IDLE
-    else:
-        # Fallback: parse the message text
-        message_text = payload.message or ""
-        if "permission" in message_text.lower():
+    notification_type = NOTIFICATION_TYPE_MAPPING.get(payload.notification_type or "")
+
+    if notification_type is None:
+        # Fallback: parse the message text for keywords
+        message_lower = (payload.message or "").lower()
+        if any(kw in message_lower for kw in PERMISSION_KEYWORDS):
             notification_type = NotificationType.PERMISSION_NEEDED
-        elif "waiting" in message_text.lower() or "idle" in message_text.lower():
+        elif any(kw in message_lower for kw in IDLE_KEYWORDS):
             notification_type = NotificationType.IDLE
         else:
             notification_type = NotificationType.PERMISSION_NEEDED
