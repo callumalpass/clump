@@ -232,6 +232,9 @@ export function SessionView({
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
   const [showExportMenu, setShowExportMenu] = useState(false);
 
+  // Initial prompt copy state
+  const [promptCopyStatus, setPromptCopyStatus] = useState<'idle' | 'copied'>('idle');
+
   // Entity management state
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [entityPickerType, setEntityPickerType] = useState<'issue' | 'pr' | null>(null);
@@ -458,6 +461,28 @@ export function SessionView({
     URL.revokeObjectURL(url);
     setShowExportMenu(false);
   }, [getExportContent, detail, session.title]);
+
+  // Get the initial user prompt from the transcript
+  const getInitialPrompt = useCallback((): string | null => {
+    if (!detail?.messages?.length) return null;
+    const firstUserMessage = detail.messages.find(m => m.role === 'user');
+    return firstUserMessage?.content || null;
+  }, [detail]);
+
+  // Copy initial prompt to clipboard
+  const handleCopyInitialPrompt = useCallback(async () => {
+    const prompt = getInitialPrompt();
+    if (!prompt) return;
+
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setPromptCopyStatus('copied');
+      setShowActionsMenu(false);
+      setTimeout(() => setPromptCopyStatus('idle'), 2000);
+    } catch {
+      console.error('Failed to copy prompt to clipboard');
+    }
+  }, [getInitialPrompt]);
 
   const handleMatchesFound = useCallback((count: number) => {
     setTotalMatches(count);
@@ -907,6 +932,29 @@ export function SessionView({
                   </svg>
                   Link PR
                 </button>
+                {/* Copy initial prompt button */}
+                {getInitialPrompt() && (
+                  <button
+                    onClick={handleCopyInitialPrompt}
+                    className="w-full px-3 py-1.5 text-sm text-left hover:bg-gray-700 text-gray-300 flex items-center gap-2 transition-colors focus:outline-none focus:bg-gray-700"
+                  >
+                    {promptCopyStatus === 'copied' ? (
+                      <>
+                        <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        Copy Prompt
+                      </>
+                    )}
+                  </button>
+                )}
                 {/* Delete button - only for non-active sessions */}
                 {!isActiveProcess && onDelete && (
                   <>
