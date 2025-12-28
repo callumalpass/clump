@@ -28,8 +28,8 @@ export function StatsView({ stats, loading, error, onRefresh }: StatsViewProps) 
           </div>
 
           {/* Skeleton Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[0, 1, 2, 3].map((i) => (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {[0, 1, 2, 3, 4].map((i) => (
               <div
                 key={i}
                 className="bg-gray-800/50 rounded-lg p-4 skeleton-item-enter"
@@ -44,8 +44,8 @@ export function StatsView({ stats, loading, error, onRefresh }: StatsViewProps) 
           {/* Skeleton This Week Section */}
           <div className="bg-gray-800/50 rounded-lg p-4">
             <div className="h-4 w-24 bg-gray-700 rounded skeleton-shimmer mb-3" />
-            <div className="grid grid-cols-3 gap-4">
-              {[0, 1, 2].map((i) => (
+            <div className="grid grid-cols-4 gap-4">
+              {[0, 1, 2, 3].map((i) => (
                 <div key={i}>
                   <div className="h-8 w-16 bg-gray-700 rounded skeleton-shimmer mb-1" />
                   <div className="h-3 w-14 bg-gray-700 rounded skeleton-shimmer" />
@@ -115,6 +115,11 @@ export function StatsView({ stats, loading, error, onRefresh }: StatsViewProps) 
 
   const daysToShow = dateRange === 'all' ? stats.daily_activity.length : dateRange;
 
+  // Calculate derived stats
+  const avgMessagesPerSession = stats.total_sessions > 0
+    ? Math.round(stats.total_messages / stats.total_sessions)
+    : 0;
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-6xl mx-auto p-6 space-y-6">
@@ -146,7 +151,7 @@ export function StatsView({ stats, loading, error, onRefresh }: StatsViewProps) 
         </div>
 
         {/* Summary cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <StatCard
             label="Total Sessions"
             value={stats.total_sessions.toLocaleString()}
@@ -157,21 +162,26 @@ export function StatsView({ stats, loading, error, onRefresh }: StatsViewProps) 
             value={stats.total_messages.toLocaleString()}
           />
           <StatCard
-            label="Estimated Cost"
-            value={formatCost(stats.total_estimated_cost_usd)}
-            subtext="All time"
-            highlight
+            label="Avg per Session"
+            value={avgMessagesPerSession.toLocaleString()}
+            subtext="messages"
           />
           <StatCard
             label="Longest Session"
             value={stats.longest_session_minutes ? formatDuration(stats.longest_session_minutes) : 'N/A'}
+          />
+          <StatCard
+            label="Estimated Cost"
+            value={formatCost(stats.total_estimated_cost_usd)}
+            subtext="All time"
+            highlight
           />
         </div>
 
         {/* This week summary */}
         <div className="bg-gray-800/50 rounded-lg p-4">
           <h2 className="text-sm font-medium text-gray-400 mb-3">This Week</h2>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             <div>
               <div className="text-2xl font-semibold text-white tabular-nums">
                 {stats.week_stats.message_count.toLocaleString()}
@@ -189,6 +199,14 @@ export function StatsView({ stats, loading, error, onRefresh }: StatsViewProps) 
                 {stats.week_stats.tool_call_count.toLocaleString()}
               </div>
               <div className="text-xs text-gray-500">Tool Calls</div>
+            </div>
+            <div>
+              <div className="text-2xl font-semibold text-white tabular-nums">
+                {stats.week_stats.session_count > 0
+                  ? Math.round(stats.week_stats.message_count / stats.week_stats.session_count)
+                  : 0}
+              </div>
+              <div className="text-xs text-gray-500">Avg/Session</div>
             </div>
           </div>
         </div>
