@@ -16,6 +16,8 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
+# Valid command categories - used for validation and iteration
+COMMAND_CATEGORIES = frozenset({"issue", "pr", "general"})
 
 router = APIRouter()
 
@@ -201,8 +203,8 @@ async def get_command(
     repo_path: Optional[str] = Query(None, description="Path to target repo")
 ) -> CommandMetadata:
     """Get a specific command by category and ID"""
-    if category not in ("issue", "pr", "general"):
-        raise HTTPException(status_code=400, detail="Category must be 'issue', 'pr', or 'general'")
+    if category not in COMMAND_CATEGORIES:
+        raise HTTPException(status_code=400, detail=f"Category must be one of: {', '.join(sorted(COMMAND_CATEGORIES))}")
 
     # Try repo-specific first if path provided (highest priority)
     if repo_path:
@@ -242,8 +244,8 @@ async def create_command(
     repo_path: Optional[str] = Query(None, description="Path to save command (defaults to clump)")
 ) -> CommandMetadata:
     """Create a new command"""
-    if category not in ("issue", "pr", "general"):
-        raise HTTPException(status_code=400, detail="Category must be 'issue', 'pr', or 'general'")
+    if category not in COMMAND_CATEGORIES:
+        raise HTTPException(status_code=400, detail=f"Category must be one of: {', '.join(sorted(COMMAND_CATEGORIES))}")
 
     # Determine where to save
     if repo_path:
@@ -290,8 +292,8 @@ async def update_command(
     repo_path: Optional[str] = Query(None, description="Path to repo containing the command")
 ) -> CommandMetadata:
     """Update an existing command"""
-    if category not in ("issue", "pr", "general"):
-        raise HTTPException(status_code=400, detail="Category must be 'issue', 'pr', or 'general'")
+    if category not in COMMAND_CATEGORIES:
+        raise HTTPException(status_code=400, detail=f"Category must be one of: {', '.join(sorted(COMMAND_CATEGORIES))}")
 
     # Find the command file
     file_path = None
@@ -334,8 +336,8 @@ async def delete_command(
     repo_path: Optional[str] = Query(None, description="Path to repo containing the command")
 ) -> dict:
     """Delete a command"""
-    if category not in ("issue", "pr", "general"):
-        raise HTTPException(status_code=400, detail="Category must be 'issue', 'pr', or 'general'")
+    if category not in COMMAND_CATEGORIES:
+        raise HTTPException(status_code=400, detail=f"Category must be one of: {', '.join(sorted(COMMAND_CATEGORIES))}")
 
     # Find the command file
     file_path = None
