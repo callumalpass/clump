@@ -10,6 +10,10 @@ import {
 } from './costs';
 
 describe('MODEL_PRICING', () => {
+  it('contains Claude 4.5 models', () => {
+    expect(MODEL_PRICING['claude-opus-4-5-20251101']).toBeDefined();
+  });
+
   it('contains Claude 4 models', () => {
     expect(MODEL_PRICING['claude-sonnet-4-20250514']).toBeDefined();
     expect(MODEL_PRICING['claude-opus-4-20250514']).toBeDefined();
@@ -90,6 +94,17 @@ describe('calculateCost', () => {
   it('uses Opus pricing when model contains "opus"', () => {
     const cost = calculateCost(1000000, 0, 0, 0, 'claude-opus-4-20250514');
     expect(cost).toBeCloseTo(15.0, 2); // Opus input is $15/M
+  });
+
+  it('uses Opus 4.5 pricing for exact model ID', () => {
+    const cost = calculateCost(1000000, 0, 0, 0, 'claude-opus-4-5-20251101');
+    expect(cost).toBeCloseTo(15.0, 2); // Opus 4.5 input is $15/M
+  });
+
+  it('uses Opus pricing for partial model match containing "opus"', () => {
+    // Should match any model containing "opus" in the name
+    const cost = calculateCost(1000000, 0, 0, 0, 'some-opus-variant');
+    expect(cost).toBeCloseTo(15.0, 2); // Should fall back to Opus pricing
   });
 
   it('uses Haiku pricing when model contains "haiku"', () => {

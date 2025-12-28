@@ -12,6 +12,13 @@ export const MODEL_PRICING: Record<string, {
   cacheRead: number;
   cacheWrite: number;
 }> = {
+  // Claude 4.5 models (latest)
+  'claude-opus-4-5-20251101': {
+    input: 15.00,
+    output: 75.00,
+    cacheRead: 1.50,
+    cacheWrite: 18.75,
+  },
   // Claude 4 models (current)
   'claude-sonnet-4-20250514': {
     input: 3.00,
