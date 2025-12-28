@@ -874,7 +874,7 @@ export default function App() {
                     if (el) tabRefs.current.set(tab, el);
                   }}
                   onClick={() => setActiveTab(tab)}
-                  className={`flex-1 px-4 py-2 text-sm capitalize focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset flex items-center justify-center gap-1.5 transition-colors duration-150 ${
+                  className={`flex-1 px-4 py-2 text-sm capitalize outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset flex items-center justify-center gap-1.5 transition-colors duration-150 ${
                     activeTab === tab
                       ? 'text-white'
                       : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
