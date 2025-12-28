@@ -325,7 +325,7 @@ export function ScheduleDetail({
                   <label className="block text-gray-500 mb-1">Command</label>
                   <select
                     value={editForm.command_id || ''}
-                    onChange={(e) => setEditForm({ ...editForm, command_id: e.target.value || undefined })}
+                    onChange={(e) => setEditForm({ ...editForm, command_id: e.target.value || null })}
                     className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-gray-200"
                   >
                     {(() => {
@@ -383,7 +383,7 @@ export function ScheduleDetail({
                       const cmd = allCommands.find(c => c.id === e.target.value);
                       setEditForm({
                         ...editForm,
-                        command_id: e.target.value || undefined,
+                        command_id: e.target.value || null,
                         custom_prompt: cmd?.template || editForm.custom_prompt,
                       });
                     }}
@@ -430,9 +430,9 @@ export function ScheduleDetail({
                     ...editForm,
                     custom_prompt: e.target.value,
                     // Clear command_id if in custom mode and user is typing
-                    ...(((editForm.target_type || schedule?.target_type) === 'custom') ? { command_id: undefined } : {})
+                    ...(((editForm.target_type || schedule?.target_type) === 'custom') ? { command_id: null } : {})
                   })}
-                  className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-gray-200 h-24 resize-none font-mono text-xs"
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-gray-200 h-48 resize-y font-mono text-xs"
                   placeholder={(editForm.target_type || schedule?.target_type) === 'custom'
                     ? "Run a security audit on all API endpoints..."
                     : "Optional custom prompt to override the command's default prompt..."}
@@ -498,8 +498,18 @@ export function ScheduleDetail({
         </div>
 
         {runs.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            No runs yet. Click "Run Now" to trigger this schedule.
+          <div className="flex flex-col items-center justify-center py-8">
+            <div className="text-center p-6 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-xs empty-state-enter">
+              <div className="w-14 h-14 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4 empty-state-icon-float">
+                <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <p className="text-gray-300 font-medium mb-1">No runs yet</p>
+              <p className="text-gray-400 text-sm">
+                Click "Run Now" to trigger this schedule manually
+              </p>
+            </div>
           </div>
         ) : (
           <div className="space-y-2">
