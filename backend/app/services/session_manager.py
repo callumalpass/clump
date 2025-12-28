@@ -13,6 +13,19 @@ Uses Claude Code CLI flags for fine-grained permission control:
 """
 
 import asyncio
+import fcntl
+import json
+import os
+import pty
+import signal
+import struct
+import termios
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Callable, TypedDict
+from uuid import uuid4
+
+from app.config import Settings
 
 # Initial PTY dimensions (larger default for modern displays)
 # Frontend will send actual dimensions once terminal component mounts
@@ -28,18 +41,27 @@ SIGTERM_SIGKILL_DELAY_SECS = 0.1  # Grace period between SIGTERM and SIGKILL
 # Buffer size for reading from PTY file descriptor
 PTY_READ_BUFFER_SIZE = 4096
 
-import os
-import pty
-import signal
-import struct
-import fcntl
-import termios
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Callable
-from uuid import uuid4
 
-from app.config import Settings
+class McpServerConfig(TypedDict, total=False):
+    """Configuration for a single MCP server.
+
+    Attributes:
+        type: Transport type (e.g., "http", "stdio").
+        url: Server URL for HTTP transport.
+        headers: HTTP headers (e.g., for authorization).
+        command: Command to run for stdio transport.
+        args: Command arguments for stdio transport.
+    """
+
+    type: str
+    url: str
+    headers: dict[str, str]
+    command: str
+    args: list[str]
+
+
+# Type alias for MCP configuration dict mapping server names to their configs
+McpConfig = dict[str, McpServerConfig]
 
 
 @dataclass
@@ -201,11 +223,9 @@ class ProcessManager:
         model: str | None = None,
         resume_session: str | None = None,
         claude_session_id: str | None = None,
-        mcp_config: dict | None = None,
+        mcp_config: McpConfig | None = None,
     ) -> list[str]:
         """Build Claude Code command arguments with proper flags."""
-        import json
-
         args = [settings.claude_command]
 
         # Resume session if specified
