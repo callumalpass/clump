@@ -8,7 +8,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, TypedDict
 from uuid import uuid4
 
 from croniter import croniter
@@ -24,6 +24,14 @@ from app.services.event_manager import event_manager, EventType
 from app.routers.commands import find_command_file, parse_command_file
 
 logger = logging.getLogger(__name__)
+
+
+class FilterParams(TypedDict):
+    """Typed dictionary for parsed filter query parameters."""
+
+    state: str
+    labels: list[str]
+    exclude_labels: list[str]
 
 
 def calculate_next_run(cron_expression: str, timezone_str: str) -> datetime:
@@ -49,7 +57,7 @@ def calculate_next_run(cron_expression: str, timezone_str: str) -> datetime:
     return next_run.astimezone(pytz.UTC).replace(tzinfo=None)
 
 
-def parse_filter_query(filter_query: str | None) -> dict:
+def parse_filter_query(filter_query: str | None) -> dict | FilterParams:
     """
     Parse a GitHub-style filter query into parameters.
 
@@ -61,12 +69,12 @@ def parse_filter_query(filter_query: str | None) -> dict:
 
     Returns:
         Empty dict if filter_query is None, empty, or whitespace-only.
-        Otherwise returns dict with state, labels, and exclude_labels.
+        Otherwise returns FilterParams with state, labels, and exclude_labels.
     """
     if not filter_query or not filter_query.strip():
         return {}
 
-    filters: dict = {
+    filters: FilterParams = {
         "state": "open",
         "labels": [],
         "exclude_labels": [],
