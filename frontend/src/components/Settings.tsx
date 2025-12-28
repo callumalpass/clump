@@ -172,13 +172,19 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 text-sm capitalize focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset ${
+              className={`relative px-4 py-2.5 text-sm capitalize focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset transition-colors duration-150 ${
                 activeTab === tab
-                  ? 'text-white border-b-2 border-blue-500'
-                  : 'text-gray-400 hover:text-white'
+                  ? 'text-white'
+                  : 'text-gray-400 hover:text-gray-200'
               }`}
             >
               {tab === 'github' ? 'GitHub' : tab}
+              {/* Animated underline indicator */}
+              <span
+                className={`absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 transition-all duration-200 ease-out ${
+                  activeTab === tab ? 'opacity-100 scale-x-100' : 'opacity-0 scale-x-0'
+                }`}
+              />
             </button>
           ))}
         </div>
@@ -186,7 +192,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
         {/* Content */}
         <div className="flex-1 overflow-auto p-4">
           {loading && activeTab !== 'github' && (
-            <div className="flex items-center justify-center py-8">
+            <div className="flex items-center justify-center py-8 tab-content-enter">
               <div className="text-gray-400">Loading settings...</div>
             </div>
           )}
@@ -198,7 +204,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
           )}
 
           {activeTab === 'github' && (
-            <div className="space-y-6">
+            <div className="space-y-6 tab-content-enter" key="github-tab">
               {/* Token Status */}
               <div>
                 <label className="block text-sm font-medium mb-2">Personal Access Token</label>
@@ -311,7 +317,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
           )}
 
           {settings && activeTab === 'permissions' && (
-            <div className="space-y-6">
+            <div className="space-y-6 tab-content-enter" key="permissions-tab">
               {/* Permission Mode */}
               <div>
                 <label className="block text-sm font-medium mb-2">Permission Mode</label>
@@ -392,7 +398,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
           )}
 
           {settings && activeTab === 'execution' && (
-            <div className="space-y-6">
+            <div className="space-y-6 tab-content-enter" key="execution-tab">
               {/* Max Turns */}
               <div>
                 <label className="block text-sm font-medium mb-2">Max Turns</label>
@@ -470,7 +476,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
           )}
 
           {activeTab === 'commands' && (
-            <div className="space-y-4">
+            <div className="space-y-4 tab-content-enter" key="commands-tab">
               <div>
                 <h3 className="text-sm font-medium mb-2">Session Commands</h3>
                 <p className="text-xs text-gray-400 mb-4">
@@ -497,7 +503,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
           )}
 
           {settings && activeTab === 'advanced' && (
-            <div className="space-y-6">
+            <div className="space-y-6 tab-content-enter" key="advanced-tab">
               {/* MCP GitHub */}
               <div>
                 <label className="flex items-center gap-3 cursor-pointer">
