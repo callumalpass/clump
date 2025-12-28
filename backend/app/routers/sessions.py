@@ -1097,7 +1097,7 @@ def _format_edit_tool(tool_input: dict) -> str:
     file_path = tool_input.get("file_path") or "unknown"
     old_str = tool_input.get("old_string") or ""
     new_str = tool_input.get("new_string") or ""
-    return f"**Edit** `{file_path}`\n\n```diff\n- {old_str.replace(chr(10), chr(10) + '- ')}\n+ {new_str.replace(chr(10), chr(10) + '+ ')}\n```"
+    return f"**Edit** `{file_path}`\n\n```diff\n- {old_str.replace('\n', '\n- ')}\n+ {new_str.replace('\n', '\n+ ')}\n```"
 
 
 def _format_read_tool(tool_input: dict) -> str:
