@@ -70,9 +70,16 @@ export function formatRelativeTime(dateString: string): string {
 
 /**
  * Returns both relative time and full date for tooltip display.
+ * Returns empty strings for invalid date strings.
  */
 export function getTimeWithTooltip(dateString: string): { relative: string; full: string } {
   const date = new Date(dateString);
+
+  // Handle invalid dates consistently with formatRelativeTime
+  if (isNaN(date.getTime())) {
+    return { relative: '', full: '' };
+  }
+
   return {
     relative: formatRelativeTime(dateString),
     full: date.toLocaleString(undefined, {

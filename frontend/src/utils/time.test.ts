@@ -222,4 +222,43 @@ describe('getTimeWithTooltip', () => {
       expect(result.full).toBeTruthy();
     });
   });
+
+  describe('invalid date handling', () => {
+    it('returns empty strings for invalid date string', () => {
+      const result = getTimeWithTooltip('not-a-date');
+      expect(result.relative).toBe('');
+      expect(result.full).toBe('');
+    });
+
+    it('returns empty strings for empty string', () => {
+      const result = getTimeWithTooltip('');
+      expect(result.relative).toBe('');
+      expect(result.full).toBe('');
+    });
+
+    it('returns empty strings for malformed date', () => {
+      const result = getTimeWithTooltip('2024-13-45');
+      expect(result.relative).toBe('');
+      expect(result.full).toBe('');
+    });
+
+    it('returns empty strings for garbage input', () => {
+      const result = getTimeWithTooltip('abc-def-ghi');
+      expect(result.relative).toBe('');
+      expect(result.full).toBe('');
+    });
+
+    it('handles consistent behavior between relative and full', () => {
+      // Both should return empty for invalid dates, not a mix of empty and "Invalid Date"
+      const invalidInputs = ['invalid', '', 'not-a-date', '2024-13-45'];
+
+      invalidInputs.forEach((input) => {
+        const result = getTimeWithTooltip(input);
+        expect(result.relative).toBe('');
+        expect(result.full).toBe('');
+        // Critically: full should NOT be "Invalid Date"
+        expect(result.full).not.toBe('Invalid Date');
+      });
+    });
+  });
 });

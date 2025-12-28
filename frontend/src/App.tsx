@@ -20,7 +20,7 @@ import { StatsModal } from './components/StatsModal';
 import { Settings } from './components/Settings';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { CommandPalette, type Command } from './components/CommandPalette';
-import type { Repo, Issue, PR, SessionSummary, CommandMetadata } from './types';
+import type { Repo, Issue, PR, SessionSummary, CommandMetadata, EntityLink } from './types';
 import type { SessionListFilters } from './components/SessionList';
 import { LRUCache } from './utils/cache';
 
@@ -72,7 +72,7 @@ interface PendingPRContext {
 // Track pending session metadata for optimistic UI
 interface PendingSessionData {
   title: string;
-  entities: { kind: string; number: number }[];
+  entities: EntityLink[];
 }
 
 export default function App() {
@@ -164,6 +164,7 @@ export default function App() {
     starred: sessionListFilters.category === 'starred' ? true : undefined,
     hasEntities: sessionListFilters.category === 'with-entities' ? true : undefined,
     isActive: sessionListFilters.category === 'active' ? true : undefined,
+    model: sessionListFilters.model,
     sort: sessionListFilters.sort,
     order: sessionListFilters.order,
   };
@@ -393,7 +394,7 @@ export default function App() {
       });
 
       const title = `${command.name}: Issue #${issue.number}`;
-      const entities = [{ kind: 'issue', number: issue.number }];
+      const entities: EntityLink[] = [{ kind: 'issue', number: issue.number }];
 
       const process = await createProcess(
         selectedRepo.id,
@@ -442,7 +443,7 @@ export default function App() {
       });
 
       const title = `${command.name}: PR #${pr.number}`;
-      const entities = [{ kind: 'pr', number: pr.number }];
+      const entities: EntityLink[] = [{ kind: 'pr', number: pr.number }];
 
       const process = await createProcess(
         selectedRepo.id,
@@ -481,7 +482,7 @@ export default function App() {
     if (!selectedRepo) return;
 
     const title = 'New Session';
-    const entities: { kind: string; number: number }[] = [];
+    const entities: EntityLink[] = [];
 
     const process = await createProcess(
       selectedRepo.id,

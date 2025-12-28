@@ -96,8 +96,10 @@ export interface Process {
 // Session types (transcript-first model)
 // ==========================================
 
+export type EntityKind = 'issue' | 'pr';
+
 export interface EntityLink {
-  kind: string;  // "issue" or "pr"
+  kind: EntityKind;
   number: number;
 }
 

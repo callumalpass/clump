@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import type {
   Repo, Issue, IssueDetail, PR, PRDetail, Process,
-  SessionSummary, SessionDetail, SessionListResponse, EntityLink,
+  SessionSummary, SessionDetail, SessionListResponse, EntityLink, EntityKind,
   ClaudeCodeSettings, ProcessCreateOptions, Tag, IssueTagsMap, GitHubLabel,
   CommandsResponse, CommandMetadata, SubsessionDetail,
   RepoSessionCount, SessionCountsResponse, StatsResponse, BulkOperationResult
 } from '../types';
 
 export interface EntityInput {
-  kind: string;  // "issue" or "pr"
+  kind: EntityKind;
   number: number;
 }
 
@@ -360,12 +360,15 @@ export function useProcesses() {
 }
 
 // Sessions (transcript-first model)
+export type ModelFilter = 'all' | 'sonnet' | 'opus' | 'haiku';
+
 export interface SessionFilters {
   repoPath?: string;
   starred?: boolean;
   hasEntities?: boolean;
   search?: string;
   isActive?: boolean;
+  model?: ModelFilter;
   sort?: 'created' | 'updated' | 'messages';
   order?: 'asc' | 'desc';
 }
@@ -377,7 +380,7 @@ export function useSessions(filters: SessionFilters = {}) {
   const [perPage] = useState(30);
   const [loading, setLoading] = useState(true);
 
-  const { repoPath, starred, hasEntities, search, isActive, sort, order } = filters;
+  const { repoPath, starred, hasEntities, search, isActive, model, sort, order } = filters;
 
   // Internal fetch that optionally shows loading state
   const fetchPage = useCallback(async (pageNum: number, showLoading: boolean) => {
@@ -388,6 +391,7 @@ export function useSessions(filters: SessionFilters = {}) {
       if (starred !== undefined) params.set('starred', starred.toString());
       if (hasEntities !== undefined) params.set('has_entities', hasEntities.toString());
       if (isActive !== undefined) params.set('is_active', isActive.toString());
+      if (model && model !== 'all') params.set('model', model);
       if (search) params.set('search', search);
       if (sort) params.set('sort', sort);
       if (order) params.set('order', order);
@@ -405,7 +409,7 @@ export function useSessions(filters: SessionFilters = {}) {
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [repoPath, starred, hasEntities, search, isActive, sort, order, perPage]);
+  }, [repoPath, starred, hasEntities, search, isActive, model, sort, order, perPage]);
 
   // Public refresh - silent by default for polling
   const refresh = useCallback(() => fetchPage(page, false), [fetchPage, page]);
