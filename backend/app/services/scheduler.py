@@ -20,6 +20,7 @@ from app.models import ScheduledJob, ScheduledJobRun, ScheduledJobStatus, Sessio
 from app.storage import load_repos, get_repo_by_id, encode_path, SessionMetadata, EntityLink, save_session_metadata
 from app.services.headless_analyzer import headless_analyzer
 from app.services.github_client import GitHubClient
+from app.services.event_manager import event_manager, EventType
 from app.routers.commands import get_builtin_commands_dir, get_repo_commands_dir, get_user_commands_dir, parse_command_file
 
 logger = logging.getLogger(__name__)
@@ -435,6 +436,14 @@ class SchedulerService:
         # Register session as running BEFORE starting (belt and suspenders with analyze_stream tracking)
         headless_analyzer.register_running(session_id)
 
+        # Emit session created event
+        await event_manager.emit(EventType.SESSION_CREATED, {
+            "session_id": session_id,
+            "repo_path": repo["local_path"],
+            "title": title,
+            "is_active": True,
+        })
+
         try:
             # Run headless session with our pre-generated session ID
             result = await headless_analyzer.analyze(
@@ -484,6 +493,12 @@ class SchedulerService:
         finally:
             # Always unregister when done (success, failure, or exception)
             headless_analyzer.unregister_running(session_id)
+
+            # Emit session completed event
+            await event_manager.emit(EventType.SESSION_COMPLETED, {
+                "session_id": session_id,
+                "repo_path": repo["local_path"],
+            })
 
     def _calculate_next_run(self, job: ScheduledJob) -> datetime:
         """Calculate the next run time based on cron expression."""

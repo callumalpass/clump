@@ -16,6 +16,7 @@ from app.database import get_repo_db
 from app.db_helpers import get_repo_or_404
 from app.models import Session, SessionStatus
 from app.services.headless_analyzer import headless_analyzer, SessionMessage
+from app.services.event_manager import event_manager, EventType
 
 router = APIRouter()
 
@@ -82,6 +83,14 @@ async def run_headless_session(data: HeadlessSessionCreate):
         # Register session as running for reliable status tracking
         headless_analyzer.register_running(claude_session_id)
 
+        # Emit session created event
+        await event_manager.emit(EventType.SESSION_CREATED, {
+            "session_id": claude_session_id,
+            "repo_path": repo["local_path"],
+            "title": data.title,
+            "is_active": True,
+        })
+
         try:
             # Run headless session with our pre-generated session ID
             result = await headless_analyzer.analyze(
@@ -123,6 +132,12 @@ async def run_headless_session(data: HeadlessSessionCreate):
             # Always unregister when done
             headless_analyzer.unregister_running(claude_session_id)
 
+            # Emit session completed event
+            await event_manager.emit(EventType.SESSION_COMPLETED, {
+                "session_id": claude_session_id,
+                "repo_path": repo["local_path"],
+            })
+
 
 @router.post("/headless/run/stream")
 async def run_headless_session_stream(data: HeadlessSessionCreate):
@@ -154,6 +169,14 @@ async def run_headless_session_stream(data: HeadlessSessionCreate):
 
     # Register session as running BEFORE the generator starts
     headless_analyzer.register_running(claude_session_id)
+
+    # Emit session created event (must be done before returning StreamingResponse)
+    await event_manager.emit(EventType.SESSION_CREATED, {
+        "session_id": claude_session_id,
+        "repo_path": repo["local_path"],
+        "title": data.title,
+        "is_active": True,
+    })
 
     async def generate():
         """Generate streaming response."""
@@ -216,6 +239,12 @@ async def run_headless_session_stream(data: HeadlessSessionCreate):
         finally:
             # Always unregister when generator completes
             headless_analyzer.unregister_running(claude_session_id)
+
+            # Emit session completed event
+            await event_manager.emit(EventType.SESSION_COMPLETED, {
+                "session_id": claude_session_id,
+                "repo_path": repo["local_path"],
+            })
 
     return StreamingResponse(
         generate(),
