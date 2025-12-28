@@ -412,36 +412,60 @@ class TestListPRs:
         """Test basic PR listing."""
         mock_repo = MagicMock()
         mock_pr = create_mock_pr()
-        mock_repo.get_pulls.return_value = [mock_pr]
+        # Search returns Issue objects, then we fetch full PR data
+        mock_issue = MagicMock()
+        mock_issue.number = mock_pr.number
+        mock_results = MagicMock()
+        mock_results.totalCount = 1
+        mock_results.__iter__ = lambda self: iter([mock_issue])
+        mock_github.search_issues.return_value = mock_results
+        mock_repo.get_pull.return_value = mock_pr
         mock_github.get_repo.return_value = mock_repo
 
-        prs = client.list_prs("owner", "repo")
+        prs, total = client.list_prs("owner", "repo")
 
         assert len(prs) == 1
+        assert total == 1
         assert prs[0].number == 123
         assert prs[0].title == "Test PR"
-        mock_repo.get_pulls.assert_called_once_with(state="open")
 
     def test_list_prs_with_state(self, client, mock_github):
         """Test PR listing with different states."""
         mock_repo = MagicMock()
-        mock_repo.get_pulls.return_value = []
+        mock_results = MagicMock()
+        mock_results.totalCount = 0
+        mock_results.__iter__ = lambda self: iter([])
+        mock_github.search_issues.return_value = mock_results
         mock_github.get_repo.return_value = mock_repo
 
         client.list_prs("owner", "repo", state="closed")
 
-        mock_repo.get_pulls.assert_called_once_with(state="closed")
+        # Verify search query includes state:closed
+        query = mock_github.search_issues.call_args[0][0]
+        assert "state:closed" in query
 
-    def test_list_prs_respects_limit(self, client, mock_github):
-        """Test PR listing respects the limit parameter."""
+    def test_list_prs_respects_per_page(self, client, mock_github):
+        """Test PR listing respects the per_page parameter."""
         mock_repo = MagicMock()
         mock_prs = [create_mock_pr(number=i) for i in range(10)]
-        mock_repo.get_pulls.return_value = mock_prs
+        # Create mock issues to be returned by search
+        mock_issues = []
+        for pr in mock_prs:
+            mock_issue = MagicMock()
+            mock_issue.number = pr.number
+            mock_issues.append(mock_issue)
+        mock_results = MagicMock()
+        mock_results.totalCount = 10
+        mock_results.__iter__ = lambda self: iter(mock_issues)
+        mock_github.search_issues.return_value = mock_results
+        # Return corresponding PR for each issue number
+        mock_repo.get_pull.side_effect = mock_prs
         mock_github.get_repo.return_value = mock_repo
 
-        prs = client.list_prs("owner", "repo", limit=3)
+        prs, total = client.list_prs("owner", "repo", per_page=3)
 
         assert len(prs) == 3
+        assert total == 10
 
     def test_list_prs_converts_to_pr_data(self, client, mock_github):
         """Test that PR objects are converted to PRData."""
@@ -455,10 +479,17 @@ class TestListPRs:
             deletions=50,
             labels=["feature", "ready"],
         )
-        mock_repo.get_pulls.return_value = [mock_pr]
+        # Mock search results
+        mock_issue = MagicMock()
+        mock_issue.number = 456
+        mock_results = MagicMock()
+        mock_results.totalCount = 1
+        mock_results.__iter__ = lambda self: iter([mock_issue])
+        mock_github.search_issues.return_value = mock_results
+        mock_repo.get_pull.return_value = mock_pr
         mock_github.get_repo.return_value = mock_repo
 
-        prs = client.list_prs("owner", "repo")
+        prs, total = client.list_prs("owner", "repo")
 
         assert isinstance(prs[0], PRData)
         assert prs[0].number == 456
@@ -674,10 +705,16 @@ class TestEdgeCases:
         mock_pr = create_mock_pr()
         mock_pr.body = None
 
-        mock_repo.get_pulls.return_value = [mock_pr]
+        mock_issue = MagicMock()
+        mock_issue.number = mock_pr.number
+        mock_results = MagicMock()
+        mock_results.totalCount = 1
+        mock_results.__iter__ = lambda self: iter([mock_issue])
+        mock_github.search_issues.return_value = mock_results
+        mock_repo.get_pull.return_value = mock_pr
         mock_github.get_repo.return_value = mock_repo
 
-        prs = client.list_prs("owner", "repo")
+        prs, _ = client.list_prs("owner", "repo")
 
         assert prs[0].body == ""
 
@@ -701,10 +738,16 @@ class TestEdgeCases:
         mock_pr = create_mock_pr()
         mock_pr.user = None
 
-        mock_repo.get_pulls.return_value = [mock_pr]
+        mock_issue = MagicMock()
+        mock_issue.number = mock_pr.number
+        mock_results = MagicMock()
+        mock_results.totalCount = 1
+        mock_results.__iter__ = lambda self: iter([mock_issue])
+        mock_github.search_issues.return_value = mock_results
+        mock_repo.get_pull.return_value = mock_pr
         mock_github.get_repo.return_value = mock_repo
 
-        prs = client.list_prs("owner", "repo")
+        prs, _ = client.list_prs("owner", "repo")
 
         assert prs[0].author == "unknown"
 
@@ -723,12 +766,16 @@ class TestEdgeCases:
     def test_empty_pr_list(self, client, mock_github):
         """Test handling empty PR list."""
         mock_repo = MagicMock()
-        mock_repo.get_pulls.return_value = []
+        mock_results = MagicMock()
+        mock_results.totalCount = 0
+        mock_results.__iter__ = lambda self: iter([])
+        mock_github.search_issues.return_value = mock_results
         mock_github.get_repo.return_value = mock_repo
 
-        prs = client.list_prs("owner", "repo")
+        prs, total = client.list_prs("owner", "repo")
 
         assert prs == []
+        assert total == 0
 
     def test_issue_with_empty_labels(self, client, mock_github):
         """Test handling issue with no labels."""

@@ -332,7 +332,7 @@ class SchedulerService:
         filters = parse_filter_query(job.filter_query)
 
         client = GitHubClient()
-        prs = client.list_prs(
+        prs, _ = client.list_prs(
             owner=repo["owner"],
             name=repo["name"],
             state=filters.get("state", "open"),
