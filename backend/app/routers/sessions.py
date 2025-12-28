@@ -414,7 +414,7 @@ def _session_to_summary(
     active_session_ids: set[str]
 ) -> SessionSummaryResponse:
     """Convert a DiscoveredSession to SessionSummaryResponse."""
-    repo_path = decode_path(session.encoded_path)
+    repo_path = session.repo_path
     repo_name = _get_repo_name(session.encoded_path)
 
     # Quick scan for transcript info
@@ -695,8 +695,7 @@ async def get_session(session_id: str):
         )
 
     # Parse the full transcript
-    repo_path = decode_path(session.encoded_path)
-    parsed = parse_transcript(session_id, repo_path)
+    parsed = parse_transcript(session_id, session.repo_path)
 
     if not parsed:
         raise HTTPException(status_code=500, detail="Failed to parse transcript")
@@ -733,10 +732,9 @@ async def get_subsession(session_id: str, agent_id: str):
 
     # The subsession file is in the same directory as the parent
     subsession_id = f"agent-{agent_id}"
-    repo_path = decode_path(parent_session.encoded_path)
 
     # Parse the subsession transcript
-    parsed = parse_transcript(subsession_id, repo_path)
+    parsed = parse_transcript(subsession_id, parent_session.repo_path)
 
     if not parsed:
         raise HTTPException(status_code=404, detail="Subsession not found")
@@ -748,7 +746,7 @@ async def get_subsession(session_id: str, agent_id: str):
         agent_id=agent_id,
         parent_session_id=session_id,
         encoded_path=parent_session.encoded_path,
-        repo_path=repo_path,
+        repo_path=parent_session.repo_path,
         messages=messages,
         summary=parsed.summary,
         model=parsed.model,
@@ -782,7 +780,7 @@ async def update_session_metadata(session_id: str, data: SessionMetadataUpdate):
     # Load or create metadata
     metadata = session.metadata or SessionMetadata(
         session_id=session_id,
-        repo_path=decode_path(session.encoded_path),
+        repo_path=session.repo_path,
     )
 
     # Update fields
@@ -801,7 +799,7 @@ async def update_session_metadata(session_id: str, data: SessionMetadataUpdate):
     # Emit session updated event
     await event_manager.emit(EventType.SESSION_UPDATED, {
         "session_id": session_id,
-        "repo_path": decode_path(session.encoded_path),
+        "repo_path": session.repo_path,
         "changes": {
             "title": metadata.title,
             "starred": metadata.starred,
@@ -829,7 +827,7 @@ async def add_entity_to_session(session_id: str, data: AddEntityRequest):
     # Load or create metadata
     metadata = session.metadata or SessionMetadata(
         session_id=session_id,
-        repo_path=decode_path(session.encoded_path),
+        repo_path=session.repo_path,
     )
 
     # Check if already linked
@@ -849,7 +847,7 @@ async def add_entity_to_session(session_id: str, data: AddEntityRequest):
     # Emit session updated event
     await event_manager.emit(EventType.SESSION_UPDATED, {
         "session_id": session_id,
-        "repo_path": decode_path(session.encoded_path),
+        "repo_path": session.repo_path,
         "changes": {
             "entities": [{"kind": e.kind, "number": e.number} for e in metadata.entities],
         },
@@ -887,7 +885,7 @@ async def remove_entity_from_session(session_id: str, entity_idx: int):
     # Emit session updated event
     await event_manager.emit(EventType.SESSION_UPDATED, {
         "session_id": session_id,
-        "repo_path": decode_path(session.encoded_path),
+        "repo_path": session.repo_path,
         "changes": {
             "entities": [{"kind": e.kind, "number": e.number} for e in session.metadata.entities],
         },
@@ -921,7 +919,7 @@ async def continue_session(session_id: str, data: ContinueSessionRequest = None)
     if matched_repo:
         repo_path = matched_repo["local_path"]
     else:
-        repo_path = decode_path(session.encoded_path)
+        repo_path = session.repo_path
 
     # Get prompt from request if provided
     initial_prompt = data.prompt if data else None
@@ -1157,8 +1155,7 @@ async def export_session(
         raise HTTPException(status_code=404, detail="Session not found")
 
     # Parse the full transcript
-    repo_path = decode_path(session.encoded_path)
-    parsed = parse_transcript(session_id, repo_path)
+    parsed = parse_transcript(session_id, session.repo_path)
 
     if not parsed:
         raise HTTPException(status_code=500, detail="Failed to parse transcript")
@@ -1169,7 +1166,7 @@ async def export_session(
     content = _export_session_to_markdown(
         parsed=parsed,
         metadata=session.metadata,
-        repo_path=repo_path,
+        repo_path=session.repo_path,
         repo_name=repo_name,
     )
 
@@ -1238,7 +1235,7 @@ async def delete_session(session_id: str):
     # Emit session deleted event
     await event_manager.emit(EventType.SESSION_DELETED, {
         "session_id": session_id,
-        "repo_path": decode_path(session.encoded_path),
+        "repo_path": session.repo_path,
     })
 
     return {
@@ -1339,7 +1336,7 @@ async def bulk_delete_sessions(data: BulkDeleteRequest):
         # Emit session deleted event
         await event_manager.emit(EventType.SESSION_DELETED, {
             "session_id": session_id,
-            "repo_path": decode_path(session.encoded_path),
+            "repo_path": session.repo_path,
         })
 
         results.append(BulkDeleteResult(
@@ -1414,7 +1411,7 @@ async def bulk_update_sessions(data: BulkUpdateRequest):
         # Load or create metadata
         metadata = session.metadata or SessionMetadata(
             session_id=session_id,
-            repo_path=decode_path(session.encoded_path),
+            repo_path=session.repo_path,
         )
 
         # Update starred status if provided
@@ -1428,7 +1425,7 @@ async def bulk_update_sessions(data: BulkUpdateRequest):
             # Emit session updated event
             await event_manager.emit(EventType.SESSION_UPDATED, {
                 "session_id": session_id,
-                "repo_path": decode_path(session.encoded_path),
+                "repo_path": session.repo_path,
                 "changes": {
                     "starred": metadata.starred,
                 },

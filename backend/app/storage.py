@@ -92,6 +92,11 @@ class DiscoveredSession:
     file_size: int  # File size in bytes
     metadata: Optional[SessionMetadata] = None  # Sidecar metadata if exists
 
+    @property
+    def repo_path(self) -> str:
+        """Decode the encoded_path to get the original repository path."""
+        return decode_path(self.encoded_path)
+
 
 # ==========================================
 # Directory and Path Utilities
