@@ -957,7 +957,7 @@ export function SessionView({
                 </svg>
               </div>
               <p className="text-gray-300 font-medium mb-1">Failed to load session</p>
-              <p className="text-gray-500 text-sm">{error}</p>
+              <p className="text-gray-400 text-sm">{error}</p>
             </div>
           </div>
         )}
@@ -980,7 +980,7 @@ export function SessionView({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
             <p className="text-gray-400 font-medium mb-1">No transcript available</p>
-            <p className="text-gray-500 text-sm">This session didn't produce a transcript</p>
+            <p className="text-gray-400 text-sm">This session didn't produce a transcript</p>
           </div>
         )}
       </div>
@@ -1061,7 +1061,7 @@ export function SessionView({
               <button
                 onClick={handleDeleteConfirm}
                 disabled={deleting}
-                className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                className="btn-danger px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50 flex items-center gap-2"
               >
                 {deleting ? (
                   <>

@@ -73,7 +73,7 @@ export function StartSessionButton({ issue, commands, onStart, size = 'md', clas
       {/* Main button */}
       <button
         onClick={handleMainClick}
-        className={`px-3 ${sizeClasses} bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-l-md font-medium border-r border-blue-500 transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900 focus-visible:z-10`}
+        className={`btn-primary px-3 ${sizeClasses} bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-l-md font-medium border-r border-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900 focus-visible:z-10`}
       >
         {selectedCommand?.shortName || 'Start'}
       </button>
@@ -84,7 +84,7 @@ export function StartSessionButton({ issue, commands, onStart, size = 'md', clas
           e.stopPropagation();
           setShowDropdown(!showDropdown);
         }}
-        className={`px-2 ${sizeClasses} bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-r-md transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900`}
+        className={`btn-primary px-2 ${sizeClasses} bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-r-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900`}
         aria-label="Select session type"
         aria-expanded={showDropdown}
         aria-haspopup="listbox"

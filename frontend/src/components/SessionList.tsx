@@ -173,7 +173,7 @@ export function SessionList({
             <p className="text-gray-300 font-medium mb-1">
               {hasFilters ? 'No matching sessions' : 'No Claude sessions found'}
             </p>
-            <p className="text-gray-500 text-sm">
+            <p className="text-gray-400 text-sm">
               {hasFilters
                 ? 'Try adjusting your filters'
                 : 'Sessions from Claude Code will appear here'}

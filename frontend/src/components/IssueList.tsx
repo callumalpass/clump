@@ -131,7 +131,7 @@ export function IssueList({
               </svg>
             </div>
             <p className="text-gray-300 font-medium mb-1">No issues found</p>
-            <p className="text-gray-500 text-sm">Try adjusting your filters or check the repository</p>
+            <p className="text-gray-400 text-sm">Try adjusting your filters or check the repository</p>
           </div>
         </div>
       )}
@@ -178,7 +178,7 @@ export function IssueList({
               </svg>
             </div>
             <p className="text-gray-300 font-medium mb-1">No matching issues</p>
-            <p className="text-gray-500 text-sm mb-3">
+            <p className="text-gray-400 text-sm mb-3">
               {selectedTagId && filters.sessionStatus
                 ? 'No issues match the selected tag and status filter'
                 : selectedTagId

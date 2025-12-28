@@ -197,7 +197,7 @@ export function PRList({
             <p className="text-gray-300 font-medium mb-1">
               {hasFilters ? 'No matching pull requests' : 'No pull requests'}
             </p>
-            <p className="text-gray-500 text-sm mb-3">
+            <p className="text-gray-400 text-sm mb-3">
               {hasFilters
                 ? filters.search && filters.sessionStatus
                   ? 'No PRs match your search and status filter'
