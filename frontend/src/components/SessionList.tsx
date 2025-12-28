@@ -128,7 +128,7 @@ export function SessionList({
 
   if (loading) {
     return (
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col flex-1 min-h-0">
         {filterBar}
         <div className="divide-y divide-gray-700">
           {[1, 2, 3, 4].map((i) => (
@@ -145,6 +145,15 @@ export function SessionList({
             </div>
           ))}
         </div>
+        {/* Pagination skeleton */}
+        <div className="shrink-0 border-t border-gray-700 p-2 flex items-center justify-between text-sm">
+          <div className="h-4 w-20 rounded skeleton-shimmer" />
+          <div className="flex items-center gap-1">
+            <div className="h-7 w-8 rounded skeleton-shimmer" />
+            <div className="h-4 w-12 rounded mx-1 skeleton-shimmer" />
+            <div className="h-7 w-8 rounded skeleton-shimmer" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -152,7 +161,7 @@ export function SessionList({
   if (sessions.length === 0) {
     const hasFilters = filters.search || filters.category !== 'all';
     return (
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col flex-1 min-h-0">
         {filterBar}
         <div className="flex-1 flex flex-col items-center justify-center p-8">
           <div className="text-center p-6 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-xs empty-state-enter">
@@ -308,38 +317,39 @@ export function SessionList({
         ))}
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="shrink-0 border-t border-gray-700 p-2 flex items-center justify-end text-sm">
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => onPageChange(page - 1)}
-              disabled={page <= 1}
-              className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900 flex items-center gap-1"
-              aria-label="Go to previous page"
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              <span>Prev</span>
-            </button>
-            <span className="px-2 text-gray-300 tabular-nums">
-              {page} / {totalPages}
-            </span>
-            <button
-              onClick={() => onPageChange(page + 1)}
-              disabled={page >= totalPages}
-              className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900 flex items-center gap-1"
-              aria-label="Go to next page"
-            >
-              <span>Next</span>
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
+      {/* Pagination - always visible to prevent layout shift */}
+      <div className="shrink-0 border-t border-gray-700 p-2 flex items-center justify-between text-sm">
+        <span className="text-gray-400">
+          {total} sessions
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onPageChange(page - 1)}
+            disabled={page <= 1}
+            className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900 flex items-center gap-1"
+            aria-label="Go to previous page"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            <span>Prev</span>
+          </button>
+          <span className="px-2 text-gray-300 tabular-nums">
+            {page} / {totalPages || 1}
+          </span>
+          <button
+            onClick={() => onPageChange(page + 1)}
+            disabled={page >= totalPages}
+            className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900 flex items-center gap-1"
+            aria-label="Go to next page"
+          >
+            <span>Next</span>
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }

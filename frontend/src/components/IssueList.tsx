@@ -5,7 +5,7 @@ import { StartSessionButton } from './StartSessionButton';
 import { getContrastColor } from '../utils/colors';
 
 /** Consistent focus ring styling for accessibility */
-const focusRing = 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900';
+const focusRing = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900';
 
 interface IssueListProps {
   issues: Issue[];

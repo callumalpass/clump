@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, ReactNode } from 'react';
 
 // Consistent focus ring styling for accessibility
-const focusRing = 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900';
+const focusRing = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900';
 
 // Shared filter bar styling constants
 export const filterBarStyles = {
@@ -10,14 +10,14 @@ export const filterBarStyles = {
   // Toggle button group (connected buttons)
   toggleGroup: 'flex rounded-md overflow-hidden border border-gray-600',
   toggleButton: (isActive: boolean) =>
-    `toggle-btn px-2.5 py-1 text-xs ${focusRing} focus:z-10 ${
+    `toggle-btn px-2.5 py-1 text-xs transition-transform active:scale-95 ${focusRing} focus:z-10 ${
       isActive
         ? 'bg-blue-600 text-white'
         : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white'
     }`,
   // Standalone pill buttons (for category filters)
   pillButton: (isActive: boolean) =>
-    `toggle-btn px-2.5 py-1 text-xs rounded-md ${focusRing} ${
+    `toggle-btn px-2.5 py-1 text-xs rounded-md transition-transform active:scale-95 ${focusRing} ${
       isActive
         ? 'bg-blue-600 text-white'
         : 'text-gray-400 hover:text-white hover:bg-gray-700'
@@ -25,11 +25,11 @@ export const filterBarStyles = {
   // Select dropdown
   select: `bg-gray-800 border border-gray-600 rounded-md px-2 py-1 text-xs transition-colors duration-150 ${focusRing} focus:border-blue-500 focus:bg-gray-700/50`,
   // Icon button
-  iconButton: `p-1 bg-gray-800 border border-gray-600 rounded-md hover:bg-gray-700 hover:border-gray-500 transition-colors ${focusRing}`,
+  iconButton: `p-1 bg-gray-800 border border-gray-600 rounded-md hover:bg-gray-700 hover:border-gray-500 transition-all active:scale-95 ${focusRing}`,
   // Counts and metadata
   count: 'text-xs text-gray-500',
   // Clear filters
-  clearButton: `text-xs text-gray-400 hover:text-white ${focusRing}`,
+  clearButton: `text-xs text-gray-400 hover:text-white transition-transform active:scale-95 ${focusRing}`,
 };
 
 // Search input component
@@ -232,7 +232,7 @@ export function LabelSelect({ selectedLabels, availableLabels, onChange }: Label
           <button
             key={label}
             onClick={() => toggleLabel(label)}
-            className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-600 text-white ${focusRing}`}
+            className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-600 text-white transition-transform active:scale-95 ${focusRing}`}
           >
             {label}
             <span className="hover:text-blue-200">×</span>
@@ -241,7 +241,7 @@ export function LabelSelect({ selectedLabels, availableLabels, onChange }: Label
         {unselectedLabels.length > 0 && (
           <button
             onClick={() => setShowDropdown(!showDropdown)}
-            className={`px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 hover:bg-gray-600 ${focusRing}`}
+            className={`px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 hover:bg-gray-600 transition-transform active:scale-95 ${focusRing}`}
           >
             + Add
           </button>
@@ -317,7 +317,7 @@ export function RefreshButton({ onClick, loading }: RefreshButtonProps) {
     <button
       onClick={onClick}
       disabled={loading}
-      className={`p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${focusRing}`}
+      className={`p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${focusRing}`}
       title="Refresh"
     >
       <svg
