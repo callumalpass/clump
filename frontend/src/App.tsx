@@ -56,6 +56,39 @@ function HorizontalResizeHandle() {
 
 type Tab = 'issues' | 'prs' | 'history' | 'schedules';
 
+// Storage key for persisting active tab
+const ACTIVE_TAB_STORAGE_KEY = 'clump:activeTab';
+
+// Valid tab values for validation
+const VALID_TABS: Tab[] = ['issues', 'prs', 'history', 'schedules'];
+
+/**
+ * Load the active tab from localStorage, with validation.
+ * Returns 'issues' as default if stored value is invalid or missing.
+ */
+function loadActiveTab(): Tab {
+  try {
+    const stored = localStorage.getItem(ACTIVE_TAB_STORAGE_KEY);
+    if (stored && VALID_TABS.includes(stored as Tab)) {
+      return stored as Tab;
+    }
+  } catch {
+    // Ignore localStorage errors (e.g., private browsing mode)
+  }
+  return 'issues';
+}
+
+/**
+ * Save the active tab to localStorage.
+ */
+function saveActiveTab(tab: Tab): void {
+  try {
+    localStorage.setItem(ACTIVE_TAB_STORAGE_KEY, tab);
+  } catch {
+    // Ignore localStorage errors
+  }
+}
+
 // Track pending issue/PR context for processes being created
 // This fixes the race condition where the sidepane doesn't show the issue/PR
 // until the analysis is created and fetched via polling
@@ -77,7 +110,7 @@ interface PendingSessionData {
 
 export default function App() {
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>('issues');
+  const [activeTab, setActiveTabState] = useState<Tab>(loadActiveTab);
   const [selectedIssue, setSelectedIssue] = useState<number | null>(null);
   const [activeProcessId, setActiveProcessId] = useState<string | null>(null);
   // Track which sessions are open as tabs (persists after process ends) - now uses UUID strings
@@ -101,6 +134,12 @@ export default function App() {
   const [selectedSchedule, setSelectedSchedule] = useState<number | null>(null);
   // Track view mode (transcript vs terminal) per session
   const [sessionViewModes, setSessionViewModes] = useState<Record<string, 'transcript' | 'terminal'>>({});
+
+  // Wrapper for setActiveTab that also persists to localStorage
+  const setActiveTab = useCallback((tab: Tab) => {
+    setActiveTabState(tab);
+    saveActiveTab(tab);
+  }, []);
 
   // Track pending issue/PR context to show side-by-side view immediately
   const pendingIssueContextRef = useRef<PendingIssueContext | null>(null);
