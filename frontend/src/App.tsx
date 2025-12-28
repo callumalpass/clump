@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useLayoutEffect } from 'react';
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
 import { useRepos, useIssues, usePRs, useProcesses, useSessions, useTags, useIssueTags, useCommands, useSessionCounts, buildPromptFromTemplate } from './hooks/useApi';
 import { useNotifications } from './hooks/useNotifications';
@@ -88,6 +88,11 @@ export default function App() {
   // Ref for collapsible issue/PR context panel
   const contextPanelRef = useRef<PanelImperativeHandle>(null);
 
+  // Refs for animated tab indicator
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
+  const tabRefs = useRef<Map<Tab, HTMLButtonElement>>(new Map());
+  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
+
   // Save session tabs on every change
   // Track which repo the current tabs belong to (prevents saving old tabs to new repo on switch)
   const tabsRepoIdRef = useRef<number | null>(null);
@@ -134,7 +139,7 @@ export default function App() {
   const { sessions, loading: sessionsLoading, refresh: refreshSessions, continueSession, deleteSession, updateSessionMetadata, total: sessionsTotal, page: sessionsPage, totalPages: sessionsTotalPages, goToPage: goToSessionsPage } = useSessions(sessionFilters);
   const { tags, createTag } = useTags(selectedRepo?.id ?? null);
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
-  const { prs, loading: prsLoading, refresh: refreshPRs } = usePRs(selectedRepo?.id ?? null, prFilters);
+  const { prs, loading: prsLoading, refresh: refreshPRs, page: prsPage, totalPages: prsTotalPages, total: prsTotal, goToPage: goToPRsPage } = usePRs(selectedRepo?.id ?? null, prFilters);
   const { commands, refresh: refreshCommands } = useCommands(selectedRepo?.local_path);
   const { counts: sessionCounts } = useSessionCounts();
 
@@ -161,6 +166,26 @@ export default function App() {
       document.title = 'Clump';
     };
   }, [sessionsNeedingAttention.size]);
+
+  // Update the sliding tab indicator position when active tab changes
+  useLayoutEffect(() => {
+    const updateIndicator = () => {
+      const container = tabsContainerRef.current;
+      const activeTabElement = tabRefs.current.get(activeTab);
+      if (container && activeTabElement) {
+        const containerRect = container.getBoundingClientRect();
+        const tabRect = activeTabElement.getBoundingClientRect();
+        setIndicatorStyle({
+          left: tabRect.left - containerRect.left,
+          width: tabRect.width,
+        });
+      }
+    };
+    updateIndicator();
+    // Also update on window resize
+    window.addEventListener('resize', updateIndicator);
+    return () => window.removeEventListener('resize', updateIndicator);
+  }, [activeTab]);
 
   // Restore session tabs when repo changes
   useEffect(() => {
@@ -830,12 +855,12 @@ export default function App() {
             sessionCounts={sessionCounts}
           />
 
-          {/* Tabs */}
-          <div className="flex border-b border-gray-700">
+          {/* Tabs with sliding indicator */}
+          <div ref={tabsContainerRef} className="relative flex border-b border-gray-700">
             {(['issues', 'prs', 'sessions', 'schedules'] as Tab[]).map((tab) => {
               // Get count for each tab
               const count = tab === 'issues' ? issuesTotal
-                : tab === 'prs' ? prs.length
+                : tab === 'prs' ? prsTotal
                 : tab === 'sessions' ? sessionsTotal
                 : 0; // schedules don't show count
               const hasRunning = tab === 'sessions' && sessions.some(s =>
@@ -845,10 +870,13 @@ export default function App() {
               return (
                 <button
                   key={tab}
+                  ref={(el) => {
+                    if (el) tabRefs.current.set(tab, el);
+                  }}
                   onClick={() => setActiveTab(tab)}
                   className={`flex-1 px-4 py-2 text-sm capitalize focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset flex items-center justify-center gap-1.5 transition-colors duration-150 ${
                     activeTab === tab
-                      ? 'text-white border-b-2 border-blue-500'
+                      ? 'text-white'
                       : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                   }`}
                 >
@@ -868,6 +896,14 @@ export default function App() {
                 </button>
               );
             })}
+            {/* Sliding indicator */}
+            <div
+              className="absolute bottom-0 h-0.5 bg-blue-500 transition-all duration-200 ease-out"
+              style={{
+                left: indicatorStyle.left,
+                width: indicatorStyle.width,
+              }}
+            />
           </div>
 
           {/* List content */}
@@ -929,6 +965,10 @@ export default function App() {
                 sessions={sessions}
                 processes={processes}
                 onRefresh={refreshPRs}
+                page={prsPage}
+                totalPages={prsTotalPages}
+                total={prsTotal}
+                onPageChange={goToPRsPage}
               />
             )}
             {activeTab === 'schedules' && selectedRepo && (
