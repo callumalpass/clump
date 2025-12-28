@@ -72,17 +72,23 @@ def parse_filter_query(filter_query: str | None) -> dict:
         "exclude_labels": [],
     }
 
+    state_prefix = "state:"
+    label_prefix = "label:"
+    exclude_label_prefix = "-label:"
+
     parts = filter_query.split()
     for part in parts:
-        if part.startswith("state:"):
-            value = part[6:]
+        if part.startswith(state_prefix):
+            value = part[len(state_prefix) :]
             if value:  # Only set if non-empty
                 filters["state"] = value
-        elif part.startswith("label:"):
-            labels = [label for label in part[6:].split(",") if label]
+        elif part.startswith(label_prefix):
+            labels = [label for label in part[len(label_prefix) :].split(",") if label]
             filters["labels"].extend(labels)
-        elif part.startswith("-label:"):
-            labels = [label for label in part[7:].split(",") if label]
+        elif part.startswith(exclude_label_prefix):
+            labels = [
+                label for label in part[len(exclude_label_prefix) :].split(",") if label
+            ]
             filters["exclude_labels"].extend(labels)
 
     return filters
