@@ -1431,6 +1431,14 @@ export default function App() {
                     : tab === 'history' ? sessionsTotal
                     : 0; // schedules don't show count
 
+                  // Keyboard shortcut for this tab (1-4)
+                  const tabShortcuts: Record<Tab, string> = {
+                    issues: '1',
+                    prs: '2',
+                    history: '3',
+                    schedules: '4',
+                  };
+
                   return (
                     <button
                       key={tab}
@@ -1438,11 +1446,12 @@ export default function App() {
                         if (el) tabRefs.current.set(tab, el);
                       }}
                       onClick={() => setActiveTab(tab)}
-                      className={`flex-1 px-3 py-2 text-sm outline-none focus-visible:bg-blue-500/10 focus-visible:text-blue-300 flex items-center justify-center gap-1.5 transition-colors duration-150 ${
+                      className={`group flex-1 px-3 py-2 text-sm outline-none focus-visible:bg-blue-500/10 focus-visible:text-blue-300 flex items-center justify-center gap-1.5 transition-colors duration-150 ${
                         activeTab === tab
                           ? 'text-white'
                           : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                       }`}
+                      title={`${tabLabels[tab]} (${tabShortcuts[tab]})`}
                     >
                       <span className={`transition-colors duration-150 ${activeTab === tab ? 'text-blue-400' : ''}`}>
                         {tabIcons[tab]}
@@ -1457,6 +1466,7 @@ export default function App() {
                           {count > 999 ? '999+' : count}
                         </span>
                       )}
+                      <kbd className="kbd-hint opacity-0 group-hover:opacity-100 transition-opacity ml-1">{tabShortcuts[tab]}</kbd>
                     </button>
                   );
                 })}
