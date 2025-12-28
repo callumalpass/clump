@@ -238,7 +238,13 @@ export function SessionList({
         {sessions.map((session, index) => (
           <div
             key={session.session_id}
-            className="group p-3 cursor-pointer border-l-2 border-transparent hover:bg-gray-800/60 hover:border-blue-500/50 transition-all duration-150 ease-out list-item-hover list-item-enter"
+            className={`group p-3 cursor-pointer border-l-2 hover:bg-gray-800/60 transition-all duration-150 ease-out list-item-hover list-item-enter ${
+              session.is_active
+                ? 'border-yellow-500/70 hover:border-yellow-400'
+                : isRecentlyModified(session.modified_at)
+                ? 'border-blue-500/60 hover:border-blue-400'
+                : 'border-green-500/30 hover:border-green-500/60'
+            }`}
             style={{ '--item-index': Math.min(index, 15) } as React.CSSProperties}
             onClick={() => onSelectSession(session)}
           >
@@ -367,11 +373,10 @@ export function SessionList({
             onClick={() => onPageChange(page - 1)}
             disabled={page <= 1}
             className="btn-secondary px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900 flex items-center gap-1"
-            aria-label="Go to previous page"
+            aria-label="Go to previous page (press [ key)"
+            title="Previous page ([)"
           >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
+            <kbd className="text-[10px] px-1 py-0.5 rounded bg-gray-600/50 text-gray-400 font-mono">[</kbd>
             <span>Prev</span>
           </button>
           <span className="px-2 text-gray-300 tabular-nums">
@@ -381,12 +386,11 @@ export function SessionList({
             onClick={() => onPageChange(page + 1)}
             disabled={page >= totalPages}
             className="btn-secondary px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900 flex items-center gap-1"
-            aria-label="Go to next page"
+            aria-label="Go to next page (press ] key)"
+            title="Next page (])"
           >
             <span>Next</span>
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
+            <kbd className="text-[10px] px-1 py-0.5 rounded bg-gray-600/50 text-gray-400 font-mono">]</kbd>
           </button>
         </div>
       </div>
