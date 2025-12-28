@@ -5,32 +5,17 @@ Sessions are discovered from Claude's JSONL files in ~/.claude/projects/
 with optional sidecar metadata stored in ~/.clump/projects/
 """
 
+import json
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, TypedDict
-import time
-
-
-class QuickScanResult(TypedDict):
-    """Result of a quick transcript scan for summary info."""
-
-    title: Optional[str]
-    model: Optional[str]
-    start_time: Optional[str]
-    end_time: Optional[str]
-    message_count: int
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
 
 from app.database import get_repo_db
 from app.models import Session, SessionStatus
-
-# Session discovery cache with TTL
-# This avoids redundant filesystem scans when polling frequently
-_session_cache: dict[str, tuple[list, float]] = {}  # key -> (sessions, timestamp)
-SESSION_CACHE_TTL = 5.0  # seconds (increased from 2s to reduce filesystem I/O)
-
 from app.schemas import (
     SessionSummaryResponse,
     SessionDetailResponse,
@@ -64,6 +49,22 @@ from app.storage import (
 from app.services.transcript_parser import parse_transcript, ParsedTranscript, TranscriptMessage
 from app.services.session_manager import process_manager
 from app.services.event_manager import event_manager, EventType
+
+# Session discovery cache with TTL
+# This avoids redundant filesystem scans when polling frequently
+_session_cache: dict[str, tuple[list, float]] = {}  # key -> (sessions, timestamp)
+SESSION_CACHE_TTL = 5.0  # seconds (increased from 2s to reduce filesystem I/O)
+
+
+class QuickScanResult(TypedDict):
+    """Result of a quick transcript scan for summary info."""
+
+    title: Optional[str]
+    model: Optional[str]
+    start_time: Optional[str]
+    end_time: Optional[str]
+    message_count: int
+
 
 router = APIRouter()
 
@@ -344,8 +345,6 @@ def _quick_scan_transcript(transcript_path: Path) -> QuickScanResult:
     """
     Quickly scan a transcript file for summary info without full parsing.
     """
-    import json
-
     result: QuickScanResult = {
         "title": None,
         "model": None,
