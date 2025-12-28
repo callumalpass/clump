@@ -26,6 +26,29 @@ from app.routers.commands import get_builtin_commands_dir, get_repo_commands_dir
 logger = logging.getLogger(__name__)
 
 
+def calculate_next_run(cron_expression: str, timezone_str: str) -> datetime:
+    """Calculate the next run time for a cron expression.
+
+    Args:
+        cron_expression: A valid cron expression (e.g., "0 9 * * *")
+        timezone_str: IANA timezone name (e.g., "America/New_York")
+
+    Returns:
+        The next run time as a naive UTC datetime (for database storage)
+    """
+    try:
+        tz = pytz.timezone(timezone_str)
+    except pytz.UnknownTimeZoneError:
+        tz = pytz.UTC
+
+    now = datetime.now(tz)
+    cron = croniter(cron_expression, now)
+    next_run = cron.get_next(datetime)
+
+    # Convert to UTC for storage
+    return next_run.astimezone(pytz.UTC).replace(tzinfo=None)
+
+
 def parse_filter_query(filter_query: str | None) -> dict:
     """
     Parse a GitHub-style filter query into parameters.
@@ -508,17 +531,7 @@ class SchedulerService:
 
     def _calculate_next_run(self, job: ScheduledJob) -> datetime:
         """Calculate the next run time based on cron expression."""
-        try:
-            tz = pytz.timezone(job.timezone)
-        except pytz.UnknownTimeZoneError:
-            tz = pytz.UTC
-
-        now = datetime.now(tz)
-        cron = croniter(job.cron_expression, now)
-        next_run = cron.get_next(datetime)
-
-        # Convert to UTC for storage
-        return next_run.astimezone(pytz.UTC).replace(tzinfo=None)
+        return calculate_next_run(job.cron_expression, job.timezone)
 
     async def trigger_job(self, job_id: int, repo_id: int) -> tuple[Optional[ScheduledJobRun], Optional[str]]:
         """Manually trigger a job to run immediately.

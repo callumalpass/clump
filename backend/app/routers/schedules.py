@@ -15,7 +15,7 @@ from sqlalchemy import select, desc
 from app.database import get_repo_db
 from app.models import ScheduledJob, ScheduledJobRun, ScheduledJobStatus, ScheduledJobTargetType
 from app.storage import get_repo_by_id
-from app.services.scheduler import scheduler
+from app.services.scheduler import scheduler, calculate_next_run
 
 router = APIRouter()
 
@@ -213,21 +213,6 @@ def run_to_response(run: ScheduledJobRun) -> ScheduledJobRunResponse:
         error_message=run.error_message,
         session_ids=safe_json_loads(run.session_ids),
     )
-
-
-def calculate_next_run(cron_expression: str, timezone_str: str) -> datetime:
-    """Calculate the next run time for a cron expression."""
-    try:
-        tz = pytz.timezone(timezone_str)
-    except pytz.UnknownTimeZoneError:
-        tz = pytz.UTC
-
-    now = datetime.now(tz)
-    cron = croniter(cron_expression, now)
-    next_run = cron.get_next(datetime)
-
-    # Convert to UTC for storage
-    return next_run.astimezone(pytz.UTC).replace(tzinfo=None)
 
 
 @router.get("/repos/{repo_id}/schedules", response_model=list[ScheduledJobResponse])
