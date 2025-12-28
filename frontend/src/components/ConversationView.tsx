@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import type { TranscriptMessage, ToolUse, ParsedTranscript } from '../types';
 import { Markdown } from './Markdown';
 import { Editor } from './Editor';
@@ -1344,14 +1344,65 @@ export function ConversationView({
   onSendMessage,
 }: ConversationViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [inputMessage, setInputMessage] = useState('');
   const [sending, setSending] = useState(false);
+
+  // Track if user is at the bottom of the scroll container
+  const isAtBottomRef = useRef(true);
+  const prevMessageCountRef = useRef(transcript.messages.length);
+
+  // Check if scrolled to bottom (with small threshold for rounding)
+  const checkIfAtBottom = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return true;
+    const threshold = 50; // pixels from bottom to consider "at bottom"
+    return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+  }, []);
+
+  // Handle scroll events to track position
+  const handleScroll = useCallback(() => {
+    isAtBottomRef.current = checkIfAtBottom();
+  }, [checkIfAtBottom]);
+
+  // Auto-scroll to bottom when new messages arrive (only for active sessions)
+  useEffect(() => {
+    if (!isActiveSession) return;
+
+    const messageCount = transcript.messages.length;
+    const hadNewMessages = messageCount > prevMessageCountRef.current;
+    prevMessageCountRef.current = messageCount;
+
+    // Only scroll if we had new messages and user was at bottom
+    if (hadNewMessages && isAtBottomRef.current && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  }, [transcript.messages.length, isActiveSession]);
+
+  // Initial scroll to bottom for active sessions
+  useEffect(() => {
+    if (isActiveSession && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      isAtBottomRef.current = true;
+    }
+  }, [isActiveSession]);
 
   const handleSend = () => {
     if (!inputMessage.trim() || !onSendMessage || sending) return;
     setSending(true);
     onSendMessage(inputMessage);
     setInputMessage('');
+    // Scroll to bottom when sending a message
+    isAtBottomRef.current = true;
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
     // Reset sending state after a delay to show feedback
     setTimeout(() => setSending(false), 500);
   };
@@ -1416,7 +1467,11 @@ export function ConversationView({
   return (
     <div className="flex flex-col min-w-0 h-full" ref={containerRef}>
       <SessionStats transcript={transcript} />
-      <div className="flex-1 overflow-auto space-y-4 p-3 min-w-0">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-auto space-y-4 p-3 min-w-0"
+      >
         {transcript.messages.map((message, index) => (
           <MessageBubble
             key={message.uuid || index}
