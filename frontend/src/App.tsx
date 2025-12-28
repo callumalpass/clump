@@ -206,6 +206,7 @@ export default function App() {
     model: sessionListFilters.model,
     sort: sessionListFilters.sort,
     order: sessionListFilters.order,
+    dateRange: sessionListFilters.dateRange,
   };
   const { sessions, loading: sessionsLoading, refresh: refreshSessions, continueSession, deleteSession, updateSessionMetadata, bulkDeleteSessions, bulkUpdateSessions, total: sessionsTotal, page: sessionsPage, totalPages: sessionsTotalPages, goToPage: goToSessionsPage } = useSessions(sessionFilters);
   const { stats, loading: statsLoading, error: statsError, refresh: refreshStats } = useStats();

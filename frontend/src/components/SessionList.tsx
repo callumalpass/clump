@@ -217,6 +217,7 @@ const SessionListItem = memo(function SessionListItem({
 
 export type SessionFilter = 'all' | 'active' | 'starred' | 'with-entities';
 export type ModelFilter = 'all' | 'sonnet' | 'opus' | 'haiku';
+export type DateRangePreset = 'all' | 'today' | 'yesterday' | 'week' | 'month';
 
 export interface SessionListFilters {
   category: SessionFilter;
@@ -224,6 +225,7 @@ export interface SessionListFilters {
   search?: string;
   sort?: 'created' | 'updated' | 'messages';
   order?: 'asc' | 'desc';
+  dateRange?: DateRangePreset;
 }
 
 interface SessionListProps {
@@ -262,6 +264,14 @@ const SORT_OPTIONS = [
   { value: 'created', label: 'Created' },
   { value: 'updated', label: 'Updated' },
   { value: 'messages', label: 'Messages' },
+];
+
+const DATE_RANGE_FILTERS: { value: DateRangePreset; label: string }[] = [
+  { value: 'all', label: 'All Time' },
+  { value: 'today', label: 'Today' },
+  { value: 'yesterday', label: 'Yesterday' },
+  { value: 'week', label: 'This Week' },
+  { value: 'month', label: 'This Month' },
 ];
 
 export function SessionList({
@@ -383,6 +393,10 @@ export function SessionList({
     onFiltersChange({ ...filters, order });
   };
 
+  const setDateRange = (dateRange: DateRangePreset) => {
+    onFiltersChange({ ...filters, dateRange: dateRange === 'all' ? undefined : dateRange });
+  };
+
   const clearFilters = () => {
     onFiltersChange({ category: 'all' });
   };
@@ -392,6 +406,7 @@ export function SessionList({
     filters.search ? 1 : 0,
     filters.category !== 'all' ? 1 : 0,
     filters.model && filters.model !== 'all' ? 1 : 0,
+    filters.dateRange && filters.dateRange !== 'all' ? 1 : 0,
     filters.sort !== 'created' ? 1 : 0,
     filters.order !== 'desc' ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
@@ -508,6 +523,16 @@ export function SessionList({
             className={`${filterBarStyles.pillButton((filters.model || 'all') === f.value)} ${
               (filters.model || 'all') === f.value ? f.color : ''
             }`}
+          >
+            {f.label}
+          </button>
+        ))}
+        <span className="text-gray-600 mx-1">|</span>
+        {DATE_RANGE_FILTERS.map((f) => (
+          <button
+            key={f.value}
+            onClick={() => setDateRange(f.value)}
+            className={filterBarStyles.pillButton((filters.dateRange || 'all') === f.value)}
           >
             {f.label}
           </button>

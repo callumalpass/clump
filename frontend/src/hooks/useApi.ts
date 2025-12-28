@@ -381,6 +381,8 @@ export function useProcesses() {
 // Sessions (transcript-first model)
 export type ModelFilter = 'all' | 'sonnet' | 'opus' | 'haiku';
 
+export type DateRangePreset = 'all' | 'today' | 'yesterday' | 'week' | 'month' | 'custom';
+
 export interface SessionFilters {
   repoPath?: string;
   starred?: boolean;
@@ -390,6 +392,9 @@ export interface SessionFilters {
   model?: ModelFilter;
   sort?: 'created' | 'updated' | 'messages';
   order?: 'asc' | 'desc';
+  dateRange?: DateRangePreset;
+  dateFrom?: string;  // ISO date string YYYY-MM-DD
+  dateTo?: string;    // ISO date string YYYY-MM-DD
 }
 
 export function useSessions(filters: SessionFilters = {}) {
@@ -399,7 +404,7 @@ export function useSessions(filters: SessionFilters = {}) {
   const [perPage] = useState(30);
   const [loading, setLoading] = useState(true);
 
-  const { repoPath, starred, hasEntities, search, isActive, model, sort, order } = filters;
+  const { repoPath, starred, hasEntities, search, isActive, model, sort, order, dateRange, dateFrom, dateTo } = filters;
 
   // Internal fetch that optionally shows loading state
   const fetchPage = useCallback(async (pageNum: number, showLoading: boolean) => {
@@ -414,6 +419,40 @@ export function useSessions(filters: SessionFilters = {}) {
       if (search) params.set('search', search);
       if (sort) params.set('sort', sort);
       if (order) params.set('order', order);
+
+      // Handle date range filtering
+      if (dateRange && dateRange !== 'all') {
+        const today = new Date();
+        const formatDate = (d: Date): string => {
+          const iso = d.toISOString();
+          return iso.substring(0, 10); // YYYY-MM-DD format
+        };
+
+        if (dateRange === 'today') {
+          params.set('date_from', formatDate(today));
+          params.set('date_to', formatDate(today));
+        } else if (dateRange === 'yesterday') {
+          const yesterday = new Date(today);
+          yesterday.setDate(yesterday.getDate() - 1);
+          params.set('date_from', formatDate(yesterday));
+          params.set('date_to', formatDate(yesterday));
+        } else if (dateRange === 'week') {
+          const weekAgo = new Date(today);
+          weekAgo.setDate(weekAgo.getDate() - 7);
+          params.set('date_from', formatDate(weekAgo));
+          params.set('date_to', formatDate(today));
+        } else if (dateRange === 'month') {
+          const monthAgo = new Date(today);
+          monthAgo.setDate(monthAgo.getDate() - 30);
+          params.set('date_from', formatDate(monthAgo));
+          params.set('date_to', formatDate(today));
+        } else if (dateRange === 'custom') {
+          // Use explicit dateFrom/dateTo for custom range
+          if (dateFrom) params.set('date_from', dateFrom);
+          if (dateTo) params.set('date_to', dateTo);
+        }
+      }
+
       params.set('limit', perPage.toString());
       params.set('offset', ((pageNum - 1) * perPage).toString());
 
@@ -428,7 +467,7 @@ export function useSessions(filters: SessionFilters = {}) {
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [repoPath, starred, hasEntities, search, isActive, model, sort, order, perPage]);
+  }, [repoPath, starred, hasEntities, search, isActive, model, sort, order, dateRange, dateFrom, dateTo, perPage]);
 
   // Public refresh - silent by default for polling
   const refresh = useCallback(() => fetchPage(page, false), [fetchPage, page]);

@@ -591,6 +591,8 @@ async def list_sessions(
     has_entities: Optional[bool] = None,
     search: Optional[str] = None,
     model: Optional[ModelFilter] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
     sort: SessionSortField = SessionSortField.UPDATED,
     order: SortOrder = SortOrder.DESC,
     limit: int = Query(default=DEFAULT_PAGE_SIZE, le=MAX_PAGE_SIZE),
@@ -603,7 +605,8 @@ async def list_sessions(
     Also includes "pending" sessions from active processes that don't have
     transcript files yet (Claude is still starting up).
 
-    Optional filtering by repo path, starred status, or search term.
+    Optional filtering by repo path, starred status, search term, or date range.
+    Date range filters (date_from, date_to) use ISO 8601 format (YYYY-MM-DD).
 
     Uses caching to avoid redundant filesystem scans when polling frequently.
     """
@@ -658,6 +661,31 @@ async def list_sessions(
                (s.repo_path and search_lower in s.repo_path.lower()) or
                (s.repo_name and search_lower in s.repo_name.lower())
         ]
+
+    # Apply date range filters
+    if date_from:
+        try:
+            from_date = datetime.fromisoformat(date_from)
+            # Use start of day for comparison
+            from_date = from_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            summaries = [
+                s for s in summaries
+                if s.modified_at and datetime.fromisoformat(s.modified_at.replace("Z", "+00:00").split("+")[0]) >= from_date
+            ]
+        except ValueError:
+            pass  # Invalid date format - skip filter
+
+    if date_to:
+        try:
+            to_date = datetime.fromisoformat(date_to)
+            # Use end of day for comparison
+            to_date = to_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+            summaries = [
+                s for s in summaries
+                if s.modified_at and datetime.fromisoformat(s.modified_at.replace("Z", "+00:00").split("+")[0]) <= to_date
+            ]
+        except ValueError:
+            pass  # Invalid date format - skip filter
 
     total = len(summaries)
 
