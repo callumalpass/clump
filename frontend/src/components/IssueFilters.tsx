@@ -8,6 +8,8 @@ import {
   StateToggle,
   SortControl,
   LabelSelect,
+  ItemCount,
+  RefreshButton,
   ClearFiltersButton,
 } from './FilterBar';
 
@@ -15,6 +17,9 @@ interface IssueFiltersProps {
   filters: IssueFiltersType;
   onFiltersChange: (filters: IssueFiltersType) => void;
   issues: Issue[];  // Used to extract available labels
+  total?: number;  // Total issue count for display
+  onRefresh?: () => void;  // Callback to refresh issues
+  loading?: boolean;  // Whether issues are currently loading
 }
 
 const SORT_OPTIONS = [
@@ -23,7 +28,7 @@ const SORT_OPTIONS = [
   { value: 'comments', label: 'Comments' },
 ];
 
-export function IssueFilters({ filters, onFiltersChange, issues }: IssueFiltersProps) {
+export function IssueFilters({ filters, onFiltersChange, issues, total, onRefresh, loading }: IssueFiltersProps) {
   // Extract unique labels from issues
   const availableLabels = useMemo(() => {
     const labelSet = new Set<string>();
@@ -76,13 +81,17 @@ export function IssueFilters({ filters, onFiltersChange, issues }: IssueFiltersP
       {/* State toggle and sort */}
       <FilterBarRow className="justify-between">
         <StateToggle value={filters.state || 'open'} onChange={setState} />
-        <SortControl
-          sortValue={filters.sort || 'created'}
-          orderValue={filters.order || 'desc'}
-          options={SORT_OPTIONS}
-          onSortChange={setSort}
-          onOrderChange={setOrder}
-        />
+        <div className="flex items-center gap-2">
+          <SortControl
+            sortValue={filters.sort || 'created'}
+            orderValue={filters.order || 'desc'}
+            options={SORT_OPTIONS}
+            onSortChange={setSort}
+            onOrderChange={setOrder}
+          />
+          {total !== undefined && <ItemCount count={total} singular="issue" />}
+          {onRefresh && <RefreshButton onClick={onRefresh} loading={loading} />}
+        </div>
       </FilterBarRow>
 
       {/* Label filter */}

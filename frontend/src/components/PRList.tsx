@@ -8,6 +8,7 @@ import {
   StateToggle,
   SortControl,
   ItemCount,
+  RefreshButton,
   ClearFiltersButton,
 } from './FilterBar';
 
@@ -22,6 +23,7 @@ interface PRListProps {
   onFiltersChange: (filters: PRFilters) => void;
   sessions?: SessionSummary[];
   processes?: Process[];
+  onRefresh?: () => void;
 }
 
 const SORT_OPTIONS = [
@@ -40,6 +42,7 @@ export function PRList({
   onFiltersChange,
   sessions = [],
   processes: _processes = [],
+  onRefresh,
 }: PRListProps) {
   // Group sessions by PR number (a session can appear under multiple PRs)
   const sessionsByPR = sessions.reduce((acc, session) => {
@@ -99,6 +102,7 @@ export function PRList({
             onOrderChange={setOrder}
           />
           <ItemCount count={prs.length} singular="PR" />
+          {onRefresh && <RefreshButton onClick={onRefresh} loading={loading} />}
         </div>
       </FilterBarRow>
       <ClearFiltersButton onClick={clearFilters} show={!!hasActiveFilters} />

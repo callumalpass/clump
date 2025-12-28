@@ -134,7 +134,7 @@ export default function App() {
   const { sessions, loading: sessionsLoading, refresh: refreshSessions, continueSession, deleteSession, updateSessionMetadata, total: sessionsTotal, page: sessionsPage, totalPages: sessionsTotalPages, goToPage: goToSessionsPage } = useSessions(sessionFilters);
   const { tags, createTag } = useTags(selectedRepo?.id ?? null);
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
-  const { prs, loading: prsLoading } = usePRs(selectedRepo?.id ?? null, prFilters);
+  const { prs, loading: prsLoading, refresh: refreshPRs } = usePRs(selectedRepo?.id ?? null, prFilters);
   const { commands, refresh: refreshCommands } = useCommands(selectedRepo?.local_path);
   const { counts: sessionCounts } = useSessionCounts();
 
@@ -892,6 +892,7 @@ export default function App() {
                 onSelectTag={setSelectedTagId}
                 filters={issueFilters}
                 onFiltersChange={setIssueFilters}
+                onRefresh={refreshIssues}
                 onCreateIssue={() => {
                   setIsCreatingIssue(true);
                   setSelectedIssue(null);
@@ -927,6 +928,7 @@ export default function App() {
                 onFiltersChange={setPRFilters}
                 sessions={sessions}
                 processes={processes}
+                onRefresh={refreshPRs}
               />
             )}
             {activeTab === 'schedules' && selectedRepo && (

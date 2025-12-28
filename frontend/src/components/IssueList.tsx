@@ -27,6 +27,7 @@ interface IssueListProps {
   filters?: IssueFiltersType;
   onFiltersChange?: (filters: IssueFiltersType) => void;
   onCreateIssue?: () => void;
+  onRefresh?: () => void;
 }
 
 export function IssueList({
@@ -49,6 +50,7 @@ export function IssueList({
   filters = {},
   onFiltersChange,
   onCreateIssue,
+  onRefresh,
 }: IssueListProps) {
   // Group sessions by issue number (a session can appear under multiple issues)
   const sessionsByIssue = sessions.reduce((acc, session) => {
@@ -79,6 +81,9 @@ export function IssueList({
           filters={filters}
           onFiltersChange={onFiltersChange}
           issues={issues}
+          total={total}
+          onRefresh={onRefresh}
+          loading={loading}
         />
       )}
 
