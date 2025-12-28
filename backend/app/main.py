@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import close_all_engines
 from app.storage import get_clump_dir
-from app.routers import github, processes, sessions, settings, headless, tags, commands, hooks, schedules
+from app.routers import github, processes, sessions, settings, headless, tags, commands, hooks, schedules, stats
 from app.services.scheduler import scheduler
 
 
@@ -64,6 +64,7 @@ app.include_router(tags.router, prefix="/api", tags=["tags"])
 app.include_router(commands.router, prefix="/api", tags=["commands"])
 app.include_router(hooks.router, prefix="/api", tags=["hooks"])
 app.include_router(schedules.router, prefix="/api", tags=["schedules"])
+app.include_router(stats.router, prefix="/api", tags=["stats"])
 
 
 @app.get("/api/health")

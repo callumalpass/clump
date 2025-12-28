@@ -264,18 +264,19 @@ export function LabelSelect({ selectedLabels, availableLabels, onChange }: Label
         <>
           {/* Backdrop to close dropdown */}
           <div
-            className="fixed inset-0 z-10 bg-black/20 transition-opacity"
+            className="fixed inset-0 z-10 bg-black/20 modal-backdrop-enter"
             onClick={() => setShowDropdown(false)}
           />
-          <div className="absolute top-full left-0 mt-1 w-48 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-20 max-h-48 overflow-auto">
-            {unselectedLabels.map((label) => (
+          <div className="absolute top-full left-0 mt-1.5 w-48 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-20 max-h-48 overflow-auto dropdown-menu-enter py-1">
+            {unselectedLabels.map((label, index) => (
               <button
                 key={label}
                 onClick={() => {
                   toggleLabel(label);
                   setShowDropdown(false);
                 }}
-                className={`w-full px-3 py-1.5 text-left text-xs hover:bg-gray-700 truncate ${focusRing} focus:bg-gray-700`}
+                className={`dropdown-item-enter w-full px-3 py-1.5 text-left text-xs text-gray-300 hover:bg-gray-700 hover:text-white truncate transition-colors duration-100 ${focusRing} focus:bg-gray-700 focus:text-white`}
+                style={{ '--item-index': index } as React.CSSProperties}
               >
                 {label}
               </button>

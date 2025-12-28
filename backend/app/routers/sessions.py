@@ -251,7 +251,8 @@ def _get_pending_sessions(
             start_time=proc.created_at.isoformat(),
             end_time=None,
             message_count=0,
-            modified_at=datetime.utcnow().isoformat(),
+            # Use local time to match discover_sessions (which uses file mtime in local time)
+            modified_at=datetime.now().isoformat(),
             file_size=0,
             entities=entities,
             tags=tags,
@@ -311,7 +312,8 @@ def _get_pending_headless_sessions(
                     start_time=metadata.created_at,
                     end_time=None,
                     message_count=0,
-                    modified_at=datetime.utcnow().isoformat(),
+                    # Use local time to match discover_sessions (which uses file mtime in local time)
+                    modified_at=datetime.now().isoformat(),
                     file_size=0,
                     entities=entities,
                     tags=metadata.tags,

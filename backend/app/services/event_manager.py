@@ -75,9 +75,9 @@ class EventManager:
 
         subscriber_count = len(self._subscribers)
         if subscriber_count == 0:
-            logger.info(f"Event {event_type.value} emitted but no subscribers connected")
+            logger.debug(f"Event {event_type.value} emitted but no subscribers connected")
         else:
-            logger.info(f"Broadcasting {event_type.value} to {subscriber_count} subscriber(s)")
+            logger.debug(f"Broadcasting {event_type.value} to {subscriber_count} subscriber(s)")
 
         # Notify all subscribers
         for callback in self._subscribers:

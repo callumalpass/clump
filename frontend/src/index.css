@@ -370,6 +370,21 @@ button:active:not(:disabled) .kbd-hint {
   border-color: rgba(59, 130, 246, 0.6);
 }
 
+/* Tool card hover effects - subtle lift and glow for tool displays in conversation */
+.tool-card-hover {
+  transition: transform 150ms ease-out, box-shadow 150ms ease-out, border-color 150ms ease-out;
+}
+
+.tool-card-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.tool-card-hover:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
 /* Token usage bar segment hover effects */
 .token-bar-segment {
   transition: filter 150ms ease-out, box-shadow 150ms ease-out;
@@ -397,6 +412,40 @@ button:active:not(:disabled) .kbd-hint {
 
 .dropdown-menu-enter {
   animation: dropdown-slide-in 100ms ease-out forwards;
+}
+
+/* Dropdown item staggered entrance animation */
+@keyframes dropdown-item-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.dropdown-item-enter {
+  animation: dropdown-item-enter 100ms ease-out forwards;
+  animation-delay: calc(var(--item-index, 0) * 20ms);
+  opacity: 0;
+}
+
+/* Tab content transition - subtle fade when switching tabs */
+@keyframes tab-content-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tab-content-enter {
+  animation: tab-content-fade-in 150ms ease-out forwards;
 }
 
 /* Active status badge glow effect - subtle pulsing glow for active sessions */
@@ -463,6 +512,7 @@ button:active:not(:disabled) .kbd-hint {
   .empty-state-icon-float,
   .message-bubble-enter,
   .dropdown-menu-enter,
+  .dropdown-item-enter,
   .list-item-enter,
   .skeleton-item-enter,
   .active-badge-glow,
@@ -483,7 +533,8 @@ button:active:not(:disabled) .kbd-hint {
 
   /* Ensure list items are visible immediately */
   .list-item-enter,
-  .skeleton-item-enter {
+  .skeleton-item-enter,
+  .dropdown-item-enter {
     opacity: 1;
   }
 
@@ -507,6 +558,7 @@ button:active:not(:disabled) .kbd-hint {
 
   /* Reduce transition durations to near-instant */
   .list-item-hover,
+  .tool-card-hover,
   .toggle-btn,
   .btn-primary,
   .btn-danger,
@@ -523,7 +575,9 @@ button:active:not(:disabled) .kbd-hint {
 
   /* Disable transform effects on hover */
   .list-item-hover:hover,
-  .list-item-hover:active {
+  .list-item-hover:active,
+  .tool-card-hover:hover,
+  .tool-card-hover:active {
     transform: none;
   }
 

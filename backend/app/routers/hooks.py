@@ -214,7 +214,6 @@ async def notifications_websocket(websocket: WebSocket):
         """Callback when a general event is received."""
         try:
             event_queue.put_nowait(event.to_dict())
-            logger.info(f"Event {event.type.value} queued for WebSocket delivery")
         except asyncio.QueueFull:
             logger.warning(f"Event queue full, dropping {event.type.value} event")
 
