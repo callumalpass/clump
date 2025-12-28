@@ -80,13 +80,29 @@ class TestPathEncoding:
         """Test decoding path that doesn't start with dash."""
         assert decode_path("home-user-projects") == "home/user/projects"
 
-    def test_encode_decode_roundtrip(self):
-        """Test that encode followed by decode gives original path format."""
+    def test_encode_decode_roundtrip_without_dashes(self):
+        """Test that encode followed by decode gives original path for paths without dashes."""
         original = "/home/user/projects/myapp"
         encoded = encode_path(original)
         decoded = decode_path(encoded)
-        # Note: This isn't a perfect roundtrip due to dash ambiguity
+        # Paths without dashes should roundtrip perfectly
         assert decoded == original
+
+    def test_encode_decode_roundtrip_with_dashes_is_lossy(self):
+        """Test that encode/decode is lossy for paths containing dashes.
+
+        This is expected behavior - dashes in the original path become
+        indistinguishable from encoded slashes after encoding. The code
+        correctly handles this by using encode_path for comparisons rather
+        than decode_path.
+        """
+        original = "/home/user/my-project"
+        encoded = encode_path(original)
+        decoded = decode_path(encoded)
+        # Paths with dashes will NOT roundtrip correctly - dashes become slashes
+        # This is expected and documented behavior
+        assert decoded != original
+        assert decoded == "/home/user/my/project"  # dashes become slashes
 
 
 class TestSubsessionDetection:

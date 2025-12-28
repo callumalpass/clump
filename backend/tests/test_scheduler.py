@@ -87,6 +87,43 @@ class TestParseFilterQuery:
         assert result["labels"] == ["bug"]
         assert "unknown" not in result
 
+    def test_handles_whitespace_only(self):
+        """Handles whitespace-only filter query."""
+        result = parse_filter_query("   ")
+        # Should return empty dict or dict with defaults, not crash
+        assert isinstance(result, dict)
+
+    def test_handles_extra_whitespace(self):
+        """Handles extra whitespace between filters."""
+        result = parse_filter_query("state:open    label:bug")
+        assert result["state"] == "open"
+        assert result["labels"] == ["bug"]
+
+    def test_handles_empty_label_value(self):
+        """Handles empty label value gracefully."""
+        result = parse_filter_query("label:")
+        # Empty label should be added (even if it's empty string)
+        assert result["labels"] == [""]
+
+    def test_handles_empty_state_value(self):
+        """Handles empty state value gracefully."""
+        result = parse_filter_query("state:")
+        # Empty state value
+        assert result["state"] == ""
+
+    def test_multiple_exclude_label_filters(self):
+        """Handles multiple separate -label filters."""
+        result = parse_filter_query("-label:wontfix -label:duplicate")
+        assert "wontfix" in result["exclude_labels"]
+        assert "duplicate" in result["exclude_labels"]
+
+    def test_mixed_include_and_exclude_labels(self):
+        """Handles both include and exclude labels together."""
+        result = parse_filter_query("label:bug,feature -label:wontfix")
+        assert "bug" in result["labels"]
+        assert "feature" in result["labels"]
+        assert "wontfix" in result["exclude_labels"]
+
 
 class TestBuildPromptFromTemplate:
     """Tests for build_prompt_from_template function."""
