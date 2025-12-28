@@ -20,6 +20,14 @@ function getShortModelName(model?: string): string {
   return 'sonnet';
 }
 
+// Check if a session was modified recently (within last 10 minutes)
+function isRecentlyModified(modifiedAt: string): boolean {
+  const modified = new Date(modifiedAt);
+  const now = new Date();
+  const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
+  return modified > tenMinutesAgo;
+}
+
 // Get model-specific text color for visual differentiation
 function getModelTextStyle(model?: string): string {
   if (!model) return 'text-gray-600';
@@ -244,6 +252,15 @@ export function SessionList({
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
                   Active
+                </span>
+              ) : isRecentlyModified(session.modified_at) ? (
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-blue-500/20 text-blue-400 flex-shrink-0"
+                  title="Session updated in the last 10 minutes"
+                  aria-label="Recently updated session"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                  Recent
                 </span>
               ) : (
                 <span
