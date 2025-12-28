@@ -199,6 +199,61 @@ class TestSessionMetadata:
         metadata = SessionMetadata.from_dict(data)
         assert metadata.session_id == ""
 
+    def test_to_dict_with_scheduled_job_id(self):
+        """Test converting metadata with scheduled_job_id to dictionary."""
+        metadata = SessionMetadata(
+            session_id="test-session-123",
+            title="Scheduled Session",
+            scheduled_job_id=42,
+        )
+
+        result = metadata.to_dict()
+
+        assert result["scheduled_job_id"] == 42
+        assert result["session_id"] == "test-session-123"
+
+    def test_to_dict_scheduled_job_id_default_none(self):
+        """Test that scheduled_job_id defaults to None in to_dict."""
+        metadata = SessionMetadata(session_id="test-session")
+        result = metadata.to_dict()
+
+        assert result["scheduled_job_id"] is None
+
+    def test_from_dict_with_scheduled_job_id(self):
+        """Test creating metadata from dictionary with scheduled_job_id."""
+        data = {
+            "session_id": "scheduled-session-123",
+            "title": "Scheduled Analysis",
+            "scheduled_job_id": 99,
+        }
+
+        metadata = SessionMetadata.from_dict(data)
+
+        assert metadata.session_id == "scheduled-session-123"
+        assert metadata.scheduled_job_id == 99
+
+    def test_from_dict_scheduled_job_id_missing(self):
+        """Test that missing scheduled_job_id defaults to None."""
+        data = {"session_id": "test-session", "title": "Test"}
+
+        metadata = SessionMetadata.from_dict(data)
+
+        assert metadata.scheduled_job_id is None
+
+    def test_scheduled_job_id_roundtrip(self):
+        """Test that scheduled_job_id survives to_dict/from_dict roundtrip."""
+        original = SessionMetadata(
+            session_id="roundtrip-test",
+            title="Roundtrip Test",
+            scheduled_job_id=123,
+        )
+
+        data = original.to_dict()
+        restored = SessionMetadata.from_dict(data)
+
+        assert restored.scheduled_job_id == original.scheduled_job_id
+        assert restored.scheduled_job_id == 123
+
 
 class TestEntityLink:
     """Tests for EntityLink dataclass."""
@@ -325,6 +380,31 @@ class TestSessionMetadataIO:
         with patch("app.storage.Path.home", return_value=tmp_path):
             result = delete_session_metadata("-nonexistent", "no-session")
             assert result is False
+
+    def test_save_and_get_session_metadata_with_scheduled_job_id(self, tmp_path):
+        """Test that scheduled_job_id persists correctly through save/load cycle."""
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            encoded_path = "-scheduled-project"
+            session_id = "scheduled-session-456"
+
+            metadata = SessionMetadata(
+                session_id=session_id,
+                title="Scheduled Job Session",
+                scheduled_job_id=77,
+                starred=True,
+            )
+
+            # Save metadata
+            save_session_metadata(encoded_path, session_id, metadata)
+
+            # Retrieve it
+            loaded = get_session_metadata(encoded_path, session_id)
+
+            assert loaded is not None
+            assert loaded.session_id == session_id
+            assert loaded.scheduled_job_id == 77
+            assert loaded.title == "Scheduled Job Session"
+            assert loaded.starred is True
 
 
 class TestSessionDiscovery:
