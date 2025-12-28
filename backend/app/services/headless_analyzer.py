@@ -6,9 +6,9 @@ for programmatic analysis of issues, PRs, and code.
 """
 
 import asyncio
+import asyncio.subprocess
 import json
 import logging
-import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import AsyncGenerator, Callable
@@ -55,7 +55,7 @@ class HeadlessAnalyzer:
     """
 
     def __init__(self):
-        self._running_sessions: dict[str, subprocess.Popen] = {}
+        self._running_sessions: dict[str, asyncio.subprocess.Process] = {}
         # Explicit tracking set - more reliable than process dict for status checks
         self._active_session_ids: set[str] = set()
 

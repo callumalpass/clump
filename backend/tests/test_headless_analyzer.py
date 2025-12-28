@@ -664,6 +664,39 @@ class TestHeadlessAnalyzerAnalyzeStream:
 
         assert "cleanup-test" not in analyzer._running_sessions
 
+    @pytest.mark.asyncio
+    async def test_analyze_stream_stores_asyncio_process(self, analyzer, mock_settings):
+        """Test that analyze_stream stores asyncio.subprocess.Process, not subprocess.Popen.
+
+        This test validates the type annotation: _running_sessions should store
+        asyncio.subprocess.Process objects from asyncio.create_subprocess_exec,
+        not subprocess.Popen from the synchronous subprocess module.
+        """
+        import asyncio.subprocess as async_subprocess
+
+        mock_process = MagicMock(spec=async_subprocess.Process)
+        mock_process.returncode = 0
+        mock_process.wait = AsyncMock()
+
+        async def readline_generator():
+            # Check the process type while it's stored in _running_sessions
+            assert "type-check-session" in analyzer._running_sessions
+            stored_process = analyzer._running_sessions["type-check-session"]
+            # The stored process should be the mock we provided (simulating asyncio.subprocess.Process)
+            assert stored_process is mock_process
+            yield b''
+
+        gen = readline_generator()
+        mock_process.stdout = MagicMock()
+        mock_process.stdout.readline = lambda: gen.__anext__()
+        mock_process.stderr = MagicMock()
+        mock_process.stderr.read = AsyncMock(return_value=b'')
+
+        with patch("app.services.headless_analyzer.settings", mock_settings):
+            with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=mock_process)):
+                async for _ in analyzer.analyze_stream("Test", "/path", session_id="type-check-session"):
+                    pass
+
 
 class TestHeadlessAnalyzerAnalyze:
     """Tests for HeadlessAnalyzer.analyze method."""
