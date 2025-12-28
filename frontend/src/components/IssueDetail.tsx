@@ -212,16 +212,28 @@ export function IssueDetail({
               <button
                 onClick={handleCloseIssue}
                 disabled={issueActionLoading}
-                className="px-2 py-0.5 text-xs rounded bg-red-900/50 text-red-300 hover:bg-red-900/70 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-red-900/50 text-red-300 hover:bg-red-900/70 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
+                {issueActionLoading && (
+                  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                )}
                 {issueActionLoading ? 'Closing...' : 'Close Issue'}
               </button>
             ) : (
               <button
                 onClick={handleReopenIssue}
                 disabled={issueActionLoading}
-                className="px-2 py-0.5 text-xs rounded bg-green-900/50 text-green-300 hover:bg-green-900/70 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-green-900/50 text-green-300 hover:bg-green-900/70 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
+                {issueActionLoading && (
+                  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                )}
                 {issueActionLoading ? 'Reopening...' : 'Reopen Issue'}
               </button>
             )}
@@ -317,8 +329,14 @@ export function IssueDetail({
                       <button
                         onClick={handleCreateTag}
                         disabled={!newTagName.trim() || creatingTag}
-                        className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors"
                       >
+                        {creatingTag && (
+                          <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                        )}
                         {creatingTag ? 'Adding...' : 'Add'}
                       </button>
                     </div>
@@ -494,8 +512,14 @@ export function IssueDetail({
               type="button"
               onClick={(e) => handleSubmitComment(e)}
               disabled={submitting || !commentBody.trim()}
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
             >
+              {submitting && (
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              )}
               {submitting ? 'Posting...' : 'Comment'}
             </button>
           </div>
