@@ -6,12 +6,15 @@ Commands are loaded from two locations:
 2. Target repo's commands (repo's .claude/commands/) - these take precedence
 """
 
+import logging
 from pathlib import Path
 from typing import Optional
 
 import yaml
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter()
@@ -99,8 +102,11 @@ def parse_command_file(file_path: Path, category: str, source: str = "builtin") 
             template=template,
             source=source,
         )
-    except Exception as e:
-        print(f"Error parsing command file {file_path}: {e}")
+    except yaml.YAMLError as e:
+        logger.warning("Failed to parse YAML frontmatter in %s: %s", file_path, e)
+        return None
+    except OSError as e:
+        logger.warning("Failed to read command file %s: %s", file_path, e)
         return None
 
 

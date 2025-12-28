@@ -4,10 +4,14 @@ Settings routes for managing configuration like GitHub PAT and Claude Code setti
 Settings are stored in ~/.clump/config.json for persistence.
 """
 
+import logging
 import os
 from typing import Literal
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 from app.config import settings, DEFAULT_ALLOWED_TOOLS
 from app.storage import load_config, save_config
@@ -91,8 +95,8 @@ async def set_github_token(request: GitHubTokenRequest):
         from app.services.github_client import GitHubClient
         import app.services.github_client as gh_module
         gh_module.github_client = GitHubClient(token)
-    except Exception as e:
-        print(f"Warning: Failed to reload GitHub client: {e}")
+    except Exception:
+        logger.exception("Failed to reload GitHub client")
 
     # Reload settings
     settings.reload()

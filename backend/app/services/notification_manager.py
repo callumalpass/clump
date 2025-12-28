@@ -6,10 +6,13 @@ Used primarily to notify when Claude Code needs user attention (permission reque
 """
 
 import asyncio
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Callable, Any
+
+logger = logging.getLogger(__name__)
 
 
 class NotificationType(str, Enum):
@@ -86,8 +89,8 @@ class NotificationManager:
                 result = callback(notification)
                 if asyncio.iscoroutine(result):
                     await result
-            except Exception as e:
-                print(f"Notification callback error: {e}")
+            except Exception:
+                logger.exception("Notification callback failed for session %s", session_id)
 
         # Notify global subscribers
         for callback in self._global_subscribers:
@@ -95,8 +98,8 @@ class NotificationManager:
                 result = callback(notification)
                 if asyncio.iscoroutine(result):
                     await result
-            except Exception as e:
-                print(f"Global notification callback error: {e}")
+            except Exception:
+                logger.exception("Global notification callback failed for session %s", session_id)
 
     async def clear_attention(self, session_id: str) -> None:
         """
