@@ -486,7 +486,7 @@ export function IssueDetail({
             ))}
           </div>
         ) : (
-          <p className="text-gray-500 mb-4">No comments yet.</p>
+          <p className="text-gray-400 mb-4">No comments yet.</p>
         )}
 
         {/* Add comment form */}

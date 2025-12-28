@@ -1458,7 +1458,7 @@ export function ConversationView({
             </svg>
           </div>
           <p className="text-gray-300 font-medium mb-1">No messages in transcript</p>
-          <p className="text-gray-500 text-sm">This conversation appears to be empty</p>
+          <p className="text-gray-400 text-sm">This conversation appears to be empty</p>
         </div>
       </div>
     );

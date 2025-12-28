@@ -270,7 +270,7 @@ export function PRDetail({
             ))}
           </div>
         ) : (
-          <p className="text-gray-500">No comments yet.</p>
+          <p className="text-gray-400">No comments yet.</p>
         )}
       </div>
     </div>

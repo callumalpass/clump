@@ -1190,7 +1190,7 @@ export default function App() {
                       />
                     ) : (
                       <div className="h-full flex items-center justify-center">
-                        <div className="text-center text-gray-500">
+                        <div className="text-center text-gray-400">
                           <p className="text-sm">Select a session above</p>
                           <p className="text-xs mt-1">or click a tab to view</p>
                         </div>
@@ -1319,7 +1319,7 @@ export default function App() {
                     />
                   ) : (
                     <div className="h-full flex items-center justify-center">
-                      <div className="text-center text-gray-500">
+                      <div className="text-center text-gray-400">
                         <p className="text-sm">Select a session above</p>
                         <p className="text-xs mt-1">or select an issue/PR from the sidebar</p>
                       </div>
@@ -1339,7 +1339,7 @@ export default function App() {
                     </svg>
                   </div>
                   <p className="text-gray-300 font-medium mb-2">Select an issue or PR to view details</p>
-                  <p className="text-gray-500 text-sm">or start a session from an issue or PR</p>
+                  <p className="text-gray-400 text-sm">or start a session from an issue or PR</p>
                 </div>
               </div>
             )}
