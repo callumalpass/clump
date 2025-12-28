@@ -141,12 +141,9 @@ class TestGetSessionWithRepoOr404:
 
         mock_db = MagicMock()
         mock_db.execute = AsyncMock(return_value=mock_result)
-        mock_db.__aenter__ = AsyncMock(return_value=mock_db)
-        mock_db.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("app.db_helpers.get_repo_by_id", return_value=mock_repo), \
-             patch("app.db_helpers.get_repo_db", return_value=mock_db):
-            session, repo = await get_session_with_repo_or_404(10, 1)
+        with patch("app.db_helpers.get_repo_by_id", return_value=mock_repo):
+            session, repo = await get_session_with_repo_or_404(10, 1, mock_db)
 
             assert session.id == 10
             assert repo["id"] == 1
@@ -154,9 +151,11 @@ class TestGetSessionWithRepoOr404:
     @pytest.mark.asyncio
     async def test_get_session_with_repo_or_404_repo_not_found(self):
         """Test that missing repo raises 404."""
+        mock_db = MagicMock()
+
         with patch("app.db_helpers.get_repo_by_id", return_value=None):
             with pytest.raises(HTTPException) as exc_info:
-                await get_session_with_repo_or_404(10, 999)
+                await get_session_with_repo_or_404(10, 999, mock_db)
 
             assert exc_info.value.status_code == 404
             assert "repository" in exc_info.value.detail.lower()
@@ -176,13 +175,10 @@ class TestGetSessionWithRepoOr404:
 
         mock_db = MagicMock()
         mock_db.execute = AsyncMock(return_value=mock_result)
-        mock_db.__aenter__ = AsyncMock(return_value=mock_db)
-        mock_db.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("app.db_helpers.get_repo_by_id", return_value=mock_repo), \
-             patch("app.db_helpers.get_repo_db", return_value=mock_db):
+        with patch("app.db_helpers.get_repo_by_id", return_value=mock_repo):
             with pytest.raises(HTTPException) as exc_info:
-                await get_session_with_repo_or_404(999, 1)
+                await get_session_with_repo_or_404(999, 1, mock_db)
 
             assert exc_info.value.status_code == 404
             assert "session" in exc_info.value.detail.lower()
@@ -207,20 +203,17 @@ class TestGetSessionWithRepoOr404:
 
         mock_db = MagicMock()
         mock_db.execute = AsyncMock(return_value=mock_result)
-        mock_db.__aenter__ = AsyncMock(return_value=mock_db)
-        mock_db.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("app.db_helpers.get_repo_by_id", return_value=mock_repo), \
-             patch("app.db_helpers.get_repo_db", return_value=mock_db):
+        with patch("app.db_helpers.get_repo_by_id", return_value=mock_repo):
             with pytest.raises(HTTPException) as exc_info:
-                await get_session_with_repo_or_404(10, 1)
+                await get_session_with_repo_or_404(10, 1, mock_db)
 
             assert exc_info.value.status_code == 404
             assert "not found" in exc_info.value.detail.lower()
 
     @pytest.mark.asyncio
-    async def test_get_session_with_repo_or_404_uses_repo_local_path(self):
-        """Test that the repo's local_path is used for DB lookup."""
+    async def test_get_session_with_repo_or_404_verifies_repo_ownership(self):
+        """Test that session ownership is verified against requested repo_id."""
         mock_repo = {
             "id": 1,
             "owner": "testowner",
@@ -238,12 +231,9 @@ class TestGetSessionWithRepoOr404:
 
         mock_db = MagicMock()
         mock_db.execute = AsyncMock(return_value=mock_result)
-        mock_db.__aenter__ = AsyncMock(return_value=mock_db)
-        mock_db.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("app.db_helpers.get_repo_by_id", return_value=mock_repo), \
-             patch("app.db_helpers.get_repo_db", return_value=mock_db) as mock_get_db:
-            await get_session_with_repo_or_404(10, 1)
+        with patch("app.db_helpers.get_repo_by_id", return_value=mock_repo):
+            session, repo = await get_session_with_repo_or_404(10, 1, mock_db)
 
-            # Verify get_repo_db was called with the repo's local_path
-            mock_get_db.assert_called_once_with("/specific/path/to/repo")
+            # Verify the session and repo are returned correctly
+            assert session.repo_id == repo["id"]

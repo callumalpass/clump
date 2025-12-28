@@ -63,15 +63,20 @@ async def get_session_or_404(db: AsyncSession, session_id: int) -> Session:
     return session
 
 
-async def get_session_with_repo_or_404(session_id: int, repo_id: int) -> tuple[Session, RepoInfo]:
+async def get_session_with_repo_or_404(
+    session_id: int, repo_id: int, db: AsyncSession
+) -> tuple[Session, RepoInfo]:
     """
     Fetch a session and verify it belongs to the specified repo.
 
     This is useful when you have both repo_id and session_id in the path.
+    The caller is responsible for providing a valid database session from
+    the appropriate repo context.
 
     Args:
         session_id: Session ID to look up
         repo_id: Repository ID the session should belong to
+        db: Active database session for the repo
 
     Returns:
         Tuple of (Session, RepoInfo)
@@ -81,11 +86,10 @@ async def get_session_with_repo_or_404(session_id: int, repo_id: int) -> tuple[S
     """
     repo = get_repo_or_404(repo_id)
 
-    async with get_repo_db(repo["local_path"]) as db:
-        session = await get_session_or_404(db, session_id)
+    session = await get_session_or_404(db, session_id)
 
-        # Verify the session belongs to this repo
-        if session.repo_id != repo_id:
-            raise HTTPException(status_code=404, detail="Session not found in this repository")
+    # Verify the session belongs to this repo
+    if session.repo_id != repo_id:
+        raise HTTPException(status_code=404, detail="Session not found in this repository")
 
-        return session, repo
+    return session, repo
