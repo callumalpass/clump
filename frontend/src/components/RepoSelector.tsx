@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import type { Repo } from '../types';
+import type { Repo, RepoSessionCount } from '../types';
 
 interface RepoSelectorProps {
   repos: Repo[];
   selectedRepo: Repo | null;
   onSelectRepo: (repo: Repo) => void;
   onAddRepo: (localPath: string) => Promise<Repo>;
+  sessionCounts?: Map<number, RepoSessionCount>;
 }
 
 export function RepoSelector({
@@ -13,8 +14,10 @@ export function RepoSelector({
   selectedRepo,
   onSelectRepo,
   onAddRepo,
+  sessionCounts,
 }: RepoSelectorProps) {
   const [isAdding, setIsAdding] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   const [localPath, setLocalPath] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -35,24 +38,90 @@ export function RepoSelector({
     }
   };
 
+  const handleSelectRepo = (repo: Repo) => {
+    onSelectRepo(repo);
+    setIsOpen(false);
+  };
+
+  // Get counts for selected repo
+  const selectedCounts = selectedRepo ? sessionCounts?.get(selectedRepo.id) : undefined;
+
   return (
     <div className="p-2 border-b border-gray-700">
       <div className="flex items-center gap-2">
-        <select
-          value={selectedRepo?.id ?? ''}
-          onChange={(e) => {
-            const repo = repos.find((r) => r.id === Number(e.target.value));
-            if (repo) onSelectRepo(repo);
-          }}
-          className="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-        >
-          <option value="">Select repository...</option>
-          {repos.map((repo) => (
-            <option key={repo.id} value={repo.id}>
-              {repo.owner}/{repo.name}
-            </option>
-          ))}
-        </select>
+        {/* Custom dropdown */}
+        <div className="relative flex-1">
+          <button
+            type="button"
+            onClick={() => setIsOpen(!isOpen)}
+            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-left flex items-center justify-between"
+          >
+            <span className="flex items-center gap-2 min-w-0">
+              {selectedRepo ? (
+                <>
+                  <span className="truncate">{selectedRepo.owner}/{selectedRepo.name}</span>
+                  {selectedCounts && selectedCounts.active > 0 && (
+                    <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-full bg-yellow-500/20 text-yellow-400">
+                      <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
+                      {selectedCounts.active}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="text-gray-400">Select repository...</span>
+              )}
+            </span>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {/* Dropdown menu */}
+          {isOpen && (
+            <>
+              {/* Backdrop to close dropdown */}
+              <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
+
+              <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-600 rounded shadow-lg max-h-64 overflow-auto">
+                {repos.length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-gray-400">No repositories added</div>
+                ) : (
+                  repos.map((repo) => {
+                    const counts = sessionCounts?.get(repo.id);
+                    const isSelected = selectedRepo?.id === repo.id;
+
+                    return (
+                      <button
+                        key={repo.id}
+                        type="button"
+                        onClick={() => handleSelectRepo(repo)}
+                        className={`w-full px-3 py-2 text-sm text-left flex items-center justify-between hover:bg-gray-700 transition-colors ${
+                          isSelected ? 'bg-gray-700 text-white' : 'text-gray-200'
+                        }`}
+                      >
+                        <span className="truncate">{repo.owner}/{repo.name}</span>
+                        <span className="flex items-center gap-2 shrink-0 ml-2">
+                          {counts && counts.active > 0 && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-full bg-yellow-500/20 text-yellow-400">
+                              <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
+                              {counts.active}
+                            </span>
+                          )}
+                          {counts && counts.total > 0 && (
+                            <span className="text-xs text-gray-500">
+                              {counts.total} session{counts.total !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
         <button
           onClick={() => setIsAdding(!isAdding)}
           className="px-2 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
