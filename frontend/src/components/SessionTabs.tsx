@@ -192,15 +192,23 @@ export function SessionTabs({
       <button
         onClick={onNewSession}
         disabled={newSessionDisabled}
-        className={`px-3 py-2 transition-all active:scale-95 disabled:active:scale-100 ${focusRing} ${
+        className={`group/new px-2 py-2 rounded-md transition-all active:scale-95 disabled:active:scale-100 ${focusRing} ${
           newSessionDisabled
             ? 'text-gray-600 cursor-not-allowed'
-            : 'text-gray-400 hover:text-white hover:bg-gray-800'
+            : 'text-gray-400 hover:text-white hover:bg-gray-700/60'
         }`}
-        title={newSessionDisabled ? "Select a repository first" : "New session"}
+        title={newSessionDisabled ? "Select a repository first" : "New session (Ctrl+N)"}
         aria-label="Create new session"
       >
-        +
+        <svg
+          className={`w-4 h-4 transition-transform ${newSessionDisabled ? '' : 'group-hover/new:rotate-90'}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
       </button>
       {/* Sliding indicator - only show when width is calculated */}
       {indicatorStyle.width > 0 && (
