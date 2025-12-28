@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
 
-from app.routers.sessions import router, _quick_scan_transcript, _get_pending_sessions
+from app.routers.sessions import router, _quick_scan_transcript, _get_pending_sessions, invalidate_session_cache
 from app.storage import (
     DiscoveredSession,
     SessionMetadata,
@@ -883,3 +883,178 @@ class TestContinueSession:
 
             assert response.status_code == 400
             assert "cannot continue" in response.json()["detail"].lower()
+
+
+class TestQuickScanTranscriptNoneHandling:
+    """Tests for None text value handling in _quick_scan_transcript."""
+
+    def test_scan_handles_none_text_in_list_content(self, tmp_path):
+        """Test that None text values in list content are handled gracefully."""
+        import json
+        transcript = tmp_path / "test.jsonl"
+        # Content with type='text' but text=None (can happen with malformed data)
+        lines = [
+            json.dumps({
+                "type": "user",
+                "timestamp": "2024-01-15T10:00:00Z",
+                "message": {
+                    "content": [
+                        {"type": "text", "text": None}  # None text value
+                    ]
+                }
+            }),
+        ]
+        transcript.write_text("\n".join(lines))
+
+        result = _quick_scan_transcript(transcript)
+
+        # Should not crash, title should be empty string
+        assert result["title"] == ""
+        assert result["message_count"] == 1
+
+    def test_scan_handles_missing_text_key_in_list_content(self, tmp_path):
+        """Test that missing text key in list content is handled gracefully."""
+        import json
+        transcript = tmp_path / "test.jsonl"
+        # Content with type='text' but no text key at all
+        lines = [
+            json.dumps({
+                "type": "user",
+                "timestamp": "2024-01-15T10:00:00Z",
+                "message": {
+                    "content": [
+                        {"type": "text"}  # Missing text key
+                    ]
+                }
+            }),
+        ]
+        transcript.write_text("\n".join(lines))
+
+        result = _quick_scan_transcript(transcript)
+
+        # Should not crash, title should be empty string
+        assert result["title"] == ""
+        assert result["message_count"] == 1
+
+    def test_scan_uses_first_valid_text_from_list(self, tmp_path):
+        """Test that first valid text is used when list has None followed by valid text."""
+        import json
+        transcript = tmp_path / "test.jsonl"
+        lines = [
+            json.dumps({
+                "type": "user",
+                "timestamp": "2024-01-15T10:00:00Z",
+                "message": {
+                    "content": [
+                        {"type": "text", "text": None},  # None - should skip
+                        {"type": "text", "text": "Valid message"}  # Valid
+                    ]
+                }
+            }),
+        ]
+        transcript.write_text("\n".join(lines))
+
+        result = _quick_scan_transcript(transcript)
+
+        # Should use the empty string from first text block (breaks after first)
+        assert result["title"] == ""
+        assert result["message_count"] == 1
+
+
+class TestSessionCacheInvalidation:
+    """Tests for session cache invalidation logic."""
+
+    @pytest.fixture(autouse=True)
+    def clear_cache(self):
+        """Clear the session cache before and after each test."""
+        from app.routers.sessions import _session_cache
+        _session_cache.clear()
+        yield
+        _session_cache.clear()
+
+    def test_cache_returns_same_data_within_ttl(self):
+        """Test that cache returns cached data within TTL window."""
+        from app.routers.sessions import _get_cached_sessions, _session_cache, SESSION_CACHE_TTL
+
+        mock_sessions = [MagicMock()]
+
+        with patch("app.routers.sessions.discover_sessions", return_value=mock_sessions) as mock_discover:
+            # First call - cache miss
+            result1 = _get_cached_sessions(repo_path="/test/path")
+            assert mock_discover.call_count == 1
+
+            # Second call within TTL - should use cache
+            result2 = _get_cached_sessions(repo_path="/test/path")
+            assert mock_discover.call_count == 1  # Should not have called discover again
+
+            assert result1 == result2
+
+    def test_cache_invalidation_clears_specific_repo(self):
+        """Test that invalidating with repo_path clears that repo's cache."""
+        from app.routers.sessions import invalidate_session_cache, _session_cache
+
+        # Set up cache manually
+        _session_cache["/test/path1"] = ([], 0)
+        _session_cache["/test/path2"] = ([], 0)
+        _session_cache["__all__"] = ([], 0)
+
+        # Invalidate specific path
+        invalidate_session_cache(repo_path="/test/path1")
+
+        assert "/test/path1" not in _session_cache
+        assert "/test/path2" in _session_cache
+        assert "__all__" not in _session_cache  # Should also clear global cache
+
+    def test_cache_invalidation_clears_all(self):
+        """Test that invalidating without repo_path clears all cache entries."""
+        from app.routers.sessions import invalidate_session_cache, _session_cache
+
+        # Set up cache manually
+        _session_cache["/test/path1"] = ([], 0)
+        _session_cache["/test/path2"] = ([], 0)
+        _session_cache["__all__"] = ([], 0)
+
+        # Invalidate all
+        invalidate_session_cache()
+
+        assert len(_session_cache) == 0
+
+    def test_cache_different_repo_paths_are_independent(self):
+        """Test that different repo paths have independent cache entries."""
+        from app.routers.sessions import _get_cached_sessions, _session_cache
+
+        mock_sessions1 = [MagicMock(session_id="session1")]
+        mock_sessions2 = [MagicMock(session_id="session2")]
+
+        with patch("app.routers.sessions.discover_sessions") as mock_discover:
+            mock_discover.return_value = mock_sessions1
+            result1 = _get_cached_sessions(repo_path="/path/one")
+
+            mock_discover.return_value = mock_sessions2
+            result2 = _get_cached_sessions(repo_path="/path/two")
+
+            # Both should have been called
+            assert mock_discover.call_count == 2
+            assert result1[0].session_id == "session1"
+            assert result2[0].session_id == "session2"
+
+    def test_cache_global_vs_specific_repo(self):
+        """Test that global cache is separate from repo-specific cache."""
+        from app.routers.sessions import _get_cached_sessions, _session_cache
+
+        mock_all_sessions = [MagicMock(session_id="all")]
+        mock_repo_sessions = [MagicMock(session_id="repo")]
+
+        with patch("app.routers.sessions.discover_sessions") as mock_discover:
+            # First call with no repo_path (global)
+            mock_discover.return_value = mock_all_sessions
+            result_all = _get_cached_sessions(repo_path=None)
+
+            # Second call with specific repo_path
+            mock_discover.return_value = mock_repo_sessions
+            result_repo = _get_cached_sessions(repo_path="/specific/path")
+
+            # Both should have been called
+            assert mock_discover.call_count == 2
+            assert result_all[0].session_id == "all"
+            assert result_repo[0].session_id == "repo"
