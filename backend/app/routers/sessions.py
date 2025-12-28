@@ -1008,3 +1008,212 @@ async def delete_session(session_id: str):
         "transcript_deleted": transcript_deleted,
         "metadata_deleted": metadata_deleted,
     }
+
+
+# ==========================================
+# Bulk Delete Sessions
+# ==========================================
+
+from pydantic import BaseModel
+from typing import List
+
+
+class BulkDeleteRequest(BaseModel):
+    """Request body for bulk session deletion."""
+    session_ids: List[str]
+
+
+class BulkDeleteResult(BaseModel):
+    """Result of a single session deletion in a bulk operation."""
+    session_id: str
+    success: bool
+    error: Optional[str] = None
+
+
+class BulkDeleteResponse(BaseModel):
+    """Response for bulk session deletion."""
+    deleted: int
+    failed: int
+    results: List[BulkDeleteResult]
+
+
+@router.post("/sessions/bulk-delete", response_model=BulkDeleteResponse)
+async def bulk_delete_sessions(data: BulkDeleteRequest):
+    """
+    Delete multiple sessions at once.
+
+    This permanently removes both transcript files and sidecar metadata
+    for each session. Active sessions are skipped.
+
+    Returns detailed results for each session.
+    """
+    # Get active session IDs to skip
+    active_processes = await process_manager.list_processes()
+    active_session_ids = {
+        proc.claude_session_id
+        for proc in active_processes
+        if proc.claude_session_id
+    }
+
+    # Get all sessions (use cached for performance)
+    sessions = _get_cached_sessions()
+    session_map = {s.session_id: s for s in sessions}
+
+    results: List[BulkDeleteResult] = []
+    deleted_count = 0
+    failed_count = 0
+
+    for session_id in data.session_ids:
+        # Check if session exists
+        session = session_map.get(session_id)
+        if not session:
+            results.append(BulkDeleteResult(
+                session_id=session_id,
+                success=False,
+                error="Session not found"
+            ))
+            failed_count += 1
+            continue
+
+        # Check if session is active
+        if session_id in active_session_ids:
+            results.append(BulkDeleteResult(
+                session_id=session_id,
+                success=False,
+                error="Cannot delete an active session"
+            ))
+            failed_count += 1
+            continue
+
+        # Try to delete transcript file
+        try:
+            if session.transcript_path.exists():
+                session.transcript_path.unlink()
+        except OSError as e:
+            results.append(BulkDeleteResult(
+                session_id=session_id,
+                success=False,
+                error=f"Failed to delete transcript: {e}"
+            ))
+            failed_count += 1
+            continue
+
+        # Delete sidecar metadata
+        delete_session_metadata(session.encoded_path, session_id)
+
+        # Emit session deleted event
+        await event_manager.emit(EventType.SESSION_DELETED, {
+            "session_id": session_id,
+            "repo_path": decode_path(session.encoded_path),
+        })
+
+        results.append(BulkDeleteResult(
+            session_id=session_id,
+            success=True
+        ))
+        deleted_count += 1
+
+    # Invalidate cache after bulk deletion
+    if deleted_count > 0:
+        invalidate_session_cache()
+
+    return BulkDeleteResponse(
+        deleted=deleted_count,
+        failed=failed_count,
+        results=results
+    )
+
+
+# ==========================================
+# Bulk Update Sessions (Star/Unstar)
+# ==========================================
+
+class BulkUpdateRequest(BaseModel):
+    """Request body for bulk session update."""
+    session_ids: List[str]
+    starred: Optional[bool] = None
+
+
+class BulkUpdateResult(BaseModel):
+    """Result of a single session update in a bulk operation."""
+    session_id: str
+    success: bool
+    error: Optional[str] = None
+
+
+class BulkUpdateResponse(BaseModel):
+    """Response for bulk session update."""
+    updated: int
+    failed: int
+    results: List[BulkUpdateResult]
+
+
+@router.post("/sessions/bulk-update", response_model=BulkUpdateResponse)
+async def bulk_update_sessions(data: BulkUpdateRequest):
+    """
+    Update multiple sessions at once.
+
+    Currently supports bulk starring/unstarring.
+    Returns detailed results for each session.
+    """
+    # Get all sessions (use cached for performance)
+    sessions = _get_cached_sessions()
+    session_map = {s.session_id: s for s in sessions}
+
+    results: List[BulkUpdateResult] = []
+    updated_count = 0
+    failed_count = 0
+
+    for session_id in data.session_ids:
+        # Check if session exists
+        session = session_map.get(session_id)
+        if not session:
+            results.append(BulkUpdateResult(
+                session_id=session_id,
+                success=False,
+                error="Session not found"
+            ))
+            failed_count += 1
+            continue
+
+        # Load or create metadata
+        metadata = session.metadata or SessionMetadata(
+            session_id=session_id,
+            repo_path=decode_path(session.encoded_path),
+        )
+
+        # Update starred status if provided
+        if data.starred is not None:
+            metadata.starred = data.starred
+
+        # Save
+        try:
+            save_session_metadata(session.encoded_path, session_id, metadata)
+
+            # Emit session updated event
+            await event_manager.emit(EventType.SESSION_UPDATED, {
+                "session_id": session_id,
+                "repo_path": decode_path(session.encoded_path),
+                "changes": {
+                    "starred": metadata.starred,
+                },
+            })
+
+            results.append(BulkUpdateResult(
+                session_id=session_id,
+                success=True
+            ))
+            updated_count += 1
+        except Exception as e:
+            results.append(BulkUpdateResult(
+                session_id=session_id,
+                success=False,
+                error=str(e)
+            ))
+            failed_count += 1
+
+    return BulkUpdateResponse(
+        updated=updated_count,
+        failed=failed_count,
+        results=results
+    )

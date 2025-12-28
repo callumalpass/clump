@@ -1,5 +1,5 @@
-import { memo, useCallback } from 'react';
-import type { SessionSummary, Process } from '../types';
+import { memo, useCallback, useState } from 'react';
+import type { SessionSummary, Process, BulkOperationResult } from '../types';
 import { calculateDuration } from '../hooks/useElapsedTime';
 import { ElapsedTimer } from './ElapsedTimer';
 import { Pagination, PaginationSkeleton } from './Pagination';
@@ -47,6 +47,9 @@ interface SessionListItemProps {
   onToggleStar?: (e: React.MouseEvent) => void;
   showContinueButton: boolean;
   showStarButton: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (e: React.MouseEvent) => void;
+  selectionMode?: boolean;
 }
 
 const SessionListItem = memo(function SessionListItem({
@@ -57,6 +60,9 @@ const SessionListItem = memo(function SessionListItem({
   onToggleStar,
   showContinueButton,
   showStarButton,
+  isSelected = false,
+  onToggleSelect,
+  selectionMode = false,
 }: SessionListItemProps) {
   // Format repo path for display - show last 2-3 segments
   const formatRepoPath = (s: SessionSummary) => {
@@ -68,7 +74,9 @@ const SessionListItem = memo(function SessionListItem({
   return (
     <div
       className={`group p-3 cursor-pointer border-l-2 hover:bg-gray-800/60 transition-all duration-150 ease-out list-item-hover list-item-enter ${
-        session.is_active
+        isSelected
+          ? 'bg-blue-900/30 border-blue-500'
+          : session.is_active
           ? 'border-yellow-500/70 hover:border-yellow-400'
           : isRecentlyModified(session.modified_at)
           ? 'border-blue-500/60 hover:border-blue-400'
@@ -78,6 +86,25 @@ const SessionListItem = memo(function SessionListItem({
       onClick={onSelect}
     >
       <div className="flex items-center gap-2 mb-1">
+        {/* Selection checkbox */}
+        {selectionMode && onToggleSelect && (
+          <button
+            onClick={onToggleSelect}
+            className={`flex-shrink-0 w-4 h-4 rounded border transition-colors ${
+              isSelected
+                ? 'bg-blue-500 border-blue-500'
+                : 'border-gray-500 hover:border-gray-400'
+            }`}
+            title={isSelected ? 'Deselect' : 'Select'}
+          >
+            {isSelected && (
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </button>
+        )}
+
         {/* Status indicator with text label for accessibility */}
         {session.is_active ? (
           <span
@@ -208,6 +235,8 @@ interface SessionListProps {
   onContinueSession?: (session: SessionSummary) => void;
   onToggleStar?: (session: SessionSummary) => void;
   onRefresh?: () => void;
+  onBulkDelete?: (sessionIds: string[]) => Promise<BulkOperationResult>;
+  onBulkStar?: (sessionIds: string[], starred: boolean) => Promise<BulkOperationResult>;
   loading: boolean;
   filters: SessionListFilters;
   onFiltersChange: (filters: SessionListFilters) => void;
@@ -237,6 +266,8 @@ export function SessionList({
   onContinueSession,
   onToggleStar,
   onRefresh,
+  onBulkDelete,
+  onBulkStar,
   loading,
   filters,
   onFiltersChange,
@@ -245,6 +276,89 @@ export function SessionList({
   totalPages,
   onPageChange,
 }: SessionListProps) {
+  // Selection state for bulk operations
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+
+  // Check if bulk operations are available
+  const hasBulkOperations = !!onBulkDelete || !!onBulkStar;
+
+  // Get selectable sessions (exclude active sessions from selection for delete)
+  const selectableSessions = sessions.filter(s => !s.is_active);
+  const allSelectableSelected = selectableSessions.length > 0 &&
+    selectableSessions.every(s => selectedIds.has(s.session_id));
+  const someSelected = selectedIds.size > 0;
+
+  const toggleSelectSession = useCallback((sessionId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) {
+        next.delete(sessionId);
+      } else {
+        next.add(sessionId);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (allSelectableSelected) {
+      // Deselect all
+      setSelectedIds(new Set());
+    } else {
+      // Select all non-active sessions on current page
+      setSelectedIds(new Set(selectableSessions.map(s => s.session_id)));
+    }
+  }, [allSelectableSelected, selectableSessions]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  // Bulk delete handler
+  const handleBulkDelete = useCallback(async () => {
+    if (!onBulkDelete || selectedIds.size === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedIds.size} session${selectedIds.size > 1 ? 's' : ''}? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setBulkActionLoading(true);
+    try {
+      const result = await onBulkDelete(Array.from(selectedIds));
+      // Clear selection after successful delete
+      if (result.deleted && result.deleted > 0) {
+        setSelectedIds(new Set());
+      }
+      if (result.failed > 0) {
+        alert(`${result.failed} session${result.failed > 1 ? 's' : ''} could not be deleted`);
+      }
+    } catch (e) {
+      console.error('Bulk delete failed:', e);
+      alert('Failed to delete sessions');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  }, [onBulkDelete, selectedIds]);
+
+  // Bulk star handler
+  const handleBulkStar = useCallback(async (starred: boolean) => {
+    if (!onBulkStar || selectedIds.size === 0) return;
+
+    setBulkActionLoading(true);
+    try {
+      await onBulkStar(Array.from(selectedIds), starred);
+      // Clear selection after successful update
+      setSelectedIds(new Set());
+    } catch (e) {
+      console.error('Bulk star failed:', e);
+      alert('Failed to update sessions');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  }, [onBulkStar, selectedIds]);
+
   const setSearch = (search: string) => {
     onFiltersChange({ ...filters, search: search || undefined });
   };
@@ -273,13 +387,100 @@ export function SessionList({
     filters.order !== 'desc' ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
+  // Bulk actions bar when items are selected
+  const bulkActionsBar = someSelected && (
+    <div className="flex items-center justify-between px-3 py-2 bg-blue-900/30 border-b border-blue-700/50">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={toggleSelectAll}
+          className={`flex-shrink-0 w-4 h-4 rounded border transition-colors ${
+            allSelectableSelected
+              ? 'bg-blue-500 border-blue-500'
+              : someSelected
+              ? 'bg-blue-500/50 border-blue-500'
+              : 'border-gray-500 hover:border-gray-400'
+          }`}
+          title={allSelectableSelected ? 'Deselect all' : 'Select all'}
+        >
+          {(allSelectableSelected || someSelected) && (
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d={allSelectableSelected ? "M5 13l4 4L19 7" : "M20 12H4"} />
+            </svg>
+          )}
+        </button>
+        <span className="text-sm text-blue-300">
+          {selectedIds.size} selected
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        {onBulkStar && (
+          <>
+            <button
+              onClick={() => handleBulkStar(true)}
+              disabled={bulkActionLoading}
+              className="px-2 py-1 text-xs bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50 rounded flex items-center gap-1 transition-colors"
+              title="Star selected"
+            >
+              <svg className="w-3 h-3" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+              </svg>
+              Star
+            </button>
+            <button
+              onClick={() => handleBulkStar(false)}
+              disabled={bulkActionLoading}
+              className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 disabled:opacity-50 rounded flex items-center gap-1 transition-colors"
+              title="Unstar selected"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+              </svg>
+              Unstar
+            </button>
+          </>
+        )}
+        {onBulkDelete && (
+          <button
+            onClick={handleBulkDelete}
+            disabled={bulkActionLoading}
+            className="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded flex items-center gap-1 transition-colors"
+            title="Delete selected"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Delete
+          </button>
+        )}
+        <button
+          onClick={clearSelection}
+          className="px-2 py-1 text-xs text-gray-400 hover:text-gray-300 transition-colors"
+          title="Clear selection"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+
   const filterBar = (
     <FilterBar>
-      <SearchInput
-        value={filters.search || ''}
-        onChange={setSearch}
-        placeholder="Search sessions..."
-      />
+      <div className="flex items-center gap-2">
+        {hasBulkOperations && !someSelected && (
+          <button
+            onClick={toggleSelectAll}
+            className="flex-shrink-0 w-4 h-4 rounded border border-gray-600 hover:border-gray-500 transition-colors"
+            title="Select sessions"
+          />
+        )}
+        <div className="flex-1">
+          <SearchInput
+            value={filters.search || ''}
+            onChange={setSearch}
+            placeholder="Search sessions..."
+          />
+        </div>
+      </div>
       <FilterBarRow className="flex-wrap gap-1">
         {CATEGORY_FILTERS.map((f) => (
           <button
@@ -377,9 +578,18 @@ export function SessionList({
     onToggleStar?.(session);
   }, [onToggleStar]);
 
+  const handleToggleSelect = useCallback((e: React.MouseEvent, session: SessionSummary) => {
+    e.stopPropagation();
+    // Don't allow selecting active sessions (can't delete them)
+    if (!session.is_active) {
+      toggleSelectSession(session.session_id);
+    }
+  }, [toggleSelectSession]);
+
   return (
     <div className="flex flex-col flex-1 min-h-0">
       {filterBar}
+      {bulkActionsBar}
       <div className="divide-y divide-gray-700 overflow-auto flex-1 min-h-0">
         {sessions.map((session, index) => (
           <SessionListItem
@@ -391,6 +601,9 @@ export function SessionList({
             onToggleStar={(e) => handleToggleStar(e, session)}
             showContinueButton={!!onContinueSession}
             showStarButton={!!onToggleStar}
+            isSelected={selectedIds.has(session.session_id)}
+            onToggleSelect={hasBulkOperations ? (e) => handleToggleSelect(e, session) : undefined}
+            selectionMode={hasBulkOperations}
           />
         ))}
       </div>

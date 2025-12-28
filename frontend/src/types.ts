@@ -177,6 +177,20 @@ export interface SessionListResponse {
   total: number;
 }
 
+// Bulk operation types
+export interface BulkOperationResultItem {
+  session_id: string;
+  success: boolean;
+  error?: string | null;
+}
+
+export interface BulkOperationResult {
+  deleted?: number;
+  updated?: number;
+  failed: number;
+  results: BulkOperationResultItem[];
+}
+
 // Legacy Session type for backwards compatibility
 export interface Session {
   id: number;

@@ -167,7 +167,7 @@ export default function App() {
     sort: sessionListFilters.sort,
     order: sessionListFilters.order,
   };
-  const { sessions, loading: sessionsLoading, refresh: refreshSessions, continueSession, deleteSession, updateSessionMetadata, total: sessionsTotal, page: sessionsPage, totalPages: sessionsTotalPages, goToPage: goToSessionsPage } = useSessions(sessionFilters);
+  const { sessions, loading: sessionsLoading, refresh: refreshSessions, continueSession, deleteSession, updateSessionMetadata, bulkDeleteSessions, bulkUpdateSessions, total: sessionsTotal, page: sessionsPage, totalPages: sessionsTotalPages, goToPage: goToSessionsPage } = useSessions(sessionFilters);
   const { stats, loading: statsLoading, error: statsError, refresh: refreshStats } = useStats();
 
   // Debounced session refresh to coalesce multiple rapid refresh requests
@@ -1106,7 +1106,9 @@ export default function App() {
     <div className="h-screen flex flex-col bg-[#0d1117] text-white">
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-[#161b22]">
-        <h1 className="text-lg font-semibold">Clump</h1>
+        <h1 className="text-xl font-light tracking-widest uppercase text-gray-100">
+          Clump
+        </h1>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-400">
             {processes.length} active process{processes.length !== 1 ? 'es' : ''}
@@ -1289,6 +1291,8 @@ export default function App() {
                     onContinueSession={handleContinueSession}
                     onToggleStar={handleToggleStar}
                     onRefresh={refreshSessions}
+                    onBulkDelete={bulkDeleteSessions}
+                    onBulkStar={(ids, starred) => bulkUpdateSessions(ids, { starred })}
                     loading={sessionsLoading}
                     filters={sessionListFilters}
                     onFiltersChange={setSessionListFilters}

@@ -4,7 +4,7 @@ import type {
   SessionSummary, SessionDetail, SessionListResponse, EntityLink,
   ClaudeCodeSettings, ProcessCreateOptions, Tag, IssueTagsMap, GitHubLabel,
   CommandsResponse, CommandMetadata, SubsessionDetail,
-  RepoSessionCount, SessionCountsResponse, StatsResponse
+  RepoSessionCount, SessionCountsResponse, StatsResponse, BulkOperationResult
 } from '../types';
 
 export interface EntityInput {
@@ -459,9 +459,38 @@ export function useSessions(filters: SessionFilters = {}) {
     return result;
   };
 
+  const bulkDeleteSessions = async (sessionIds: string[]): Promise<BulkOperationResult> => {
+    const result = await fetchJson<BulkOperationResult>(`${API_BASE}/sessions/bulk-delete`, {
+      method: 'POST',
+      body: JSON.stringify({ session_ids: sessionIds }),
+    });
+    // Refresh to get updated list
+    await refresh();
+    return result;
+  };
+
+  const bulkUpdateSessions = async (
+    sessionIds: string[],
+    updates: { starred?: boolean }
+  ): Promise<BulkOperationResult> => {
+    const result = await fetchJson<BulkOperationResult>(`${API_BASE}/sessions/bulk-update`, {
+      method: 'POST',
+      body: JSON.stringify({ session_ids: sessionIds, ...updates }),
+    });
+    // Update local state optimistically for starred status
+    if (updates.starred !== undefined) {
+      setSessions((prev) =>
+        prev.map((s) =>
+          sessionIds.includes(s.session_id) ? { ...s, starred: updates.starred! } : s
+        )
+      );
+    }
+    return result;
+  };
+
   const totalPages = Math.ceil(total / perPage);
 
-  return { sessions, total, loading, refresh, continueSession, deleteSession, updateSessionMetadata, page, totalPages, goToPage };
+  return { sessions, total, loading, refresh, continueSession, deleteSession, updateSessionMetadata, bulkDeleteSessions, bulkUpdateSessions, page, totalPages, goToPage };
 }
 
 // Session counts per repo (for badges)
