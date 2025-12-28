@@ -1240,7 +1240,7 @@ export default function App() {
       },
     });
 
-    // Open sessions
+    // Open sessions (currently open as tabs)
     for (const session of openSessions) {
       cmds.push({
         id: `session-${session.session_id}`,
@@ -1258,8 +1258,29 @@ export default function App() {
       });
     }
 
+    // Recent sessions from history (not already open as tabs)
+    const openSessionIdSet = new Set(openSessions.map(s => s.session_id));
+    const recentSessions = sessions
+      .filter(s => !openSessionIdSet.has(s.session_id))
+      .slice(0, 10); // Limit to 10 recent sessions
+
+    for (const session of recentSessions) {
+      cmds.push({
+        id: `recent-${session.session_id}`,
+        label: session.title || 'Untitled Session',
+        description: `${session.message_count} messages`,
+        icon: (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        ),
+        category: 'recent',
+        action: () => handleSelectSession(session),
+      });
+    }
+
     return cmds;
-  }, [selectedRepo, activeTab, openSessions, handleNewProcess, handleSelectSessionTab, refreshIssues, refreshPRs, refreshSessions]);
+  }, [selectedRepo, activeTab, openSessions, sessions, handleNewProcess, handleSelectSessionTab, handleSelectSession, refreshIssues, refreshPRs, refreshSessions]);
 
   return (
     <div className="h-screen flex flex-col bg-[#0d1117] text-white">
