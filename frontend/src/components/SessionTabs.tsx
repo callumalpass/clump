@@ -1,6 +1,7 @@
 import { useRef, useState, useLayoutEffect } from 'react';
 import type { SessionSummary, Process } from '../types';
 import { ElapsedTimer } from './ElapsedTimer';
+import { formatRelativeTime } from '../utils/time';
 import { focusRing } from '../utils/styles';
 
 /** Maximum length of a tab title before truncation */
@@ -160,9 +161,16 @@ export function SessionTabs({
             <span className="text-sm whitespace-nowrap max-w-[180px] truncate">
               {tabName}
             </span>
-            {/* Show elapsed time for running sessions */}
-            {isRunning && (activeProcess?.created_at || session.start_time) && (
+            {/* Show elapsed time for running sessions, relative time for completed */}
+            {isRunning && (activeProcess?.created_at || session.start_time) ? (
               <ElapsedTimer startTime={activeProcess?.created_at || session.start_time!} className="text-xs text-yellow-400 tabular-nums" />
+            ) : !isRunning && session.modified_at && (
+              <span
+                className="text-xs text-gray-500 tabular-nums"
+                title={new Date(session.modified_at).toLocaleString()}
+              >
+                {formatRelativeTime(session.modified_at)}
+              </span>
             )}
             <button
               type="button"
