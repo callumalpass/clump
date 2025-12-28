@@ -36,6 +36,21 @@ function ResizeHandle() {
   );
 }
 
+function HorizontalResizeHandle() {
+  return (
+    <Separator className="group relative flex items-center justify-center h-2 cursor-row-resize transition-all">
+      {/* Visible drag line */}
+      <div className="h-px w-full bg-gray-700 group-hover:bg-blue-500 group-active:bg-blue-400 transition-colors" />
+      {/* Grip dots indicator - visible on hover */}
+      <div className="absolute inset-x-0 flex flex-row items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+        <div className="w-1 h-1 rounded-full bg-blue-400" />
+        <div className="w-1 h-1 rounded-full bg-blue-400" />
+        <div className="w-1 h-1 rounded-full bg-blue-400" />
+      </div>
+    </Separator>
+  );
+}
+
 type Tab = 'issues' | 'prs' | 'history' | 'schedules';
 
 // Track pending issue/PR context for processes being created
@@ -96,6 +111,9 @@ export default function App() {
   const tabsContainerRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Map<Tab, HTMLButtonElement>>(new Map());
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
+
+  // Ref for refreshing schedule list from ScheduleDetail
+  const scheduleListRefreshRef = useRef<(() => void) | null>(null);
 
   // Save session tabs on every change
   // Track which repo the current tabs belong to (prevents saving old tabs to new repo on switch)
@@ -273,28 +291,12 @@ export default function App() {
     return () => clearInterval(interval);
   }, [hasActiveSessions, refreshSessions]);
 
-  // Validate and cleanup stale session tabs (after sessions load)
-  useEffect(() => {
-    if (sessionsLoading) return;
-
-    // Find tabs that reference sessions that no longer exist and have no active process
-    const validTabs = openSessionIds.filter(id => {
-      // Keep if session exists in backend
-      if (sessions.find(s => s.session_id === id)) return true;
-      // Keep if there's an active process for this session (optimistic UI)
-      if (processes.find(p => p.claude_session_id === id)) return true;
-      // Remove stale tabs
-      return false;
-    });
-
-    if (validTabs.length < openSessionIds.length) {
-      setOpenSessionIds(validTabs);
-      // If active tab was removed, clear it
-      if (activeTabSessionId && !validTabs.includes(activeTabSessionId)) {
-        setActiveTabSessionId(validTabs[0] || null);
-      }
-    }
-  }, [sessions, processes, openSessionIds, activeTabSessionId, sessionsLoading]);
+  // Note: We intentionally do NOT auto-cleanup session tabs based on the sessions list
+  // because sessions is paginated. Tabs for sessions on other pages would be incorrectly
+  // removed when sorting/filtering changes. Tabs are only removed when:
+  // 1. User explicitly closes them via handleCloseSessionTab
+  // 2. Session is deleted via deleteSession
+  // 3. Repo is switched (handled in the repo change useEffect)
 
   const handleStartIssueSession = useCallback(
     async (issue: Issue, command: CommandMetadata) => {
@@ -460,7 +462,7 @@ export default function App() {
           goToIssuesPage(issuesPage - 1);
         } else if (activeTab === 'prs' && prsPage > 1) {
           goToPRsPage(prsPage - 1);
-        } else if (activeTab === 'sessions' && sessionsPage > 1) {
+        } else if (activeTab === 'history' && sessionsPage > 1) {
           goToSessionsPage(sessionsPage - 1);
         }
         return;
@@ -473,7 +475,7 @@ export default function App() {
           goToIssuesPage(issuesPage + 1);
         } else if (activeTab === 'prs' && prsPage < prsTotalPages) {
           goToPRsPage(prsPage + 1);
-        } else if (activeTab === 'sessions' && sessionsPage < sessionsTotalPages) {
+        } else if (activeTab === 'history' && sessionsPage < sessionsTotalPages) {
           goToSessionsPage(sessionsPage + 1);
         }
         return;
@@ -893,142 +895,155 @@ export default function App() {
             sessionCounts={sessionCounts}
           />
 
-          {/* Tabs with sliding indicator */}
-          <div ref={tabsContainerRef} className="relative flex border-b border-gray-700">
-            {(['issues', 'prs', 'sessions', 'schedules'] as Tab[]).map((tab) => {
-              // Get count for each tab
-              const count = tab === 'issues' ? issuesTotal
-                : tab === 'prs' ? prsTotal
-                : tab === 'sessions' ? sessionsTotal
-                : 0; // schedules don't show count
-              const hasRunning = tab === 'sessions' && sessions.some(s =>
-                s.is_active && processes.some(p => p.claude_session_id === s.session_id)
-              );
-
-              return (
-                <button
-                  key={tab}
-                  ref={(el) => {
-                    if (el) tabRefs.current.set(tab, el);
-                  }}
-                  onClick={() => setActiveTab(tab)}
-                  className={`flex-1 px-4 py-2 text-sm capitalize outline-none focus-visible:bg-blue-500/10 focus-visible:text-blue-300 flex items-center justify-center gap-1.5 transition-colors duration-150 ${
-                    activeTab === tab
-                      ? 'text-white'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
-                  }`}
-                >
-                  {tab}
-                  {selectedRepo && count > 0 && (
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center ${
-                      activeTab === tab
-                        ? hasRunning ? 'bg-yellow-500/20 text-yellow-400' : 'bg-blue-500/20 text-blue-400'
-                        : hasRunning ? 'bg-yellow-500/20 text-yellow-400' : 'bg-gray-700 text-gray-400'
-                    }`}>
-                      {hasRunning && (
-                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse mr-1" />
-                      )}
-                      {count > 999 ? '999+' : count}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-            {/* Sliding indicator - only show when width is calculated */}
-            {indicatorStyle.width > 0 && (
-              <div
-                className="absolute bottom-0 h-0.5 bg-blue-500 transition-all duration-200 ease-out"
-                style={{
-                  left: indicatorStyle.left,
-                  width: indicatorStyle.width,
-                }}
-              />
-            )}
-          </div>
-
-          {/* List content */}
-          <div className="flex-1 min-h-0 flex flex-col">
-            {activeTab === 'issues' && selectedRepo && (
-              <IssueList
-                issues={issues}
-                selectedIssue={selectedIssue}
-                onSelectIssue={handleSelectIssue}
-                issueCommands={commands.issue}
-                onStartSession={handleStartIssueSession}
-                loading={issuesLoading}
-                page={issuesPage}
-                totalPages={issuesTotalPages}
-                total={issuesTotal}
-                onPageChange={goToIssuesPage}
+          {/* Split sidebar with Sessions at top, Tabs below */}
+          <Group orientation="vertical" className="flex-1 min-h-0">
+            {/* Top: Always-visible sessions */}
+            <Panel defaultSize="30%" minSize="80px" maxSize="60%">
+              <CompactSessionList
                 sessions={sessions}
-                processes={processes}
-                tags={tags}
-                issueTagsMap={issueTagsMap}
-                selectedTagId={selectedTagId}
-                onSelectTag={setSelectedTagId}
-                filters={issueFilters}
-                onFiltersChange={setIssueFilters}
-                onRefresh={refreshIssues}
-                onCreateIssue={() => {
-                  setIsCreatingIssue(true);
-                  setSelectedIssue(null);
-                }}
-              />
-            )}
-            {activeTab === 'sessions' && (
-              <SessionList
-                sessions={sessions}
-                processes={processes}
                 onSelectSession={handleSelectSession}
                 onContinueSession={handleContinueSession}
-                onToggleStar={handleToggleStar}
-                onRefresh={refreshSessions}
-                loading={sessionsLoading}
-                filters={sessionListFilters}
-                onFiltersChange={setSessionListFilters}
-                total={sessionsTotal}
-                page={sessionsPage}
-                totalPages={sessionsTotalPages}
-                onPageChange={goToSessionsPage}
+                onViewAll={() => setActiveTab('history')}
               />
-            )}
-            {activeTab === 'prs' && selectedRepo && (
-              <PRList
-                prs={prs}
-                selectedPR={selectedPR}
-                onSelectPR={handleSelectPR}
-                prCommands={commands.pr}
-                onStartSession={handleStartPRSession}
-                loading={prsLoading}
-                filters={prFilters}
-                onFiltersChange={setPRFilters}
-                sessions={sessions}
-                processes={processes}
-                onRefresh={refreshPRs}
-                page={prsPage}
-                totalPages={prsTotalPages}
-                total={prsTotal}
-                onPageChange={goToPRsPage}
-              />
-            )}
-            {activeTab === 'schedules' && selectedRepo && (
-              <ScheduleList
-                repoId={selectedRepo.id}
-                repoPath={selectedRepo.local_path}
-                commands={commands}
-                selectedScheduleId={selectedSchedule}
-                onSelectSchedule={(id) => {
-                  setSelectedSchedule(id);
-                  // Clear other selections
-                  setSelectedIssue(null);
-                  setSelectedPR(null);
-                }}
-              />
-            )}
-            {!selectedRepo && activeTab !== 'sessions' && (
-              <div className="p-4 text-gray-400">Select a repository to view {activeTab}</div>
-            )}
-          </div>
+            </Panel>
+
+            <HorizontalResizeHandle />
+
+            {/* Bottom: Tabs for Issues/PRs/History/Schedules */}
+            <Panel minSize="200px" className="flex flex-col">
+              {/* Tabs with sliding indicator */}
+              <div ref={tabsContainerRef} className="relative flex border-b border-gray-700 shrink-0">
+                {(['issues', 'prs', 'history', 'schedules'] as Tab[]).map((tab) => {
+                  // Get count for each tab
+                  const count = tab === 'issues' ? issuesTotal
+                    : tab === 'prs' ? prsTotal
+                    : tab === 'history' ? sessionsTotal
+                    : 0; // schedules don't show count
+
+                  return (
+                    <button
+                      key={tab}
+                      ref={(el) => {
+                        if (el) tabRefs.current.set(tab, el);
+                      }}
+                      onClick={() => setActiveTab(tab)}
+                      className={`flex-1 px-4 py-2 text-sm capitalize outline-none focus-visible:bg-blue-500/10 focus-visible:text-blue-300 flex items-center justify-center gap-1.5 transition-colors duration-150 ${
+                        activeTab === tab
+                          ? 'text-white'
+                          : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                      }`}
+                    >
+                      {tab}
+                      {(selectedRepo || tab === 'history') && count > 0 && (
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center ${
+                          activeTab === tab
+                            ? 'bg-blue-500/20 text-blue-400'
+                            : 'bg-gray-700 text-gray-400'
+                        }`}>
+                          {count > 999 ? '999+' : count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+                {/* Sliding indicator - only show when width is calculated */}
+                {indicatorStyle.width > 0 && (
+                  <div
+                    className="absolute bottom-0 h-0.5 bg-blue-500 transition-all duration-200 ease-out"
+                    style={{
+                      left: indicatorStyle.left,
+                      width: indicatorStyle.width,
+                    }}
+                  />
+                )}
+              </div>
+
+              {/* List content */}
+              <div className="flex-1 min-h-0 flex flex-col">
+                {activeTab === 'issues' && selectedRepo && (
+                  <IssueList
+                    issues={issues}
+                    selectedIssue={selectedIssue}
+                    onSelectIssue={handleSelectIssue}
+                    issueCommands={commands.issue}
+                    onStartSession={handleStartIssueSession}
+                    loading={issuesLoading}
+                    page={issuesPage}
+                    totalPages={issuesTotalPages}
+                    total={issuesTotal}
+                    onPageChange={goToIssuesPage}
+                    sessions={sessions}
+                    processes={processes}
+                    tags={tags}
+                    issueTagsMap={issueTagsMap}
+                    selectedTagId={selectedTagId}
+                    onSelectTag={setSelectedTagId}
+                    filters={issueFilters}
+                    onFiltersChange={setIssueFilters}
+                    onRefresh={refreshIssues}
+                    onCreateIssue={() => {
+                      setIsCreatingIssue(true);
+                      setSelectedIssue(null);
+                    }}
+                  />
+                )}
+                {activeTab === 'history' && (
+                  <SessionList
+                    sessions={sessions}
+                    processes={processes}
+                    onSelectSession={handleSelectSession}
+                    onContinueSession={handleContinueSession}
+                    onToggleStar={handleToggleStar}
+                    onRefresh={refreshSessions}
+                    loading={sessionsLoading}
+                    filters={sessionListFilters}
+                    onFiltersChange={setSessionListFilters}
+                    total={sessionsTotal}
+                    page={sessionsPage}
+                    totalPages={sessionsTotalPages}
+                    onPageChange={goToSessionsPage}
+                  />
+                )}
+                {activeTab === 'prs' && selectedRepo && (
+                  <PRList
+                    prs={prs}
+                    selectedPR={selectedPR}
+                    onSelectPR={handleSelectPR}
+                    prCommands={commands.pr}
+                    onStartSession={handleStartPRSession}
+                    loading={prsLoading}
+                    filters={prFilters}
+                    onFiltersChange={setPRFilters}
+                    sessions={sessions}
+                    processes={processes}
+                    onRefresh={refreshPRs}
+                    page={prsPage}
+                    totalPages={prsTotalPages}
+                    total={prsTotal}
+                    onPageChange={goToPRsPage}
+                  />
+                )}
+                {activeTab === 'schedules' && selectedRepo && (
+                  <ScheduleList
+                    repoId={selectedRepo.id}
+                    repoPath={selectedRepo.local_path}
+                    commands={commands}
+                    selectedScheduleId={selectedSchedule}
+                    onSelectSchedule={(id) => {
+                      setSelectedSchedule(id);
+                      // Clear other selections
+                      setSelectedIssue(null);
+                      setSelectedPR(null);
+                    }}
+                    refreshRef={scheduleListRefreshRef}
+                  />
+                )}
+                {!selectedRepo && activeTab !== 'history' && (
+                  <div className="p-4 text-gray-400">Select a repository to view {activeTab}</div>
+                )}
+              </div>
+            </Panel>
+          </Group>
         </Panel>
 
         <ResizeHandle />
@@ -1323,7 +1338,8 @@ export default function App() {
                   commands={commands}
                   onScheduleDeleted={() => setSelectedSchedule(null)}
                   onScheduleUpdated={() => {
-                    // Refresh schedules list is handled internally by useSchedules
+                    // Refresh schedules list to show updated data in cards
+                    scheduleListRefreshRef.current?.();
                   }}
                 />
               </div>
