@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { SessionList, SessionListFilters } from './SessionList';
-import type { SessionSummary, Process } from '../types';
+import type { SessionSummary, Process, BulkOperationResult } from '../types';
 
 // Mock ElapsedTimer component
 vi.mock('./ElapsedTimer', () => ({
@@ -643,6 +643,659 @@ describe('SessionList', () => {
       // formatRepoPath takes the last 2 segments: 'to/repository'
       const repoSpan = screen.getByText('to/repository');
       expect(repoSpan).toHaveAttribute('title', '/very/long/path/to/repository');
+    });
+  });
+
+  describe('Active Filter Count', () => {
+    it('does not count undefined sort as active filter', () => {
+      // When sort is undefined (default), it should not count as active
+      render(
+        <SessionList
+          {...defaultProps}
+          filters={{ category: 'all', sort: undefined }}
+        />
+      );
+
+      // The filter indicator should not appear when no filters are active
+      expect(screen.queryByTitle('Clear all active filters')).not.toBeInTheDocument();
+    });
+
+    it('does not count undefined order as active filter', () => {
+      // When order is undefined (default), it should not count as active
+      render(
+        <SessionList
+          {...defaultProps}
+          filters={{ category: 'all', order: undefined }}
+        />
+      );
+
+      expect(screen.queryByTitle('Clear all active filters')).not.toBeInTheDocument();
+    });
+
+    it('counts non-default sort as active filter', () => {
+      render(
+        <SessionList
+          {...defaultProps}
+          filters={{ category: 'all', sort: 'updated' }}
+        />
+      );
+
+      // Clear filters indicator should appear when there's an active filter
+      expect(screen.getByTitle('Clear all active filters')).toBeInTheDocument();
+    });
+
+    it('counts non-default order as active filter', () => {
+      render(
+        <SessionList
+          {...defaultProps}
+          filters={{ category: 'all', order: 'asc' }}
+        />
+      );
+
+      expect(screen.getByTitle('Clear all active filters')).toBeInTheDocument();
+    });
+
+    it('counts search as active filter', () => {
+      render(
+        <SessionList
+          {...defaultProps}
+          filters={{ category: 'all', search: 'test query' }}
+        />
+      );
+
+      expect(screen.getByTitle('Clear all active filters')).toBeInTheDocument();
+    });
+
+    it('counts date range as active filter', () => {
+      render(
+        <SessionList
+          {...defaultProps}
+          filters={{ category: 'all', dateRange: 'today' }}
+        />
+      );
+
+      expect(screen.getByTitle('Clear all active filters')).toBeInTheDocument();
+    });
+
+    it('counts model filter as active filter', () => {
+      render(
+        <SessionList
+          {...defaultProps}
+          filters={{ category: 'all', model: 'opus' }}
+        />
+      );
+
+      expect(screen.getByTitle('Clear all active filters')).toBeInTheDocument();
+    });
+  });
+
+  describe('Bulk Operations', () => {
+    it('shows select checkbox when bulk operations are available', () => {
+      const sessions = [createMockSession({ is_active: false })];
+
+      render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={1}
+          onBulkDelete={vi.fn()}
+        />
+      );
+
+      // Should show the select all checkbox in the header
+      expect(screen.getByTitle('Select sessions')).toBeInTheDocument();
+    });
+
+    it('does not show select checkbox when no bulk operations available', () => {
+      const sessions = [createMockSession({ is_active: false })];
+
+      render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={1}
+          onBulkDelete={undefined}
+          onBulkStar={undefined}
+        />
+      );
+
+      expect(screen.queryByTitle('Select sessions')).not.toBeInTheDocument();
+    });
+
+    it('shows bulk actions bar when sessions are selected', async () => {
+      const sessions = [createMockSession({ session_id: 'sess-1', is_active: false })];
+
+      render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={1}
+          onBulkDelete={vi.fn()}
+        />
+      );
+
+      // Click the checkbox to select the session
+      const selectCheckbox = screen.getByTitle('Select');
+      fireEvent.click(selectCheckbox);
+
+      expect(screen.getByText('1 selected')).toBeInTheDocument();
+    });
+
+    it('clicking on active session checkbox does not select it', () => {
+      const sessions = [
+        createMockSession({ session_id: 'sess-1', is_active: true }),
+        createMockSession({ session_id: 'sess-2', is_active: false }),
+      ];
+
+      render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={2}
+          onBulkDelete={vi.fn()}
+        />
+      );
+
+      // Both sessions have checkboxes rendered, but clicking on active session's doesn't do anything useful
+      // The test verifies that when we use select all, only non-active sessions are selected
+      fireEvent.click(screen.getByTitle('Select sessions'));
+
+      // Should only show 1 selected (the non-active one)
+      expect(screen.getByText('1 selected')).toBeInTheDocument();
+    });
+
+    it('calls onBulkStar with correct parameters', async () => {
+      const onBulkStar = vi.fn().mockResolvedValue({ updated: 1 } as BulkOperationResult);
+      const sessions = [createMockSession({ session_id: 'sess-1', is_active: false })];
+
+      render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={1}
+          onBulkStar={onBulkStar}
+        />
+      );
+
+      // Select the session
+      fireEvent.click(screen.getByTitle('Select'));
+
+      // Click the Star button
+      const starButton = screen.getByTitle('Star selected');
+      fireEvent.click(starButton);
+
+      await waitFor(() => {
+        expect(onBulkStar).toHaveBeenCalledWith(['sess-1'], true);
+      });
+    });
+
+    it('calls onBulkStar with false for unstar', async () => {
+      const onBulkStar = vi.fn().mockResolvedValue({ updated: 1 } as BulkOperationResult);
+      const sessions = [createMockSession({ session_id: 'sess-1', is_active: false })];
+
+      render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={1}
+          onBulkStar={onBulkStar}
+        />
+      );
+
+      // Select the session
+      fireEvent.click(screen.getByTitle('Select'));
+
+      // Click the Unstar button
+      const unstarButton = screen.getByTitle('Unstar selected');
+      fireEvent.click(unstarButton);
+
+      await waitFor(() => {
+        expect(onBulkStar).toHaveBeenCalledWith(['sess-1'], false);
+      });
+    });
+
+    it('clears selection after successful bulk star', async () => {
+      const onBulkStar = vi.fn().mockResolvedValue({ updated: 1 } as BulkOperationResult);
+      const sessions = [createMockSession({ session_id: 'sess-1', is_active: false })];
+
+      render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={1}
+          onBulkStar={onBulkStar}
+        />
+      );
+
+      // Select the session
+      fireEvent.click(screen.getByTitle('Select'));
+      expect(screen.getByText('1 selected')).toBeInTheDocument();
+
+      // Click Star
+      fireEvent.click(screen.getByTitle('Star selected'));
+
+      await waitFor(() => {
+        // Selection should be cleared
+        expect(screen.queryByText('1 selected')).not.toBeInTheDocument();
+      });
+    });
+
+    it('does not clear selection when bulk star updates zero sessions', async () => {
+      const onBulkStar = vi.fn().mockResolvedValue({ updated: 0 } as BulkOperationResult);
+      const sessions = [createMockSession({ session_id: 'sess-1', is_active: false })];
+
+      render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={1}
+          onBulkStar={onBulkStar}
+        />
+      );
+
+      // Select the session
+      fireEvent.click(screen.getByTitle('Select'));
+      expect(screen.getByText('1 selected')).toBeInTheDocument();
+
+      // Click Star
+      fireEvent.click(screen.getByTitle('Star selected'));
+
+      await waitFor(() => {
+        expect(onBulkStar).toHaveBeenCalled();
+      });
+
+      // Selection should NOT be cleared since updated: 0
+      expect(screen.getByText('1 selected')).toBeInTheDocument();
+    });
+
+    it('shows delete confirmation dialog when delete clicked', () => {
+      const onBulkDelete = vi.fn();
+      const sessions = [createMockSession({ session_id: 'sess-1', is_active: false })];
+
+      render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={1}
+          onBulkDelete={onBulkDelete}
+        />
+      );
+
+      // Select the session
+      fireEvent.click(screen.getByTitle('Select'));
+
+      // Click Delete
+      fireEvent.click(screen.getByTitle('Delete selected'));
+
+      // Confirmation dialog should appear
+      expect(screen.getByText('Delete Sessions')).toBeInTheDocument();
+      expect(screen.getByText(/Are you sure you want to delete 1 session/)).toBeInTheDocument();
+    });
+
+    it('calls onBulkDelete after confirmation', async () => {
+      const onBulkDelete = vi.fn().mockResolvedValue({ deleted: 1 } as BulkOperationResult);
+      const sessions = [createMockSession({ session_id: 'sess-1', is_active: false })];
+
+      render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={1}
+          onBulkDelete={onBulkDelete}
+        />
+      );
+
+      // Select the session
+      fireEvent.click(screen.getByTitle('Select'));
+
+      // Click Delete in bulk actions bar
+      fireEvent.click(screen.getByTitle('Delete selected'));
+
+      // Find the confirm button (the one with btn-danger class in the dialog)
+      const confirmButton = screen.getByRole('dialog').querySelector('.btn-danger');
+      expect(confirmButton).toBeInTheDocument();
+      fireEvent.click(confirmButton!);
+
+      await waitFor(() => {
+        expect(onBulkDelete).toHaveBeenCalledWith(['sess-1']);
+      });
+    });
+
+    it('cancels delete when cancel clicked in dialog', () => {
+      const onBulkDelete = vi.fn();
+      const sessions = [createMockSession({ session_id: 'sess-1', is_active: false })];
+
+      render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={1}
+          onBulkDelete={onBulkDelete}
+        />
+      );
+
+      // Select the session
+      fireEvent.click(screen.getByTitle('Select'));
+
+      // Click Delete in bulk actions bar
+      fireEvent.click(screen.getByTitle('Delete selected'));
+
+      // Find and click the Cancel button in the dialog (the one with btn-secondary class)
+      const dialog = screen.getByRole('dialog');
+      const cancelButton = dialog.querySelector('.btn-secondary');
+      expect(cancelButton).toBeInTheDocument();
+      fireEvent.click(cancelButton!);
+
+      // Dialog should close, onBulkDelete should not be called
+      expect(onBulkDelete).not.toHaveBeenCalled();
+      expect(screen.queryByText('Delete Sessions')).not.toBeInTheDocument();
+    });
+
+    it('clears selection when cancel button in bulk bar clicked', () => {
+      const sessions = [createMockSession({ session_id: 'sess-1', is_active: false })];
+
+      render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={1}
+          onBulkDelete={vi.fn()}
+        />
+      );
+
+      // Select the session
+      fireEvent.click(screen.getByTitle('Select'));
+      expect(screen.getByText('1 selected')).toBeInTheDocument();
+
+      // Click Cancel in bulk bar
+      fireEvent.click(screen.getByTitle('Clear selection'));
+
+      // Selection should be cleared
+      expect(screen.queryByText('1 selected')).not.toBeInTheDocument();
+    });
+
+    it('can select all non-active sessions', () => {
+      const sessions = [
+        createMockSession({ session_id: 'sess-1', is_active: false }),
+        createMockSession({ session_id: 'sess-2', is_active: false }),
+        createMockSession({ session_id: 'sess-3', is_active: true }),
+      ];
+
+      render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={3}
+          onBulkDelete={vi.fn()}
+        />
+      );
+
+      // Click select all
+      fireEvent.click(screen.getByTitle('Select sessions'));
+
+      // Should show 2 selected (not 3, since active session is excluded)
+      expect(screen.getByText('2 selected')).toBeInTheDocument();
+    });
+
+    it('toggles select all to deselect when all are selected', () => {
+      const sessions = [
+        createMockSession({ session_id: 'sess-1', is_active: false }),
+        createMockSession({ session_id: 'sess-2', is_active: false }),
+      ];
+
+      render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={2}
+          onBulkDelete={vi.fn()}
+        />
+      );
+
+      // Click select all
+      fireEvent.click(screen.getByTitle('Select sessions'));
+      expect(screen.getByText('2 selected')).toBeInTheDocument();
+
+      // Click deselect all
+      fireEvent.click(screen.getByTitle('Deselect all'));
+
+      expect(screen.queryByText('2 selected')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Model Filters', () => {
+    it('renders all model filter buttons', () => {
+      render(<SessionList {...defaultProps} />);
+
+      expect(screen.getByRole('button', { name: 'All Models' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Sonnet' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Opus' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Haiku' })).toBeInTheDocument();
+    });
+
+    it('calls onFiltersChange with model filter', () => {
+      const onFiltersChange = vi.fn();
+      render(<SessionList {...defaultProps} onFiltersChange={onFiltersChange} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Opus' }));
+
+      expect(onFiltersChange).toHaveBeenCalledWith({ category: 'all', model: 'opus' });
+    });
+
+    it('clears model filter when All Models clicked', () => {
+      const onFiltersChange = vi.fn();
+      render(
+        <SessionList
+          {...defaultProps}
+          filters={{ category: 'all', model: 'opus' }}
+          onFiltersChange={onFiltersChange}
+        />
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'All Models' }));
+
+      expect(onFiltersChange).toHaveBeenCalledWith({ category: 'all', model: undefined });
+    });
+  });
+
+  describe('Date Range Filters', () => {
+    it('renders all date range filter buttons', () => {
+      render(<SessionList {...defaultProps} />);
+
+      expect(screen.getByRole('button', { name: 'All Time' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Today' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Yesterday' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'This Week' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'This Month' })).toBeInTheDocument();
+    });
+
+    it('calls onFiltersChange with date range filter', () => {
+      const onFiltersChange = vi.fn();
+      render(<SessionList {...defaultProps} onFiltersChange={onFiltersChange} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+
+      expect(onFiltersChange).toHaveBeenCalledWith({ category: 'all', dateRange: 'today' });
+    });
+
+    it('clears date range filter when All Time clicked', () => {
+      const onFiltersChange = vi.fn();
+      render(
+        <SessionList
+          {...defaultProps}
+          filters={{ category: 'all', dateRange: 'today' }}
+          onFiltersChange={onFiltersChange}
+        />
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'All Time' }));
+
+      expect(onFiltersChange).toHaveBeenCalledWith({ category: 'all', dateRange: undefined });
+    });
+  });
+
+  describe('Sort and Order Controls', () => {
+    it('calls onFiltersChange with sort option', () => {
+      const onFiltersChange = vi.fn();
+      render(<SessionList {...defaultProps} onFiltersChange={onFiltersChange} />);
+
+      // Find the sort select - it should be a combobox with options
+      const sortSelect = document.querySelector('select') as HTMLSelectElement;
+      expect(sortSelect).toBeInTheDocument();
+      fireEvent.change(sortSelect, { target: { value: 'updated' } });
+
+      expect(onFiltersChange).toHaveBeenCalledWith({ category: 'all', sort: 'updated' });
+    });
+
+    it('toggles order when order button clicked', () => {
+      const onFiltersChange = vi.fn();
+      render(
+        <SessionList
+          {...defaultProps}
+          filters={{ category: 'all', order: 'desc' }}
+          onFiltersChange={onFiltersChange}
+        />
+      );
+
+      // Find the order toggle button by its title (desc order shows "Newest first - click for oldest first")
+      const orderButton = screen.getByTitle('Newest first - click for oldest first');
+      fireEvent.click(orderButton);
+
+      expect(onFiltersChange).toHaveBeenCalledWith({ category: 'all', order: 'asc' });
+    });
+
+    it('handles undefined order (defaults to desc)', () => {
+      const onFiltersChange = vi.fn();
+      render(
+        <SessionList
+          {...defaultProps}
+          filters={{ category: 'all' }} // no order specified
+          onFiltersChange={onFiltersChange}
+        />
+      );
+
+      // Default order is desc, so the title should be "Newest first..."
+      const orderButton = screen.getByTitle('Newest first - click for oldest first');
+      fireEvent.click(orderButton);
+
+      expect(onFiltersChange).toHaveBeenCalledWith({ category: 'all', order: 'asc' });
+    });
+  });
+
+  describe('Search Input', () => {
+    it('updates search filter on input after debounce', async () => {
+      vi.useFakeTimers();
+      const onFiltersChange = vi.fn();
+      render(<SessionList {...defaultProps} onFiltersChange={onFiltersChange} />);
+
+      const searchInput = screen.getByPlaceholderText('Search sessions...');
+      fireEvent.change(searchInput, { target: { value: 'test query' } });
+
+      // Advance timers to trigger debounce
+      vi.advanceTimersByTime(300);
+
+      expect(onFiltersChange).toHaveBeenCalledWith({ category: 'all', search: 'test query' });
+      vi.useRealTimers();
+    });
+
+    it('clears search filter when clear button clicked', async () => {
+      const onFiltersChange = vi.fn();
+      render(
+        <SessionList
+          {...defaultProps}
+          filters={{ category: 'all', search: 'existing' }}
+          onFiltersChange={onFiltersChange}
+        />
+      );
+
+      // Click the clear search button
+      const clearButton = screen.getByTitle('Clear search');
+      fireEvent.click(clearButton);
+
+      expect(onFiltersChange).toHaveBeenCalledWith({ category: 'all', search: undefined });
+    });
+  });
+
+  describe('Clear Filters', () => {
+    it('resets all filters when clear clicked', () => {
+      const onFiltersChange = vi.fn();
+      render(
+        <SessionList
+          {...defaultProps}
+          filters={{ category: 'starred', model: 'opus', search: 'test' }}
+          onFiltersChange={onFiltersChange}
+        />
+      );
+
+      // Click the filter indicator button
+      fireEvent.click(screen.getByTitle('Clear all active filters'));
+
+      expect(onFiltersChange).toHaveBeenCalledWith({ category: 'all' });
+    });
+  });
+
+  describe('Pagination', () => {
+    it('renders pagination with current page indicator', () => {
+      const sessions = [createMockSession()];
+
+      render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={100}
+          page={2}
+          totalPages={5}
+        />
+      );
+
+      // Should display page indicator
+      expect(screen.getByText('2 / 5')).toBeInTheDocument();
+    });
+
+    it('calls onPageChange when next page button clicked', () => {
+      const onPageChange = vi.fn();
+      const sessions = [createMockSession()];
+
+      render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={100}
+          page={2}
+          totalPages={5}
+          onPageChange={onPageChange}
+        />
+      );
+
+      // Find and click next page button by its aria-label
+      const nextButton = screen.getByLabelText(/Go to next page/);
+      fireEvent.click(nextButton);
+
+      expect(onPageChange).toHaveBeenCalledWith(3);
+    });
+  });
+
+  describe('Completed Filter', () => {
+    it('renders Completed filter tab', () => {
+      render(<SessionList {...defaultProps} />);
+
+      expect(screen.getByRole('button', { name: 'Completed' })).toBeInTheDocument();
+    });
+
+    it('calls onFiltersChange with completed category', () => {
+      const onFiltersChange = vi.fn();
+      render(<SessionList {...defaultProps} onFiltersChange={onFiltersChange} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Completed' }));
+
+      expect(onFiltersChange).toHaveBeenCalledWith({ category: 'completed' });
+    });
+
+    it('highlights completed filter when selected', () => {
+      render(<SessionList {...defaultProps} filters={{ category: 'completed' }} />);
+
+      const completedButton = screen.getByRole('button', { name: 'Completed' });
+      expect(completedButton).toHaveClass('bg-blue-600');
     });
   });
 });

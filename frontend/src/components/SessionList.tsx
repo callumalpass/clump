@@ -157,15 +157,16 @@ const SessionListItem = memo(function SessionListItem({
           {formatRepoPath(session)}
         </span>
 
-        {/* Entity links */}
+        {/* Entity badges - informational only */}
         {session.entities?.map((entity, idx) => (
           <span
             key={idx}
-            className={`px-1 py-0.5 rounded transition-colors ${
+            className={`px-1 py-0.5 rounded ${
               entity.kind === 'issue'
-                ? 'bg-green-900/30 text-green-400 hover:bg-green-900/50 hover:text-green-300'
-                : 'bg-purple-900/30 text-purple-400 hover:bg-purple-900/50 hover:text-purple-300'
+                ? 'bg-green-900/30 text-green-400'
+                : 'bg-purple-900/30 text-purple-400'
             }`}
+            title={entity.kind === 'issue' ? `Issue #${entity.number}` : `PR #${entity.number}`}
           >
             #{entity.number}
           </span>
@@ -363,12 +364,13 @@ export function SessionList({
 
     setBulkActionLoading(true);
     try {
-      await onBulkStar(Array.from(selectedIds), starred);
-      // Clear selection after successful update
-      setSelectedIds(new Set());
+      const result = await onBulkStar(Array.from(selectedIds), starred);
+      // Clear selection after successful update (if any sessions were updated)
+      if (result.updated && result.updated > 0) {
+        setSelectedIds(new Set());
+      }
     } catch (e) {
       console.error('Bulk star failed:', e);
-      alert('Failed to update sessions');
     } finally {
       setBulkActionLoading(false);
     }
@@ -408,8 +410,8 @@ export function SessionList({
     filters.category !== 'all' ? 1 : 0,
     filters.model && filters.model !== 'all' ? 1 : 0,
     filters.dateRange && filters.dateRange !== 'all' ? 1 : 0,
-    filters.sort !== 'created' ? 1 : 0,
-    filters.order !== 'desc' ? 1 : 0,
+    filters.sort && filters.sort !== 'created' ? 1 : 0,
+    filters.order && filters.order !== 'desc' ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
   // Memoize event handlers - must be before any early returns to satisfy Rules of Hooks
