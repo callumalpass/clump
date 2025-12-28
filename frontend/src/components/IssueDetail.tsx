@@ -403,18 +403,18 @@ export function IssueDetail({
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div
-                      className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer"
+                      className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer group/session rounded-md -m-1 p-1 hover:bg-gray-700/50 transition-colors"
                       onClick={() => onSelectSession?.(session)}
                     >
                       <span className={`w-2 h-2 rounded-full shrink-0 ${
                         isActuallyRunning ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'
                       }`} />
-                      <span className="text-sm font-medium text-white truncate hover:text-blue-400 transition-colors">
+                      <span className="text-sm font-medium text-white truncate group-hover/session:text-blue-400 transition-colors">
                         {session.title || 'Untitled session'}
                       </span>
                       {/* Arrow to indicate opens in panel */}
                       <svg
-                        className="w-4 h-4 text-gray-500"
+                        className="w-4 h-4 text-gray-500 group-hover/session:text-blue-400 group-hover/session:translate-x-0.5 transition-all"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
