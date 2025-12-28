@@ -16,7 +16,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
 
-from app.routers.sessions import router, _quick_scan_transcript, _get_pending_sessions, invalidate_session_cache
+from app.routers.sessions import (
+    router,
+    _quick_scan_transcript,
+    _get_pending_sessions,
+    invalidate_session_cache,
+    _format_edit_tool,
+    _format_read_tool,
+    _format_write_tool,
+    _format_bash_tool,
+    _format_grep_tool,
+    _format_glob_tool,
+    _format_task_tool,
+    _format_tool_use_markdown,
+)
 from app.storage import (
     DiscoveredSession,
     SessionMetadata,
@@ -1058,3 +1071,296 @@ class TestSessionCacheInvalidation:
             assert mock_discover.call_count == 2
             assert result_all[0].session_id == "all"
             assert result_repo[0].session_id == "repo"
+
+
+class TestToolFormatters:
+    """Tests for tool formatting functions used in Markdown export."""
+
+    # ==============================================
+    # _format_edit_tool tests
+    # ==============================================
+
+    def test_format_edit_tool_basic(self):
+        """Test formatting an Edit tool with normal inputs."""
+        result = _format_edit_tool({
+            "file_path": "/path/to/file.py",
+            "old_string": "old code",
+            "new_string": "new code",
+        })
+        assert "**Edit** `/path/to/file.py`" in result
+        assert "- old code" in result
+        assert "+ new code" in result
+        assert "```diff" in result
+
+    def test_format_edit_tool_multiline(self):
+        """Test formatting an Edit tool with multiline content."""
+        result = _format_edit_tool({
+            "file_path": "/file.py",
+            "old_string": "line1\nline2\nline3",
+            "new_string": "new1\nnew2",
+        })
+        # Multiline old_string should have - prefix on each line
+        assert "- line1\n- line2\n- line3" in result
+        # Multiline new_string should have + prefix on each line
+        assert "+ new1\n+ new2" in result
+
+    def test_format_edit_tool_none_old_string(self):
+        """Test formatting Edit tool when old_string is None."""
+        result = _format_edit_tool({
+            "file_path": "/file.py",
+            "old_string": None,
+            "new_string": "new content",
+        })
+        # Should not raise AttributeError
+        assert "**Edit** `/file.py`" in result
+        assert "+ new content" in result
+
+    def test_format_edit_tool_none_new_string(self):
+        """Test formatting Edit tool when new_string is None."""
+        result = _format_edit_tool({
+            "file_path": "/file.py",
+            "old_string": "old content",
+            "new_string": None,
+        })
+        # Should not raise AttributeError
+        assert "**Edit** `/file.py`" in result
+        assert "- old content" in result
+
+    def test_format_edit_tool_both_none(self):
+        """Test formatting Edit tool when both strings are None."""
+        result = _format_edit_tool({
+            "file_path": "/file.py",
+            "old_string": None,
+            "new_string": None,
+        })
+        # Should not raise AttributeError
+        assert "**Edit** `/file.py`" in result
+        assert "```diff" in result
+
+    def test_format_edit_tool_missing_keys(self):
+        """Test formatting Edit tool when keys are missing entirely."""
+        result = _format_edit_tool({})
+        assert "**Edit** `unknown`" in result
+        assert "```diff" in result
+
+    def test_format_edit_tool_none_file_path(self):
+        """Test formatting Edit tool when file_path is None."""
+        result = _format_edit_tool({
+            "file_path": None,
+            "old_string": "old",
+            "new_string": "new",
+        })
+        assert "**Edit** `unknown`" in result
+
+    # ==============================================
+    # _format_read_tool tests
+    # ==============================================
+
+    def test_format_read_tool_basic(self):
+        """Test formatting a Read tool."""
+        result = _format_read_tool({"file_path": "/path/to/file.py"})
+        assert result == "**Read** `/path/to/file.py`"
+
+    def test_format_read_tool_none_file_path(self):
+        """Test formatting Read tool when file_path is None."""
+        result = _format_read_tool({"file_path": None})
+        assert result == "**Read** `unknown`"
+
+    def test_format_read_tool_missing_file_path(self):
+        """Test formatting Read tool when file_path is missing."""
+        result = _format_read_tool({})
+        assert result == "**Read** `unknown`"
+
+    # ==============================================
+    # _format_write_tool tests
+    # ==============================================
+
+    def test_format_write_tool_basic(self):
+        """Test formatting a Write tool."""
+        result = _format_write_tool({
+            "file_path": "/path/to/file.py",
+            "content": "line1\nline2\nline3",
+        })
+        assert "**Write** `/path/to/file.py` (3 lines)" in result
+
+    def test_format_write_tool_single_line(self):
+        """Test formatting Write tool with single line content."""
+        result = _format_write_tool({
+            "file_path": "/file.py",
+            "content": "single line",
+        })
+        assert "(1 lines)" in result
+
+    def test_format_write_tool_none_content(self):
+        """Test formatting Write tool when content is None."""
+        result = _format_write_tool({
+            "file_path": "/file.py",
+            "content": None,
+        })
+        # Should not raise AttributeError
+        assert "**Write** `/file.py` (1 lines)" in result
+
+    def test_format_write_tool_missing_content(self):
+        """Test formatting Write tool when content is missing."""
+        result = _format_write_tool({"file_path": "/file.py"})
+        assert "(1 lines)" in result
+
+    def test_format_write_tool_none_file_path(self):
+        """Test formatting Write tool when file_path is None."""
+        result = _format_write_tool({
+            "file_path": None,
+            "content": "content",
+        })
+        assert "**Write** `unknown`" in result
+
+    def test_format_write_tool_empty(self):
+        """Test formatting Write tool with empty input."""
+        result = _format_write_tool({})
+        assert "**Write** `unknown` (1 lines)" in result
+
+    # ==============================================
+    # _format_bash_tool tests
+    # ==============================================
+
+    def test_format_bash_tool_basic(self):
+        """Test formatting a Bash tool."""
+        result = _format_bash_tool({"command": "ls -la"})
+        assert "**Bash**" in result
+        assert "```bash" in result
+        assert "$ ls -la" in result
+
+    def test_format_bash_tool_none_command(self):
+        """Test formatting Bash tool when command is None."""
+        result = _format_bash_tool({"command": None})
+        # Should not raise AttributeError
+        assert "**Bash**" in result
+        assert "$ " in result
+
+    def test_format_bash_tool_missing_command(self):
+        """Test formatting Bash tool when command is missing."""
+        result = _format_bash_tool({})
+        assert "**Bash**" in result
+        assert "$ " in result
+
+    # ==============================================
+    # _format_grep_tool tests
+    # ==============================================
+
+    def test_format_grep_tool_basic(self):
+        """Test formatting a Grep tool."""
+        result = _format_grep_tool({
+            "pattern": "TODO",
+            "path": "/src",
+        })
+        assert result == "**Grep** `TODO` in `/src`"
+
+    def test_format_grep_tool_none_pattern(self):
+        """Test formatting Grep tool when pattern is None."""
+        result = _format_grep_tool({
+            "pattern": None,
+            "path": "/src",
+        })
+        assert result == "**Grep** `` in `/src`"
+
+    def test_format_grep_tool_none_path(self):
+        """Test formatting Grep tool when path is None."""
+        result = _format_grep_tool({
+            "pattern": "TODO",
+            "path": None,
+        })
+        assert result == "**Grep** `TODO` in `.`"
+
+    def test_format_grep_tool_missing_keys(self):
+        """Test formatting Grep tool when keys are missing."""
+        result = _format_grep_tool({})
+        assert result == "**Grep** `` in `.`"
+
+    # ==============================================
+    # _format_glob_tool tests
+    # ==============================================
+
+    def test_format_glob_tool_basic(self):
+        """Test formatting a Glob tool."""
+        result = _format_glob_tool({"pattern": "**/*.py"})
+        assert result == "**Glob** `**/*.py`"
+
+    def test_format_glob_tool_none_pattern(self):
+        """Test formatting Glob tool when pattern is None."""
+        result = _format_glob_tool({"pattern": None})
+        assert result == "**Glob** ``"
+
+    def test_format_glob_tool_missing_pattern(self):
+        """Test formatting Glob tool when pattern is missing."""
+        result = _format_glob_tool({})
+        assert result == "**Glob** ``"
+
+    # ==============================================
+    # _format_task_tool tests
+    # ==============================================
+
+    def test_format_task_tool_basic(self):
+        """Test formatting a Task tool."""
+        result = _format_task_tool({
+            "description": "Search for files",
+            "subagent_type": "Explore",
+        })
+        assert result == "**Task** (Explore): Search for files"
+
+    def test_format_task_tool_none_description(self):
+        """Test formatting Task tool when description is None."""
+        result = _format_task_tool({
+            "description": None,
+            "subagent_type": "Explore",
+        })
+        assert result == "**Task** (Explore): "
+
+    def test_format_task_tool_none_subagent_type(self):
+        """Test formatting Task tool when subagent_type is None."""
+        result = _format_task_tool({
+            "description": "Search for files",
+            "subagent_type": None,
+        })
+        assert result == "**Task** (general): Search for files"
+
+    def test_format_task_tool_missing_keys(self):
+        """Test formatting Task tool when keys are missing."""
+        result = _format_task_tool({})
+        assert result == "**Task** (general): "
+
+    # ==============================================
+    # _format_tool_use_markdown tests
+    # ==============================================
+
+    def test_format_tool_use_markdown_known_tool(self):
+        """Test formatting a known tool via the dispatch function."""
+        result = _format_tool_use_markdown({
+            "name": "Read",
+            "input": {"file_path": "/test.py"},
+        })
+        assert result == "**Read** `/test.py`"
+
+    def test_format_tool_use_markdown_unknown_tool(self):
+        """Test formatting an unknown tool falls back to generic format."""
+        result = _format_tool_use_markdown({
+            "name": "CustomTool",
+            "input": {"custom_param": "value"},
+        })
+        assert result == "**CustomTool**"
+
+    def test_format_tool_use_markdown_missing_name(self):
+        """Test formatting when tool name is missing."""
+        result = _format_tool_use_markdown({"input": {}})
+        assert result == "**Unknown**"
+
+    def test_format_tool_use_markdown_missing_input(self):
+        """Test formatting when input is missing."""
+        result = _format_tool_use_markdown({"name": "Read"})
+        # Should use empty dict for input and fall back to "unknown" for file_path
+        assert result == "**Read** `unknown`"
+
+    def test_format_tool_use_markdown_all_known_tools(self):
+        """Test that all known tools are properly dispatched."""
+        known_tools = ["Edit", "Read", "Write", "Bash", "Grep", "Glob", "Task"]
+        for tool_name in known_tools:
+            result = _format_tool_use_markdown({"name": tool_name, "input": {}})
+            assert f"**{tool_name}**" in result or "**Edit**" in result
