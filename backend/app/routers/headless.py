@@ -12,11 +12,14 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import json
 
+from datetime import datetime
+
 from app.database import get_repo_db
 from app.db_helpers import get_repo_or_404
 from app.models import Session, SessionStatus
 from app.services.headless_analyzer import headless_analyzer, SessionMessage
 from app.services.event_manager import event_manager, EventType
+from app.storage import encode_path, SessionMetadata, save_session_metadata
 
 router = APIRouter()
 
@@ -79,6 +82,16 @@ async def run_headless_session(data: HeadlessSessionCreate):
         db.add(session)
         await db.commit()
         await db.refresh(session)
+
+        # Save session metadata sidecar so pending sessions are discoverable
+        encoded_path = encode_path(repo["local_path"])
+        metadata = SessionMetadata(
+            session_id=claude_session_id,
+            title=data.title,
+            repo_path=repo["local_path"],
+            created_at=datetime.utcnow().isoformat(),
+        )
+        save_session_metadata(encoded_path, claude_session_id, metadata)
 
         # Register session as running for reliable status tracking
         headless_analyzer.register_running(claude_session_id)
@@ -166,6 +179,16 @@ async def run_headless_session_stream(data: HeadlessSessionCreate):
         await db.commit()
         await db.refresh(session)
         session_id = session.id
+
+    # Save session metadata sidecar so pending sessions are discoverable
+    encoded_path = encode_path(repo["local_path"])
+    metadata = SessionMetadata(
+        session_id=claude_session_id,
+        title=data.title,
+        repo_path=repo["local_path"],
+        created_at=datetime.utcnow().isoformat(),
+    )
+    save_session_metadata(encoded_path, claude_session_id, metadata)
 
     # Register session as running BEFORE the generator starts
     headless_analyzer.register_running(claude_session_id)
