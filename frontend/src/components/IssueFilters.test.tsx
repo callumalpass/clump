@@ -149,7 +149,14 @@ describe('IssueFilters', () => {
     it('does not show clear button when search is empty', () => {
       render(<IssueFilters {...defaultProps} />);
 
-      expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
+      // The button exists in DOM but is visually hidden (opacity-0, pointer-events-none) for animation purposes
+      const clearButton = screen.queryByRole('button', { name: 'Clear search' });
+      // When hidden, it has tabindex=-1 and pointer-events-none
+      if (clearButton) {
+        expect(clearButton).toHaveAttribute('tabindex', '-1');
+        expect(clearButton).toHaveClass('pointer-events-none');
+        expect(clearButton).toHaveClass('opacity-0');
+      }
     });
 
     it('updates search input when filters.search changes externally', () => {

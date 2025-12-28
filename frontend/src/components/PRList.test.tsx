@@ -111,7 +111,8 @@ describe('PRList', () => {
 
       expect(screen.getByText('Open')).toBeInTheDocument();
       expect(screen.getByText('Closed')).toBeInTheDocument();
-      expect(screen.getByText('All')).toBeInTheDocument();
+      // There are two "All" buttons (StateToggle and SessionStatusToggle), so use getAllByText
+      expect(screen.getAllByText('All').length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -339,7 +340,8 @@ describe('PRList', () => {
 
       expect(screen.getByText('Open')).toBeInTheDocument();
       expect(screen.getByText('Closed')).toBeInTheDocument();
-      expect(screen.getByText('All')).toBeInTheDocument();
+      // There are two "All" buttons (StateToggle and SessionStatusToggle)
+      expect(screen.getAllByText('All').length).toBe(2);
     });
 
     it('highlights active filter tab', () => {
@@ -367,7 +369,11 @@ describe('PRList', () => {
 
       render(<PRList {...defaultProps} onFiltersChange={onFiltersChange} />);
 
-      fireEvent.click(screen.getByText('All'));
+      // The StateToggle's "All" button is the one that doesn't have a title attribute
+      // Find all "All" buttons and click the one without title="Show all"
+      const allButtons = screen.getAllByText('All');
+      const stateToggleAllButton = allButtons.find(btn => !btn.hasAttribute('title'));
+      fireEvent.click(stateToggleAllButton!);
 
       expect(onFiltersChange).toHaveBeenCalledWith({ state: 'all' });
     });
@@ -381,21 +387,23 @@ describe('PRList', () => {
         createMockPR({ number: 3 }),
       ];
 
-      render(<PRList {...defaultProps} prs={prs} />);
+      render(<PRList {...defaultProps} prs={prs} total={3} />);
 
-      expect(screen.getByText('3 PRs')).toBeInTheDocument();
+      // The count appears in both ItemCount (filter bar) and pagination footer
+      expect(screen.getAllByText('3 PRs').length).toBeGreaterThanOrEqual(1);
     });
 
     it('uses singular form for 1 PR', () => {
       const prs = [createMockPR({ number: 1 })];
 
-      render(<PRList {...defaultProps} prs={prs} />);
+      render(<PRList {...defaultProps} prs={prs} total={1} />);
 
+      // ItemCount uses singular form for 1 item
       expect(screen.getByText('1 PR')).toBeInTheDocument();
     });
 
     it('shows 0 PRs when empty and loading shows skeletons', () => {
-      render(<PRList {...defaultProps} prs={[]} loading={true} />);
+      render(<PRList {...defaultProps} prs={[]} loading={true} total={0} />);
 
       // Count should still show even when loading
       expect(screen.getByText('0 PRs')).toBeInTheDocument();

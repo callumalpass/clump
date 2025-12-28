@@ -130,14 +130,16 @@ describe('SessionList', () => {
     it('disables refresh button when loading', () => {
       render(<SessionList {...defaultProps} onRefresh={vi.fn()} loading={true} />);
 
-      const refreshButton = screen.getByTitle('Refresh');
+      // When loading, the title changes to 'Refreshing...'
+      const refreshButton = screen.getByTitle('Refreshing...');
       expect(refreshButton).toBeDisabled();
     });
 
     it('shows spinning animation when loading', () => {
       render(<SessionList {...defaultProps} onRefresh={vi.fn()} loading={true} />);
 
-      const refreshButton = screen.getByTitle('Refresh');
+      // When loading, the title changes to 'Refreshing...'
+      const refreshButton = screen.getByTitle('Refreshing...');
       const svg = refreshButton.querySelector('svg');
       expect(svg).toHaveClass('animate-spin');
     });

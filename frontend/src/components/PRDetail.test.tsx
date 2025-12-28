@@ -225,8 +225,9 @@ describe('PRDetail', () => {
       render(<PRDetail {...defaultProps} />);
 
       await waitFor(() => {
-        const markdown = screen.getByTestId('markdown');
-        expect(markdown).toHaveTextContent('This PR adds a new feature to the application.');
+        // Multiple markdown elements (PR body and comments), so use getAllByTestId
+        const markdownElements = screen.getAllByTestId('markdown');
+        expect(markdownElements.some(el => el.textContent === 'This PR adds a new feature to the application.')).toBe(true);
       });
     });
 

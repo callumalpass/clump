@@ -91,6 +91,10 @@ export function PRDetail({
     setLoading(true);
     fetchPR(repoId, prNumber)
       .then(setPR)
+      .catch(() => {
+        // Error fetching PR - pr will remain null, showing "not found" message
+        setPR(null);
+      })
       .finally(() => setLoading(false));
   };
 

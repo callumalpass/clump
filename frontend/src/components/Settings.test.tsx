@@ -644,14 +644,15 @@ describe('Settings', () => {
     it('highlights the active tab', async () => {
       render(<Settings {...defaultProps} />);
 
+      // The active tab gets 'text-white' class, while inactive tabs get 'text-gray-400'
       const githubTab = screen.getByRole('button', { name: 'GitHub' });
-      expect(githubTab).toHaveClass('border-blue-500');
+      expect(githubTab).toHaveClass('text-white');
 
       fireEvent.click(screen.getByRole('button', { name: 'permissions' }));
 
       const permissionsTab = screen.getByRole('button', { name: 'permissions' });
-      expect(permissionsTab).toHaveClass('border-blue-500');
-      expect(githubTab).not.toHaveClass('border-blue-500');
+      expect(permissionsTab).toHaveClass('text-white');
+      expect(githubTab).not.toHaveClass('text-white');
     });
   });
 });
