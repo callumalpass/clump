@@ -240,7 +240,14 @@ async def notifications_websocket(websocket: WebSocket):
             try:
                 event = await event_queue.get()
                 await websocket.send_json(event)
+            except WebSocketDisconnect:
+                logger.debug("WebSocket disconnected during send")
+                break
+            except asyncio.CancelledError:
+                # Task cancellation is expected during cleanup
+                break
             except Exception:
+                logger.exception("Unexpected error sending WebSocket event")
                 break
 
     async def receive_messages():
@@ -255,8 +262,13 @@ async def notifications_websocket(websocket: WebSocket):
                         await notification_manager.clear_attention(session_id)
 
             except WebSocketDisconnect:
+                logger.debug("WebSocket disconnected during receive")
+                break
+            except asyncio.CancelledError:
+                # Task cancellation is expected during cleanup
                 break
             except Exception:
+                logger.exception("Unexpected error receiving WebSocket message")
                 break
 
     try:
