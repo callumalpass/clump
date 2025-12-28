@@ -607,6 +607,28 @@ button:active:not(:disabled) .kbd-hint {
   filter: drop-shadow(0 0 4px rgba(250, 204, 21, 0.4));
 }
 
+/* Resize handle styling - improved discoverability */
+.resize-handle {
+  transition: background-color 150ms ease;
+}
+
+.resize-handle:hover {
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+.resize-handle:active {
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+/* Resize handle dots glow effect on hover */
+.resize-handle-dots {
+  transition: opacity 200ms ease, filter 200ms ease;
+}
+
+.resize-handle:hover .resize-handle-dots {
+  filter: drop-shadow(0 0 3px rgba(96, 165, 250, 0.5));
+}
+
 /* Respect user's motion preferences for accessibility */
 @media (prefers-reduced-motion: reduce) {
   /* Disable all custom animations */
@@ -728,5 +750,15 @@ button:active:not(:disabled) .kbd-hint {
   button:hover:not(:disabled) .kbd-hint,
   button:active:not(:disabled) .kbd-hint {
     transition-duration: 0.01ms !important;
+  }
+
+  /* Reduce resize handle transitions */
+  .resize-handle,
+  .resize-handle-dots {
+    transition-duration: 0.01ms !important;
+  }
+
+  .resize-handle:hover .resize-handle-dots {
+    filter: none;
   }
 }

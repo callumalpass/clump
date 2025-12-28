@@ -26,14 +26,14 @@ import { LRUCache } from './utils/cache';
 
 function ResizeHandle() {
   return (
-    <Separator className="group relative flex items-center justify-center w-2 cursor-col-resize transition-all">
+    <Separator className="group relative flex items-center justify-center w-2 cursor-col-resize transition-all resize-handle">
       {/* Visible drag line */}
       <div className="w-px h-full bg-gray-700 group-hover:bg-blue-500 group-active:bg-blue-400 transition-colors" />
-      {/* Grip dots indicator - visible on hover */}
-      <div className="absolute inset-y-0 flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-        <div className="w-1 h-1 rounded-full bg-blue-400" />
-        <div className="w-1 h-1 rounded-full bg-blue-400" />
-        <div className="w-1 h-1 rounded-full bg-blue-400" />
+      {/* Grip dots indicator - subtly visible, enhanced on hover */}
+      <div className="absolute inset-y-0 flex flex-col items-center justify-center gap-1 opacity-30 group-hover:opacity-100 transition-opacity pointer-events-none resize-handle-dots">
+        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blue-400 transition-colors" />
+        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blue-400 transition-colors" />
+        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blue-400 transition-colors" />
       </div>
     </Separator>
   );
@@ -41,14 +41,14 @@ function ResizeHandle() {
 
 function HorizontalResizeHandle() {
   return (
-    <Separator className="group relative flex items-center justify-center h-2 cursor-row-resize transition-all">
+    <Separator className="group relative flex items-center justify-center h-2 cursor-row-resize transition-all resize-handle">
       {/* Visible drag line */}
       <div className="h-px w-full bg-gray-700 group-hover:bg-blue-500 group-active:bg-blue-400 transition-colors" />
-      {/* Grip dots indicator - visible on hover */}
-      <div className="absolute inset-x-0 flex flex-row items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-        <div className="w-1 h-1 rounded-full bg-blue-400" />
-        <div className="w-1 h-1 rounded-full bg-blue-400" />
-        <div className="w-1 h-1 rounded-full bg-blue-400" />
+      {/* Grip dots indicator - subtly visible, enhanced on hover */}
+      <div className="absolute inset-x-0 flex flex-row items-center justify-center gap-1 opacity-30 group-hover:opacity-100 transition-opacity pointer-events-none resize-handle-dots">
+        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blue-400 transition-colors" />
+        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blue-400 transition-colors" />
+        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blue-400 transition-colors" />
       </div>
     </Separator>
   );
