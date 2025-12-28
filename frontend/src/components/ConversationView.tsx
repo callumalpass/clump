@@ -171,6 +171,44 @@ function formatCost(cost: number | null): string {
   return `$${cost.toFixed(2)}`;
 }
 
+// Format time gap for display between messages
+function formatTimeGap(ms: number): string | null {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  // Only show gap if >= 3 minutes
+  if (minutes < 3) return null;
+
+  if (days > 0) {
+    return days === 1 ? '1 day later' : `${days} days later`;
+  }
+  if (hours > 0) {
+    return hours === 1 ? '1 hour later' : `${hours} hours later`;
+  }
+  return `${minutes} minutes later`;
+}
+
+// Time gap indicator component
+function TimeGapIndicator({ gapMs }: { gapMs: number }) {
+  const gapText = formatTimeGap(gapMs);
+  if (!gapText) return null;
+
+  return (
+    <div className="flex items-center gap-3 py-2 my-1" role="separator" aria-label={gapText}>
+      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent" />
+      <span className="text-xs text-gray-500 flex items-center gap-1.5 px-2">
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        {gapText}
+      </span>
+      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent" />
+    </div>
+  );
+}
+
 function SessionStats({ transcript }: { transcript: ParsedTranscript }) {
   const totalInput = transcript.total_input_tokens ?? 0;
   const totalOutput = transcript.total_output_tokens ?? 0;
@@ -1494,16 +1532,26 @@ export function ConversationView({
         onScroll={handleScroll}
         className="flex-1 overflow-auto space-y-4 p-3 min-w-0"
       >
-        {transcript.messages.map((message, index) => (
-          <MessageBubble
-            key={message.uuid || index}
-            message={message}
-            parentSessionId={sessionId}
-            searchQuery={searchQuery}
-            matchIndices={matchMap.get(index) || []}
-            currentMatchIndex={currentMatchIndex}
-          />
-        ))}
+        {transcript.messages.map((message, index) => {
+          // Calculate time gap from previous message
+          const prevMessage = index > 0 ? transcript.messages[index - 1] : null;
+          const gapMs = prevMessage?.timestamp && message.timestamp
+            ? new Date(message.timestamp).getTime() - new Date(prevMessage.timestamp).getTime()
+            : 0;
+
+          return (
+            <div key={message.uuid || index}>
+              {gapMs > 0 && <TimeGapIndicator gapMs={gapMs} />}
+              <MessageBubble
+                message={message}
+                parentSessionId={sessionId}
+                searchQuery={searchQuery}
+                matchIndices={matchMap.get(index) || []}
+                currentMatchIndex={currentMatchIndex}
+              />
+            </div>
+          );
+        })}
       </div>
       {/* Inline editor for active sessions */}
       {isActiveSession && onSendMessage && (
