@@ -1009,9 +1009,31 @@ export async function exportSession(
   );
 }
 
+/**
+ * Get the MIME type based on file extension.
+ */
+export function getMimeType(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'md':
+    case 'markdown':
+      return 'text/markdown;charset=utf-8';
+    case 'json':
+      return 'application/json;charset=utf-8';
+    case 'txt':
+      return 'text/plain;charset=utf-8';
+    case 'html':
+    case 'htm':
+      return 'text/html;charset=utf-8';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
 // Utility to trigger download of exported content
 export function downloadExport(content: string, filename: string): void {
-  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+  const mimeType = getMimeType(filename);
+  const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

@@ -13,6 +13,8 @@ import {
   useLabels,
   useAssignees,
   useCommands,
+  getMimeType,
+  downloadExport,
 } from './useApi';
 
 // Mock fetch globally
@@ -591,5 +593,212 @@ describe('useCommands', () => {
 
     const calledUrl = mockFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain('repo_path=%2Fpath%2Fto%2Frepo');
+  });
+});
+
+describe('getMimeType', () => {
+  describe('markdown files', () => {
+    it('returns correct MIME type for .md extension', () => {
+      expect(getMimeType('session.md')).toBe('text/markdown;charset=utf-8');
+    });
+
+    it('returns correct MIME type for .markdown extension', () => {
+      expect(getMimeType('document.markdown')).toBe('text/markdown;charset=utf-8');
+    });
+
+    it('handles uppercase extensions', () => {
+      expect(getMimeType('README.MD')).toBe('text/markdown;charset=utf-8');
+    });
+  });
+
+  describe('json files', () => {
+    it('returns correct MIME type for .json extension', () => {
+      expect(getMimeType('data.json')).toBe('application/json;charset=utf-8');
+    });
+
+    it('handles uppercase JSON extension', () => {
+      expect(getMimeType('config.JSON')).toBe('application/json;charset=utf-8');
+    });
+  });
+
+  describe('text files', () => {
+    it('returns correct MIME type for .txt extension', () => {
+      expect(getMimeType('notes.txt')).toBe('text/plain;charset=utf-8');
+    });
+
+    it('handles uppercase TXT extension', () => {
+      expect(getMimeType('LOG.TXT')).toBe('text/plain;charset=utf-8');
+    });
+  });
+
+  describe('HTML files', () => {
+    it('returns correct MIME type for .html extension', () => {
+      expect(getMimeType('page.html')).toBe('text/html;charset=utf-8');
+    });
+
+    it('returns correct MIME type for .htm extension', () => {
+      expect(getMimeType('index.htm')).toBe('text/html;charset=utf-8');
+    });
+
+    it('handles uppercase HTML extensions', () => {
+      expect(getMimeType('PAGE.HTML')).toBe('text/html;charset=utf-8');
+      expect(getMimeType('INDEX.HTM')).toBe('text/html;charset=utf-8');
+    });
+  });
+
+  describe('unknown/fallback', () => {
+    it('returns octet-stream for unknown extensions', () => {
+      expect(getMimeType('file.xyz')).toBe('application/octet-stream');
+      expect(getMimeType('data.bin')).toBe('application/octet-stream');
+    });
+
+    it('returns octet-stream for files without extension', () => {
+      expect(getMimeType('Makefile')).toBe('application/octet-stream');
+    });
+
+    it('handles empty filename', () => {
+      expect(getMimeType('')).toBe('application/octet-stream');
+    });
+
+    it('handles filename with only extension', () => {
+      expect(getMimeType('.gitignore')).toBe('application/octet-stream');
+    });
+  });
+
+  describe('edge cases', () => {
+    it('handles multiple dots in filename', () => {
+      expect(getMimeType('session.2024.01.15.md')).toBe('text/markdown;charset=utf-8');
+      expect(getMimeType('data.backup.json')).toBe('application/json;charset=utf-8');
+    });
+
+    it('handles paths with directories', () => {
+      expect(getMimeType('/path/to/file.md')).toBe('text/markdown;charset=utf-8');
+      expect(getMimeType('folder/subfolder/data.json')).toBe('application/json;charset=utf-8');
+    });
+  });
+});
+
+describe('downloadExport', () => {
+  // Mock DOM APIs
+  let mockCreateObjectURL: ReturnType<typeof vi.fn>;
+  let mockRevokeObjectURL: ReturnType<typeof vi.fn>;
+  let mockAppendChild: ReturnType<typeof vi.fn>;
+  let mockRemoveChild: ReturnType<typeof vi.fn>;
+  let mockClick: ReturnType<typeof vi.fn>;
+  let mockLink: HTMLAnchorElement;
+
+  beforeEach(() => {
+    // Mock URL methods
+    mockCreateObjectURL = vi.fn().mockReturnValue('blob:mock-url');
+    mockRevokeObjectURL = vi.fn();
+    global.URL.createObjectURL = mockCreateObjectURL;
+    global.URL.revokeObjectURL = mockRevokeObjectURL;
+
+    // Mock DOM methods
+    mockClick = vi.fn();
+    mockLink = {
+      href: '',
+      download: '',
+      click: mockClick,
+    } as unknown as HTMLAnchorElement;
+
+    vi.spyOn(document, 'createElement').mockReturnValue(mockLink);
+    mockAppendChild = vi.spyOn(document.body, 'appendChild').mockImplementation(() => mockLink);
+    mockRemoveChild = vi.spyOn(document.body, 'removeChild').mockImplementation(() => mockLink);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('creates blob with correct MIME type for markdown files', () => {
+    downloadExport('# Hello World', 'document.md');
+
+    expect(mockCreateObjectURL).toHaveBeenCalled();
+    const blob = mockCreateObjectURL.mock.calls[0][0] as Blob;
+    expect(blob.type).toBe('text/markdown;charset=utf-8');
+  });
+
+  it('creates blob with correct MIME type for JSON files', () => {
+    downloadExport('{"key": "value"}', 'data.json');
+
+    expect(mockCreateObjectURL).toHaveBeenCalled();
+    const blob = mockCreateObjectURL.mock.calls[0][0] as Blob;
+    expect(blob.type).toBe('application/json;charset=utf-8');
+  });
+
+  it('creates blob with correct MIME type for text files', () => {
+    downloadExport('plain text content', 'notes.txt');
+
+    expect(mockCreateObjectURL).toHaveBeenCalled();
+    const blob = mockCreateObjectURL.mock.calls[0][0] as Blob;
+    expect(blob.type).toBe('text/plain;charset=utf-8');
+  });
+
+  it('creates blob with correct MIME type for HTML files', () => {
+    downloadExport('<html><body>Hello</body></html>', 'page.html');
+
+    expect(mockCreateObjectURL).toHaveBeenCalled();
+    const blob = mockCreateObjectURL.mock.calls[0][0] as Blob;
+    expect(blob.type).toBe('text/html;charset=utf-8');
+  });
+
+  it('sets the correct download filename', () => {
+    downloadExport('content', 'my-session.md');
+
+    expect(mockLink.download).toBe('my-session.md');
+  });
+
+  it('sets the blob URL as href', () => {
+    downloadExport('content', 'file.md');
+
+    expect(mockLink.href).toBe('blob:mock-url');
+  });
+
+  it('triggers click on the link', () => {
+    downloadExport('content', 'file.md');
+
+    expect(mockClick).toHaveBeenCalled();
+  });
+
+  it('appends link to body before clicking', () => {
+    downloadExport('content', 'file.md');
+
+    expect(mockAppendChild).toHaveBeenCalledWith(mockLink);
+  });
+
+  it('removes link from body after clicking', () => {
+    downloadExport('content', 'file.md');
+
+    expect(mockRemoveChild).toHaveBeenCalledWith(mockLink);
+  });
+
+  it('revokes the object URL after download', () => {
+    downloadExport('content', 'file.md');
+
+    expect(mockRevokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+  });
+
+  it('handles empty content', () => {
+    downloadExport('', 'empty.md');
+
+    expect(mockCreateObjectURL).toHaveBeenCalled();
+    expect(mockClick).toHaveBeenCalled();
+  });
+
+  it('handles content with special characters', () => {
+    const specialContent = '# Title\n\nContent with "quotes" and <tags>';
+    downloadExport(specialContent, 'special.md');
+
+    expect(mockCreateObjectURL).toHaveBeenCalled();
+    expect(mockClick).toHaveBeenCalled();
+  });
+
+  it('handles unicode content', () => {
+    const unicodeContent = '# 日本語タイトル\n\nEmoji: 🚀 ✨';
+    downloadExport(unicodeContent, 'unicode.md');
+
+    expect(mockCreateObjectURL).toHaveBeenCalled();
+    expect(mockClick).toHaveBeenCalled();
   });
 });
