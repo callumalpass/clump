@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
 import { useRepos, useIssues, usePRs, useProcesses, useSessions, useTags, useIssueTags, useCommands, useSessionCounts, buildPromptFromTemplate } from './hooks/useApi';
+import { useNotifications } from './hooks/useNotifications';
 import type { IssueFilters, SessionFilters, PRFilters } from './hooks/useApi';
 import { RepoSelector } from './components/RepoSelector';
 import { IssueList } from './components/IssueList';
@@ -135,6 +136,30 @@ export default function App() {
   const { prs, loading: prsLoading } = usePRs(selectedRepo?.id ?? null, prFilters);
   const { commands, refresh: refreshCommands } = useCommands(selectedRepo?.local_path);
   const { counts: sessionCounts } = useSessionCounts();
+
+  // Notifications hook for tracking sessions needing attention
+  const {
+    needsAttention,
+    clearAttention,
+    sessionsNeedingAttention,
+  } = useNotifications({
+    enableDesktopNotifications: true,
+    enableSound: true,
+  });
+
+  // Update browser tab title when attention is needed
+  useEffect(() => {
+    const attentionCount = sessionsNeedingAttention.size;
+    if (attentionCount > 0) {
+      document.title = `(${attentionCount}) Clump - Attention needed`;
+    } else {
+      document.title = 'Clump';
+    }
+
+    return () => {
+      document.title = 'Clump';
+    };
+  }, [sessionsNeedingAttention.size]);
 
   // Restore session tabs when repo changes
   useEffect(() => {
@@ -538,6 +563,9 @@ export default function App() {
 
     setActiveTabSessionId(sessionId);
 
+    // Clear attention state when user selects the session
+    clearAttention(sessionId);
+
     // Check if session is active
     const activeProcess = session.is_active ? processes.find(p => p.claude_session_id === sessionId) : null;
     if (activeProcess) {
@@ -559,7 +587,7 @@ export default function App() {
       setSelectedPR(firstPR.number);
       setSelectedIssue(null);
     }
-  }, [sessions, processes]);
+  }, [sessions, processes, clearAttention]);
 
   // Session tab keyboard shortcuts (Alt + 1-9, [, ], N)
   useEffect(() => {
@@ -1002,6 +1030,8 @@ export default function App() {
                       onSelectSession={handleSelectSessionTab}
                       onCloseSession={handleCloseSessionTab}
                       onNewSession={handleNewProcess}
+                      needsAttention={needsAttention}
+                      newSessionDisabled={!selectedRepo}
                     />
                   )}
                   <div className="flex-1 min-h-0 p-2">
@@ -1128,6 +1158,8 @@ export default function App() {
                   onSelectSession={handleSelectSessionTab}
                   onCloseSession={handleCloseSessionTab}
                   onNewSession={handleNewProcess}
+                  needsAttention={needsAttention}
+                  newSessionDisabled={!selectedRepo}
                 />
                 <div className="flex-1 min-h-0 p-2">
                   {activeProcessId && activeSession ? (

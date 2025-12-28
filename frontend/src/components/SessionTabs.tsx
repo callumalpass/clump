@@ -19,6 +19,10 @@ interface SessionTabsProps {
   onCloseSession: (sessionId: string) => void;
   /** Callback to create a new session */
   onNewSession: () => void;
+  /** Check if a session needs user attention (e.g., permission request) */
+  needsAttention?: (sessionId: string) => boolean;
+  /** Whether the new session button should be disabled (e.g., no repo selected) */
+  newSessionDisabled?: boolean;
 }
 
 function getTabName(session: SessionSummary): string {
@@ -37,6 +41,8 @@ export function SessionTabs({
   onSelectSession,
   onCloseSession,
   onNewSession,
+  needsAttention,
+  newSessionDisabled,
 }: SessionTabsProps) {
   return (
     <div className="flex items-center gap-1 bg-[#161b22] border-b border-gray-700 px-2 overflow-x-auto">
@@ -47,6 +53,9 @@ export function SessionTabs({
           ? processes.find(p => p.claude_session_id === session.session_id)
           : null;
         const isRunning = !!activeProcess;
+        // Check if session needs attention (permission request, idle)
+        const sessionNeedsAttention = needsAttention?.(session.session_id) ?? false;
+        const isActiveTab = activeSessionId === session.session_id;
 
         return (
           <div
@@ -54,9 +63,11 @@ export function SessionTabs({
             role="tab"
             tabIndex={0}
             className={`group flex items-center gap-1.5 px-3 py-2 cursor-pointer border-b-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset ${
-              activeSessionId === session.session_id
+              isActiveTab
                 ? 'border-blue-500 text-white'
-                : 'border-transparent text-gray-400 hover:text-white hover:bg-gray-800'
+                : sessionNeedsAttention
+                  ? 'border-orange-500 text-orange-300 bg-orange-500/10 hover:bg-orange-500/20'
+                  : 'border-transparent text-gray-400 hover:text-white hover:bg-gray-800'
             }`}
             onClick={() => onSelectSession(session.session_id)}
             onKeyDown={(e) => {
@@ -66,15 +77,31 @@ export function SessionTabs({
               }
             }}
             title={session.title || 'Untitled'}
-            aria-selected={activeSessionId === session.session_id}
+            aria-selected={isActiveTab}
           >
             {/* Status indicator */}
             <span
               className={`w-2 h-2 rounded-full shrink-0 ${
-                isRunning ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'
+                sessionNeedsAttention
+                  ? 'bg-orange-500 animate-pulse'
+                  : isRunning
+                    ? 'bg-yellow-500 animate-pulse'
+                    : 'bg-green-500'
               }`}
-              title={isRunning ? 'Session is running' : 'Session completed'}
-              aria-label={isRunning ? 'Running' : 'Completed'}
+              title={
+                sessionNeedsAttention
+                  ? 'Needs attention - permission request pending'
+                  : isRunning
+                    ? 'Session is running'
+                    : 'Session completed'
+              }
+              aria-label={
+                sessionNeedsAttention
+                  ? 'Needs attention'
+                  : isRunning
+                    ? 'Running'
+                    : 'Completed'
+              }
             />
             {/* Entity badges - show linked issues/PRs */}
             {session.entities && session.entities.length > 0 && (
@@ -122,8 +149,13 @@ export function SessionTabs({
       })}
       <button
         onClick={onNewSession}
-        className="px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset"
-        title="New session"
+        disabled={newSessionDisabled}
+        className={`px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset ${
+          newSessionDisabled
+            ? 'text-gray-600 cursor-not-allowed'
+            : 'text-gray-400 hover:text-white hover:bg-gray-800'
+        }`}
+        title={newSessionDisabled ? "Select a repository first" : "New session"}
         aria-label="Create new session"
       >
         +
