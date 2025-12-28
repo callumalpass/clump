@@ -87,6 +87,18 @@ class SessionListResponse(BaseModel):
     total: int
 
 
+class RepoSessionCount(BaseModel):
+    """Session count for a single repo."""
+    repo_id: int
+    total: int
+    active: int
+
+
+class SessionCountsResponse(BaseModel):
+    """Response for session counts across all repos."""
+    counts: list[RepoSessionCount]
+
+
 # ==========================================
 # Session Detail (full transcript)
 # ==========================================

@@ -22,6 +22,8 @@ from app.schemas import (
     ToolUseResponse,
     TokenUsageResponse,
     SubsessionDetailResponse,
+    RepoSessionCount,
+    SessionCountsResponse,
 )
 from app.storage import (
     discover_sessions,
@@ -31,6 +33,7 @@ from app.storage import (
     encode_path,
     decode_path,
     match_encoded_path_to_repo,
+    load_repos,
     SessionMetadata,
     EntityLink,
     DiscoveredSession,
@@ -411,6 +414,56 @@ async def list_sessions(
     summaries = summaries[offset:offset + limit]
 
     return SessionListResponse(sessions=summaries, total=total)
+
+
+# ==========================================
+# Session Counts Per Repo
+# ==========================================
+
+@router.get("/sessions/counts", response_model=SessionCountsResponse)
+async def get_session_counts():
+    """
+    Get session counts for all repos.
+
+    Returns total and active session counts per repo.
+    Useful for showing badges in the repo selector.
+    """
+    repos = load_repos()
+
+    # Get active session IDs from running processes
+    active_processes = await process_manager.list_processes()
+    active_session_ids = {
+        proc.claude_session_id
+        for proc in active_processes
+        if proc.claude_session_id
+    }
+
+    counts = []
+    for repo in repos:
+        # Discover sessions for this repo
+        sessions = discover_sessions(repo_path=repo["local_path"])
+
+        # Count active sessions
+        active_count = sum(
+            1 for s in sessions if s.session_id in active_session_ids
+        )
+
+        # Also count pending sessions (active processes without JSONL files yet)
+        discovered_ids = {s.session_id for s in sessions}
+        for proc in active_processes:
+            if proc.claude_session_id and proc.claude_session_id not in discovered_ids:
+                encoded_filter = encode_path(repo["local_path"])
+                encoded_proc = encode_path(proc.working_dir)
+                if encoded_filter == encoded_proc:
+                    active_count += 1
+
+        counts.append(RepoSessionCount(
+            repo_id=repo["id"],
+            total=len(sessions),
+            active=active_count,
+        ))
+
+    return SessionCountsResponse(counts=counts)
 
 
 # ==========================================
