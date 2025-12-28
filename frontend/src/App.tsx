@@ -21,6 +21,7 @@ import { Settings } from './components/Settings';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import type { Repo, Issue, PR, SessionSummary, CommandMetadata } from './types';
 import type { SessionListFilters } from './components/SessionList';
+import { LRUCache } from './utils/cache';
 
 function ResizeHandle() {
   return (
@@ -53,48 +54,6 @@ function HorizontalResizeHandle() {
 }
 
 type Tab = 'issues' | 'prs' | 'history' | 'schedules';
-
-// Simple LRU cache for session data to prevent unbounded memory growth
-class LRUSessionCache {
-  private cache = new Map<string, SessionSummary>();
-  private maxSize: number;
-
-  constructor(maxSize = 100) {
-    this.maxSize = maxSize;
-  }
-
-  get(key: string): SessionSummary | undefined {
-    const value = this.cache.get(key);
-    if (value !== undefined) {
-      // Move to end (most recently used)
-      this.cache.delete(key);
-      this.cache.set(key, value);
-    }
-    return value;
-  }
-
-  set(key: string, value: SessionSummary): void {
-    // If key exists, delete it first (will be re-added at end)
-    if (this.cache.has(key)) {
-      this.cache.delete(key);
-    } else if (this.cache.size >= this.maxSize) {
-      // Evict least recently used (first item in Map)
-      const firstKey = this.cache.keys().next().value;
-      if (firstKey !== undefined) {
-        this.cache.delete(firstKey);
-      }
-    }
-    this.cache.set(key, value);
-  }
-
-  delete(key: string): boolean {
-    return this.cache.delete(key);
-  }
-
-  clear(): void {
-    this.cache.clear();
-  }
-}
 
 // Track pending issue/PR context for processes being created
 // This fixes the race condition where the sidepane doesn't show the issue/PR
@@ -150,7 +109,7 @@ export default function App() {
 
   // LRU cache for session data - prevents unbounded memory growth
   // Sessions are cached when viewed so tabs persist across page changes
-  const cachedSessionsRef = useRef(new LRUSessionCache(100));
+  const cachedSessionsRef = useRef(new LRUCache<string, SessionSummary>(100));
 
   // Ref for collapsible issue/PR context panel
   const contextPanelRef = useRef<PanelImperativeHandle>(null);
@@ -608,6 +567,8 @@ export default function App() {
           setShortcutsOpen(false);
         } else if (settingsOpen) {
           setSettingsOpen(false);
+        } else if (statsModalOpen) {
+          setStatsModalOpen(false);
         } else if (activeProcessId) {
           setActiveProcessId(null);
         } else if (selectedIssue) {
@@ -621,7 +582,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [settingsOpen, shortcutsOpen, activeProcessId, selectedIssue, selectedPR, activeTab, issuesPage, issuesTotalPages, goToIssuesPage, prsPage, prsTotalPages, goToPRsPage, sessionsPage, sessionsTotalPages, goToSessionsPage]);
+  }, [settingsOpen, shortcutsOpen, statsModalOpen, activeProcessId, selectedIssue, selectedPR, activeTab, issuesPage, issuesTotalPages, goToIssuesPage, prsPage, prsTotalPages, goToPRsPage, sessionsPage, sessionsTotalPages, goToSessionsPage]);
 
   const handleSelectSession = useCallback((session: SessionSummary) => {
     // Check if this session is active (has a running process)
@@ -988,7 +949,7 @@ export default function App() {
           {/* Usage stats summary */}
           {stats && (
             <button
-              onClick={() => setActiveTab('stats')}
+              onClick={() => setStatsModalOpen(true)}
               className="hidden md:flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300 transition-colors"
               title="View usage statistics"
             >
@@ -1035,6 +996,16 @@ export default function App() {
       {/* Keyboard Shortcuts Modal */}
       <KeyboardShortcutsModal isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
+      {/* Stats Modal */}
+      <StatsModal
+        isOpen={statsModalOpen}
+        onClose={() => setStatsModalOpen(false)}
+        stats={stats}
+        loading={statsLoading}
+        error={statsError}
+        onRefresh={refreshStats}
+      />
+
       <Group orientation="horizontal" className="flex-1 min-h-0">
         {/* Left sidebar */}
         <Panel defaultSize="320px" minSize="200px" maxSize="500px" className="border-r border-gray-700 flex flex-col bg-[#0d1117]">
@@ -1064,7 +1035,7 @@ export default function App() {
             <Panel minSize="200px" className="flex flex-col">
               {/* Tabs with sliding indicator */}
               <div ref={tabsContainerRef} className="relative flex border-b border-gray-700 shrink-0">
-                {(['issues', 'prs', 'history', 'schedules', 'stats'] as Tab[]).map((tab) => {
+                {(['issues', 'prs', 'history', 'schedules'] as Tab[]).map((tab) => {
                   // Get count for each tab
                   const count = tab === 'issues' ? issuesTotal
                     : tab === 'prs' ? prsTotal
@@ -1189,15 +1160,7 @@ export default function App() {
                     refreshRef={scheduleListRefreshRef}
                   />
                 )}
-                {activeTab === 'stats' && (
-                  <StatsView
-                    stats={stats}
-                    loading={statsLoading}
-                    error={statsError}
-                    onRefresh={refreshStats}
-                  />
-                )}
-                {!selectedRepo && activeTab !== 'history' && activeTab !== 'stats' && (
+                {!selectedRepo && activeTab !== 'history' && (
                   <div className="p-4 text-gray-400">Select a repository to view {activeTab}</div>
                 )}
               </div>
