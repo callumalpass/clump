@@ -412,6 +412,25 @@ export function SessionList({
     filters.order !== 'desc' ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
+  // Memoize event handlers - must be before any early returns to satisfy Rules of Hooks
+  const handleContinue = useCallback((e: React.MouseEvent, session: SessionSummary) => {
+    e.stopPropagation();
+    onContinueSession?.(session);
+  }, [onContinueSession]);
+
+  const handleToggleStar = useCallback((e: React.MouseEvent, session: SessionSummary) => {
+    e.stopPropagation();
+    onToggleStar?.(session);
+  }, [onToggleStar]);
+
+  const handleToggleSelect = useCallback((e: React.MouseEvent, session: SessionSummary) => {
+    e.stopPropagation();
+    // Don't allow selecting active sessions (can't delete them)
+    if (!session.is_active) {
+      toggleSelectSession(session.session_id);
+    }
+  }, [toggleSelectSession]);
+
   // Bulk actions bar when items are selected
   const bulkActionsBar = someSelected && (
     <div className="flex items-center justify-between px-3 py-2 bg-blue-900/30 border-b border-blue-700/50">
@@ -613,25 +632,6 @@ export function SessionList({
       </div>
     );
   }
-
-  // Memoize event handlers to maintain stable references for memoized children
-  const handleContinue = useCallback((e: React.MouseEvent, session: SessionSummary) => {
-    e.stopPropagation();
-    onContinueSession?.(session);
-  }, [onContinueSession]);
-
-  const handleToggleStar = useCallback((e: React.MouseEvent, session: SessionSummary) => {
-    e.stopPropagation();
-    onToggleStar?.(session);
-  }, [onToggleStar]);
-
-  const handleToggleSelect = useCallback((e: React.MouseEvent, session: SessionSummary) => {
-    e.stopPropagation();
-    // Don't allow selecting active sessions (can't delete them)
-    if (!session.is_active) {
-      toggleSelectSession(session.session_id);
-    }
-  }, [toggleSelectSession]);
 
   return (
     <>
