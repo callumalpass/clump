@@ -370,4 +370,143 @@ describe('useWebSocket', () => {
       expect(result.current.sendResize).toBe(initialSendResize);
     });
   });
+
+  describe('callback updates (stale closure prevention)', () => {
+    it('should call updated onMessage callback after rerender', async () => {
+      const onMessage1 = vi.fn();
+      const onMessage2 = vi.fn();
+
+      const { rerender } = renderHook(
+        ({ onMessage }) => useWebSocket('test-id', { onMessage }),
+        { initialProps: { onMessage: onMessage1 } }
+      );
+
+      const ws = MockWebSocket.getLastInstance();
+      act(() => {
+        ws?.simulateOpen();
+      });
+
+      // Rerender with a new callback
+      rerender({ onMessage: onMessage2 });
+
+      // Simulate a message - should call the NEW callback, not the old one
+      const testData = new TextEncoder().encode('test').buffer;
+      act(() => {
+        ws?.simulateMessage(testData);
+      });
+
+      await waitFor(() => {
+        // Old callback should NOT be called
+        expect(onMessage1).not.toHaveBeenCalled();
+        // New callback SHOULD be called
+        expect(onMessage2).toHaveBeenCalledTimes(1);
+        expect(onMessage2).toHaveBeenCalledWith(testData);
+      });
+    });
+
+    it('should call updated onOpen callback after rerender', async () => {
+      const onOpen1 = vi.fn();
+      const onOpen2 = vi.fn();
+
+      // Start with null processId so we can control when the connection opens
+      const { rerender } = renderHook(
+        ({ processId, onOpen }) => useWebSocket(processId, { onOpen }),
+        { initialProps: { processId: null as string | null, onOpen: onOpen1 } }
+      );
+
+      // Update to use the second callback
+      rerender({ processId: null, onOpen: onOpen2 });
+
+      // Now connect with the updated callback in place
+      rerender({ processId: 'test-id', onOpen: onOpen2 });
+
+      const ws = MockWebSocket.getLastInstance();
+      act(() => {
+        ws?.simulateOpen();
+      });
+
+      await waitFor(() => {
+        // Only the second callback should be called
+        expect(onOpen1).not.toHaveBeenCalled();
+        expect(onOpen2).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('should call updated onClose callback after rerender', async () => {
+      const onClose1 = vi.fn();
+      const onClose2 = vi.fn();
+
+      const { rerender } = renderHook(
+        ({ onClose }) => useWebSocket('test-id', { onClose }),
+        { initialProps: { onClose: onClose1 } }
+      );
+
+      const ws = MockWebSocket.getLastInstance();
+      act(() => {
+        ws?.simulateOpen();
+      });
+
+      // Update the callback
+      rerender({ onClose: onClose2 });
+
+      // Close the connection
+      act(() => {
+        ws?.simulateClose();
+      });
+
+      await waitFor(() => {
+        expect(onClose1).not.toHaveBeenCalled();
+        expect(onClose2).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('should call updated onError callback after rerender', async () => {
+      const onError1 = vi.fn();
+      const onError2 = vi.fn();
+
+      const { rerender } = renderHook(
+        ({ onError }) => useWebSocket('test-id', { onError }),
+        { initialProps: { onError: onError1 } }
+      );
+
+      // Update the callback
+      rerender({ onError: onError2 });
+
+      const ws = MockWebSocket.getLastInstance();
+      act(() => {
+        ws?.simulateError();
+      });
+
+      await waitFor(() => {
+        expect(onError1).not.toHaveBeenCalled();
+        expect(onError2).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('should not reconnect when only callbacks change', async () => {
+      const onMessage1 = vi.fn();
+      const onMessage2 = vi.fn();
+
+      const { rerender } = renderHook(
+        ({ onMessage }) => useWebSocket('test-id', { onMessage }),
+        { initialProps: { onMessage: onMessage1 } }
+      );
+
+      const ws1 = MockWebSocket.getLastInstance();
+      act(() => {
+        ws1?.simulateOpen();
+      });
+
+      // Get instance count before rerender
+      const instanceCountBefore = MockWebSocket.getLastInstance();
+
+      // Rerender with new callback
+      rerender({ onMessage: onMessage2 });
+
+      // Should be the same WebSocket instance (no reconnection)
+      const instanceCountAfter = MockWebSocket.getLastInstance();
+      expect(instanceCountAfter).toBe(instanceCountBefore);
+      expect(ws1?.readyState).toBe(MockWebSocket.OPEN);
+    });
+  });
 });

@@ -14,6 +14,11 @@ export function useWebSocket(
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
+  // Store callbacks in refs to avoid stale closures
+  // This ensures the latest callback is always called without needing to reconnect
+  const callbacksRef = useRef(options);
+  callbacksRef.current = options;
+
   useEffect(() => {
     if (!processId) return;
 
@@ -26,20 +31,20 @@ export function useWebSocket(
 
     ws.onopen = () => {
       setIsConnected(true);
-      options.onOpen?.();
+      callbacksRef.current.onOpen?.();
     };
 
     ws.onmessage = (event) => {
-      options.onMessage?.(event.data);
+      callbacksRef.current.onMessage?.(event.data);
     };
 
     ws.onclose = () => {
       setIsConnected(false);
-      options.onClose?.();
+      callbacksRef.current.onClose?.();
     };
 
     ws.onerror = (error) => {
-      options.onError?.(error);
+      callbacksRef.current.onError?.(error);
     };
 
     return () => {
