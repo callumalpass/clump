@@ -29,9 +29,9 @@ export class LRUCache<K, V> {
       this.cache.delete(key);
     } else if (this.cache.size >= this.maxSize) {
       // Evict least recently used (first item in Map)
-      const firstKey = this.cache.keys().next().value;
-      if (firstKey !== undefined) {
-        this.cache.delete(firstKey);
+      const firstEntry = this.cache.keys().next();
+      if (!firstEntry.done) {
+        this.cache.delete(firstEntry.value);
       }
     }
     this.cache.set(key, value);

@@ -333,5 +333,34 @@ describe('LRUCache', () => {
       expect(cache.has('g')).toBe(true);
       expect(cache.size).toBe(5);
     });
+
+    it('handles undefined as a valid key', () => {
+      // This tests the fix for the iterator.done check bug
+      const cache = new LRUCache<string | undefined, number>(2);
+      cache.set(undefined, 1);
+      cache.set('a', 2);
+      expect(cache.get(undefined)).toBe(1);
+      expect(cache.get('a')).toBe(2);
+
+      // Adding a third item should evict undefined (the LRU)
+      cache.set('b', 3);
+      expect(cache.size).toBe(2);
+      expect(cache.has(undefined)).toBe(false);
+      expect(cache.has('a')).toBe(true);
+      expect(cache.has('b')).toBe(true);
+    });
+
+    it('correctly evicts when first key is undefined', () => {
+      // Regression test: ensures undefined keys are properly evicted
+      const cache = new LRUCache<string | undefined, number>(1);
+      cache.set(undefined, 1);
+      expect(cache.get(undefined)).toBe(1);
+
+      // This should evict undefined and add 'a'
+      cache.set('a', 2);
+      expect(cache.size).toBe(1);
+      expect(cache.has(undefined)).toBe(false);
+      expect(cache.get('a')).toBe(2);
+    });
   });
 });

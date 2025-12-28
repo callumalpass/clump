@@ -158,6 +158,17 @@ describe('formatRelativeTime', () => {
       // Format as ISO string which is always in UTC
       expect(formatRelativeTime(twoHoursAgo.toISOString())).toBe('2 hours ago');
     });
+
+    it('returns empty string for invalid date strings', () => {
+      expect(formatRelativeTime('not-a-date')).toBe('');
+      expect(formatRelativeTime('invalid')).toBe('');
+      expect(formatRelativeTime('')).toBe('');
+    });
+
+    it('returns empty string for malformed date strings', () => {
+      expect(formatRelativeTime('2024-13-45')).toBe(''); // Invalid month/day
+      expect(formatRelativeTime('abc-def-ghi')).toBe('');
+    });
   });
 });
 

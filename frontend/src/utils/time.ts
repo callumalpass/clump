@@ -1,9 +1,16 @@
 /**
  * Formats a date string as a human-readable relative time (e.g., "2 hours ago", "yesterday").
  * Falls back to a short date format for older dates.
+ * Returns empty string for invalid date strings.
  */
 export function formatRelativeTime(dateString: string): string {
   const date = new Date(dateString);
+
+  // Handle invalid dates
+  if (isNaN(date.getTime())) {
+    return '';
+  }
+
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffSeconds = Math.floor(diffMs / 1000);
