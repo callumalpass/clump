@@ -302,19 +302,19 @@ class GitHubClient:
         comment = issue.create_comment(body)
         return comment.id
 
-    def add_labels(self, owner: str, name: str, issue_number: int, labels: list[str]):
+    def add_labels(self, owner: str, name: str, issue_number: int, labels: list[str]) -> None:
         """Add labels to an issue or PR."""
         repo = self.get_repo(owner, name)
         issue = repo.get_issue(issue_number)
         issue.add_to_labels(*labels)
 
-    def close_issue(self, owner: str, name: str, issue_number: int):
+    def close_issue(self, owner: str, name: str, issue_number: int) -> None:
         """Close an issue."""
         repo = self.get_repo(owner, name)
         issue = repo.get_issue(issue_number)
         issue.edit(state="closed")
 
-    def reopen_issue(self, owner: str, name: str, issue_number: int):
+    def reopen_issue(self, owner: str, name: str, issue_number: int) -> None:
         """Reopen a closed issue."""
         repo = self.get_repo(owner, name)
         issue = repo.get_issue(issue_number)
