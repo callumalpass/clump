@@ -390,3 +390,49 @@ export interface ScheduledJobUpdate {
   max_turns?: number;
   model?: string;
 }
+
+// ==========================================
+// Stats types (usage analytics)
+// ==========================================
+
+export interface DailyActivity {
+  date: string;
+  message_count: number;
+  session_count: number;
+  tool_call_count: number;
+}
+
+export interface DailyModelTokens {
+  date: string;
+  tokens_by_model: Record<string, number>;
+}
+
+export interface ModelUsage {
+  model: string;
+  display_name: string;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  estimated_cost_usd: number;
+}
+
+export interface HourlyDistribution {
+  hour: number;  // 0-23
+  count: number;
+}
+
+export interface StatsResponse {
+  last_computed_date: string;
+  total_sessions: number;
+  total_messages: number;
+  first_session_date?: string | null;
+  longest_session_minutes?: number | null;
+  daily_activity: DailyActivity[];
+  daily_model_tokens: DailyModelTokens[];
+  model_usage: ModelUsage[];
+  hourly_distribution: HourlyDistribution[];
+  today_stats?: DailyActivity | null;
+  week_stats: DailyActivity;
+  total_estimated_cost_usd: number;
+}

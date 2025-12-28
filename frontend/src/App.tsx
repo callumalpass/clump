@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
-import { useRepos, useIssues, usePRs, useProcesses, useSessions, useTags, useIssueTags, useCommands, useSessionCounts, buildPromptFromTemplate } from './hooks/useApi';
+import { useRepos, useIssues, usePRs, useProcesses, useSessions, useTags, useIssueTags, useCommands, useSessionCounts, useStats, buildPromptFromTemplate } from './hooks/useApi';
 import { useNotifications } from './hooks/useNotifications';
 import type { IssueFilters, SessionFilters, PRFilters } from './hooks/useApi';
 import { RepoSelector } from './components/RepoSelector';
@@ -16,6 +16,7 @@ import { SessionList } from './components/SessionList';
 import { CompactSessionList } from './components/CompactSessionList';
 import { ScheduleList } from './components/ScheduleList';
 import { ScheduleDetail } from './components/ScheduleDetail';
+import { StatsModal } from './components/StatsModal';
 import { Settings } from './components/Settings';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import type { Repo, Issue, PR, SessionSummary, CommandMetadata } from './types';
@@ -126,6 +127,7 @@ export default function App() {
   const [issuePanelCollapsed, setIssuePanelCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [statsModalOpen, setStatsModalOpen] = useState(false);
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const [issueFilters, setIssueFilters] = useState<IssueFilters>({ state: 'open' });
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
@@ -205,6 +207,7 @@ export default function App() {
     order: sessionListFilters.order,
   };
   const { sessions, loading: sessionsLoading, refresh: refreshSessions, continueSession, deleteSession, updateSessionMetadata, total: sessionsTotal, page: sessionsPage, totalPages: sessionsTotalPages, goToPage: goToSessionsPage } = useSessions(sessionFilters);
+  const { stats, loading: statsLoading, error: statsError, refresh: refreshStats } = useStats();
 
   // Debounced session refresh to coalesce multiple rapid refresh requests
   const refreshSessionsDebounced = useMemo(() => {
@@ -270,14 +273,14 @@ export default function App() {
   }, [updateCounts]);
 
   // Handle initial state from WebSocket
-  const handleInitialState = useCallback((event: { processes: Array<{ id: string; session_id: number | null; working_dir: string; created_at: string }> }) => {
+  const handleInitialState = useCallback((event: { processes: Array<{ id: string; session_id: number | null; working_dir: string; created_at: string; claude_session_id?: string | null }> }) => {
     // Update processes from WebSocket initial state
     setProcesses(event.processes.map(p => ({
       id: p.id,
       session_id: p.session_id,
       working_dir: p.working_dir,
       created_at: p.created_at,
-      claude_session_id: null,  // Will be filled in by subsequent events or refresh
+      claude_session_id: p.claude_session_id ?? null,
     })));
   }, [setProcesses]);
 
@@ -982,6 +985,22 @@ export default function App() {
           <span className="text-sm text-gray-400">
             {processes.length} active process{processes.length !== 1 ? 'es' : ''}
           </span>
+          {/* Usage stats summary */}
+          {stats && (
+            <button
+              onClick={() => setActiveTab('stats')}
+              className="hidden md:flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+              title="View usage statistics"
+            >
+              <span className="tabular-nums">
+                {stats.today_stats ? `${stats.today_stats.message_count.toLocaleString()} msgs today` : ''}
+              </span>
+              <span className="text-gray-600">|</span>
+              <span className="tabular-nums text-green-500">
+                ${stats.total_estimated_cost_usd.toFixed(2)}
+              </span>
+            </button>
+          )}
           {/* Keyboard shortcuts hint */}
           <button
             onClick={() => setShortcutsOpen(true)}
@@ -1045,7 +1064,7 @@ export default function App() {
             <Panel minSize="200px" className="flex flex-col">
               {/* Tabs with sliding indicator */}
               <div ref={tabsContainerRef} className="relative flex border-b border-gray-700 shrink-0">
-                {(['issues', 'prs', 'history', 'schedules'] as Tab[]).map((tab) => {
+                {(['issues', 'prs', 'history', 'schedules', 'stats'] as Tab[]).map((tab) => {
                   // Get count for each tab
                   const count = tab === 'issues' ? issuesTotal
                     : tab === 'prs' ? prsTotal
@@ -1170,7 +1189,15 @@ export default function App() {
                     refreshRef={scheduleListRefreshRef}
                   />
                 )}
-                {!selectedRepo && activeTab !== 'history' && (
+                {activeTab === 'stats' && (
+                  <StatsView
+                    stats={stats}
+                    loading={statsLoading}
+                    error={statsError}
+                    onRefresh={refreshStats}
+                  />
+                )}
+                {!selectedRepo && activeTab !== 'history' && activeTab !== 'stats' && (
                   <div className="p-4 text-gray-400">Select a repository to view {activeTab}</div>
                 )}
               </div>

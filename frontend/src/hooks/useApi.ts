@@ -4,7 +4,7 @@ import type {
   SessionSummary, SessionDetail, SessionListResponse, EntityLink,
   ClaudeCodeSettings, ProcessCreateOptions, Tag, IssueTagsMap, GitHubLabel,
   CommandsResponse, CommandMetadata, SubsessionDetail,
-  RepoSessionCount, SessionCountsResponse
+  RepoSessionCount, SessionCountsResponse, StatsResponse
 } from '../types';
 
 export interface EntityInput {
@@ -939,4 +939,34 @@ export function buildPromptFromTemplate(
     result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), String(value ?? ''));
   }
   return result;
+}
+
+// Stats (Claude usage analytics)
+export function useStats() {
+  const [stats, setStats] = useState<StatsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    try {
+      setLoading(true);
+      const data = await fetchJson<StatsResponse>(`${API_BASE}/stats`, { signal });
+      setStats(data);
+      setError(null);
+    } catch (e) {
+      // Ignore abort errors
+      if (e instanceof Error && e.name === 'AbortError') return;
+      setError(e instanceof Error ? e.message : 'Failed to fetch stats');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    refresh(controller.signal);
+    return () => controller.abort();
+  }, [refresh]);
+
+  return { stats, loading, error, refresh: () => refresh() };
 }
