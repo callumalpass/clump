@@ -1,11 +1,12 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback, memo } from 'react';
 import type { TranscriptMessage, ToolUse, ParsedTranscript } from '../types';
 import { Markdown } from './Markdown';
 import { Editor } from './Editor';
 import { SubsessionView } from './SubsessionView';
 
 // Highlight matching text in a string
-function HighlightedText({
+// Memoized to avoid recomputation on every render
+const HighlightedText = memo(function HighlightedText({
   text,
   searchQuery,
   isCurrentMatch
@@ -14,51 +15,60 @@ function HighlightedText({
   searchQuery: string;
   isCurrentMatch?: boolean;
 }) {
-  if (!searchQuery.trim()) {
+  // Memoize the parts calculation to avoid string manipulation on every render
+  const parts = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return null; // Signal to render text directly
+    }
+
+    const result: React.ReactNode[] = [];
+    const lowerText = text.toLowerCase();
+    const lowerQuery = searchQuery.toLowerCase();
+    let lastIndex = 0;
+    let matchIndex = 0;
+
+    while (true) {
+      const index = lowerText.indexOf(lowerQuery, lastIndex);
+      if (index === -1) break;
+
+      // Add text before match
+      if (index > lastIndex) {
+        result.push(text.slice(lastIndex, index));
+      }
+
+      // Add highlighted match
+      result.push(
+        <mark
+          key={`match-${matchIndex}`}
+          className={`rounded px-0.5 ${
+            isCurrentMatch
+              ? 'bg-yellow-400 text-black'
+              : 'bg-yellow-500/30 text-inherit'
+          }`}
+          data-search-match={matchIndex}
+        >
+          {text.slice(index, index + searchQuery.length)}
+        </mark>
+      );
+
+      lastIndex = index + searchQuery.length;
+      matchIndex++;
+    }
+
+    // Add remaining text
+    if (lastIndex < text.length) {
+      result.push(text.slice(lastIndex));
+    }
+
+    return result;
+  }, [text, searchQuery, isCurrentMatch]);
+
+  if (parts === null) {
     return <>{text}</>;
   }
 
-  const parts: React.ReactNode[] = [];
-  const lowerText = text.toLowerCase();
-  const lowerQuery = searchQuery.toLowerCase();
-  let lastIndex = 0;
-  let matchIndex = 0;
-
-  while (true) {
-    const index = lowerText.indexOf(lowerQuery, lastIndex);
-    if (index === -1) break;
-
-    // Add text before match
-    if (index > lastIndex) {
-      parts.push(text.slice(lastIndex, index));
-    }
-
-    // Add highlighted match
-    parts.push(
-      <mark
-        key={`match-${matchIndex}`}
-        className={`rounded px-0.5 ${
-          isCurrentMatch
-            ? 'bg-yellow-400 text-black'
-            : 'bg-yellow-500/30 text-inherit'
-        }`}
-        data-search-match={matchIndex}
-      >
-        {text.slice(index, index + searchQuery.length)}
-      </mark>
-    );
-
-    lastIndex = index + searchQuery.length;
-    matchIndex++;
-  }
-
-  // Add remaining text
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
-  }
-
   return <>{parts}</>;
-}
+});
 
 interface ConversationViewProps {
   transcript: ParsedTranscript;

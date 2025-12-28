@@ -182,13 +182,22 @@ export function SessionView({
         timestamp: new Date().toISOString(),
       }]);
 
-      // Send message text first, then carriage return after a small delay
-      // This mimics how the backend sends initial prompts and how real typing works
+      // Send message text first, then carriage return after a delay
       // Claude Code's TUI (Ink) needs time to process the text before receiving Enter
-      sendInput(message);
+      // Batch characters to reduce network overhead (10 chars per packet instead of 1)
+      const text = message.trim();
+      const BATCH_SIZE = 10;
 
-      // Small delay before sending Enter (like backend's PROMPT_ENTER_DELAY_SECS = 0.1)
-      await new Promise(resolve => setTimeout(resolve, 100));
+      for (let i = 0; i < text.length; i += BATCH_SIZE) {
+        sendInput(text.slice(i, i + BATCH_SIZE));
+        // Small delay between chunks to avoid overwhelming the TUI
+        if (i + BATCH_SIZE < text.length) {
+          await new Promise(resolve => setTimeout(resolve, 5));
+        }
+      }
+
+      // Wait for Claude Code's TUI to process the input before sending Enter
+      await new Promise(resolve => setTimeout(resolve, 150));
 
       // Use \r (carriage return) like a real terminal Enter key
       sendInput('\r');

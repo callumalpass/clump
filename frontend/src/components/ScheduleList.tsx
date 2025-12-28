@@ -1,4 +1,4 @@
-import { useState, useEffect, type MutableRefObject } from 'react';
+import { useState, useEffect, memo, type MutableRefObject } from 'react';
 import { useSchedules, describeCron, formatRelativeTime, CRON_PRESETS } from '../hooks/useSchedules';
 import type { ScheduledJob, ScheduledJobCreate, ScheduledJobTargetType, CommandsResponse } from '../types';
 
@@ -197,7 +197,7 @@ interface ScheduleCardProps {
   onTogglePause: () => void;
 }
 
-function ScheduleCard({ schedule, selected, onSelect, onTrigger, onDelete, onTogglePause }: ScheduleCardProps) {
+const ScheduleCard = memo(function ScheduleCard({ schedule, selected, onSelect, onTrigger, onDelete, onTogglePause }: ScheduleCardProps) {
   const nextRun = schedule.next_run_at
     ? formatRelativeTime(new Date(schedule.next_run_at))
     : 'Not scheduled';
@@ -307,7 +307,7 @@ function ScheduleCard({ schedule, selected, onSelect, onTrigger, onDelete, onTog
       )}
     </div>
   );
-}
+});
 
 function StatusBadge({ status }: { status: string }) {
   const colors = {

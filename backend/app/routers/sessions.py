@@ -19,7 +19,7 @@ from app.models import Session, SessionStatus
 # Session discovery cache with TTL
 # This avoids redundant filesystem scans when polling frequently
 _session_cache: dict[str, tuple[list, float]] = {}  # key -> (sessions, timestamp)
-SESSION_CACHE_TTL = 2.0  # seconds
+SESSION_CACHE_TTL = 5.0  # seconds (increased from 2s to reduce filesystem I/O)
 
 from app.schemas import (
     SessionSummaryResponse,

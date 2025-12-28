@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, useLayoutEffect } from 'react';
+import { useState, useCallback, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
 import { useRepos, useIssues, usePRs, useProcesses, useSessions, useTags, useIssueTags, useCommands, useSessionCounts, buildPromptFromTemplate } from './hooks/useApi';
 import { useNotifications } from './hooks/useNotifications';
@@ -53,6 +53,48 @@ function HorizontalResizeHandle() {
 
 type Tab = 'issues' | 'prs' | 'history' | 'schedules';
 
+// Simple LRU cache for session data to prevent unbounded memory growth
+class LRUSessionCache {
+  private cache = new Map<string, SessionSummary>();
+  private maxSize: number;
+
+  constructor(maxSize = 100) {
+    this.maxSize = maxSize;
+  }
+
+  get(key: string): SessionSummary | undefined {
+    const value = this.cache.get(key);
+    if (value !== undefined) {
+      // Move to end (most recently used)
+      this.cache.delete(key);
+      this.cache.set(key, value);
+    }
+    return value;
+  }
+
+  set(key: string, value: SessionSummary): void {
+    // If key exists, delete it first (will be re-added at end)
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= this.maxSize) {
+      // Evict least recently used (first item in Map)
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey !== undefined) {
+        this.cache.delete(firstKey);
+      }
+    }
+    this.cache.set(key, value);
+  }
+
+  delete(key: string): boolean {
+    return this.cache.delete(key);
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+}
+
 // Track pending issue/PR context for processes being created
 // This fixes the race condition where the sidepane doesn't show the issue/PR
 // until the analysis is created and fetched via polling
@@ -104,9 +146,9 @@ export default function App() {
   // Track pending session data for optimistic UI (title, entities before backend returns)
   const pendingSessionsRef = useRef<Map<string, PendingSessionData>>(new Map());
 
-  // Cache session data for open tabs so they persist when not on current page
-  // This prevents tabs from disappearing when sort/filter changes the paginated list
-  const cachedSessionsRef = useRef<Map<string, SessionSummary>>(new Map());
+  // LRU cache for session data - prevents unbounded memory growth
+  // Sessions are cached when viewed so tabs persist across page changes
+  const cachedSessionsRef = useRef(new LRUSessionCache(100));
 
   // Ref for collapsible issue/PR context panel
   const contextPanelRef = useRef<PanelImperativeHandle>(null);
@@ -163,6 +205,21 @@ export default function App() {
     order: sessionListFilters.order,
   };
   const { sessions, loading: sessionsLoading, refresh: refreshSessions, continueSession, deleteSession, updateSessionMetadata, total: sessionsTotal, page: sessionsPage, totalPages: sessionsTotalPages, goToPage: goToSessionsPage } = useSessions(sessionFilters);
+
+  // Debounced session refresh to coalesce multiple rapid refresh requests
+  const refreshSessionsDebounced = useMemo(() => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      timeoutId = setTimeout(() => {
+        refreshSessions();
+        timeoutId = null;
+      }, 500);
+    };
+  }, [refreshSessions]);
+
   const { tags, createTag } = useTags(selectedRepo?.id ?? null);
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
   const { prs, loading: prsLoading, refresh: refreshPRs, page: prsPage, totalPages: prsTotalPages, total: prsTotal, goToPage: goToPRsPage } = usePRs(selectedRepo?.id ?? null, prFilters);
@@ -344,10 +401,10 @@ export default function App() {
         setActiveTabSessionId(process.claude_session_id);
       }
 
-      // Trigger immediate refresh to get session data sooner
-      setTimeout(refreshSessions, 500);
+      // Trigger debounced refresh to get session data sooner
+      refreshSessionsDebounced();
     },
-    [selectedRepo, createProcess, refreshSessions]
+    [selectedRepo, createProcess, refreshSessionsDebounced]
   );
 
   const handleStartPRSession = useCallback(
@@ -392,10 +449,10 @@ export default function App() {
         setActiveTabSessionId(process.claude_session_id);
       }
 
-      // Trigger immediate refresh to get analysis data sooner
-      setTimeout(refreshSessions, 500);
+      // Trigger debounced refresh to get analysis data sooner
+      refreshSessionsDebounced();
     },
-    [selectedRepo, createProcess, refreshSessions]
+    [selectedRepo, createProcess, refreshSessionsDebounced]
   );
 
   const handleNewProcess = useCallback(async () => {
@@ -425,9 +482,9 @@ export default function App() {
       setActiveTabSessionId(process.claude_session_id);
     }
 
-    // Trigger immediate refresh to get session data sooner
-    setTimeout(refreshSessions, 500);
-  }, [selectedRepo, createProcess, refreshSessions]);
+    // Trigger debounced refresh to get session data sooner
+    refreshSessionsDebounced();
+  }, [selectedRepo, createProcess, refreshSessionsDebounced]);
 
   // Global keyboard shortcuts (basic navigation)
   useEffect(() => {
@@ -773,52 +830,55 @@ export default function App() {
   // Get the list of open sessions (sessions that have tabs open)
   // Uses optimistic UI: if a session isn't in the backend yet but has an active process,
   // synthesize a session from process data + pending metadata so the tab appears immediately
-  const openSessions = openSessionIds
-    .map(id => {
-      // First try to find in fetched sessions (current page)
-      const session = sessions.find(s => s.session_id === id);
-      if (session) {
-        // Clear pending data once we have real session data
-        pendingSessionsRef.current.delete(id);
-        // Update cache with latest data
-        cachedSessionsRef.current.set(id, session);
-        return session;
-      }
+  // Memoized to avoid recalculating on every render
+  const openSessions = useMemo(() => {
+    return openSessionIds
+      .map(id => {
+        // First try to find in fetched sessions (current page)
+        const session = sessions.find(s => s.session_id === id);
+        if (session) {
+          // Clear pending data once we have real session data
+          pendingSessionsRef.current.delete(id);
+          // Update cache with latest data
+          cachedSessionsRef.current.set(id, session);
+          return session;
+        }
 
-      // If not on current page, check our cache (for sessions on other pages)
-      const cachedSession = cachedSessionsRef.current.get(id);
-      if (cachedSession) {
-        return cachedSession;
-      }
+        // If not on current page, check our cache (for sessions on other pages)
+        const cachedSession = cachedSessionsRef.current.get(id);
+        if (cachedSession) {
+          return cachedSession;
+        }
 
-      // If not found anywhere, check if there's an active process for this session
-      const process = processes.find(p => p.claude_session_id === id);
-      if (process && selectedRepo) {
-        // Get pending session data (title, entities) if available
-        const pendingData = pendingSessionsRef.current.get(id);
+        // If not found anywhere, check if there's an active process for this session
+        const process = processes.find(p => p.claude_session_id === id);
+        if (process && selectedRepo) {
+          // Get pending session data (title, entities) if available
+          const pendingData = pendingSessionsRef.current.get(id);
 
-        // Create a synthetic session from process data + pending metadata (optimistic UI)
-        return {
-          session_id: id,
-          encoded_path: '',
-          repo_path: process.working_dir,
-          repo_name: `${selectedRepo.owner}/${selectedRepo.name}`,
-          title: pendingData?.title || 'New Session',
-          model: null,
-          start_time: process.created_at,
-          end_time: null,
-          message_count: 0,
-          modified_at: process.created_at,
-          file_size: 0,
-          entities: pendingData?.entities || [],
-          tags: [],
-          starred: false,
-          is_active: true,
-        } as SessionSummary;
-      }
-      return null;
-    })
-    .filter((s): s is SessionSummary => !!s);
+          // Create a synthetic session from process data + pending metadata (optimistic UI)
+          return {
+            session_id: id,
+            encoded_path: '',
+            repo_path: process.working_dir,
+            repo_name: `${selectedRepo.owner}/${selectedRepo.name}`,
+            title: pendingData?.title || 'New Session',
+            model: null,
+            start_time: process.created_at,
+            end_time: null,
+            message_count: 0,
+            modified_at: process.created_at,
+            file_size: 0,
+            entities: pendingData?.entities || [],
+            tags: [],
+            starred: false,
+            is_active: true,
+          } as SessionSummary;
+        }
+        return null;
+      })
+      .filter((s): s is SessionSummary => !!s);
+  }, [openSessionIds, sessions, processes, selectedRepo]);
 
   // Show side-by-side if we have open session tabs and any issue/PR selected
   const showSideBySide = openSessions.length > 0 && (hasIssueContext || hasPRContext);
