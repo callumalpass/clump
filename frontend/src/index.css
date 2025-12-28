@@ -746,13 +746,17 @@ button:disabled .kbd-hint {
   transform: scale(0.98);
 }
 
-/* Session tab close button - improved visibility and hover feedback */
+/* Session tab close button - hidden by default, visible on tab hover */
 .session-tab-close {
-  transition: opacity 150ms ease, background-color 150ms ease, color 150ms ease, transform 100ms ease;
+  transition: opacity 150ms ease-out, background-color 150ms ease, color 150ms ease, transform 100ms ease;
+}
+
+.session-tab-close:hover {
+  transform: scale(1.1);
 }
 
 .session-tab-close:active {
-  transform: scale(0.85);
+  transform: scale(0.9);
 }
 
 /* Resize handle styling - improved discoverability */
@@ -918,8 +922,9 @@ button:disabled .kbd-hint {
     transform: none;
   }
 
-  /* Disable session tab active scale */
+  /* Disable session tab and close button scale effects */
   .session-tab:active,
+  .session-tab-close:hover,
   .session-tab-close:active {
     transform: none;
   }

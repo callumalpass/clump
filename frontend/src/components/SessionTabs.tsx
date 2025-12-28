@@ -178,12 +178,12 @@ export function SessionTabs({
                 e.stopPropagation();
                 onCloseSession(session.session_id);
               }}
-              className={`session-tab-close ml-1 p-0.5 rounded text-gray-600 group-hover:text-gray-400 hover:!bg-red-500/10 hover:!text-red-400 ${focusRing}`}
+              className={`session-tab-close ml-1 p-1 rounded-full opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-400 hover:bg-red-500/15 active:bg-red-500/25 transition-all duration-150 ${focusRing} focus-visible:opacity-100`}
               title="Close tab"
               aria-label={`Close ${session.title || 'session'}`}
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
