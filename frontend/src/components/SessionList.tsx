@@ -8,7 +8,7 @@ import {
   SortControl,
   ItemCount,
   RefreshButton,
-  ClearFiltersButton,
+  ActiveFiltersIndicator,
   filterBarStyles,
 } from './FilterBar';
 
@@ -85,11 +85,13 @@ export function SessionList({
     onFiltersChange({ category: 'all' });
   };
 
-  const hasActiveFilters =
-    filters.search ||
-    filters.category !== 'all' ||
-    filters.sort !== 'created' ||
-    filters.order !== 'desc';
+  // Count active filters for the indicator
+  const activeFilterCount = [
+    filters.search ? 1 : 0,
+    filters.category !== 'all' ? 1 : 0,
+    filters.sort !== 'created' ? 1 : 0,
+    filters.order !== 'desc' ? 1 : 0,
+  ].reduce((a, b) => a + b, 0);
 
   const filterBar = (
     <FilterBar>
@@ -122,7 +124,7 @@ export function SessionList({
           {onRefresh && <RefreshButton onClick={onRefresh} loading={loading} />}
         </div>
       </FilterBarRow>
-      <ClearFiltersButton onClick={clearFilters} show={!!hasActiveFilters} />
+      <ActiveFiltersIndicator onClick={clearFilters} filterCount={activeFilterCount} />
     </FilterBar>
   );
 

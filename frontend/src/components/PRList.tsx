@@ -10,7 +10,7 @@ import {
   SortControl,
   ItemCount,
   RefreshButton,
-  ClearFiltersButton,
+  ActiveFiltersIndicator,
 } from './FilterBar';
 
 /** Consistent focus ring styling for accessibility */
@@ -93,12 +93,14 @@ export function PRList({
     onFiltersChange({ state: 'open' });
   };
 
-  const hasActiveFilters =
-    filters.search ||
-    filters.state !== 'open' ||
-    filters.sort !== 'created' ||
-    filters.order !== 'desc' ||
-    filters.sessionStatus;
+  // Count active filters for the indicator
+  const activeFilterCount = [
+    filters.search ? 1 : 0,
+    filters.state !== 'open' ? 1 : 0,
+    filters.sort !== 'created' ? 1 : 0,
+    filters.order !== 'desc' ? 1 : 0,
+    filters.sessionStatus ? 1 : 0,
+  ].reduce((a, b) => a + b, 0);
 
   // Filter PRs by session status
   const filteredPRs = prs.filter((pr) => {
@@ -135,7 +137,7 @@ export function PRList({
           {onRefresh && <RefreshButton onClick={onRefresh} loading={loading} />}
         </div>
       </FilterBarRow>
-      <ClearFiltersButton onClick={clearFilters} show={!!hasActiveFilters} />
+      <ActiveFiltersIndicator onClick={clearFilters} filterCount={activeFilterCount} />
     </FilterBar>
   );
 
