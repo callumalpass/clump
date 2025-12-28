@@ -1,6 +1,7 @@
 import { memo, useCallback, useState } from 'react';
 import type { SessionSummary, Process, BulkOperationResult } from '../types';
 import { calculateDuration } from '../hooks/useElapsedTime';
+import { getModelShortName, getModelTextColor } from '../utils/models';
 import { ElapsedTimer } from './ElapsedTimer';
 import { Pagination, PaginationSkeleton } from './Pagination';
 import {
@@ -14,28 +15,12 @@ import {
   filterBarStyles,
 } from './FilterBar';
 
-// Get short model name for display
-function getShortModelName(model?: string): string {
-  if (!model) return '';
-  if (model.includes('opus')) return 'opus';
-  if (model.includes('haiku')) return 'haiku';
-  return 'sonnet';
-}
-
 // Check if a session was modified recently (within last 10 minutes)
 function isRecentlyModified(modifiedAt: string): boolean {
   const modified = new Date(modifiedAt);
   const now = new Date();
   const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
   return modified > tenMinutesAgo;
-}
-
-// Get model-specific text color for visual differentiation
-function getModelTextStyle(model?: string): string {
-  if (!model) return 'text-gray-600';
-  if (model.includes('opus')) return 'text-amber-500';
-  if (model.includes('haiku')) return 'text-cyan-500';
-  return 'text-purple-400'; // Sonnet
 }
 
 // Memoized list item component to prevent unnecessary re-renders
@@ -71,17 +56,18 @@ const SessionListItem = memo(function SessionListItem({
     return segments.slice(-2).join('/');
   };
 
+  // Determine status for both border and glow styling
+  const statusClasses = isSelected
+    ? 'bg-blue-900/30 border-blue-500 list-item-glow-recent'
+    : session.is_active
+    ? 'border-yellow-500/70 hover:border-yellow-400 list-item-glow-active'
+    : isRecentlyModified(session.modified_at)
+    ? 'border-blue-500/60 hover:border-blue-400 list-item-glow-recent'
+    : 'border-green-500/30 hover:border-green-500/60 list-item-glow-done';
+
   return (
     <div
-      className={`group p-3 cursor-pointer border-l-2 hover:bg-gray-800/60 transition-all duration-150 ease-out list-item-hover list-item-enter ${
-        isSelected
-          ? 'bg-blue-900/30 border-blue-500'
-          : session.is_active
-          ? 'border-yellow-500/70 hover:border-yellow-400'
-          : isRecentlyModified(session.modified_at)
-          ? 'border-blue-500/60 hover:border-blue-400'
-          : 'border-green-500/30 hover:border-green-500/60'
-      }`}
+      className={`group p-3 cursor-pointer border-l-2 hover:bg-gray-800/60 transition-all duration-150 ease-out list-item-hover list-item-enter ${statusClasses}`}
       style={{ '--item-index': Math.min(index, 15) } as React.CSSProperties}
       onClick={onSelect}
     >
@@ -194,8 +180,8 @@ const SessionListItem = memo(function SessionListItem({
 
         {/* Model - color-coded for quick identification */}
         {session.model && (
-          <span className={getModelTextStyle(session.model)}>
-            {getShortModelName(session.model)}
+          <span className={getModelTextColor(session.model)}>
+            {getModelShortName(session.model)}
           </span>
         )}
 

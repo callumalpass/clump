@@ -88,10 +88,10 @@ export function CompactSessionList({
         {prominentSessions.map((session, index) => (
           <div
             key={session.session_id}
-            className={`group flex items-center gap-2 px-3 py-2 cursor-pointer border-l-2 hover:bg-gray-800/60 transition-all duration-150 list-item-enter ${
+            className={`group flex items-center gap-2 px-3 py-2 cursor-pointer border-l-2 hover:bg-gray-800/60 transition-all duration-150 list-item-hover list-item-enter ${
               session.is_active
-                ? 'border-yellow-500/70 hover:border-yellow-400 bg-yellow-500/5'
-                : 'border-blue-500/60 hover:border-blue-400'
+                ? 'border-yellow-500/70 hover:border-yellow-400 bg-yellow-500/5 list-item-glow-active'
+                : 'border-blue-500/60 hover:border-blue-400 list-item-glow-recent'
             }`}
             style={{ '--item-index': index } as React.CSSProperties}
             onClick={() => onSelectSession(session)}
