@@ -25,6 +25,9 @@ from app.routers.commands import find_command_file, parse_command_file
 
 logger = logging.getLogger(__name__)
 
+# Scheduler configuration constants
+SCHEDULER_CHECK_INTERVAL_SECONDS = 60  # How often to check for due jobs
+
 
 class FilterParams(TypedDict):
     """Typed dictionary for parsed filter query parameters."""
@@ -131,7 +134,7 @@ class SchedulerService:
         self._task: asyncio.Task | None = None
         self._running_jobs: set[int] = set()  # Track currently executing job IDs
         self._running_jobs_lock = asyncio.Lock()  # Protect access to _running_jobs
-        self._check_interval = 60  # Check every 60 seconds
+        self._check_interval = SCHEDULER_CHECK_INTERVAL_SECONDS
 
     async def start(self):
         """Start the scheduler background task."""
