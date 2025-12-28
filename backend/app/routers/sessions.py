@@ -83,7 +83,10 @@ def _calculate_duration_seconds(start_time: Optional[str], end_time: Optional[st
         duration = (end - start).total_seconds()
         # Return None for negative durations (shouldn't happen, but be safe)
         return int(duration) if duration >= 0 else None
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, AttributeError):
+        # ValueError: invalid timestamp format
+        # TypeError: unexpected type in datetime operations
+        # AttributeError: .replace() called on non-string type
         return None
 
 

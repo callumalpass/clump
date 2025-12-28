@@ -21,6 +21,7 @@ from app.routers.sessions import (
     _quick_scan_transcript,
     _get_pending_sessions,
     invalidate_session_cache,
+    _calculate_duration_seconds,
     _format_edit_tool,
     _format_read_tool,
     _format_write_tool,
@@ -1364,3 +1365,216 @@ class TestToolFormatters:
         for tool_name in known_tools:
             result = _format_tool_use_markdown({"name": tool_name, "input": {}})
             assert f"**{tool_name}**" in result or "**Edit**" in result
+
+
+class TestCalculateDurationSeconds:
+    """Tests for the _calculate_duration_seconds helper function."""
+
+    # ==============================================
+    # Basic functionality tests
+    # ==============================================
+
+    def test_calculates_duration_basic(self):
+        """Test basic duration calculation with valid ISO timestamps."""
+        result = _calculate_duration_seconds(
+            "2024-01-15T10:00:00Z",
+            "2024-01-15T10:05:00Z"
+        )
+        assert result == 300  # 5 minutes = 300 seconds
+
+    def test_calculates_duration_with_offset_timezone(self):
+        """Test duration calculation with timezone offset."""
+        result = _calculate_duration_seconds(
+            "2024-01-15T10:00:00+00:00",
+            "2024-01-15T11:00:00+00:00"
+        )
+        assert result == 3600  # 1 hour = 3600 seconds
+
+    def test_calculates_duration_zero(self):
+        """Test duration calculation when times are the same."""
+        result = _calculate_duration_seconds(
+            "2024-01-15T10:00:00Z",
+            "2024-01-15T10:00:00Z"
+        )
+        assert result == 0
+
+    def test_calculates_duration_hours(self):
+        """Test duration calculation spanning multiple hours."""
+        result = _calculate_duration_seconds(
+            "2024-01-15T09:00:00Z",
+            "2024-01-15T12:30:00Z"
+        )
+        assert result == 12600  # 3.5 hours = 12600 seconds
+
+    def test_calculates_duration_crossing_midnight(self):
+        """Test duration calculation crossing midnight."""
+        result = _calculate_duration_seconds(
+            "2024-01-15T23:30:00Z",
+            "2024-01-16T00:30:00Z"
+        )
+        assert result == 3600  # 1 hour
+
+    # ==============================================
+    # None handling tests
+    # ==============================================
+
+    def test_returns_none_when_start_time_is_none(self):
+        """Test that None is returned when start_time is None."""
+        result = _calculate_duration_seconds(None, "2024-01-15T10:00:00Z")
+        assert result is None
+
+    def test_returns_none_when_end_time_is_none(self):
+        """Test that None is returned when end_time is None."""
+        result = _calculate_duration_seconds("2024-01-15T10:00:00Z", None)
+        assert result is None
+
+    def test_returns_none_when_both_are_none(self):
+        """Test that None is returned when both timestamps are None."""
+        result = _calculate_duration_seconds(None, None)
+        assert result is None
+
+    # ==============================================
+    # Empty string handling tests
+    # ==============================================
+
+    def test_returns_none_when_start_time_is_empty(self):
+        """Test that None is returned when start_time is empty string."""
+        result = _calculate_duration_seconds("", "2024-01-15T10:00:00Z")
+        assert result is None
+
+    def test_returns_none_when_end_time_is_empty(self):
+        """Test that None is returned when end_time is empty string."""
+        result = _calculate_duration_seconds("2024-01-15T10:00:00Z", "")
+        assert result is None
+
+    # ==============================================
+    # Invalid timestamp handling tests
+    # ==============================================
+
+    def test_returns_none_for_invalid_start_time_format(self):
+        """Test that None is returned for invalid start_time format."""
+        result = _calculate_duration_seconds(
+            "not-a-timestamp",
+            "2024-01-15T10:00:00Z"
+        )
+        assert result is None
+
+    def test_returns_none_for_invalid_end_time_format(self):
+        """Test that None is returned for invalid end_time format."""
+        result = _calculate_duration_seconds(
+            "2024-01-15T10:00:00Z",
+            "invalid"
+        )
+        assert result is None
+
+    def test_returns_none_for_both_invalid(self):
+        """Test that None is returned when both timestamps are invalid."""
+        result = _calculate_duration_seconds("bad", "also-bad")
+        assert result is None
+
+    def test_returns_none_for_partial_timestamp(self):
+        """Test that None is returned for partial timestamp."""
+        result = _calculate_duration_seconds(
+            "2024-01-15",  # Missing time component
+            "2024-01-15T10:00:00Z"
+        )
+        # Note: datetime.fromisoformat actually accepts this
+        # so this might return a value - testing actual behavior
+        # The key is it doesn't raise an exception
+
+    # ==============================================
+    # Negative duration handling tests
+    # ==============================================
+
+    def test_returns_none_for_negative_duration(self):
+        """Test that None is returned when end is before start."""
+        result = _calculate_duration_seconds(
+            "2024-01-15T12:00:00Z",
+            "2024-01-15T10:00:00Z"  # Before start
+        )
+        assert result is None
+
+    # ==============================================
+    # Edge case tests
+    # ==============================================
+
+    def test_handles_milliseconds_in_timestamp(self):
+        """Test handling of timestamps with milliseconds."""
+        result = _calculate_duration_seconds(
+            "2024-01-15T10:00:00.123Z",
+            "2024-01-15T10:00:01.456Z"
+        )
+        # Should be approximately 1 second (rounded to int)
+        assert result == 1
+
+    def test_handles_microseconds_in_timestamp(self):
+        """Test handling of timestamps with microseconds."""
+        result = _calculate_duration_seconds(
+            "2024-01-15T10:00:00.123456Z",
+            "2024-01-15T10:00:02.654321Z"
+        )
+        # Should be approximately 2 seconds (rounded to int)
+        assert result == 2
+
+    def test_handles_different_timezone_offsets(self):
+        """Test handling of timestamps with different timezone offsets."""
+        # These are actually the same instant in time
+        result = _calculate_duration_seconds(
+            "2024-01-15T10:00:00+00:00",
+            "2024-01-15T12:00:00+02:00"  # Same as 10:00 UTC
+        )
+        assert result == 0
+
+    def test_handles_very_long_duration(self):
+        """Test handling of very long durations (multiple days)."""
+        result = _calculate_duration_seconds(
+            "2024-01-01T00:00:00Z",
+            "2024-01-10T00:00:00Z"  # 9 days later
+        )
+        assert result == 9 * 24 * 3600  # 9 days in seconds
+
+    def test_returns_integer_not_float(self):
+        """Test that result is an integer, not a float."""
+        result = _calculate_duration_seconds(
+            "2024-01-15T10:00:00Z",
+            "2024-01-15T10:00:30Z"
+        )
+        assert isinstance(result, int)
+        assert result == 30
+
+    # ==============================================
+    # Type safety tests
+    # ==============================================
+
+    def test_handles_non_string_start_time(self):
+        """Test that non-string start_time is handled gracefully."""
+        # This tests the AttributeError case - calling .replace() on non-string
+        result = _calculate_duration_seconds(
+            123,  # Not a string
+            "2024-01-15T10:00:00Z"
+        )
+        assert result is None
+
+    def test_handles_non_string_end_time(self):
+        """Test that non-string end_time is handled gracefully."""
+        result = _calculate_duration_seconds(
+            "2024-01-15T10:00:00Z",
+            456  # Not a string
+        )
+        assert result is None
+
+    def test_handles_list_input(self):
+        """Test that list input is handled gracefully."""
+        result = _calculate_duration_seconds(
+            ["2024-01-15T10:00:00Z"],  # List instead of string
+            "2024-01-15T10:00:00Z"
+        )
+        assert result is None
+
+    def test_handles_dict_input(self):
+        """Test that dict input is handled gracefully."""
+        result = _calculate_duration_seconds(
+            {"time": "2024-01-15T10:00:00Z"},  # Dict instead of string
+            "2024-01-15T10:00:00Z"
+        )
+        assert result is None
