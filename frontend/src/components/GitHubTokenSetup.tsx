@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { AlertMessage } from './AlertMessage';
 
 interface TokenStatus {
   configured: boolean;
@@ -143,7 +144,7 @@ export function GitHubTokenSetup({ onTokenConfigured }: GitHubTokenSetupProps) {
           />
 
           {error && (
-            <div className="text-red-400 text-sm mb-3">{error}</div>
+            <AlertMessage type="error" message={error} className="mb-3" />
           )}
 
           <div className="flex items-center gap-2">

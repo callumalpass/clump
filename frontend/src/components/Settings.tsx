@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useClaudeSettings } from '../hooks/useApi';
 import type { PermissionMode, OutputFormat, CommandMetadata } from '../types';
 import { CommandEditor } from './CommandEditor';
+import { AlertMessage } from './AlertMessage';
 
 interface TokenStatus {
   configured: boolean;
@@ -277,7 +278,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                       />
 
                       {tokenError && (
-                        <div className="text-red-400 text-sm">{tokenError}</div>
+                        <AlertMessage type="error" message={tokenError} />
                       )}
 
                       <div className="flex gap-2">

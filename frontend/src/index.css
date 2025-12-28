@@ -272,3 +272,62 @@ textarea::placeholder {
 .dropdown-menu-enter {
   animation: dropdown-slide-in 100ms ease-out forwards;
 }
+
+/* Respect user's motion preferences for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  /* Disable all custom animations */
+  .skeleton-shimmer,
+  .modal-backdrop-enter,
+  .modal-content-enter,
+  .empty-state-enter,
+  .empty-state-icon-float,
+  .message-bubble-enter,
+  .dropdown-menu-enter {
+    animation: none;
+  }
+
+  /* Disable Tailwind's built-in animations */
+  .animate-spin,
+  .animate-pulse,
+  .animate-bounce,
+  .animate-ping {
+    animation: none;
+  }
+
+  /* Show elements immediately without animation */
+  .modal-backdrop-enter,
+  .modal-content-enter,
+  .empty-state-enter,
+  .message-bubble-enter,
+  .dropdown-menu-enter {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Reduce transition durations to near-instant */
+  .list-item-hover,
+  .toggle-btn,
+  .message-bubble,
+  .message-assistant,
+  .message-user,
+  .token-bar-segment,
+  select,
+  input,
+  textarea {
+    transition-duration: 0.01ms !important;
+  }
+
+  /* Disable transform effects on hover */
+  .list-item-hover:hover,
+  .list-item-hover:active {
+    transform: none;
+  }
+
+  .toggle-btn:active:not(:disabled) {
+    transform: none;
+  }
+
+  .token-bar-segment:hover {
+    transform: none;
+  }
+}
