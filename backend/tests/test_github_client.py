@@ -21,6 +21,7 @@ from app.services.github_client import (
     IssueData,
     PRData,
     IssueComment,
+    PRComment,
 )
 
 
@@ -507,7 +508,10 @@ class TestGetPR:
         """Test get_pr returns correct PRData."""
         mock_repo = MagicMock()
         mock_pr = create_mock_pr(number=789, title="Important PR")
+        mock_issue = MagicMock()
+        mock_issue.get_comments.return_value = []
         mock_repo.get_pull.return_value = mock_pr
+        mock_repo.get_issue.return_value = mock_issue
         mock_github.get_repo.return_value = mock_repo
 
         result = client.get_pr("owner", "repo", 789)
@@ -516,6 +520,89 @@ class TestGetPR:
         assert result.number == 789
         assert result.title == "Important PR"
         mock_repo.get_pull.assert_called_once_with(789)
+
+    def test_get_pr_includes_comments(self, client, mock_github):
+        """Test get_pr includes comments from issue endpoint."""
+        mock_repo = MagicMock()
+        mock_pr = create_mock_pr(number=456)
+        mock_issue = MagicMock()
+
+        # Create mock comments
+        mock_comment1 = MagicMock()
+        mock_comment1.id = 101
+        mock_comment1.body = "LGTM!"
+        mock_comment1.created_at = datetime(2024, 1, 16, 10, 0, 0)
+        mock_user1 = MagicMock()
+        mock_user1.login = "reviewer1"
+        mock_comment1.user = mock_user1
+
+        mock_comment2 = MagicMock()
+        mock_comment2.id = 102
+        mock_comment2.body = "Please fix the typo"
+        mock_comment2.created_at = datetime(2024, 1, 16, 11, 0, 0)
+        mock_user2 = MagicMock()
+        mock_user2.login = "reviewer2"
+        mock_comment2.user = mock_user2
+
+        mock_issue.get_comments.return_value = [mock_comment1, mock_comment2]
+        mock_repo.get_pull.return_value = mock_pr
+        mock_repo.get_issue.return_value = mock_issue
+        mock_github.get_repo.return_value = mock_repo
+
+        result = client.get_pr("owner", "repo", 456)
+
+        assert result.comments is not None
+        assert len(result.comments) == 2
+        assert result.comments[0].id == 101
+        assert result.comments[0].author == "reviewer1"
+        assert result.comments[0].body == "LGTM!"
+        assert result.comments[1].author == "reviewer2"
+        # Verify we fetch comments from issue endpoint
+        mock_repo.get_issue.assert_called_once_with(456)
+
+    def test_get_pr_handles_null_comment_user(self, client, mock_github):
+        """Test get_pr handles comments with null user."""
+        mock_repo = MagicMock()
+        mock_pr = create_mock_pr()
+        mock_issue = MagicMock()
+
+        mock_comment = MagicMock()
+        mock_comment.id = 1
+        mock_comment.body = "Anonymous review"
+        mock_comment.created_at = datetime(2024, 1, 16, 12, 0, 0)
+        mock_comment.user = None
+
+        mock_issue.get_comments.return_value = [mock_comment]
+        mock_repo.get_pull.return_value = mock_pr
+        mock_repo.get_issue.return_value = mock_issue
+        mock_github.get_repo.return_value = mock_repo
+
+        result = client.get_pr("owner", "repo", 123)
+
+        assert result.comments[0].author == "unknown"
+
+    def test_get_pr_handles_null_comment_body(self, client, mock_github):
+        """Test get_pr handles comments with null body."""
+        mock_repo = MagicMock()
+        mock_pr = create_mock_pr()
+        mock_issue = MagicMock()
+
+        mock_comment = MagicMock()
+        mock_comment.id = 1
+        mock_comment.body = None
+        mock_comment.created_at = datetime(2024, 1, 16, 12, 0, 0)
+        mock_user = MagicMock()
+        mock_user.login = "commenter"
+        mock_comment.user = mock_user
+
+        mock_issue.get_comments.return_value = [mock_comment]
+        mock_repo.get_pull.return_value = mock_pr
+        mock_repo.get_issue.return_value = mock_issue
+        mock_github.get_repo.return_value = mock_repo
+
+        result = client.get_pr("owner", "repo", 123)
+
+        assert result.comments[0].body == ""
 
 
 class TestIssueMutations:
@@ -810,3 +897,135 @@ class TestEdgeCases:
         result = client.get_issue("owner", "repo", 42)
 
         assert result.comments[0].body == ""
+
+
+class TestListPRsSearchQuery:
+    """Tests for PR listing search query functionality."""
+
+    def test_list_prs_with_search_query(self, client, mock_github):
+        """Test PR listing with text search."""
+        mock_repo = MagicMock()
+        mock_results = MagicMock()
+        mock_results.totalCount = 0
+        mock_results.__iter__ = lambda self: iter([])
+        mock_github.search_issues.return_value = mock_results
+        mock_github.get_repo.return_value = mock_repo
+
+        client.list_prs("owner", "repo", search_query="fix bug")
+
+        query = mock_github.search_issues.call_args[0][0]
+        assert query.startswith("fix bug ")
+        assert "is:pr" in query
+
+    def test_list_prs_invalid_sort_defaults_to_created(self, client, mock_github):
+        """Test that invalid sort field defaults to 'created'."""
+        mock_repo = MagicMock()
+        mock_results = MagicMock()
+        mock_results.totalCount = 0
+        mock_results.__iter__ = lambda self: iter([])
+        mock_github.search_issues.return_value = mock_results
+        mock_github.get_repo.return_value = mock_repo
+
+        client.list_prs("owner", "repo", sort="comments")  # 'comments' not valid for PRs
+
+        call_kwargs = mock_github.search_issues.call_args[1]
+        assert call_kwargs["sort"] == "created"
+
+    def test_list_prs_invalid_order_defaults_to_desc(self, client, mock_github):
+        """Test that invalid order defaults to 'desc'."""
+        mock_repo = MagicMock()
+        mock_results = MagicMock()
+        mock_results.totalCount = 0
+        mock_results.__iter__ = lambda self: iter([])
+        mock_github.search_issues.return_value = mock_results
+        mock_github.get_repo.return_value = mock_repo
+
+        client.list_prs("owner", "repo", order="random")
+
+        call_kwargs = mock_github.search_issues.call_args[1]
+        assert call_kwargs["order"] == "desc"
+
+    def test_list_prs_state_all_omits_state_filter(self, client, mock_github):
+        """Test that state='all' doesn't add state filter for PRs."""
+        mock_repo = MagicMock()
+        mock_results = MagicMock()
+        mock_results.totalCount = 0
+        mock_results.__iter__ = lambda self: iter([])
+        mock_github.search_issues.return_value = mock_results
+        mock_github.get_repo.return_value = mock_repo
+
+        client.list_prs("owner", "repo", state="all")
+
+        query = mock_github.search_issues.call_args[0][0]
+        assert "state:" not in query
+
+
+class TestDataclasses:
+    """Tests for dataclass structures."""
+
+    def test_issue_data_defaults(self):
+        """Test IssueData default values."""
+        issue = IssueData(
+            number=1,
+            title="Test",
+            body="Body",
+            state="open",
+            labels=[],
+            author="user",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            comments_count=0,
+        )
+
+        assert issue.comments is None
+        assert issue.url == ""
+
+    def test_pr_data_defaults(self):
+        """Test PRData default values."""
+        pr = PRData(
+            number=1,
+            title="Test PR",
+            body="Body",
+            state="open",
+            labels=[],
+            author="user",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            head_ref="feature",
+            base_ref="main",
+            additions=0,
+            deletions=0,
+            changed_files=0,
+        )
+
+        assert pr.comments_count == 0
+        assert pr.comments is None
+        assert pr.url == ""
+
+    def test_issue_comment_structure(self):
+        """Test IssueComment has all required fields."""
+        comment = IssueComment(
+            id=123,
+            author="testuser",
+            body="Test comment",
+            created_at=datetime(2024, 1, 15, 10, 0, 0),
+        )
+
+        assert comment.id == 123
+        assert comment.author == "testuser"
+        assert comment.body == "Test comment"
+        assert comment.created_at == datetime(2024, 1, 15, 10, 0, 0)
+
+    def test_pr_comment_structure(self):
+        """Test PRComment has all required fields."""
+        comment = PRComment(
+            id=456,
+            author="reviewer",
+            body="LGTM",
+            created_at=datetime(2024, 1, 16, 14, 30, 0),
+        )
+
+        assert comment.id == 456
+        assert comment.author == "reviewer"
+        assert comment.body == "LGTM"
+        assert comment.created_at == datetime(2024, 1, 16, 14, 30, 0)
