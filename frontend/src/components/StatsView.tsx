@@ -19,8 +19,74 @@ export function StatsView({ stats, loading, error, onRefresh }: StatsViewProps) 
 
   if (loading && !stats) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-gray-500">Loading stats...</div>
+      <div className="h-full overflow-y-auto">
+        <div className="max-w-6xl mx-auto p-6 space-y-6">
+          {/* Skeleton Toolbar */}
+          <div className="flex items-center justify-between">
+            <div className="h-4 w-40 bg-gray-700 rounded skeleton-shimmer" />
+            <div className="h-8 w-24 bg-gray-700 rounded skeleton-shimmer" />
+          </div>
+
+          {/* Skeleton Summary Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[0, 1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="bg-gray-800/50 rounded-lg p-4 skeleton-item-enter"
+                style={{ '--item-index': i } as React.CSSProperties}
+              >
+                <div className="h-3 w-20 bg-gray-700 rounded skeleton-shimmer mb-2" />
+                <div className="h-6 w-16 bg-gray-700 rounded skeleton-shimmer" />
+              </div>
+            ))}
+          </div>
+
+          {/* Skeleton This Week Section */}
+          <div className="bg-gray-800/50 rounded-lg p-4">
+            <div className="h-4 w-24 bg-gray-700 rounded skeleton-shimmer mb-3" />
+            <div className="grid grid-cols-3 gap-4">
+              {[0, 1, 2].map((i) => (
+                <div key={i}>
+                  <div className="h-8 w-16 bg-gray-700 rounded skeleton-shimmer mb-1" />
+                  <div className="h-3 w-14 bg-gray-700 rounded skeleton-shimmer" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Skeleton Activity Chart */}
+          <div className="bg-gray-800/50 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="h-4 w-28 bg-gray-700 rounded skeleton-shimmer" />
+              <div className="flex gap-1">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-6 w-10 bg-gray-700 rounded skeleton-shimmer" />
+                ))}
+              </div>
+            </div>
+            <div className="h-48 bg-gray-700/50 rounded skeleton-shimmer" />
+          </div>
+
+          {/* Skeleton Two Column Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-gray-800/50 rounded-lg p-4">
+              <div className="h-4 w-28 bg-gray-700 rounded skeleton-shimmer mb-4" />
+              <div className="space-y-3">
+                {[0, 1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <div className="h-8 w-8 bg-gray-700 rounded skeleton-shimmer" />
+                    <div className="flex-1 h-4 bg-gray-700 rounded skeleton-shimmer" />
+                    <div className="h-4 w-12 bg-gray-700 rounded skeleton-shimmer" />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="bg-gray-800/50 rounded-lg p-4">
+              <div className="h-4 w-32 bg-gray-700 rounded skeleton-shimmer mb-4" />
+              <div className="h-32 bg-gray-700/50 rounded skeleton-shimmer" />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
