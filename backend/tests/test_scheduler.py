@@ -88,10 +88,10 @@ class TestParseFilterQuery:
         assert "unknown" not in result
 
     def test_handles_whitespace_only(self):
-        """Handles whitespace-only filter query."""
+        """Handles whitespace-only filter query - returns empty dict."""
         result = parse_filter_query("   ")
-        # Should return empty dict or dict with defaults, not crash
-        assert isinstance(result, dict)
+        # Should return empty dict (same as None/empty string)
+        assert result == {}
 
     def test_handles_extra_whitespace(self):
         """Handles extra whitespace between filters."""
@@ -100,16 +100,33 @@ class TestParseFilterQuery:
         assert result["labels"] == ["bug"]
 
     def test_handles_empty_label_value(self):
-        """Handles empty label value gracefully."""
+        """Handles empty label value gracefully - skips empty labels."""
         result = parse_filter_query("label:")
-        # Empty label should be added (even if it's empty string)
-        assert result["labels"] == [""]
+        # Empty label should be skipped to avoid GitHub API issues
+        assert result["labels"] == []
 
     def test_handles_empty_state_value(self):
-        """Handles empty state value gracefully."""
+        """Handles empty state value gracefully - keeps default state."""
         result = parse_filter_query("state:")
-        # Empty state value
-        assert result["state"] == ""
+        # Empty state value should keep the default "open"
+        assert result["state"] == "open"
+
+    def test_handles_empty_exclude_label_value(self):
+        """Handles empty exclude label value gracefully - skips empty labels."""
+        result = parse_filter_query("-label:")
+        # Empty exclude label should be skipped
+        assert result["exclude_labels"] == []
+
+    def test_handles_mixed_empty_and_valid_labels(self):
+        """Handles mix of empty and valid labels - only keeps valid ones."""
+        result = parse_filter_query("label:bug,,feature")
+        # Empty labels between commas should be skipped
+        assert result["labels"] == ["bug", "feature"]
+
+    def test_handles_trailing_comma_in_labels(self):
+        """Handles trailing comma in labels - skips resulting empty label."""
+        result = parse_filter_query("label:bug,")
+        assert result["labels"] == ["bug"]
 
     def test_multiple_exclude_label_filters(self):
         """Handles multiple separate -label filters."""

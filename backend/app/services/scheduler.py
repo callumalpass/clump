@@ -35,8 +35,12 @@ def parse_filter_query(filter_query: str | None) -> dict:
         label:bug
         label:bug,enhancement (multiple labels OR)
         -label:wontfix (exclude)
+
+    Returns:
+        Empty dict if filter_query is None, empty, or whitespace-only.
+        Otherwise returns dict with state, labels, and exclude_labels.
     """
-    if not filter_query:
+    if not filter_query or not filter_query.strip():
         return {}
 
     filters: dict = {
@@ -48,12 +52,14 @@ def parse_filter_query(filter_query: str | None) -> dict:
     parts = filter_query.split()
     for part in parts:
         if part.startswith("state:"):
-            filters["state"] = part[6:]
+            value = part[6:]
+            if value:  # Only set if non-empty
+                filters["state"] = value
         elif part.startswith("label:"):
-            labels = part[6:].split(",")
+            labels = [label for label in part[6:].split(",") if label]
             filters["labels"].extend(labels)
         elif part.startswith("-label:"):
-            labels = part[7:].split(",")
+            labels = [label for label in part[7:].split(",") if label]
             filters["exclude_labels"].extend(labels)
 
     return filters
