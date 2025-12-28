@@ -15,6 +15,14 @@ router = APIRouter()
 
 # Model pricing per 1M tokens (USD) - matches frontend/src/utils/costs.ts
 MODEL_PRICING = {
+    # Claude 4.5 models (latest)
+    "claude-opus-4-5-20251101": {
+        "input": 15.00,
+        "output": 75.00,
+        "cache_read": 1.50,
+        "cache_write": 18.75,
+    },
+    # Claude 4 models (current)
     "claude-sonnet-4-20250514": {
         "input": 3.00,
         "output": 15.00,
@@ -27,6 +35,7 @@ MODEL_PRICING = {
         "cache_read": 1.50,
         "cache_write": 18.75,
     },
+    # Claude 3.5 models (legacy)
     "claude-3-5-sonnet-20241022": {
         "input": 3.00,
         "output": 15.00,
@@ -132,6 +141,10 @@ class StatsResponse(BaseModel):
 def get_display_name(model: str) -> str:
     """Get a friendly display name for a model."""
     if "opus" in model.lower():
+        if "4-5" in model or "4.5" in model:
+            return "Opus 4.5"
+        if "4-" in model:
+            return "Opus 4"
         return "Opus"
     if "sonnet" in model.lower():
         if "4-5" in model or "4.5" in model:
