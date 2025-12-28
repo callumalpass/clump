@@ -43,6 +43,7 @@ const shortcutGroups: ShortcutGroup[] = [
     shortcuts: [
       { keys: ['s'], description: 'Toggle star on current session' },
       { keys: ['t'], description: 'Toggle transcript/terminal view' },
+      { keys: ['e'], description: 'Export session transcript to markdown' },
     ],
   },
   {

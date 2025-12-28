@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
-import { useRepos, useIssues, usePRs, useProcesses, useSessions, useTags, useIssueTags, useCommands, useSessionCounts, useStats, buildPromptFromTemplate } from './hooks/useApi';
+import { useRepos, useIssues, usePRs, useProcesses, useSessions, useTags, useIssueTags, useCommands, useSessionCounts, useStats, buildPromptFromTemplate, exportSession, downloadExport } from './hooks/useApi';
 import { useNotifications } from './hooks/useNotifications';
 import type { IssueFilters, SessionFilters, PRFilters } from './hooks/useApi';
 import { RepoSelector } from './components/RepoSelector';
@@ -988,6 +988,21 @@ export default function App() {
         if (sessionId) {
           const currentMode = sessionViewModes[sessionId] ?? 'transcript';
           handleSetSessionViewMode(sessionId, currentMode === 'transcript' ? 'terminal' : 'transcript');
+        }
+        return;
+      }
+
+      // "e" : Export current session to markdown
+      if (e.key === 'e' && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        if (activeTabSessionId) {
+          exportSession(activeTabSessionId, 'markdown')
+            .then(result => {
+              downloadExport(result.content, result.filename);
+            })
+            .catch(err => {
+              console.error('Failed to export session:', err);
+            });
         }
         return;
       }

@@ -949,6 +949,210 @@ async def continue_session(session_id: str, data: ContinueSessionRequest = None)
 
 
 # ==========================================
+# Export Session to Markdown
+# ==========================================
+
+def _format_tool_use_markdown(tool: dict) -> str:
+    """Format a tool use as Markdown."""
+    name = tool.get("name", "Unknown")
+    tool_input = tool.get("input", {})
+
+    if name == "Edit":
+        file_path = tool_input.get("file_path", "unknown")
+        old_str = tool_input.get("old_string", "")
+        new_str = tool_input.get("new_string", "")
+        return f"**Edit** `{file_path}`\n\n```diff\n- {old_str.replace(chr(10), chr(10) + '- ')}\n+ {new_str.replace(chr(10), chr(10) + '+ ')}\n```"
+
+    if name == "Read":
+        file_path = tool_input.get("file_path", "unknown")
+        return f"**Read** `{file_path}`"
+
+    if name == "Write":
+        file_path = tool_input.get("file_path", "unknown")
+        content = tool_input.get("content", "")
+        lines = content.count('\n') + 1
+        return f"**Write** `{file_path}` ({lines} lines)"
+
+    if name == "Bash":
+        command = tool_input.get("command", "")
+        return f"**Bash**\n```bash\n$ {command}\n```"
+
+    if name == "Grep":
+        pattern = tool_input.get("pattern", "")
+        path = tool_input.get("path", ".")
+        return f"**Grep** `{pattern}` in `{path}`"
+
+    if name == "Glob":
+        pattern = tool_input.get("pattern", "")
+        return f"**Glob** `{pattern}`"
+
+    if name == "Task":
+        description = tool_input.get("description", "")
+        subagent_type = tool_input.get("subagent_type", "general")
+        return f"**Task** ({subagent_type}): {description}"
+
+    # Generic fallback
+    return f"**{name}**"
+
+
+def _export_session_to_markdown(
+    parsed: ParsedTranscript,
+    metadata: Optional[SessionMetadata],
+    repo_path: str,
+    repo_name: Optional[str],
+) -> str:
+    """Convert a parsed transcript to a Markdown document."""
+    lines = []
+
+    # Title
+    title = metadata.title if metadata and metadata.title else parsed.summary or "Claude Session"
+    lines.append(f"# {title}")
+    lines.append("")
+
+    # Metadata section
+    lines.append("## Session Info")
+    lines.append("")
+    if repo_name:
+        lines.append(f"- **Repository:** {repo_name}")
+    lines.append(f"- **Path:** `{repo_path}`")
+    if parsed.model:
+        lines.append(f"- **Model:** {parsed.model}")
+    if parsed.start_time:
+        lines.append(f"- **Started:** {parsed.start_time}")
+    if parsed.end_time:
+        lines.append(f"- **Ended:** {parsed.end_time}")
+    if parsed.git_branch:
+        lines.append(f"- **Branch:** {parsed.git_branch}")
+
+    # Token stats
+    total_tokens = (parsed.total_input_tokens or 0) + (parsed.total_output_tokens or 0)
+    if total_tokens > 0:
+        lines.append(f"- **Total Tokens:** {total_tokens:,}")
+        lines.append(f"  - Input: {parsed.total_input_tokens or 0:,}")
+        lines.append(f"  - Output: {parsed.total_output_tokens or 0:,}")
+        if parsed.total_cache_read_tokens:
+            lines.append(f"  - Cache Read: {parsed.total_cache_read_tokens:,}")
+
+    # Entities
+    if metadata and metadata.entities:
+        entity_strs = []
+        for e in metadata.entities:
+            entity_strs.append(f"#{e.number} ({e.kind})")
+        if entity_strs:
+            lines.append(f"- **Linked:** {', '.join(entity_strs)}")
+
+    # Tags
+    if metadata and metadata.tags:
+        lines.append(f"- **Tags:** {', '.join(metadata.tags)}")
+
+    lines.append("")
+
+    # Conversation
+    lines.append("## Conversation")
+    lines.append("")
+
+    for msg in parsed.messages:
+        role = "You" if msg.role == "user" else "Claude"
+        timestamp_str = ""
+        if msg.timestamp:
+            try:
+                dt = datetime.fromisoformat(msg.timestamp.replace("Z", "+00:00"))
+                timestamp_str = f" ({dt.strftime('%H:%M:%S')})"
+            except (ValueError, AttributeError):
+                pass
+
+        lines.append(f"### {role}{timestamp_str}")
+        lines.append("")
+
+        # Message content
+        if msg.content:
+            lines.append(msg.content)
+            lines.append("")
+
+        # Tool uses
+        if msg.tool_uses:
+            for tool in msg.tool_uses:
+                tool_md = _format_tool_use_markdown({
+                    "name": tool.name,
+                    "input": tool.input,
+                })
+                lines.append(tool_md)
+                lines.append("")
+
+        lines.append("---")
+        lines.append("")
+
+    # Footer
+    lines.append("---")
+    lines.append(f"*Exported from Clump on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*")
+
+    return "\n".join(lines)
+
+
+class ExportFormat(str):
+    """Supported export formats."""
+    MARKDOWN = "markdown"
+
+
+class SessionExportResponse(BaseModel):
+    """Response for session export."""
+    content: str
+    filename: str
+    format: str
+
+
+@router.get("/sessions/{session_id}/export", response_model=SessionExportResponse)
+async def export_session(
+    session_id: str,
+    format: str = "markdown",
+):
+    """
+    Export a session transcript to a downloadable format.
+
+    Currently supports:
+    - markdown: Well-formatted Markdown document
+    """
+    if format != "markdown":
+        raise HTTPException(status_code=400, detail="Unsupported export format. Use 'markdown'.")
+
+    # Find the session
+    sessions = _get_cached_sessions()
+    session = _find_session_by_id(sessions, session_id)
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Parse the full transcript
+    repo_path = decode_path(session.encoded_path)
+    parsed = parse_transcript(session_id, repo_path)
+
+    if not parsed:
+        raise HTTPException(status_code=500, detail="Failed to parse transcript")
+
+    repo_name = _get_repo_name(session.encoded_path)
+
+    # Export to Markdown
+    content = _export_session_to_markdown(
+        parsed=parsed,
+        metadata=session.metadata,
+        repo_path=repo_path,
+        repo_name=repo_name,
+    )
+
+    # Generate filename
+    title = session.metadata.title if session.metadata and session.metadata.title else "session"
+    safe_title = "".join(c if c.isalnum() or c in "-_ " else "" for c in title)[:50].strip()
+    safe_title = safe_title.replace(" ", "-").lower() or "session"
+    filename = f"{safe_title}-{session_id[:8]}.md"
+
+    return SessionExportResponse(
+        content=content,
+        filename=filename,
+        format="markdown",
+    )
+
+
+# ==========================================
 # Delete Session
 # ==========================================
 

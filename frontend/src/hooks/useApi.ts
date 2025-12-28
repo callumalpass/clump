@@ -970,6 +970,35 @@ export function buildPromptFromTemplate(
   return result;
 }
 
+// Session Export
+export interface SessionExportResponse {
+  content: string;
+  filename: string;
+  format: string;
+}
+
+export async function exportSession(
+  sessionId: string,
+  format: string = 'markdown'
+): Promise<SessionExportResponse> {
+  return fetchJson<SessionExportResponse>(
+    `${API_BASE}/sessions/${sessionId}/export?format=${format}`
+  );
+}
+
+// Utility to trigger download of exported content
+export function downloadExport(content: string, filename: string): void {
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 // Stats (Claude usage analytics)
 export function useStats() {
   const [stats, setStats] = useState<StatsResponse | null>(null);
