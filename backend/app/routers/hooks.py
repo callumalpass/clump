@@ -16,8 +16,11 @@ Configure Claude Code hooks to POST to these endpoints:
 """
 
 import asyncio
+import logging
 from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 from app.services.notification_manager import notification_manager, NotificationType, Notification
 from app.services.event_manager import event_manager, Event
@@ -211,8 +214,9 @@ async def notifications_websocket(websocket: WebSocket):
         """Callback when a general event is received."""
         try:
             event_queue.put_nowait(event.to_dict())
+            logger.info(f"Event {event.type.value} queued for WebSocket delivery")
         except asyncio.QueueFull:
-            pass
+            logger.warning(f"Event queue full, dropping {event.type.value} event")
 
     # Subscribe to both notification and general events
     notification_manager.subscribe_global(on_notification)

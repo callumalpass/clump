@@ -6,6 +6,9 @@ Replaces polling with push-based updates.
 """
 
 import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -70,6 +73,12 @@ class EventManager:
             data=data or {},
         )
 
+        subscriber_count = len(self._subscribers)
+        if subscriber_count == 0:
+            logger.info(f"Event {event_type.value} emitted but no subscribers connected")
+        else:
+            logger.info(f"Broadcasting {event_type.value} to {subscriber_count} subscriber(s)")
+
         # Notify all subscribers
         for callback in self._subscribers:
             try:
@@ -77,7 +86,7 @@ class EventManager:
                 if asyncio.iscoroutine(result):
                     await result
             except Exception as e:
-                print(f"Event callback error: {e}")
+                logger.error(f"Event callback error: {e}")
 
     async def emit_counts_changed(self, counts: dict) -> None:
         """
