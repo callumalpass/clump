@@ -104,6 +104,10 @@ export default function App() {
   // Track pending session data for optimistic UI (title, entities before backend returns)
   const pendingSessionsRef = useRef<Map<string, PendingSessionData>>(new Map());
 
+  // Cache session data for open tabs so they persist when not on current page
+  // This prevents tabs from disappearing when sort/filter changes the paginated list
+  const cachedSessionsRef = useRef<Map<string, SessionSummary>>(new Map());
+
   // Ref for collapsible issue/PR context panel
   const contextPanelRef = useRef<PanelImperativeHandle>(null);
 
@@ -262,9 +266,10 @@ export default function App() {
     setActiveProcessId(null);
     setExpandedSessionId(null);
 
-    // Clear pending context refs
+    // Clear pending context refs and session cache
     pendingIssueContextRef.current = null;
     pendingPRContextRef.current = null;
+    cachedSessionsRef.current.clear();
   }, [selectedRepo?.id]);
 
   // Handle issue selection from list - clears expanded analysis and PR selection
@@ -596,7 +601,8 @@ export default function App() {
   // Handler for closing a session tab (not deleting the session)
   const handleCloseSessionTab = useCallback((sessionId: string) => {
     // Find the session to check if it has a running process
-    const session = sessions.find(s => s.session_id === sessionId);
+    const session = sessions.find(s => s.session_id === sessionId)
+      ?? cachedSessionsRef.current.get(sessionId);
     if (session?.is_active) {
       const activeProcess = processes.find(p => p.claude_session_id === sessionId);
       if (activeProcess) {
@@ -604,8 +610,9 @@ export default function App() {
       }
     }
 
-    // Remove from open tabs
+    // Remove from open tabs and cache
     setOpenSessionIds(prev => prev.filter(id => id !== sessionId));
+    cachedSessionsRef.current.delete(sessionId);
 
     // If this was the active tab, clear it
     if (activeTabSessionId === sessionId) {
@@ -617,7 +624,8 @@ export default function App() {
 
   // Handler for selecting a session tab
   const handleSelectSessionTab = useCallback((sessionId: string) => {
-    const session = sessions.find(s => s.session_id === sessionId);
+    const session = sessions.find(s => s.session_id === sessionId)
+      ?? cachedSessionsRef.current.get(sessionId);
     if (!session) return;
 
     setActiveTabSessionId(sessionId);
@@ -767,15 +775,23 @@ export default function App() {
   // synthesize a session from process data + pending metadata so the tab appears immediately
   const openSessions = openSessionIds
     .map(id => {
-      // First try to find in fetched sessions
+      // First try to find in fetched sessions (current page)
       const session = sessions.find(s => s.session_id === id);
       if (session) {
         // Clear pending data once we have real session data
         pendingSessionsRef.current.delete(id);
+        // Update cache with latest data
+        cachedSessionsRef.current.set(id, session);
         return session;
       }
 
-      // If not found, check if there's an active process for this session
+      // If not on current page, check our cache (for sessions on other pages)
+      const cachedSession = cachedSessionsRef.current.get(id);
+      if (cachedSession) {
+        return cachedSession;
+      }
+
+      // If not found anywhere, check if there's an active process for this session
       const process = processes.find(p => p.claude_session_id === id);
       if (process && selectedRepo) {
         // Get pending session data (title, entities) if available
