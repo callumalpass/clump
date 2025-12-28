@@ -17,8 +17,13 @@ const shortcutGroups: ShortcutGroup[] = [
     shortcuts: [
       { keys: ['Cmd/Ctrl', 'K'], description: 'Open command palette' },
       { keys: ['/'], description: 'Focus search in current tab' },
+      { keys: ['1'], description: 'Go to Issues tab' },
+      { keys: ['2'], description: 'Go to PRs tab' },
+      { keys: ['3'], description: 'Go to History tab' },
+      { keys: ['4'], description: 'Go to Schedules tab' },
       { keys: ['['], description: 'Previous page in list' },
       { keys: [']'], description: 'Next page in list' },
+      { keys: ['r'], description: 'Refresh current view' },
       { keys: ['Esc'], description: 'Close modal, deselect, or close terminal' },
       { keys: ['?'], description: 'Show this help dialog' },
     ],
@@ -30,6 +35,14 @@ const shortcutGroups: ShortcutGroup[] = [
       { keys: ['Alt', '['], description: 'Previous session tab' },
       { keys: ['Alt', ']'], description: 'Next session tab' },
       { keys: ['Alt', 'N'], description: 'Open new session (requires repo)' },
+      { keys: ['w'], description: 'Close current session tab' },
+    ],
+  },
+  {
+    title: 'Session Actions',
+    shortcuts: [
+      { keys: ['s'], description: 'Toggle star on current session' },
+      { keys: ['t'], description: 'Toggle transcript/terminal view' },
     ],
   },
   {

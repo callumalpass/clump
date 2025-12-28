@@ -508,95 +508,6 @@ export default function App() {
     refreshSessionsDebounced();
   }, [selectedRepo, createProcess, refreshSessionsDebounced]);
 
-  // Global keyboard shortcuts (basic navigation)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger shortcuts when typing in inputs/textareas
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        // Allow Escape and Cmd+K in inputs
-        if (e.key !== 'Escape' && !(e.key === 'k' && (e.metaKey || e.ctrlKey))) return;
-      }
-
-      // Cmd+K / Ctrl+K : Open command palette
-      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        setCommandPaletteOpen((prev) => !prev);
-        return;
-      }
-
-      // "?" : Show keyboard shortcuts help
-      if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        setShortcutsOpen((prev) => !prev);
-        return;
-      }
-
-      // "/" : Focus search in current tab - like GitHub/Slack
-      if (e.key === '/') {
-        e.preventDefault();
-        // Focus the search input in the current tab after a short delay
-        setTimeout(() => {
-          const placeholder = activeTab === 'issues' ? 'Search issues...'
-            : activeTab === 'prs' ? 'Search PRs...'
-            : 'Search sessions...';
-          const searchInput = document.querySelector(`input[placeholder="${placeholder}"]`) as HTMLInputElement;
-          searchInput?.focus();
-        }, 50);
-        return;
-      }
-
-      // "[" : Previous page in current list (without Alt - Alt+[ is for session tabs)
-      if (e.key === '[' && !e.altKey && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        if (activeTab === 'issues' && issuesPage > 1) {
-          goToIssuesPage(issuesPage - 1);
-        } else if (activeTab === 'prs' && prsPage > 1) {
-          goToPRsPage(prsPage - 1);
-        } else if (activeTab === 'history' && sessionsPage > 1) {
-          goToSessionsPage(sessionsPage - 1);
-        }
-        return;
-      }
-
-      // "]" : Next page in current list (without Alt - Alt+] is for session tabs)
-      if (e.key === ']' && !e.altKey && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        if (activeTab === 'issues' && issuesPage < issuesTotalPages) {
-          goToIssuesPage(issuesPage + 1);
-        } else if (activeTab === 'prs' && prsPage < prsTotalPages) {
-          goToPRsPage(prsPage + 1);
-        } else if (activeTab === 'history' && sessionsPage < sessionsTotalPages) {
-          goToSessionsPage(sessionsPage + 1);
-        }
-        return;
-      }
-
-      // Escape: Close modals, deselect issue/PR, or close terminal
-      if (e.key === 'Escape') {
-        if (commandPaletteOpen) {
-          setCommandPaletteOpen(false);
-        } else if (shortcutsOpen) {
-          setShortcutsOpen(false);
-        } else if (settingsOpen) {
-          setSettingsOpen(false);
-        } else if (statsModalOpen) {
-          setStatsModalOpen(false);
-        } else if (activeProcessId) {
-          setActiveProcessId(null);
-        } else if (selectedIssue) {
-          setSelectedIssue(null);
-        } else if (selectedPR) {
-          setSelectedPR(null);
-        }
-        return;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [commandPaletteOpen, settingsOpen, shortcutsOpen, statsModalOpen, activeProcessId, selectedIssue, selectedPR, activeTab, issuesPage, issuesTotalPages, goToIssuesPage, prsPage, prsTotalPages, goToPRsPage, sessionsPage, sessionsTotalPages, goToSessionsPage]);
-
   const handleSelectSession = useCallback((session: SessionSummary) => {
     // Check if this session is active (has a running process)
     const activeProcess = session.is_active ? processes.find(p => p.claude_session_id === session.session_id) : null;
@@ -985,6 +896,161 @@ export default function App() {
   const handleSetSessionViewMode = useCallback((sessionId: string, mode: 'transcript' | 'terminal') => {
     setSessionViewModes(prev => ({ ...prev, [sessionId]: mode }));
   }, []);
+
+  // Global keyboard shortcuts (basic navigation)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts when typing in inputs/textareas
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        // Allow Escape and Cmd+K in inputs
+        if (e.key !== 'Escape' && !(e.key === 'k' && (e.metaKey || e.ctrlKey))) return;
+      }
+
+      // Cmd+K / Ctrl+K : Open command palette
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+        return;
+      }
+
+      // "?" : Show keyboard shortcuts help
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setShortcutsOpen((prev) => !prev);
+        return;
+      }
+
+      // "/" : Focus search in current tab - like GitHub/Slack
+      if (e.key === '/') {
+        e.preventDefault();
+        // Focus the search input in the current tab after a short delay
+        setTimeout(() => {
+          const placeholder = activeTab === 'issues' ? 'Search issues...'
+            : activeTab === 'prs' ? 'Search PRs...'
+            : 'Search sessions...';
+          const searchInput = document.querySelector(`input[placeholder="${placeholder}"]`) as HTMLInputElement;
+          searchInput?.focus();
+        }, 50);
+        return;
+      }
+
+      // "1-4" : Go to sidebar tabs (Issues, PRs, History, Schedules)
+      if (!e.altKey && !e.ctrlKey && !e.metaKey) {
+        if (e.key === '1') {
+          e.preventDefault();
+          setActiveTab('issues');
+          return;
+        }
+        if (e.key === '2') {
+          e.preventDefault();
+          setActiveTab('prs');
+          return;
+        }
+        if (e.key === '3') {
+          e.preventDefault();
+          setActiveTab('history');
+          return;
+        }
+        if (e.key === '4') {
+          e.preventDefault();
+          setActiveTab('schedules');
+          return;
+        }
+      }
+
+      // "w" : Close current session tab (like browser tabs)
+      if (e.key === 'w' && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        if (activeTabSessionId) {
+          handleCloseSessionTab(activeTabSessionId);
+        }
+        return;
+      }
+
+      // "s" : Toggle star on current session
+      if (e.key === 's' && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        const currentSession = activeTabSessionId
+          ? (sessions.find(s => s.session_id === activeTabSessionId)
+            ?? cachedSessionsRef.current.get(activeTabSessionId))
+          : null;
+        if (currentSession) {
+          handleToggleStar(currentSession);
+        }
+        return;
+      }
+
+      // "t" : Toggle between transcript and terminal view for active session
+      if (e.key === 't' && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        const sessionId = activeTabSessionId;
+        if (sessionId) {
+          const currentMode = sessionViewModes[sessionId] ?? 'transcript';
+          handleSetSessionViewMode(sessionId, currentMode === 'transcript' ? 'terminal' : 'transcript');
+        }
+        return;
+      }
+
+      // "r" : Refresh current view
+      if (e.key === 'r' && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        if (activeTab === 'issues') refreshIssues();
+        else if (activeTab === 'prs') refreshPRs();
+        else if (activeTab === 'history') refreshSessions();
+        return;
+      }
+
+      // "[" : Previous page in current list (without Alt - Alt+[ is for session tabs)
+      if (e.key === '[' && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        if (activeTab === 'issues' && issuesPage > 1) {
+          goToIssuesPage(issuesPage - 1);
+        } else if (activeTab === 'prs' && prsPage > 1) {
+          goToPRsPage(prsPage - 1);
+        } else if (activeTab === 'history' && sessionsPage > 1) {
+          goToSessionsPage(sessionsPage - 1);
+        }
+        return;
+      }
+
+      // "]" : Next page in current list (without Alt - Alt+] is for session tabs)
+      if (e.key === ']' && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        if (activeTab === 'issues' && issuesPage < issuesTotalPages) {
+          goToIssuesPage(issuesPage + 1);
+        } else if (activeTab === 'prs' && prsPage < prsTotalPages) {
+          goToPRsPage(prsPage + 1);
+        } else if (activeTab === 'history' && sessionsPage < sessionsTotalPages) {
+          goToSessionsPage(sessionsPage + 1);
+        }
+        return;
+      }
+
+      // Escape: Close modals, deselect issue/PR, or close terminal
+      if (e.key === 'Escape') {
+        if (commandPaletteOpen) {
+          setCommandPaletteOpen(false);
+        } else if (shortcutsOpen) {
+          setShortcutsOpen(false);
+        } else if (settingsOpen) {
+          setSettingsOpen(false);
+        } else if (statsModalOpen) {
+          setStatsModalOpen(false);
+        } else if (activeProcessId) {
+          setActiveProcessId(null);
+        } else if (selectedIssue) {
+          setSelectedIssue(null);
+        } else if (selectedPR) {
+          setSelectedPR(null);
+        }
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [commandPaletteOpen, settingsOpen, shortcutsOpen, statsModalOpen, activeProcessId, selectedIssue, selectedPR, activeTab, issuesPage, issuesTotalPages, goToIssuesPage, prsPage, prsTotalPages, goToPRsPage, sessionsPage, sessionsTotalPages, goToSessionsPage, activeTabSessionId, handleCloseSessionTab, sessions, handleToggleStar, sessionViewModes, handleSetSessionViewMode, refreshIssues, refreshPRs, refreshSessions]);
 
   // Command palette commands
   const paletteCommands = useMemo((): Command[] => {
