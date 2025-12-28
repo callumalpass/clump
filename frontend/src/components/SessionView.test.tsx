@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { SessionView, ViewMode } from './SessionView';
 import type { SessionSummary, SessionDetail, Issue, PR, EntityLink, TranscriptMessage } from '../types';
 import * as useApiModule from '../hooks/useApi';
@@ -20,12 +19,11 @@ vi.mock('./Terminal', () => ({
 }));
 vi.mock('./ConversationView', () => ({
   ConversationView: ({
-    transcript,
     searchQuery,
     onMatchesFound,
     onSendMessage,
   }: {
-    transcript: unknown;
+    transcript?: unknown;
     searchQuery?: string;
     onMatchesFound?: (count: number) => void;
     onSendMessage?: (msg: string) => void;
@@ -151,27 +149,6 @@ function createMockIssue(overrides: Partial<Issue> = {}): Issue {
   };
 }
 
-function createMockPR(overrides: Partial<PR> = {}): PR {
-  return {
-    number: 123,
-    title: 'Test PR',
-    body: 'PR body',
-    state: 'open',
-    labels: ['enhancement'],
-    author: 'prauthor',
-    created_at: '2024-01-12T10:00:00Z',
-    updated_at: '2024-01-15T10:00:00Z',
-    head_ref: 'feature/test',
-    base_ref: 'main',
-    additions: 50,
-    deletions: 10,
-    changed_files: 3,
-    comments_count: 0,
-    url: 'https://github.com/owner/repo/pull/123',
-    ...overrides,
-  };
-}
-
 describe('SessionView', () => {
   let mockFetchSessionDetail: ReturnType<typeof vi.fn>;
   let mockAddEntityToSession: ReturnType<typeof vi.fn>;
@@ -211,7 +188,7 @@ describe('SessionView', () => {
 
     // Setup mocks
     mockFetchSessionDetail = vi.fn().mockResolvedValue(createMockDetail());
-    mockAddEntityToSession = vi.fn().mockImplementation((sessionId, kind, number) =>
+    mockAddEntityToSession = vi.fn().mockImplementation((_sessionId, kind, number) =>
       Promise.resolve({ kind, number } as EntityLink)
     );
     mockRemoveEntityFromSession = vi.fn().mockResolvedValue(undefined);
