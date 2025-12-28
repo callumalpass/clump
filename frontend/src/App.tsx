@@ -258,13 +258,13 @@ export default function App() {
     setExpandedSessionId(null);
   }, []);
 
-  // Smart polling: only poll when there are active sessions, with adaptive intervals
+  // Smart polling: poll frequently when active, slower baseline poll to catch headless sessions
   const hasActiveSessions = sessions.some(s => s.is_active) || processes.length > 0;
   useEffect(() => {
-    if (!hasActiveSessions) return;
-
-    // Poll more frequently when there are active sessions
-    const interval = setInterval(refreshSessions, 3000);
+    // Fast polling (3s) when there are active sessions
+    // Slow polling (15s) otherwise to catch newly started headless sessions
+    const pollInterval = hasActiveSessions ? 3000 : 15000;
+    const interval = setInterval(refreshSessions, pollInterval);
     return () => clearInterval(interval);
   }, [hasActiveSessions, refreshSessions]);
 
@@ -543,9 +543,9 @@ export default function App() {
   }, [processes]);
 
   const handleContinueSession = useCallback(
-    async (session: SessionSummary) => {
+    async (session: SessionSummary, prompt?: string) => {
       // Use the continue endpoint - creates a new process resuming the conversation
-      const process = await continueSession(session.session_id);
+      const process = await continueSession(session.session_id, prompt);
 
       // Add the new process to state immediately
       addProcess(process);
@@ -1197,7 +1197,7 @@ export default function App() {
                     ) : viewingSession ? (
                       <SessionView
                         session={viewingSession}
-                        onContinue={() => handleContinueSession(viewingSession)}
+                        onContinue={(prompt) => handleContinueSession(viewingSession, prompt)}
                         onClose={() => setViewingSessionId(null)}
                         onDelete={async () => {
                           await deleteSession(viewingSession.session_id);
@@ -1326,7 +1326,7 @@ export default function App() {
                   ) : viewingSession ? (
                     <SessionView
                       session={viewingSession}
-                      onContinue={() => handleContinueSession(viewingSession)}
+                      onContinue={(prompt) => handleContinueSession(viewingSession, prompt)}
                       onClose={() => setViewingSessionId(null)}
                       onDelete={async () => {
                         await deleteSession(viewingSession.session_id);

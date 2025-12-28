@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Terminal } from './Terminal';
 import { ConversationView } from './ConversationView';
+import { Editor } from './Editor';
 import { EntityPicker } from './EntityPicker';
 import { TokenUsageBar } from './TokenUsageBar';
 import type { SessionSummary, SessionDetail, EntityLink, Issue, PR, ParsedTranscript } from '../types';
@@ -116,8 +117,8 @@ interface SessionViewProps {
   processId?: string | null;
   /** Callback when session is closed */
   onClose: () => void;
-  /** Callback to continue a finished session */
-  onContinue?: () => void;
+  /** Callback to continue a finished session (returns new process ID) */
+  onContinue?: (prompt?: string) => Promise<string | void>;
   /** Callback when session is deleted */
   onDelete?: () => void;
   /** Callback when session title is changed */
@@ -162,7 +163,8 @@ export function SessionView({
   // Handler to send messages to Claude via WebSocket
   const handleSendMessage = useCallback((message: string) => {
     if (processId && message.trim()) {
-      sendInput(message + '\n');
+      // Use \r (carriage return) like a real terminal Enter key, not \n (line feed)
+      sendInput(message + '\r');
     }
   }, [processId, sendInput]);
 
@@ -205,6 +207,25 @@ export function SessionView({
   // Title editing state
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
+
+  // Continue with message state (for inactive sessions)
+  const [continueMessage, setContinueMessage] = useState('');
+  const [isContinuing, setIsContinuing] = useState(false);
+
+  // Handler to continue session with a message
+  const handleContinueWithMessage = useCallback(async () => {
+    if (!onContinue || isContinuing) return;
+    const message = continueMessage.trim();
+    setIsContinuing(true);
+    try {
+      await onContinue(message || undefined);
+      setContinueMessage('');
+    } catch (err) {
+      console.error('Failed to continue session:', err);
+    } finally {
+      setIsContinuing(false);
+    }
+  }, [onContinue, continueMessage, isContinuing]);
 
   // Sync entities when session changes
   useEffect(() => {
@@ -736,19 +757,6 @@ export function SessionView({
             </div>
           )}
 
-          {/* Continue button (only for completed sessions) */}
-          {!isActiveProcess && onContinue && (
-            <button
-              onClick={onContinue}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-              </svg>
-              Continue
-            </button>
-          )}
-
           {/* Actions dropdown */}
           <div className="relative" data-actions-menu>
             <button
@@ -970,7 +978,7 @@ export function SessionView({
             currentMatchIndex={currentMatchIndex}
             onMatchesFound={handleMatchesFound}
             isActiveSession={isActiveProcess}
-            onSendMessage={handleSendMessage}
+            onSendMessage={processId ? handleSendMessage : undefined}
           />
         )}
 
@@ -984,6 +992,46 @@ export function SessionView({
           </div>
         )}
       </div>
+
+      {/* Message input for inactive sessions (continue with message) */}
+      {!isActiveProcess && onContinue && (
+        <div className="shrink-0 border-t border-gray-700 bg-gray-900 p-3">
+          <Editor
+            value={continueMessage}
+            onChange={setContinueMessage}
+            placeholder="Send a message to continue this session..."
+            minHeight="60px"
+            maxHeight="200px"
+            onSubmit={handleContinueWithMessage}
+            disabled={isContinuing}
+          />
+          <div className="flex justify-end mt-2">
+            <button
+              onClick={handleContinueWithMessage}
+              disabled={isContinuing}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center gap-2 btn-press"
+            >
+              {isContinuing ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <span>Starting...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                  <span>{continueMessage.trim() ? 'Continue with message' : 'Continue'}</span>
+                  <kbd className="text-xs bg-blue-700/50 px-1 py-0.5 rounded">⌘↵</kbd>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Footer with metadata and token usage */}
       <div className="px-4 py-2 border-t border-gray-700 bg-gray-800/30 space-y-2">
