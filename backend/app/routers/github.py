@@ -13,6 +13,12 @@ from contextlib import contextmanager
 from typing import Generator
 
 from fastapi import APIRouter, HTTPException, Query
+from github import (
+    BadCredentialsException,
+    GithubException,
+    RateLimitExceededException,
+    UnknownObjectException,
+)
 from pydantic import BaseModel
 
 from app.db_helpers import get_repo_or_404
@@ -31,7 +37,13 @@ router = APIRouter()
 
 @contextmanager
 def github_api_error_handler() -> Generator[None, None, None]:
-    """Context manager that converts GitHub API exceptions to HTTPException(400).
+    """Context manager that converts GitHub API exceptions to appropriate HTTPExceptions.
+
+    Maps GitHub API exceptions to HTTP status codes:
+    - UnknownObjectException (404) -> HTTPException(404)
+    - BadCredentialsException (401/403) -> HTTPException(401)
+    - RateLimitExceededException (403) -> HTTPException(429)
+    - GithubException (other) -> HTTPException(502) for server errors, 400 otherwise
 
     Usage:
         with github_api_error_handler():
@@ -39,8 +51,17 @@ def github_api_error_handler() -> Generator[None, None, None]:
     """
     try:
         yield
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except UnknownObjectException as e:
+        raise HTTPException(status_code=404, detail=f"Not found: {e.data}")
+    except BadCredentialsException:
+        raise HTTPException(status_code=401, detail="GitHub authentication failed")
+    except RateLimitExceededException:
+        raise HTTPException(status_code=429, detail="GitHub API rate limit exceeded")
+    except GithubException as e:
+        # Map GitHub API server errors (5xx) to 502 Bad Gateway
+        if e.status >= 500:
+            raise HTTPException(status_code=502, detail=f"GitHub API error: {e.data}")
+        raise HTTPException(status_code=400, detail=f"GitHub API error: {e.data}")
 
 
 def parse_github_remote(local_path: str) -> tuple[str, str]:
@@ -206,8 +227,14 @@ async def create_repo(repo: RepoCreate):
     # Verify it exists on GitHub
     try:
         github_client.get_repo(owner, name)
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Repository not found: {e}")
+    except UnknownObjectException:
+        raise HTTPException(status_code=404, detail=f"Repository not found: {owner}/{name}")
+    except BadCredentialsException:
+        raise HTTPException(status_code=401, detail="GitHub authentication failed")
+    except RateLimitExceededException:
+        raise HTTPException(status_code=429, detail="GitHub API rate limit exceeded")
+    except GithubException as e:
+        raise HTTPException(status_code=502, detail=f"GitHub API error: {e.data}")
 
     try:
         repo_info = storage_add_repo(owner, name, repo.local_path)
