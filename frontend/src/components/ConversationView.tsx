@@ -4,6 +4,7 @@ import { Markdown } from './Markdown';
 import { Editor } from './Editor';
 import { SubsessionView } from './SubsessionView';
 import { calculateCost, formatCost } from '../utils/costs';
+import { getModelDisplayName, getModelBadgeStyle } from '../utils/models';
 
 // Highlight matching text in a string
 // Memoized to avoid recomputation on every render
@@ -89,24 +90,6 @@ function formatTokens(count: number | undefined): string {
   return count.toString();
 }
 
-// Get human-readable model name
-function getModelName(model?: string): string {
-  if (!model) return 'Unknown';
-  if (model.includes('opus')) return 'Opus 4.5';
-  if (model.includes('sonnet')) return 'Sonnet';
-  if (model.includes('haiku')) return 'Haiku';
-  return model.split('-').slice(-1)[0] || model;
-}
-
-// Get model-specific badge styling for visual differentiation
-function getModelBadgeStyle(model?: string): string {
-  if (!model) return 'bg-gray-700/50 text-gray-400';
-  if (model.includes('opus')) return 'bg-amber-900/50 text-amber-300 border border-amber-700/30';
-  if (model.includes('haiku')) return 'bg-cyan-900/50 text-cyan-300 border border-cyan-700/30';
-  // Default to Sonnet styling (purple)
-  return 'bg-purple-900/50 text-purple-300 border border-purple-700/30';
-}
-
 // Calculate session duration from timestamps
 function getDuration(startTime?: string, endTime?: string): string {
   if (!startTime || !endTime) return '-';
@@ -178,7 +161,7 @@ function SessionStats({ transcript }: { transcript: ParsedTranscript }) {
         <div className="flex items-center gap-4 text-xs">
           {/* Model badge - color-coded by model type */}
           <span className={`px-2 py-0.5 rounded-full ${getModelBadgeStyle(transcript.model)}`}>
-            {getModelName(transcript.model)}
+            {getModelDisplayName(transcript.model)}
           </span>
 
           {/* Token stats */}
@@ -218,7 +201,7 @@ function SessionStats({ transcript }: { transcript: ParsedTranscript }) {
           {estimatedCost !== null && (
             <div
               className="flex items-center gap-1 text-amber-400"
-              title={`Estimated cost based on ${getModelName(transcript.model)} pricing (Dec 2024)\nInput: ${formatTokens(totalInput)} tokens\nOutput: ${formatTokens(totalOutput)} tokens\nCache read: ${formatTokens(totalCacheRead)} tokens`}
+              title={`Estimated cost based on ${getModelDisplayName(transcript.model)} pricing (Dec 2024)\nInput: ${formatTokens(totalInput)} tokens\nOutput: ${formatTokens(totalOutput)} tokens\nCache read: ${formatTokens(totalCacheRead)} tokens`}
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
