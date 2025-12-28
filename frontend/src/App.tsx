@@ -1228,6 +1228,13 @@ export default function App() {
               {/* Tabs with sliding indicator */}
               <div ref={tabsContainerRef} className="relative flex border-b border-gray-700 shrink-0">
                 {(['issues', 'prs', 'history', 'schedules'] as Tab[]).map((tab) => {
+                  // Display labels - handles special casing like "PRs"
+                  const tabLabels: Record<Tab, string> = {
+                    issues: 'Issues',
+                    prs: 'PRs',
+                    history: 'History',
+                    schedules: 'Schedules',
+                  };
                   // Get count for each tab
                   const count = tab === 'issues' ? issuesTotal
                     : tab === 'prs' ? prsTotal
@@ -1241,13 +1248,13 @@ export default function App() {
                         if (el) tabRefs.current.set(tab, el);
                       }}
                       onClick={() => setActiveTab(tab)}
-                      className={`flex-1 px-4 py-2 text-sm capitalize outline-none focus-visible:bg-blue-500/10 focus-visible:text-blue-300 flex items-center justify-center gap-1.5 transition-colors duration-150 ${
+                      className={`flex-1 px-4 py-2 text-sm outline-none focus-visible:bg-blue-500/10 focus-visible:text-blue-300 flex items-center justify-center gap-1.5 transition-colors duration-150 ${
                         activeTab === tab
                           ? 'text-white'
                           : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                       }`}
                     >
-                      {tab}
+                      {tabLabels[tab]}
                       {(selectedRepo || tab === 'history') && count > 0 && (
                         <span className={`text-xs px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center ${
                           activeTab === tab
