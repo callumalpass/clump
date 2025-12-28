@@ -356,7 +356,7 @@ export function ActiveFiltersIndicator({ onClick, filterCount }: ActiveFiltersIn
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-md bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 hover:text-blue-300 border border-blue-500/30 transition-all active:scale-95 ${focusRing}`}
+      className={`filter-indicator-enter inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-md bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 hover:text-blue-300 border border-blue-500/30 transition-all active:scale-95 ${focusRing}`}
       title="Clear all active filters"
       aria-label={`Clear ${filterCount} active filter${filterCount !== 1 ? 's' : ''}`}
     >

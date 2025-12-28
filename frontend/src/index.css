@@ -565,6 +565,22 @@ button:disabled .kbd-hint {
   animation: tab-content-fade-in 150ms ease-out forwards;
 }
 
+/* Active filters indicator entrance animation - subtle scale and fade */
+@keyframes filter-indicator-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.filter-indicator-enter {
+  animation: filter-indicator-enter 200ms ease-out forwards;
+}
+
 /* Active status badge glow effect - subtle pulsing glow for active sessions */
 @keyframes active-badge-glow {
   0%, 100% {
@@ -729,7 +745,8 @@ button:disabled .kbd-hint {
   .alert-enter,
   .alert-icon-enter,
   .status-badge-enter,
-  .session-tab-enter {
+  .session-tab-enter,
+  .filter-indicator-enter {
     animation: none;
   }
 
@@ -778,7 +795,8 @@ button:disabled .kbd-hint {
   .message-bubble-enter,
   .dropdown-menu-enter,
   .status-badge-enter,
-  .session-tab-enter {
+  .session-tab-enter,
+  .filter-indicator-enter {
     opacity: 1;
     transform: none;
   }
