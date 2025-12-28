@@ -66,7 +66,7 @@ export function SessionTabs({
               isActiveTab
                 ? 'border-blue-500 text-white'
                 : sessionNeedsAttention
-                  ? 'border-orange-500 text-orange-300 bg-orange-500/10 hover:bg-orange-500/20'
+                  ? 'border-orange-400 text-orange-200 bg-orange-900/40 hover:bg-orange-900/60'
                   : 'border-transparent text-gray-400 hover:text-white hover:bg-gray-800'
             }`}
             onClick={() => onSelectSession(session.session_id)}
