@@ -15,6 +15,7 @@ const shortcutGroups: ShortcutGroup[] = [
   {
     title: 'Navigation',
     shortcuts: [
+      { keys: ['Cmd/Ctrl', 'K'], description: 'Open command palette' },
       { keys: ['/'], description: 'Focus search in current tab' },
       { keys: ['['], description: 'Previous page in list' },
       { keys: [']'], description: 'Next page in list' },

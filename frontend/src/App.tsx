@@ -19,6 +19,7 @@ import { ScheduleDetail } from './components/ScheduleDetail';
 import { StatsModal } from './components/StatsModal';
 import { Settings } from './components/Settings';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
+import { CommandPalette, type Command } from './components/CommandPalette';
 import type { Repo, Issue, PR, SessionSummary, CommandMetadata } from './types';
 import type { SessionListFilters } from './components/SessionList';
 import { LRUCache } from './utils/cache';
@@ -87,6 +88,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [statsModalOpen, setStatsModalOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const [issueFilters, setIssueFilters] = useState<IssueFilters>({ state: 'open' });
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
@@ -510,8 +512,15 @@ export default function App() {
       // Don't trigger shortcuts when typing in inputs/textareas
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        // Allow Escape in inputs
-        if (e.key !== 'Escape') return;
+        // Allow Escape and Cmd+K in inputs
+        if (e.key !== 'Escape' && !(e.key === 'k' && (e.metaKey || e.ctrlKey))) return;
+      }
+
+      // Cmd+K / Ctrl+K : Open command palette
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+        return;
       }
 
       // "?" : Show keyboard shortcuts help
@@ -563,7 +572,9 @@ export default function App() {
 
       // Escape: Close modals, deselect issue/PR, or close terminal
       if (e.key === 'Escape') {
-        if (shortcutsOpen) {
+        if (commandPaletteOpen) {
+          setCommandPaletteOpen(false);
+        } else if (shortcutsOpen) {
           setShortcutsOpen(false);
         } else if (settingsOpen) {
           setSettingsOpen(false);
@@ -582,7 +593,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [settingsOpen, shortcutsOpen, statsModalOpen, activeProcessId, selectedIssue, selectedPR, activeTab, issuesPage, issuesTotalPages, goToIssuesPage, prsPage, prsTotalPages, goToPRsPage, sessionsPage, sessionsTotalPages, goToSessionsPage]);
+  }, [commandPaletteOpen, settingsOpen, shortcutsOpen, statsModalOpen, activeProcessId, selectedIssue, selectedPR, activeTab, issuesPage, issuesTotalPages, goToIssuesPage, prsPage, prsTotalPages, goToPRsPage, sessionsPage, sessionsTotalPages, goToSessionsPage]);
 
   const handleSelectSession = useCallback((session: SessionSummary) => {
     // Check if this session is active (has a running process)
@@ -937,6 +948,160 @@ export default function App() {
     setSessionViewModes(prev => ({ ...prev, [sessionId]: mode }));
   }, []);
 
+  // Command palette commands
+  const paletteCommands = useMemo((): Command[] => {
+    const cmds: Command[] = [];
+
+    // Navigation commands
+    cmds.push({
+      id: 'nav-issues',
+      label: 'Go to Issues',
+      description: 'View GitHub issues',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" strokeWidth={2} />
+          <circle cx="12" cy="12" r="3" fill="currentColor" />
+        </svg>
+      ),
+      category: 'navigation',
+      action: () => setActiveTab('issues'),
+    });
+
+    cmds.push({
+      id: 'nav-prs',
+      label: 'Go to Pull Requests',
+      description: 'View GitHub pull requests',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+        </svg>
+      ),
+      category: 'navigation',
+      action: () => setActiveTab('prs'),
+    });
+
+    cmds.push({
+      id: 'nav-history',
+      label: 'Go to History',
+      description: 'View past sessions',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+      category: 'navigation',
+      action: () => setActiveTab('history'),
+    });
+
+    cmds.push({
+      id: 'nav-schedules',
+      label: 'Go to Schedules',
+      description: 'View scheduled tasks',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      ),
+      category: 'navigation',
+      action: () => setActiveTab('schedules'),
+    });
+
+    // Action commands
+    if (selectedRepo) {
+      cmds.push({
+        id: 'action-new-session',
+        label: 'New Session',
+        description: 'Start a new Claude Code session',
+        shortcut: ['Alt', 'N'],
+        icon: (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+        ),
+        category: 'actions',
+        action: handleNewProcess,
+      });
+    }
+
+    cmds.push({
+      id: 'action-settings',
+      label: 'Open Settings',
+      description: 'Configure application settings',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      ),
+      category: 'actions',
+      action: () => setSettingsOpen(true),
+    });
+
+    cmds.push({
+      id: 'action-stats',
+      label: 'View Usage Statistics',
+      description: 'See token usage and costs',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+      ),
+      category: 'actions',
+      action: () => setStatsModalOpen(true),
+    });
+
+    cmds.push({
+      id: 'action-shortcuts',
+      label: 'Keyboard Shortcuts',
+      description: 'View all keyboard shortcuts',
+      shortcut: ['?'],
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+      category: 'actions',
+      action: () => setShortcutsOpen(true),
+    });
+
+    cmds.push({
+      id: 'action-refresh',
+      label: 'Refresh Data',
+      description: 'Refresh current view data',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+      ),
+      category: 'actions',
+      action: () => {
+        if (activeTab === 'issues') refreshIssues();
+        else if (activeTab === 'prs') refreshPRs();
+        else if (activeTab === 'history') refreshSessions();
+      },
+    });
+
+    // Open sessions
+    for (const session of openSessions) {
+      cmds.push({
+        id: `session-${session.session_id}`,
+        label: session.title || 'Untitled Session',
+        description: session.is_active ? 'Active session' : `${session.message_count} messages`,
+        icon: session.is_active ? (
+          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+        ) : (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+        ),
+        category: 'sessions',
+        action: () => handleSelectSessionTab(session.session_id),
+      });
+    }
+
+    return cmds;
+  }, [selectedRepo, activeTab, openSessions, handleNewProcess, handleSelectSessionTab, refreshIssues, refreshPRs, refreshSessions]);
+
   return (
     <div className="h-screen flex flex-col bg-[#0d1117] text-white">
       {/* Header */}
@@ -1004,6 +1169,13 @@ export default function App() {
         loading={statsLoading}
         error={statsError}
         onRefresh={refreshStats}
+      />
+
+      {/* Command Palette */}
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        commands={paletteCommands}
       />
 
       <Group orientation="horizontal" className="flex-1 min-h-0">
