@@ -9,6 +9,28 @@ import { fetchSessionDetail, addEntityToSession, removeEntityFromSession } from 
 import { useWebSocket } from '../hooks/useWebSocket';
 import { formatDuration } from '../utils/time';
 
+// =============================================================================
+// Constants
+// =============================================================================
+
+// PTY input handling: Claude Code's TUI (Ink) needs batched input with delays
+// to avoid overwhelming the terminal and ensure proper processing
+const PTY_BATCH_SIZE = 10;           // Characters per batch to reduce network overhead
+const PTY_CHUNK_DELAY_MS = 5;        // Delay between batches to avoid overwhelming TUI
+const PTY_ENTER_DELAY_MS = 150;      // Delay before sending Enter to let TUI process input
+
+// UI timing constants
+const POLL_INTERVAL_MS = 2000;       // Session detail polling interval for active sessions
+const COPY_STATUS_RESET_MS = 2000;   // Time before copy/prompt status resets to idle
+const UI_FOCUS_DELAY_MS = 50;        // Delay for DOM focus operations (allows render)
+
+// Export formatting
+const SEPARATOR_LINE_LENGTH = 50;    // Length of separator lines in text exports
+
+// =============================================================================
+// Types & Helpers
+// =============================================================================
+
 // Extract common session metadata for export formatters
 interface SessionMetadata {
   title: string;
@@ -108,7 +130,7 @@ function formatTranscriptAsText(detail: SessionDetail): string {
     lines.push(`Model: ${meta.model}`);
   }
   lines.push('');
-  lines.push('-'.repeat(50));
+  lines.push('-'.repeat(SEPARATOR_LINE_LENGTH));
   lines.push('');
 
   for (const message of detail.messages) {
@@ -209,21 +231,17 @@ export function SessionView({
       }]);
 
       // Send message text first, then carriage return after a delay
-      // Claude Code's TUI (Ink) needs time to process the text before receiving Enter
-      // Batch characters to reduce network overhead (10 chars per packet instead of 1)
       const text = message.trim();
-      const BATCH_SIZE = 10;
 
-      for (let i = 0; i < text.length; i += BATCH_SIZE) {
-        sendInput(text.slice(i, i + BATCH_SIZE));
-        // Small delay between chunks to avoid overwhelming the TUI
-        if (i + BATCH_SIZE < text.length) {
-          await new Promise(resolve => setTimeout(resolve, 5));
+      for (let i = 0; i < text.length; i += PTY_BATCH_SIZE) {
+        sendInput(text.slice(i, i + PTY_BATCH_SIZE));
+        if (i + PTY_BATCH_SIZE < text.length) {
+          await new Promise(resolve => setTimeout(resolve, PTY_CHUNK_DELAY_MS));
         }
       }
 
       // Wait for Claude Code's TUI to process the input before sending Enter
-      await new Promise(resolve => setTimeout(resolve, 150));
+      await new Promise(resolve => setTimeout(resolve, PTY_ENTER_DELAY_MS));
 
       // Use \r (carriage return) like a real terminal Enter key
       sendInput('\r');
@@ -419,7 +437,7 @@ export function SessionView({
 
     // Poll for transcript updates only if session is active
     if (isActiveProcess) {
-      pollInterval = setInterval(() => fetchDetail(false), 2000);
+      pollInterval = setInterval(() => fetchDetail(false), POLL_INTERVAL_MS);
     }
 
     return () => {
@@ -460,7 +478,7 @@ export function SessionView({
       await navigator.clipboard.writeText(content);
       setCopyStatus('copied');
       setShowExportMenu(false);
-      setTimeout(() => setCopyStatus('idle'), 2000);
+      setTimeout(() => setCopyStatus('idle'), COPY_STATUS_RESET_MS);
     } catch {
       console.error('Failed to copy to clipboard');
     }
@@ -503,7 +521,7 @@ export function SessionView({
       await navigator.clipboard.writeText(prompt);
       setPromptCopyStatus('copied');
       setShowActionsMenu(false);
-      setTimeout(() => setPromptCopyStatus('idle'), 2000);
+      setTimeout(() => setPromptCopyStatus('idle'), COPY_STATUS_RESET_MS);
     } catch {
       console.error('Failed to copy prompt to clipboard');
     }
@@ -556,7 +574,7 @@ export function SessionView({
         setTimeout(() => {
           const input = document.querySelector('[data-transcript-search]') as HTMLInputElement;
           input?.focus();
-        }, 50);
+        }, UI_FOCUS_DELAY_MS);
       }
 
       // Escape to close search
@@ -828,7 +846,7 @@ export function SessionView({
                 setTimeout(() => {
                   const input = document.querySelector('[data-transcript-search]') as HTMLInputElement;
                   input?.focus();
-                }, 50);
+                }, UI_FOCUS_DELAY_MS);
               }
             }}
             className={`p-1.5 rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
