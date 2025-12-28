@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { useClaudeSettings } from '../hooks/useApi';
 import type { PermissionMode, OutputFormat, CommandMetadata } from '../types';
 import { CommandEditor } from './CommandEditor';
@@ -22,6 +22,11 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
   const [customTool, setCustomTool] = useState('');
   const [activeTab, setActiveTab] = useState<'github' | 'permissions' | 'execution' | 'commands' | 'advanced'>('github');
 
+  // Refs for animated tab indicator (similar to SessionTabs)
+  const tabContainerRef = useRef<HTMLDivElement>(null);
+  const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
+
   // GitHub token state
   const [tokenStatus, setTokenStatus] = useState<TokenStatus>({ configured: false, masked_token: null });
   const [tokenLoading, setTokenLoading] = useState(false);
@@ -29,6 +34,25 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
   const [newToken, setNewToken] = useState('');
   const [tokenError, setTokenError] = useState('');
   const [tokenSaving, setTokenSaving] = useState(false);
+
+  // Update sliding tab indicator position when active tab changes
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    const updateIndicator = () => {
+      const container = tabContainerRef.current;
+      const activeTabElement = tabRefs.current.get(activeTab);
+      if (container && activeTabElement) {
+        const containerRect = container.getBoundingClientRect();
+        const tabRect = activeTabElement.getBoundingClientRect();
+        setIndicatorStyle({
+          left: tabRect.left - containerRect.left,
+          width: tabRect.width,
+        });
+      }
+    };
+    // Small delay to ensure tabs are rendered
+    requestAnimationFrame(updateIndicator);
+  }, [activeTab, isOpen]);
 
   // Fetch token status when modal opens
   useEffect(() => {
@@ -166,27 +190,32 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-gray-700">
+        {/* Tabs with sliding indicator */}
+        <div ref={tabContainerRef} className="relative flex border-b border-gray-700">
           {(['github', 'permissions', 'execution', 'commands', 'advanced'] as const).map((tab) => (
             <button
               key={tab}
+              ref={(el) => {
+                if (el) tabRefs.current.set(tab, el);
+              }}
               onClick={() => setActiveTab(tab)}
-              className={`relative px-4 py-2.5 text-sm capitalize focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset transition-colors duration-150 ${
+              className={`px-4 py-2.5 text-sm capitalize focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset transition-colors duration-150 ${
                 activeTab === tab
                   ? 'text-white'
                   : 'text-gray-400 hover:text-gray-200'
               }`}
             >
               {tab === 'github' ? 'GitHub' : tab}
-              {/* Animated underline indicator */}
-              <span
-                className={`absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 transition-all duration-200 ease-out ${
-                  activeTab === tab ? 'opacity-100 scale-x-100' : 'opacity-0 scale-x-0'
-                }`}
-              />
             </button>
           ))}
+          {/* Sliding indicator - animates between tabs */}
+          <div
+            className="absolute bottom-0 h-0.5 bg-blue-500 transition-all duration-200 ease-out"
+            style={{
+              transform: `translateX(${indicatorStyle.left}px)`,
+              width: indicatorStyle.width,
+            }}
+          />
         </div>
 
         {/* Content */}
