@@ -13,6 +13,7 @@ import { Terminal } from './components/Terminal';
 import { SessionView } from './components/SessionView';
 import { SessionTabs } from './components/SessionTabs';
 import { SessionList } from './components/SessionList';
+import { ScheduleList } from './components/ScheduleList';
 import { Settings } from './components/Settings';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import type { Repo, Issue, PR, SessionSummary, CommandMetadata } from './types';
@@ -33,7 +34,7 @@ function ResizeHandle() {
   );
 }
 
-type Tab = 'issues' | 'prs' | 'sessions';
+type Tab = 'issues' | 'prs' | 'sessions' | 'schedules';
 
 // Track pending issue/PR context for processes being created
 // This fixes the race condition where the sidepane doesn't show the issue/PR
@@ -831,11 +832,12 @@ export default function App() {
 
           {/* Tabs */}
           <div className="flex border-b border-gray-700">
-            {(['issues', 'prs', 'sessions'] as Tab[]).map((tab) => {
+            {(['issues', 'prs', 'sessions', 'schedules'] as Tab[]).map((tab) => {
               // Get count for each tab
               const count = tab === 'issues' ? issuesTotal
                 : tab === 'prs' ? prs.length
-                : sessionsTotal;
+                : tab === 'sessions' ? sessionsTotal
+                : 0; // schedules don't show count
               const hasRunning = tab === 'sessions' && sessions.some(s =>
                 s.is_active && processes.some(p => p.claude_session_id === s.session_id)
               );
@@ -927,6 +929,13 @@ export default function App() {
                 processes={processes}
               />
             )}
+            {activeTab === 'schedules' && selectedRepo && (
+              <ScheduleList
+                repoId={selectedRepo.id}
+                repoPath={selectedRepo.local_path}
+                commands={commands}
+              />
+            )}
             {!selectedRepo && activeTab !== 'sessions' && (
               <div className="p-4 text-gray-400">Select a repository to view {activeTab}</div>
             )}
@@ -953,35 +962,88 @@ export default function App() {
                   className="flex flex-col border-r border-gray-700"
                 >
                   {/* Always-visible header with toggle button */}
-                  <div className="flex items-center justify-between p-2 border-b border-gray-700 bg-gray-800/50 shrink-0">
-                    {!issuePanelCollapsed && (
-                      <span className="text-sm font-medium text-gray-300">
-                        {showIssueSideBySide ? 'Issue Context' : 'PR Context'}
-                      </span>
+                  <div className={`flex items-center p-2 border-b border-gray-700 bg-gray-800/50 shrink-0 ${issuePanelCollapsed ? 'flex-col gap-2' : 'justify-between'}`}>
+                    {issuePanelCollapsed ? (
+                      <>
+                        <button
+                          onClick={() => {
+                            const panel = contextPanelRef.current;
+                            if (panel?.isCollapsed()) {
+                              panel.expand();
+                              setIssuePanelCollapsed(false);
+                            }
+                          }}
+                          className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white"
+                          title="Expand panel"
+                          aria-label={`Expand ${showIssueSideBySide ? 'issue' : 'PR'} context panel`}
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                        {/* Vertical label when collapsed */}
+                        <div
+                          className="flex flex-col items-center gap-1 cursor-pointer group"
+                          onClick={() => {
+                            const panel = contextPanelRef.current;
+                            if (panel?.isCollapsed()) {
+                              panel.expand();
+                              setIssuePanelCollapsed(false);
+                            }
+                          }}
+                          title={`Click to expand ${showIssueSideBySide ? 'issue' : 'PR'} context`}
+                        >
+                          {/* Icon for content type */}
+                          {showIssueSideBySide ? (
+                            <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <circle cx="12" cy="12" r="10" strokeWidth={2} />
+                              <circle cx="12" cy="12" r="3" fill="currentColor" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+                            </svg>
+                          )}
+                          {/* Vertical text */}
+                          <span
+                            className="text-xs font-medium text-gray-400 group-hover:text-gray-200 transition-colors"
+                            style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+                          >
+                            {showIssueSideBySide ? 'Issue' : 'PR'}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-sm font-medium text-gray-300">
+                          {showIssueSideBySide ? 'Issue Context' : 'PR Context'}
+                        </span>
+                        <button
+                          onClick={() => {
+                            const panel = contextPanelRef.current;
+                            panel?.collapse();
+                            setIssuePanelCollapsed(true);
+                          }}
+                          className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white"
+                          title="Collapse panel"
+                          aria-label={`Collapse ${showIssueSideBySide ? 'issue' : 'PR'} context panel`}
+                        >
+                          <svg
+                            className="w-4 h-4 rotate-180"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </>
                     )}
-                    <button
-                      onClick={() => {
-                        const panel = contextPanelRef.current;
-                        if (panel?.isCollapsed()) {
-                          panel.expand();
-                          setIssuePanelCollapsed(false);
-                        } else {
-                          panel?.collapse();
-                          setIssuePanelCollapsed(true);
-                        }
-                      }}
-                      className={`p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white ${issuePanelCollapsed ? 'mx-auto' : ''}`}
-                      title={issuePanelCollapsed ? "Expand panel" : "Collapse panel"}
-                    >
-                      <svg
-                        className={`w-4 h-4 transition-transform duration-200 ${issuePanelCollapsed ? '' : 'rotate-180'}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
                   </div>
                   {/* Content area - invisible when collapsed but still in layout */}
                   <div className={`flex-1 overflow-auto transition-opacity duration-150 ${issuePanelCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
@@ -1015,6 +1077,7 @@ export default function App() {
                             sessions={sessions}
                             processes={processes}
                             onSelectSession={handleSelectSession}
+                            onContinueSession={handleContinueSession}
                           />
                         )}
                   </div>
@@ -1144,6 +1207,7 @@ export default function App() {
                   sessions={sessions}
                   processes={processes}
                   onSelectSession={handleSelectSession}
+                  onContinueSession={handleContinueSession}
                 />
               </div>
             )}
