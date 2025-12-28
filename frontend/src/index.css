@@ -251,32 +251,50 @@ textarea::placeholder {
   box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5);
 }
 
-/* Primary button press state - adds tactile depth on click */
+/* Primary button states - hover elevation and press depth */
 .btn-primary {
   transition: background-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
 }
 
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3), 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
 .btn-primary:active:not(:disabled) {
+  transform: translateY(0);
   background-color: #1d4ed8; /* blue-700 */
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-/* Danger button press state */
+/* Danger button states - hover elevation and press depth */
 .btn-danger {
   transition: background-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
 }
 
+.btn-danger:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3), 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
 .btn-danger:active:not(:disabled) {
+  transform: translateY(0);
   background-color: #b91c1c; /* red-700 */
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-/* Secondary/ghost button press state */
+/* Secondary/ghost button states - hover elevation and press depth */
 .btn-secondary {
   transition: background-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
 }
 
+.btn-secondary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
 .btn-secondary:active:not(:disabled) {
+  transform: translateY(0);
   background-color: #374151; /* gray-700 */
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.15);
 }
@@ -364,6 +382,46 @@ textarea::placeholder {
   animation: active-badge-glow 2s ease-in-out infinite;
 }
 
+/* Star button toggle animation - satisfying pop effect when starring/unstarring */
+@keyframes star-pop {
+  0% {
+    transform: scale(1);
+  }
+  15% {
+    transform: scale(0.8);
+  }
+  40% {
+    transform: scale(1.25);
+  }
+  60% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.star-button {
+  transition: color 150ms ease, transform 150ms ease;
+}
+
+.star-button:hover {
+  transform: scale(1.15);
+}
+
+.star-button:active {
+  transform: scale(0.9);
+}
+
+.star-button-animate {
+  animation: star-pop 350ms ease-out forwards;
+}
+
+/* Subtle glow for starred items */
+.star-button-starred {
+  filter: drop-shadow(0 0 4px rgba(250, 204, 21, 0.4));
+}
+
 /* Respect user's motion preferences for accessibility */
 @media (prefers-reduced-motion: reduce) {
   /* Disable all custom animations */
@@ -376,8 +434,15 @@ textarea::placeholder {
   .dropdown-menu-enter,
   .list-item-enter,
   .skeleton-item-enter,
-  .active-badge-glow {
+  .active-badge-glow,
+  .star-button-animate {
     animation: none;
+  }
+
+  /* Disable star button hover transform */
+  .star-button:hover,
+  .star-button:active {
+    transform: none;
   }
 
   /* Keep static glow for active badge when motion is reduced */
@@ -436,6 +501,16 @@ textarea::placeholder {
   }
 
   .token-bar-segment:hover {
+    transform: none;
+  }
+
+  /* Disable button hover elevation effects */
+  .btn-primary:hover:not(:disabled),
+  .btn-primary:active:not(:disabled),
+  .btn-danger:hover:not(:disabled),
+  .btn-danger:active:not(:disabled),
+  .btn-secondary:hover:not(:disabled),
+  .btn-secondary:active:not(:disabled) {
     transform: none;
   }
 }
