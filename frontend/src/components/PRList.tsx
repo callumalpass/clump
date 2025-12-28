@@ -13,6 +13,9 @@ import {
   ClearFiltersButton,
 } from './FilterBar';
 
+/** Consistent focus ring styling for accessibility */
+const focusRing = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900';
+
 interface PRListProps {
   prs: PR[];
   selectedPR: number | null;
@@ -25,6 +28,10 @@ interface PRListProps {
   sessions?: SessionSummary[];
   processes?: Process[];
   onRefresh?: () => void;
+  page: number;
+  totalPages: number;
+  total: number;
+  onPageChange: (page: number) => void;
 }
 
 const SORT_OPTIONS = [
@@ -33,7 +40,7 @@ const SORT_OPTIONS = [
 ];
 
 export function PRList({
-  prs,
+  prs = [],
   selectedPR,
   onSelectPR,
   prCommands,
@@ -44,6 +51,10 @@ export function PRList({
   sessions = [],
   processes: _processes = [],
   onRefresh,
+  page,
+  totalPages,
+  total,
+  onPageChange,
 }: PRListProps) {
   // Group sessions by PR number (a session can appear under multiple PRs)
   const sessionsByPR = sessions.reduce((acc, session) => {
@@ -120,7 +131,7 @@ export function PRList({
             onSortChange={setSort}
             onOrderChange={setOrder}
           />
-          <ItemCount count={filteredPRs.length} singular="PR" />
+          <ItemCount count={total} singular="PR" />
           {onRefresh && <RefreshButton onClick={onRefresh} loading={loading} />}
         </div>
       </FilterBarRow>
@@ -153,6 +164,15 @@ export function PRList({
             </div>
           ))}
         </div>
+        {/* Pagination skeleton */}
+        <div className="shrink-0 border-t border-gray-700 p-2 flex items-center justify-between text-sm">
+          <div className="h-4 w-16 rounded skeleton-shimmer" />
+          <div className="flex items-center gap-1">
+            <div className="h-7 w-8 rounded skeleton-shimmer" />
+            <div className="h-4 w-12 rounded mx-1 skeleton-shimmer" />
+            <div className="h-7 w-8 rounded skeleton-shimmer" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -167,15 +187,35 @@ export function PRList({
           <div className="text-center p-6 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-xs empty-state-enter">
             <div className="w-14 h-14 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4">
               <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                {hasFilters ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                )}
               </svg>
             </div>
             <p className="text-gray-300 font-medium mb-1">
               {hasFilters ? 'No matching pull requests' : 'No pull requests'}
             </p>
-            <p className="text-gray-500 text-sm">
-              {hasFilters ? 'Try adjusting your filters' : 'This repository has no PRs yet'}
+            <p className="text-gray-500 text-sm mb-3">
+              {hasFilters
+                ? filters.search && filters.sessionStatus
+                  ? 'No PRs match your search and status filter'
+                  : filters.search
+                  ? `No PRs match "${filters.search}"`
+                  : filters.sessionStatus
+                  ? `No ${filters.sessionStatus === 'analyzed' ? 'analyzed' : 'unanalyzed'} PRs found`
+                  : 'Try adjusting your filters'
+                : 'This repository has no PRs yet'}
             </p>
+            {hasFilters && (
+              <button
+                onClick={clearFilters}
+                className={`px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 active:scale-95 text-gray-200 rounded transition-all ${focusRing}`}
+              >
+                Clear filters
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -281,6 +321,40 @@ export function PRList({
             </div>
           );
         })}
+      </div>
+
+      {/* Pagination - always visible to prevent layout shift */}
+      <div className="shrink-0 border-t border-gray-700 p-2 flex items-center justify-between text-sm">
+        <span className="text-gray-400">
+          {total} PRs
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onPageChange(page - 1)}
+            disabled={page <= 1}
+            className={`px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 transition-all ${focusRing} flex items-center gap-1`}
+            aria-label="Go to previous page"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            <span>Prev</span>
+          </button>
+          <span className="px-2 text-gray-300 tabular-nums">
+            {page} / {totalPages || 1}
+          </span>
+          <button
+            onClick={() => onPageChange(page + 1)}
+            disabled={page >= totalPages}
+            className={`px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 transition-all ${focusRing} flex items-center gap-1`}
+            aria-label="Go to next page"
+          >
+            <span>Next</span>
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );
