@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, type MutableRefObject } from 'react';
 import { useSchedules, describeCron, formatRelativeTime, CRON_PRESETS } from '../hooks/useSchedules';
 import type { ScheduledJob, ScheduledJobCreate, ScheduledJobTargetType, CommandsResponse } from '../types';
 
@@ -8,9 +8,10 @@ interface ScheduleListProps {
   commands: CommandsResponse;
   selectedScheduleId?: number | null;
   onSelectSchedule?: (scheduleId: number) => void;
+  refreshRef?: MutableRefObject<(() => void) | null>;
 }
 
-export function ScheduleList({ repoId, commands, selectedScheduleId, onSelectSchedule }: ScheduleListProps) {
+export function ScheduleList({ repoId, commands, selectedScheduleId, onSelectSchedule, refreshRef }: ScheduleListProps) {
   const {
     schedules,
     loading,
@@ -20,7 +21,20 @@ export function ScheduleList({ repoId, commands, selectedScheduleId, onSelectSch
     triggerNow,
     pauseSchedule,
     resumeSchedule,
+    refresh,
   } = useSchedules(repoId);
+
+  // Expose refresh function to parent via ref
+  useEffect(() => {
+    if (refreshRef) {
+      refreshRef.current = refresh;
+    }
+    return () => {
+      if (refreshRef) {
+        refreshRef.current = null;
+      }
+    };
+  }, [refreshRef, refresh]);
 
   const [isCreating, setIsCreating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -96,8 +110,36 @@ export function ScheduleList({ repoId, commands, selectedScheduleId, onSelectSch
       {/* Content */}
       <div className="flex-1 overflow-auto p-4">
         {loading ? (
-          <div className="flex items-center justify-center py-8 text-gray-400">
-            Loading schedules...
+          <div className="space-y-3">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="bg-gray-800 rounded-lg p-4 border border-gray-700 skeleton-item-enter"
+                style={{ '--item-index': i } as React.CSSProperties}
+              >
+                {/* Header row skeleton */}
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <div className="h-5 w-32 rounded skeleton-shimmer" />
+                      <div className="h-4 w-14 rounded-full skeleton-shimmer" />
+                    </div>
+                    <div className="h-4 w-48 rounded skeleton-shimmer mt-2" />
+                  </div>
+                  <div className="flex items-center gap-1 ml-2">
+                    <div className="w-7 h-7 rounded skeleton-shimmer" />
+                    <div className="w-7 h-7 rounded skeleton-shimmer" />
+                    <div className="w-7 h-7 rounded skeleton-shimmer" />
+                  </div>
+                </div>
+                {/* Meta row skeleton */}
+                <div className="flex items-center gap-4">
+                  <div className="h-4 w-24 rounded skeleton-shimmer" />
+                  <div className="h-4 w-20 rounded skeleton-shimmer" />
+                  <div className="h-4 w-16 rounded skeleton-shimmer" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : schedules.length === 0 ? (
           <div className="text-center py-12 empty-state-enter">
@@ -186,8 +228,9 @@ function ScheduleCard({ schedule, selected, onSelect, onTrigger, onDelete, onTog
         <div className="flex items-center gap-1 ml-2" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={onTrigger}
-            className="p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors"
+            className="p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-green-400 transition-all active:scale-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-800"
             title="Run now"
+            aria-label="Run schedule now"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
@@ -196,8 +239,11 @@ function ScheduleCard({ schedule, selected, onSelect, onTrigger, onDelete, onTog
           </button>
           <button
             onClick={onTogglePause}
-            className="p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors"
+            className={`p-1.5 hover:bg-gray-700 rounded transition-all active:scale-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-800 ${
+              isPaused ? 'text-yellow-500 hover:text-yellow-400' : 'text-gray-400 hover:text-yellow-400'
+            }`}
             title={isPaused ? 'Resume' : 'Pause'}
+            aria-label={isPaused ? 'Resume schedule' : 'Pause schedule'}
           >
             {isPaused ? (
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -211,8 +257,9 @@ function ScheduleCard({ schedule, selected, onSelect, onTrigger, onDelete, onTog
           </button>
           <button
             onClick={onDelete}
-            className="p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-red-400 transition-colors"
+            className="p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-red-400 transition-all active:scale-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-800"
             title="Delete"
+            aria-label="Delete schedule"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
