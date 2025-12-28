@@ -34,7 +34,7 @@ export function IssueDetail({
   expandedSessionId: _expandedSessionId,
   onToggleSession: _onToggleSession,
   onSelectSession,
-  onContinueSession: _onContinueSession,
+  onContinueSession,
   tags = [],
   issueTags = [],
   onAddTag,
@@ -47,6 +47,7 @@ export function IssueDetail({
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0]);
   const [creatingTag, setCreatingTag] = useState(false);
+  const [continuingSessionId, setContinuingSessionId] = useState<string | null>(null);
 
   const handleCreateTag = async () => {
     if (!newTagName.trim() || !onCreateTag) return;
@@ -375,18 +376,22 @@ export function IssueDetail({
                 : null;
               const isActuallyRunning = !!activeProcess;
 
+              const isContinuing = continuingSessionId === session.session_id;
+
               return (
                 <div
                   key={session.session_id}
-                  onClick={() => onSelectSession?.(session)}
-                  className="group bg-gray-800 rounded-lg border border-gray-700 hover:border-gray-600 p-3 cursor-pointer hover:bg-gray-750 transition-colors"
+                  className="group bg-gray-800 rounded-lg border border-gray-700 hover:border-gray-600 p-3 transition-colors"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div
+                      className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer"
+                      onClick={() => onSelectSession?.(session)}
+                    >
                       <span className={`w-2 h-2 rounded-full shrink-0 ${
                         isActuallyRunning ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'
                       }`} />
-                      <span className="text-sm font-medium text-white truncate">
+                      <span className="text-sm font-medium text-white truncate hover:text-blue-400 transition-colors">
                         {session.title || 'Untitled session'}
                       </span>
                       {/* Arrow to indicate opens in panel */}
@@ -403,6 +408,36 @@ export function IssueDetail({
                       <span className="text-xs text-gray-400 hidden sm:inline">
                         {new Date(session.modified_at).toLocaleDateString()}
                       </span>
+                      {/* Continue button for completed sessions */}
+                      {!isActuallyRunning && onContinueSession && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setContinuingSessionId(session.session_id);
+                            onContinueSession(session);
+                          }}
+                          disabled={isContinuing}
+                          className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
+                          title="Continue this session"
+                        >
+                          {isContinuing ? (
+                            <>
+                              <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                              </svg>
+                              <span>Starting...</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                              </svg>
+                              <span>Continue</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
                   {isActuallyRunning && (
