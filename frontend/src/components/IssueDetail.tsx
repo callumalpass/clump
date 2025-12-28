@@ -4,6 +4,7 @@ import { fetchIssue, closeIssue, reopenIssue } from '../hooks/useApi';
 import { Markdown } from './Markdown';
 import { StartSessionButton } from './StartSessionButton';
 import { getContrastColor, TAG_COLORS } from '../utils/colors';
+import { getTimeWithTooltip } from '../utils/time';
 import { Editor } from './Editor';
 
 interface IssueDetailProps {
@@ -369,7 +370,7 @@ export function IssueDetail({
       {/* Issue body */}
       <div className="mb-6">
         <div className="text-sm text-gray-400 mb-2">
-          Opened by <span className="text-gray-300">{issue.author}</span> on {new Date(issue.created_at).toLocaleDateString()}
+          Opened by <span className="text-gray-300">{issue.author}</span> <span className="cursor-help" title={getTimeWithTooltip(issue.created_at).full}>{getTimeWithTooltip(issue.created_at).relative}</span>
         </div>
         <div className="bg-gray-800 rounded-lg p-4">
           {issue.body ? (
@@ -423,8 +424,8 @@ export function IssueDetail({
                       </svg>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs text-gray-400 hidden sm:inline">
-                        {new Date(session.modified_at).toLocaleDateString()}
+                      <span className="text-xs text-gray-400 hidden sm:inline cursor-help" title={getTimeWithTooltip(session.modified_at).full}>
+                        {getTimeWithTooltip(session.modified_at).relative}
                       </span>
                       {/* Continue button for completed sessions */}
                       {!isActuallyRunning && onContinueSession && (
@@ -479,7 +480,7 @@ export function IssueDetail({
             {issue.comments.map((comment) => (
               <div key={comment.id} className="bg-gray-800 rounded-lg p-4">
                 <div className="text-sm text-gray-400 mb-2">
-                  <span className="text-gray-300">{comment.author}</span> · {new Date(comment.created_at).toLocaleDateString()}
+                  <span className="text-gray-300">{comment.author}</span> · <span className="cursor-help" title={getTimeWithTooltip(comment.created_at).full}>{getTimeWithTooltip(comment.created_at).relative}</span>
                 </div>
                 <Markdown>{comment.body}</Markdown>
               </div>

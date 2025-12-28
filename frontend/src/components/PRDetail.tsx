@@ -3,6 +3,7 @@ import type { PRDetail as PRDetailType, SessionSummary, Process, CommandMetadata
 import { fetchPR } from '../hooks/useApi';
 import { Markdown } from './Markdown';
 import { PRStartSessionButton } from './PRStartSessionButton';
+import { getTimeWithTooltip } from '../utils/time';
 
 interface PRDetailProps {
   repoId: number;
@@ -154,7 +155,7 @@ export function PRDetail({
       {/* PR description */}
       <div className="mb-6">
         <div className="text-sm text-gray-400 mb-2">
-          Opened by <span className="text-gray-300">{pr.author}</span> on {new Date(pr.created_at).toLocaleDateString()}
+          Opened by <span className="text-gray-300">{pr.author}</span> <span className="cursor-help" title={getTimeWithTooltip(pr.created_at).full}>{getTimeWithTooltip(pr.created_at).relative}</span>
         </div>
         <div className="bg-gray-800 rounded-lg p-4">
           {pr.body ? (
@@ -207,8 +208,8 @@ export function PRDetail({
                       </svg>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs text-gray-400 hidden sm:inline">
-                        {new Date(session.modified_at).toLocaleDateString()}
+                      <span className="text-xs text-gray-400 hidden sm:inline cursor-help" title={getTimeWithTooltip(session.modified_at).full}>
+                        {getTimeWithTooltip(session.modified_at).relative}
                       </span>
                       {/* Continue button for completed sessions */}
                       {!isActuallyRunning && onContinueSession && (
@@ -263,7 +264,7 @@ export function PRDetail({
             {pr.comments.map((comment) => (
               <div key={comment.id} className="bg-gray-800 rounded-lg p-4">
                 <div className="text-sm text-gray-400 mb-2">
-                  <span className="text-gray-300">{comment.author}</span> · {new Date(comment.created_at).toLocaleDateString()}
+                  <span className="text-gray-300">{comment.author}</span> · <span className="cursor-help" title={getTimeWithTooltip(comment.created_at).full}>{getTimeWithTooltip(comment.created_at).relative}</span>
                 </div>
                 <Markdown>{comment.body}</Markdown>
               </div>
