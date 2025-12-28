@@ -179,9 +179,10 @@ export function StartSessionButton({ issue, commands, onStart, size = 'md', clas
                   handleCommandSelect(command);
                 }
               }}
-              className={`w-full px-3 py-2 text-left hover:bg-gray-700 first:rounded-t-md last:rounded-b-md focus:bg-gray-700 ${focusRingInset} ${
+              className={`dropdown-item-enter w-full px-3 py-2 text-left hover:bg-gray-700 first:rounded-t-md last:rounded-b-md focus:bg-gray-700 ${focusRingInset} ${
                 selectedCommand?.id === command.id ? 'bg-gray-700' : ''
               }`}
+              style={{ '--item-index': index } as React.CSSProperties}
             >
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-white">{command.name}</span>
