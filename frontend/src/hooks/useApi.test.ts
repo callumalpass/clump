@@ -7,6 +7,7 @@ import {
   usePRs,
   useProcesses,
   useSessions,
+  useActiveSessions,
   useClaudeSettings,
   useTags,
   useIssueTags,
@@ -401,6 +402,220 @@ describe('useSessions', () => {
     expect(calledUrl).toContain('starred=true');
     expect(calledUrl).toContain('has_entities=true');
     expect(calledUrl).toContain('search=test');
+  });
+});
+
+describe('useActiveSessions', () => {
+  it('fetches active sessions on mount', async () => {
+    const mockResponse = {
+      sessions: [
+        { session_id: 'sess-1', title: 'Active Session', is_active: true, modified_at: new Date().toISOString() },
+      ],
+      total: 1,
+    };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockResponse));
+
+    const { result } = renderHook(() => useActiveSessions());
+
+    expect(result.current.loading).toBe(true);
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.sessions).toHaveLength(1);
+    expect(result.current.sessions[0].session_id).toBe('sess-1');
+  });
+
+  it('includes repoPath parameter when provided', async () => {
+    const mockResponse = { sessions: [], total: 0 };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockResponse));
+
+    renderHook(() => useActiveSessions('/path/to/repo'));
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalled();
+    });
+
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('repo_path=%2Fpath%2Fto%2Frepo');
+  });
+
+  it('filters to only active sessions', async () => {
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+
+    const mockResponse = {
+      sessions: [
+        { session_id: 'active-1', title: 'Active Session', is_active: true, modified_at: oneHourAgo.toISOString() },
+        { session_id: 'inactive-old', title: 'Old Inactive', is_active: false, modified_at: oneHourAgo.toISOString() },
+      ],
+      total: 2,
+    };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockResponse));
+
+    const { result } = renderHook(() => useActiveSessions());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Should only include active session, not the old inactive one
+    expect(result.current.sessions).toHaveLength(1);
+    expect(result.current.sessions[0].session_id).toBe('active-1');
+  });
+
+  it('includes recently modified inactive sessions (within 10 minutes)', async () => {
+    const now = new Date();
+    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+
+    const mockResponse = {
+      sessions: [
+        { session_id: 'active-1', title: 'Active', is_active: true, modified_at: oneHourAgo.toISOString() },
+        { session_id: 'recent-inactive', title: 'Recent Inactive', is_active: false, modified_at: fiveMinutesAgo.toISOString() },
+        { session_id: 'old-inactive', title: 'Old Inactive', is_active: false, modified_at: oneHourAgo.toISOString() },
+      ],
+      total: 3,
+    };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockResponse));
+
+    const { result } = renderHook(() => useActiveSessions());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Should include active and recently modified, but not old inactive
+    expect(result.current.sessions).toHaveLength(2);
+    const sessionIds = result.current.sessions.map(s => s.session_id);
+    expect(sessionIds).toContain('active-1');
+    expect(sessionIds).toContain('recent-inactive');
+    expect(sessionIds).not.toContain('old-inactive');
+  });
+
+  it('uses correct sort parameters', async () => {
+    const mockResponse = { sessions: [], total: 0 };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockResponse));
+
+    renderHook(() => useActiveSessions());
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalled();
+    });
+
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('sort=updated');
+    expect(calledUrl).toContain('order=desc');
+    expect(calledUrl).toContain('limit=50');
+    expect(calledUrl).toContain('offset=0');
+  });
+
+  it('refresh function does not show loading indicator', async () => {
+    const mockResponse = { sessions: [], total: 0 };
+    mockFetch
+      .mockResolvedValueOnce(createMockResponse(mockResponse))
+      .mockResolvedValueOnce(createMockResponse(mockResponse));
+
+    const { result } = renderHook(() => useActiveSessions());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Call refresh
+    act(() => {
+      result.current.refresh();
+    });
+
+    // Loading should remain false during silent refresh
+    expect(result.current.loading).toBe(false);
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    // Should still be false after refresh completes
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('refetches when repoPath changes', async () => {
+    const mockResponse = { sessions: [], total: 0 };
+    mockFetch.mockResolvedValue(createMockResponse(mockResponse));
+
+    const { result, rerender } = renderHook(
+      ({ repoPath }) => useActiveSessions(repoPath),
+      { initialProps: { repoPath: '/repo/one' as string | undefined } }
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    let calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('repo_path=%2Frepo%2Fone');
+
+    // Change repo path
+    rerender({ repoPath: '/repo/two' });
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    calledUrl = mockFetch.mock.calls[1][0] as string;
+    expect(calledUrl).toContain('repo_path=%2Frepo%2Ftwo');
+  });
+
+  it('handles sessions without modified_at', async () => {
+    const mockResponse = {
+      sessions: [
+        { session_id: 'active-no-modified', title: 'Active No Modified', is_active: true },
+        { session_id: 'inactive-no-modified', title: 'Inactive No Modified', is_active: false },
+      ],
+      total: 2,
+    };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockResponse));
+
+    const { result } = renderHook(() => useActiveSessions());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Should only include active session (inactive without modified_at is excluded)
+    expect(result.current.sessions).toHaveLength(1);
+    expect(result.current.sessions[0].session_id).toBe('active-no-modified');
+  });
+
+  it('handles fetch errors gracefully', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+    const { result } = renderHook(() => useActiveSessions());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Should have empty sessions and not throw
+    expect(result.current.sessions).toEqual([]);
+    expect(consoleSpy).toHaveBeenCalledWith('Failed to fetch active sessions:', expect.any(Error));
+
+    consoleSpy.mockRestore();
+  });
+
+  it('handles empty response', async () => {
+    const mockResponse = { sessions: [], total: 0 };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockResponse));
+
+    const { result } = renderHook(() => useActiveSessions());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.sessions).toEqual([]);
   });
 });
 

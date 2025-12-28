@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
-import { useRepos, useIssues, usePRs, useProcesses, useSessions, useTags, useIssueTags, useCommands, useSessionCounts, useStats, buildPromptFromTemplate, exportSession, downloadExport } from './hooks/useApi';
+import { useRepos, useIssues, usePRs, useProcesses, useSessions, useActiveSessions, useTags, useIssueTags, useCommands, useSessionCounts, useStats, buildPromptFromTemplate, exportSession, downloadExport } from './hooks/useApi';
 import { useNotifications } from './hooks/useNotifications';
 import type { IssueFilters, SessionFilters, PRFilters } from './hooks/useApi';
 import { RepoSelector } from './components/RepoSelector';
@@ -210,6 +210,8 @@ export default function App() {
     dateRange: sessionListFilters.dateRange,
   };
   const { sessions, loading: sessionsLoading, refresh: refreshSessions, continueSession, deleteSession, updateSessionMetadata, bulkDeleteSessions, bulkUpdateSessions, total: sessionsTotal, page: sessionsPage, totalPages: sessionsTotalPages, goToPage: goToSessionsPage } = useSessions(sessionFilters);
+  // Separate hook for active/recent sessions (independent of history pagination)
+  const { sessions: activeSessions, refresh: refreshActiveSessions } = useActiveSessions(selectedRepo?.local_path);
   const { stats, loading: statsLoading, error: statsError, refresh: refreshStats } = useStats();
 
   // Debounced session refresh to coalesce multiple rapid refresh requests
@@ -221,10 +223,11 @@ export default function App() {
       }
       timeoutId = setTimeout(() => {
         refreshSessions();
+        refreshActiveSessions();
         timeoutId = null;
       }, 500);
     };
-  }, [refreshSessions]);
+  }, [refreshSessions, refreshActiveSessions]);
 
   const { tags, createTag } = useTags(selectedRepo?.id ?? null);
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
@@ -237,26 +240,30 @@ export default function App() {
   const handleSessionCreated = useCallback(() => {
     // Refresh the session list to pick up the new session
     refreshSessions();
+    refreshActiveSessions();
     refreshSessionCounts();
-  }, [refreshSessions, refreshSessionCounts]);
+  }, [refreshSessions, refreshActiveSessions, refreshSessionCounts]);
 
   // Handle session updated - update the session in list
   const handleSessionUpdated = useCallback((_event: { session_id: string; changes: Record<string, unknown> }) => {
     // Refresh sessions to pick up the changes
     refreshSessions();
-  }, [refreshSessions]);
+    refreshActiveSessions();
+  }, [refreshSessions, refreshActiveSessions]);
 
   // Handle session completed - update is_active flag
   const handleSessionCompleted = useCallback((_event: { session_id: string }) => {
     refreshSessions();
+    refreshActiveSessions();
     refreshSessionCounts();
-  }, [refreshSessions, refreshSessionCounts]);
+  }, [refreshSessions, refreshActiveSessions, refreshSessionCounts]);
 
   // Handle session deleted - remove from list
   const handleSessionDeleted = useCallback((_event: { session_id: string }) => {
     refreshSessions();
+    refreshActiveSessions();
     refreshSessionCounts();
-  }, [refreshSessions, refreshSessionCounts]);
+  }, [refreshSessions, refreshActiveSessions, refreshSessionCounts]);
 
   // Handle process started - add to processes list
   const handleProcessStarted = useCallback((_event: { process_id: string; session_id: string; working_dir: string }) => {
@@ -1378,10 +1385,10 @@ export default function App() {
 
           {/* Split sidebar with Sessions at top, Tabs below */}
           <Group orientation="vertical" className="flex-1 min-h-0">
-            {/* Top: Always-visible sessions */}
+            {/* Top: Always-visible sessions (uses separate API call for active/recent) */}
             <Panel defaultSize="30%" minSize="80px" maxSize="60%">
               <CompactSessionList
-                sessions={sessions}
+                sessions={activeSessions}
                 onSelectSession={handleSelectSession}
                 onContinueSession={handleContinueSession}
                 onViewAll={() => setActiveTab('history')}

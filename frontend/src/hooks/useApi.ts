@@ -555,6 +555,59 @@ export function useSessions(filters: SessionFilters = {}) {
   return { sessions, total, loading, refresh, continueSession, deleteSession, updateSessionMetadata, bulkDeleteSessions, bulkUpdateSessions, page, totalPages, goToPage };
 }
 
+// Active/Recent Sessions (for the always-visible sessions panel)
+// Fetches active and recently modified sessions independently of history pagination
+export function useActiveSessions(repoPath?: string) {
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchActiveSessions = useCallback(async (showLoading: boolean = false) => {
+    try {
+      if (showLoading) setLoading(true);
+      const params = new URLSearchParams();
+      if (repoPath) params.set('repo_path', repoPath);
+      // Sort by modified_at descending to get most recent first
+      params.set('sort', 'updated');
+      params.set('order', 'desc');
+      // Get enough sessions to show active + recent ones
+      params.set('limit', '50');
+      params.set('offset', '0');
+
+      const data = await fetchJson<SessionListResponse>(
+        `${API_BASE}/sessions?${params}`
+      );
+
+      // Filter to active + recently modified (within last 10 minutes)
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+      const prominentSessions = data.sessions.filter(s => {
+        if (s.is_active) return true;
+        if (s.modified_at) {
+          const modified = new Date(s.modified_at);
+          return modified > tenMinutesAgo;
+        }
+        return false;
+      });
+
+      setSessions(prominentSessions);
+    } catch (e) {
+      console.error('Failed to fetch active sessions:', e);
+    } finally {
+      // Only update loading state if we showed loading indicator
+      if (showLoading) setLoading(false);
+    }
+  }, [repoPath]);
+
+  // Refresh function for external use (silent by default)
+  const refresh = useCallback(() => fetchActiveSessions(false), [fetchActiveSessions]);
+
+  // Initial load and when repo changes
+  useEffect(() => {
+    fetchActiveSessions(true);
+  }, [fetchActiveSessions]);
+
+  return { sessions, loading, refresh };
+}
+
 // Session counts per repo (for badges)
 // Now event-driven via WebSocket - no polling
 export function useSessionCounts() {
