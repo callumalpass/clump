@@ -2,6 +2,7 @@ import { useMemo, memo } from 'react';
 import type { PR, SessionSummary, Process, CommandMetadata } from '../types';
 import type { PRFilters, SessionStatusFilter } from '../hooks/useApi';
 import { PRStartSessionButton } from './PRStartSessionButton';
+import { DiffBar } from './PRDetail';
 import {
   FilterBar,
   FilterBarRow,
@@ -110,6 +111,7 @@ const PRListItem = memo(function PRListItem({
               <span className="text-green-500">+{pr.additions}</span>
               <span className="text-red-500">-{pr.deletions}</span>
             </span>
+            <DiffBar additions={pr.additions} deletions={pr.deletions} />
             <span>{pr.changed_files} file{pr.changed_files !== 1 ? 's' : ''}</span>
             {prSessions.length > 0 && (
               <span className="text-purple-400">{prSessions.length} session{prSessions.length !== 1 ? 's' : ''}</span>

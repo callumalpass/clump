@@ -1,9 +1,66 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import type { PRDetail as PRDetailType, SessionSummary, Process, CommandMetadata } from '../types';
 import { fetchPR } from '../hooks/useApi';
 import { Markdown } from './Markdown';
 import { PRStartSessionButton } from './PRStartSessionButton';
 import { getTimeWithTooltip } from '../utils/time';
+
+/**
+ * Visual diff bar showing additions vs deletions ratio (like GitHub)
+ * Shows a horizontal bar with green (additions) and red (deletions) segments
+ */
+interface DiffBarProps {
+  additions: number;
+  deletions: number;
+  /** Maximum number of blocks to display (default 5) */
+  maxBlocks?: number;
+}
+
+export const DiffBar = memo(function DiffBar({ additions, deletions, maxBlocks = 5 }: DiffBarProps) {
+  const total = additions + deletions;
+
+  // Don't show if no changes
+  if (total === 0) return null;
+
+  // Calculate how many blocks for each type
+  const additionRatio = additions / total;
+  const additionBlocks = Math.round(additionRatio * maxBlocks);
+  const deletionBlocks = maxBlocks - additionBlocks;
+
+  // Generate blocks array
+  const blocks: ('add' | 'del' | 'neutral')[] = [];
+  for (let i = 0; i < additionBlocks; i++) blocks.push('add');
+  for (let i = 0; i < deletionBlocks; i++) blocks.push('del');
+
+  // If we have blocks but all same type, ensure at least one of each if both exist
+  if (additions > 0 && deletions > 0 && (additionBlocks === 0 || deletionBlocks === 0)) {
+    if (additionBlocks === 0) blocks[0] = 'add';
+    if (deletionBlocks === 0) blocks[blocks.length - 1] = 'del';
+  }
+
+  // Edge case: if only additions or only deletions, show all one color
+  if (additions === 0) blocks.fill('del');
+  if (deletions === 0) blocks.fill('add');
+
+  return (
+    <div
+      className="inline-flex items-center gap-0.5"
+      title={`+${additions.toLocaleString()} additions, -${deletions.toLocaleString()} deletions`}
+      aria-label={`${additions} additions, ${deletions} deletions`}
+    >
+      {blocks.map((type, i) => (
+        <span
+          key={i}
+          className={`w-2 h-2 rounded-sm transition-transform hover:scale-125 ${
+            type === 'add' ? 'bg-green-500' :
+            type === 'del' ? 'bg-red-500' :
+            'bg-gray-500'
+          }`}
+        />
+      ))}
+    </div>
+  );
+});
 
 interface PRDetailProps {
   repoId: number;
@@ -141,6 +198,7 @@ export function PRDetail({
             <span className="text-green-500">+{pr.additions}</span>
             <span className="text-red-500">-{pr.deletions}</span>
             <span>{pr.changed_files} file{pr.changed_files !== 1 ? 's' : ''} changed</span>
+            <DiffBar additions={pr.additions} deletions={pr.deletions} />
           </div>
         </div>
         <PRStartSessionButton
