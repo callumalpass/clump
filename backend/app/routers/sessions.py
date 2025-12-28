@@ -11,6 +11,10 @@ from typing import Optional
 import time
 
 from fastapi import APIRouter, HTTPException, Query
+from sqlalchemy import select
+
+from app.database import get_repo_db
+from app.models import Session, SessionStatus
 
 # Session discovery cache with TTL
 # This avoids redundant filesystem scans when polling frequently
@@ -99,6 +103,16 @@ def invalidate_session_cache(repo_path: Optional[str] = None) -> None:
         _session_cache.pop("__all__", None)  # Also invalidate global cache
     else:
         _session_cache.clear()
+
+
+def _get_running_headless_session_ids() -> set[str]:
+    """
+    Get session IDs of headless sessions that are currently running.
+
+    Uses the headless analyzer's in-memory tracking for reliable real-time status.
+    """
+    from app.services.headless_analyzer import headless_analyzer
+    return set(headless_analyzer.list_running())
 
 
 def _message_to_response(msg: TranscriptMessage) -> TranscriptMessageResponse:
@@ -229,6 +243,65 @@ def _get_pending_sessions(
             starred=starred,
             is_active=True,
         ))
+
+    return pending
+
+
+def _get_pending_headless_sessions(
+    discovered_session_ids: set[str],
+    repo_path: Optional[str] = None,
+) -> list[SessionSummaryResponse]:
+    """
+    Get synthetic session summaries for running headless sessions that don't have JSONL files yet.
+
+    Uses in-memory tracking from the headless analyzer for reliable real-time status,
+    and sidecar metadata for session info.
+    """
+    from app.services.headless_analyzer import headless_analyzer
+
+    pending = []
+    running_ids = set(headless_analyzer.list_running())
+
+    # Only process sessions that are running but not yet discovered
+    pending_ids = running_ids - discovered_session_ids
+    if not pending_ids:
+        return pending
+
+    repos = load_repos()
+
+    # Filter to specific repo if provided
+    if repo_path:
+        repos = [r for r in repos if r["local_path"] == repo_path]
+
+    for repo in repos:
+        encoded_path = encode_path(repo["local_path"])
+        repo_name = f"{repo['owner']}/{repo['name']}" if repo.get('owner') and repo.get('name') else None
+
+        for session_id in pending_ids:
+            # Try to get sidecar metadata if it exists
+            metadata = get_session_metadata(encoded_path, session_id)
+
+            # Only include if metadata exists for this repo (means session belongs to this repo)
+            if metadata:
+                entities = _entities_to_response(metadata.entities)
+
+                pending.append(SessionSummaryResponse(
+                    session_id=session_id,
+                    encoded_path=encoded_path,
+                    repo_path=repo["local_path"],
+                    repo_name=repo_name,
+                    title=metadata.title or "Running...",
+                    model=None,
+                    start_time=metadata.created_at,
+                    end_time=None,
+                    message_count=0,
+                    modified_at=datetime.utcnow().isoformat(),
+                    file_size=0,
+                    entities=entities,
+                    tags=metadata.tags,
+                    starred=metadata.starred,
+                    is_active=True,
+                ))
 
     return pending
 
@@ -436,6 +509,10 @@ async def list_sessions(
         if proc.claude_session_id
     }
 
+    # Also include headless sessions that are currently running (e.g., scheduled jobs)
+    running_headless_ids = _get_running_headless_session_ids()
+    active_session_ids.update(running_headless_ids)
+
     # Track which sessions we've discovered (have JSONL files)
     discovered_session_ids = {s.session_id for s in sessions}
 
@@ -445,6 +522,10 @@ async def list_sessions(
     # Add pending sessions (active processes without JSONL files yet)
     pending = _get_pending_sessions(active_session_ids, discovered_session_ids, repo_path)
     summaries.extend(pending)
+
+    # Add pending headless sessions (running in database but no JSONL file yet)
+    pending_headless = _get_pending_headless_sessions(discovered_session_ids, repo_path)
+    summaries.extend(pending_headless)
 
     # Sort based on the requested field and order
     reverse = order == "desc"
@@ -504,6 +585,10 @@ async def get_session_counts():
         if proc.claude_session_id
     }
 
+    # Also include headless sessions that are currently running (e.g., scheduled jobs)
+    running_headless_ids = _get_running_headless_session_ids()
+    active_session_ids.update(running_headless_ids)
+
     counts = []
     for repo in repos:
         # Discover sessions for this repo (use cached)
@@ -523,9 +608,13 @@ async def get_session_counts():
                 if encoded_filter == encoded_proc:
                     active_count += 1
 
+        # Also count pending headless sessions (running in database but no JSONL file yet)
+        pending_headless = _get_pending_headless_sessions(discovered_ids, repo["local_path"])
+        active_count += len(pending_headless)
+
         counts.append(RepoSessionCount(
             repo_id=repo["id"],
-            total=len(sessions),
+            total=len(sessions) + len(pending_headless),
             active=active_count,
         ))
 

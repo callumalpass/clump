@@ -6,6 +6,7 @@ Sessions are stored in per-repo databases at ~/.clump/projects/{hash}/data.db.
 """
 
 import asyncio
+from uuid import uuid4
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -61,24 +62,29 @@ async def run_headless_session(data: HeadlessSessionCreate):
     """
     repo = get_repo_or_404(data.repo_id)
 
+    # Generate session ID upfront so we can track it as "active" during execution
+    claude_session_id = str(uuid4())
+
     async with get_repo_db(repo["local_path"]) as db:
-        # Create session record
+        # Create session record with the session ID already set
         session = Session(
             repo_id=repo["id"],
             kind=data.kind,
             title=data.title,
             prompt=data.prompt,
             status=SessionStatus.RUNNING.value,
+            claude_session_id=claude_session_id,
         )
         db.add(session)
         await db.commit()
         await db.refresh(session)
 
         try:
-            # Run headless session
+            # Run headless session with our pre-generated session ID
             result = await headless_analyzer.analyze(
                 prompt=data.prompt,
                 working_dir=repo["local_path"],
+                session_id=claude_session_id,
                 allowed_tools=data.allowed_tools,
                 disallowed_tools=data.disallowed_tools,
                 permission_mode=data.permission_mode,
@@ -93,12 +99,11 @@ async def run_headless_session(data: HeadlessSessionCreate):
                 SessionStatus.COMPLETED.value if result.success else SessionStatus.FAILED.value
             )
             session.transcript = result.result
-            session.claude_session_id = result.session_id
             await db.commit()
 
             return HeadlessSessionResponse(
                 session_id=session.id,
-                claude_session_id=result.session_id,
+                claude_session_id=claude_session_id,
                 result=result.result,
                 success=result.success,
                 cost_usd=result.cost_usd,
@@ -122,6 +127,9 @@ async def run_headless_session_stream(data: HeadlessSessionCreate):
     """
     repo = get_repo_or_404(data.repo_id)
 
+    # Generate session ID upfront so we can track it as "active" during execution
+    claude_session_id = str(uuid4())
+
     # Create session record outside the generator
     async with get_repo_db(repo["local_path"]) as db:
         session = Session(
@@ -130,6 +138,7 @@ async def run_headless_session_stream(data: HeadlessSessionCreate):
             title=data.title,
             prompt=data.prompt,
             status=SessionStatus.RUNNING.value,
+            claude_session_id=claude_session_id,
         )
         db.add(session)
         await db.commit()
@@ -139,13 +148,13 @@ async def run_headless_session_stream(data: HeadlessSessionCreate):
     async def generate():
         """Generate streaming response."""
         full_result = ""
-        claude_session_id = ""
         success = False
 
         try:
             async for msg in headless_analyzer.analyze_stream(
                 prompt=data.prompt,
                 working_dir=repo["local_path"],
+                session_id=claude_session_id,
                 allowed_tools=data.allowed_tools,
                 disallowed_tools=data.disallowed_tools,
                 permission_mode=data.permission_mode,
@@ -154,9 +163,6 @@ async def run_headless_session_stream(data: HeadlessSessionCreate):
                 system_prompt=data.system_prompt,
                 resume_session=data.resume_session,
             ):
-                # Track session ID and result
-                if msg.session_id:
-                    claude_session_id = msg.session_id
                 if msg.type == "result" and msg.subtype == "success":
                     full_result = msg.content or ""
                     success = True
@@ -166,7 +172,7 @@ async def run_headless_session_stream(data: HeadlessSessionCreate):
                     "type": msg.type,
                     "subtype": msg.subtype,
                     "content": msg.content,
-                    "session_id": msg.session_id,
+                    "session_id": claude_session_id,
                     "cost_usd": msg.cost_usd,
                     "duration_ms": msg.duration_ms,
                 }) + "\n"
@@ -181,7 +187,6 @@ async def run_headless_session_stream(data: HeadlessSessionCreate):
                         SessionStatus.COMPLETED.value if success else SessionStatus.FAILED.value
                     )
                     session.transcript = full_result
-                    session.claude_session_id = claude_session_id
                     await db.commit()
 
         except Exception as e:
