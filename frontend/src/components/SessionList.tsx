@@ -205,10 +205,11 @@ export function SessionList({
     <div className="flex flex-col flex-1 min-h-0">
       {filterBar}
       <div className="divide-y divide-gray-700 overflow-auto flex-1 min-h-0">
-        {sessions.map((session) => (
+        {sessions.map((session, index) => (
           <div
             key={session.session_id}
-            className="group p-3 cursor-pointer border-l-2 border-transparent hover:bg-gray-800/60 hover:border-blue-500/50 transition-all duration-150 ease-out list-item-hover"
+            className="group p-3 cursor-pointer border-l-2 border-transparent hover:bg-gray-800/60 hover:border-blue-500/50 transition-all duration-150 ease-out list-item-hover list-item-enter"
+            style={{ '--item-index': Math.min(index, 15) } as React.CSSProperties}
             onClick={() => onSelectSession(session)}
           >
             <div className="flex items-center gap-2 mb-1">
@@ -326,7 +327,7 @@ export function SessionList({
           <button
             onClick={() => onPageChange(page - 1)}
             disabled={page <= 1}
-            className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900 flex items-center gap-1"
+            className="btn-secondary px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900 flex items-center gap-1"
             aria-label="Go to previous page"
           >
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -340,7 +341,7 @@ export function SessionList({
           <button
             onClick={() => onPageChange(page + 1)}
             disabled={page >= totalPages}
-            className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900 flex items-center gap-1"
+            className="btn-secondary px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900 flex items-center gap-1"
             aria-label="Go to next page"
           >
             <span>Next</span>

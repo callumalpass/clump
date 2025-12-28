@@ -130,6 +130,24 @@ body {
   animation: empty-state-float 3s ease-in-out infinite;
 }
 
+/* List item entrance animation - subtle fade and slide */
+@keyframes list-item-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.list-item-enter {
+  animation: list-item-enter 200ms ease-out forwards;
+  animation-delay: calc(var(--item-index, 0) * 30ms);
+  opacity: 0; /* Start hidden before animation runs */
+}
+
 /* List item hover lift effect */
 .list-item-hover {
   transition: transform 150ms ease-out, box-shadow 150ms ease-out, background-color 150ms ease-out;
@@ -202,6 +220,36 @@ textarea::placeholder {
 .toggle-btn:active:not(:disabled) {
   transform: scale(0.97);
   box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5);
+}
+
+/* Primary button press state - adds tactile depth on click */
+.btn-primary {
+  transition: background-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+
+.btn-primary:active:not(:disabled) {
+  background-color: #1d4ed8; /* blue-700 */
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Danger button press state */
+.btn-danger {
+  transition: background-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+
+.btn-danger:active:not(:disabled) {
+  background-color: #b91c1c; /* red-700 */
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Secondary/ghost button press state */
+.btn-secondary {
+  transition: background-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+
+.btn-secondary:active:not(:disabled) {
+  background-color: #374151; /* gray-700 */
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 /* Message bubble styling for conversation view */
@@ -282,8 +330,14 @@ textarea::placeholder {
   .empty-state-enter,
   .empty-state-icon-float,
   .message-bubble-enter,
-  .dropdown-menu-enter {
+  .dropdown-menu-enter,
+  .list-item-enter {
     animation: none;
+  }
+
+  /* Ensure list items are visible immediately */
+  .list-item-enter {
+    opacity: 1;
   }
 
   /* Disable Tailwind's built-in animations */
@@ -307,6 +361,9 @@ textarea::placeholder {
   /* Reduce transition durations to near-instant */
   .list-item-hover,
   .toggle-btn,
+  .btn-primary,
+  .btn-danger,
+  .btn-secondary,
   .message-bubble,
   .message-assistant,
   .message-user,

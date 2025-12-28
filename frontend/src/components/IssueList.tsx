@@ -201,7 +201,7 @@ export function IssueList({
       {/* Issue list */}
       {!loading && filteredIssues.length > 0 && (
         <div className="flex-1 overflow-auto min-h-0 divide-y divide-gray-700">
-          {filteredIssues.map((issue) => {
+          {filteredIssues.map((issue, index) => {
           const issueSessions = sessionsByIssue[issue.number.toString()] || [];
           // Check if any session is actively running
           const hasRunning = issueSessions.some(s => s.is_active);
@@ -211,11 +211,12 @@ export function IssueList({
           return (
             <div
               key={issue.number}
-              className={`p-3 cursor-pointer border-l-2 transition-all duration-150 ease-out list-item-hover ${
+              className={`p-3 cursor-pointer border-l-2 transition-all duration-150 ease-out list-item-hover list-item-enter ${
                 selectedIssue === issue.number
                   ? 'bg-gray-800/80 border-blue-500 list-item-selected'
                   : 'border-transparent hover:bg-gray-800/60 hover:border-blue-500/50'
               }`}
+              style={{ '--item-index': Math.min(index, 15) } as React.CSSProperties}
               onClick={() => onSelectIssue(issue.number)}
             >
               <div className="flex items-start justify-between gap-2">
@@ -324,7 +325,7 @@ export function IssueList({
               <button
                 onClick={() => onPageChange(page - 1)}
                 disabled={page <= 1}
-                className={`px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 transition-all ${focusRing} flex items-center gap-1`}
+                className={`btn-secondary px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${focusRing} flex items-center gap-1`}
                 aria-label="Go to previous page"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -338,7 +339,7 @@ export function IssueList({
               <button
                 onClick={() => onPageChange(page + 1)}
                 disabled={page >= totalPages}
-                className={`px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 transition-all ${focusRing} flex items-center gap-1`}
+                className={`btn-secondary px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${focusRing} flex items-center gap-1`}
                 aria-label="Go to next page"
               >
                 <span>Next</span>
