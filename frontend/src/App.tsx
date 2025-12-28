@@ -808,10 +808,30 @@ export default function App() {
 
   // Find the active process and its related session
   const activeProcess = processes.find(p => p.id === activeProcessId);
-  const activeSession = activeProcess?.claude_session_id
+  const activeSessionFromList = activeProcess?.claude_session_id
     ? (sessions.find(s => s.session_id === activeProcess.claude_session_id)
       ?? cachedSessionsRef.current.get(activeProcess.claude_session_id))
     : null;
+
+  // Synthesize session from process data if not found (handles hot reloads, pagination gaps)
+  const activeSession: SessionSummary | null = activeSessionFromList
+    ?? (activeProcess?.claude_session_id && selectedRepo ? {
+      session_id: activeProcess.claude_session_id,
+      encoded_path: '',
+      repo_path: activeProcess.working_dir,
+      repo_name: `${selectedRepo.owner}/${selectedRepo.name}`,
+      title: pendingSessionsRef.current.get(activeProcess.claude_session_id)?.title || 'Active Session',
+      model: null,
+      start_time: activeProcess.created_at,
+      end_time: null,
+      message_count: 0,
+      modified_at: activeProcess.created_at,
+      file_size: 0,
+      entities: pendingSessionsRef.current.get(activeProcess.claude_session_id)?.entities || [],
+      tags: [],
+      starred: false,
+      is_active: true,
+    } : null);
 
   // Find the session being viewed (for transcript panel)
   const viewingSession = viewingSessionId
@@ -825,8 +845,9 @@ export default function App() {
     : null;
 
   // Cache active/viewing sessions so they persist across pagination changes
-  if (activeSession && activeProcess?.claude_session_id) {
-    cachedSessionsRef.current.set(activeProcess.claude_session_id, activeSession);
+  // Only cache real sessions from API, not synthetic ones
+  if (activeSessionFromList && activeProcess?.claude_session_id) {
+    cachedSessionsRef.current.set(activeProcess.claude_session_id, activeSessionFromList);
   }
   if (viewingSession && viewingSessionId) {
     cachedSessionsRef.current.set(viewingSessionId, viewingSession);
