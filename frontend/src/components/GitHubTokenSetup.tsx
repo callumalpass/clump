@@ -38,16 +38,13 @@ export function GitHubTokenSetup({ onTokenConfigured }: GitHubTokenSetupProps) {
     e.preventDefault();
     setError('');
     setLoading(true);
-    console.log('Submitting token...');
 
     try {
-      console.log('Making POST request...');
       const res = await fetch('/api/settings/github-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
-      console.log('Response status:', res.status);
 
       if (!res.ok) {
         const data = await res.json();
@@ -55,7 +52,6 @@ export function GitHubTokenSetup({ onTokenConfigured }: GitHubTokenSetupProps) {
       }
 
       const data = await res.json();
-      console.log('Response data:', data);
       setStatus(data);
       setToken('');
       setIsEditing(false);

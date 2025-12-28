@@ -346,14 +346,16 @@ export default function App() {
       tabsRepoIdRef.current = null;
     }
 
-    // Clear process (we'll check if any restored tabs have running processes separately)
-    setActiveProcessId(null);
-    setExpandedSessionId(null);
-
-    // Clear pending context refs and session cache
-    pendingIssueContextRef.current = null;
-    pendingPRContextRef.current = null;
-    cachedSessionsRef.current.clear();
+    // Only clear process/cache if repo actually changed (not on hot reload)
+    const repoActuallyChanged = tabsRepoIdRef.current !== null && tabsRepoIdRef.current !== selectedRepo?.id;
+    if (repoActuallyChanged || !selectedRepo?.id) {
+      setActiveProcessId(null);
+      setExpandedSessionId(null);
+      // Clear pending context refs and session cache
+      pendingIssueContextRef.current = null;
+      pendingPRContextRef.current = null;
+      cachedSessionsRef.current.clear();
+    }
   }, [selectedRepo?.id]);
 
   // Handle issue selection from list - clears expanded analysis and PR selection
