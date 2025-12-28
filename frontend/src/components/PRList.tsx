@@ -106,7 +106,7 @@ const PRListItem = memo(function PRListItem({
             </div>
           )}
           {/* Stats */}
-          <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+          <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
             <span>by {pr.author}</span>
             <span className="flex items-center gap-1">
               <span className="text-green-500">+{pr.additions}</span>

@@ -96,7 +96,7 @@ const IssueListItem = memo(function IssueListItem({
               })}
             </div>
           )}
-          <div className="text-xs text-gray-500 mt-1">
+          <div className="text-xs text-gray-400 mt-1">
             by {issue.author} · {issue.comments_count} comments
             {issueSessions.length > 0 && (
               <span className="text-purple-400"> · {issueSessions.length} session{issueSessions.length !== 1 ? 's' : ''}</span>

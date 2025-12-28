@@ -145,7 +145,7 @@ const SessionListItem = memo(function SessionListItem({
         )}
       </div>
 
-      <div className="flex items-center gap-2 text-xs text-gray-500">
+      <div className="flex items-center gap-2 text-xs text-gray-400">
         {/* Repo path */}
         <span className="px-1.5 py-0.5 bg-gray-700 hover:bg-gray-600 rounded truncate max-w-[120px] transition-colors" title={session.repo_path}>
           {formatRepoPath(session)}
@@ -173,7 +173,7 @@ const SessionListItem = memo(function SessionListItem({
         )}
 
         {/* Message count */}
-        <span className="text-gray-600">
+        <span className="text-gray-500">
           {session.message_count} msg{session.message_count !== 1 ? 's' : ''}
         </span>
 
@@ -183,7 +183,7 @@ const SessionListItem = memo(function SessionListItem({
             <ElapsedTimer startTime={session.start_time} />
           </span>
         ) : session.start_time && session.end_time ? (
-          <span className="text-gray-600" title="Total duration">
+          <span className="text-gray-500" title="Total duration">
             {calculateDuration(session.start_time, session.end_time)}
           </span>
         ) : null}
