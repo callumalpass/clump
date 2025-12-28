@@ -1,4 +1,4 @@
-import { memo, useState, useRef, useEffect } from 'react';
+import { memo, useState, useRef, useEffect, useCallback } from 'react';
 import { focusRing } from '../utils/styles';
 
 interface PaginationProps {
@@ -25,6 +25,7 @@ export const Pagination = memo(function Pagination({
 
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState(String(page));
+  const [isShaking, setIsShaking] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Focus input when entering edit mode
@@ -42,14 +43,29 @@ export const Pagination = memo(function Pagination({
     }
   }, [page, isEditing]);
 
+  // Trigger shake animation for invalid input
+  const triggerShake = useCallback(() => {
+    setIsShaking(true);
+    // Remove the class after animation completes to allow re-triggering
+    const timer = setTimeout(() => setIsShaking(false), 400);
+    return () => clearTimeout(timer);
+  }, []);
+
   const handleSubmit = () => {
     const newPage = parseInt(inputValue, 10);
     if (!isNaN(newPage) && newPage >= 1 && newPage <= safeTotal && newPage !== page) {
       onPageChange(newPage);
+      setIsEditing(false);
+    } else if (inputValue === String(page)) {
+      // Same page, just close without shake
+      setIsEditing(false);
     } else {
+      // Invalid input - shake and reset
+      triggerShake();
       setInputValue(String(page));
+      // Keep editing mode open briefly so user sees the reset
+      setTimeout(() => setIsEditing(false), 400);
     }
-    setIsEditing(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -77,7 +93,7 @@ export const Pagination = memo(function Pagination({
 
         {/* Clickable page indicator with inline edit */}
         {isEditing ? (
-          <div className="flex items-center gap-0.5 min-w-[48px] justify-center">
+          <div className={`flex items-center gap-0.5 min-w-[48px] justify-center ${isShaking ? 'input-shake' : ''}`}>
             <input
               ref={inputRef}
               type="text"
@@ -87,8 +103,11 @@ export const Pagination = memo(function Pagination({
               onChange={(e) => setInputValue(e.target.value.replace(/\D/g, ''))}
               onBlur={handleSubmit}
               onKeyDown={handleKeyDown}
-              className={`w-8 px-1 py-0.5 text-xs text-center bg-gray-700 border border-blue-500 rounded tabular-nums text-white ${focusRing}`}
+              className={`w-8 px-1 py-0.5 text-xs text-center bg-gray-700 border rounded tabular-nums text-white transition-colors ${
+                isShaking ? 'border-red-500' : 'border-blue-500'
+              } ${focusRing}`}
               aria-label="Enter page number"
+              aria-invalid={isShaking}
             />
             <span className="text-gray-500 text-xs">/ {safeTotal}</span>
           </div>

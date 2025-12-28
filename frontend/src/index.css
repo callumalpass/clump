@@ -13,6 +13,23 @@ body {
   padding: 8px;
 }
 
+/* Input shake animation for validation feedback */
+@keyframes input-shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translateX(-3px);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translateX(3px);
+  }
+}
+
+.input-shake {
+  animation: input-shake 400ms ease-out;
+}
+
 /* Skeleton loading shimmer effect */
 @keyframes shimmer {
   0% {
@@ -833,7 +850,8 @@ button:disabled .kbd-hint {
   .status-badge-enter,
   .session-tab-enter,
   .filter-indicator-enter,
-  .copy-success-icon {
+  .copy-success-icon,
+  .input-shake {
     animation: none;
   }
 
