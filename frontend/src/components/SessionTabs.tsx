@@ -1,6 +1,9 @@
 import type { SessionSummary, Process } from '../types';
 import { ElapsedTimer } from './ElapsedTimer';
 
+/** Consistent focus ring styling for accessibility */
+const focusRing = 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900';
+
 /** Maximum length of a tab title before truncation */
 const MAX_TAB_TITLE_LENGTH = 30;
 /** Suffix appended to truncated titles */
@@ -62,7 +65,7 @@ export function SessionTabs({
             key={session.session_id}
             role="tab"
             tabIndex={0}
-            className={`group flex items-center gap-1.5 px-3 py-2 cursor-pointer border-b-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset ${
+            className={`group flex items-center gap-1.5 px-3 py-2 cursor-pointer border-b-2 transition-colors ${focusRing} ${
               isActiveTab
                 ? 'border-blue-500 text-white'
                 : sessionNeedsAttention
@@ -128,7 +131,7 @@ export function SessionTabs({
             </span>
             {/* Show elapsed time for running sessions */}
             {isRunning && activeProcess && (
-              <ElapsedTimer startTime={activeProcess.created_at} className="text-xs text-gray-500 tabular-nums" />
+              <ElapsedTimer startTime={activeProcess.created_at} className="text-xs text-yellow-400 tabular-nums" />
             )}
             <button
               type="button"
@@ -136,7 +139,7 @@ export function SessionTabs({
                 e.stopPropagation();
                 onCloseSession(session.session_id);
               }}
-              className="ml-1 p-0.5 rounded text-gray-600 group-hover:text-gray-400 hover:!bg-red-500/10 hover:!text-red-400 focus:outline-none focus:ring-1 focus:ring-red-400/50 transition-colors duration-150"
+              className={`ml-1 p-0.5 rounded text-gray-600 group-hover:text-gray-400 hover:!bg-red-500/10 hover:!text-red-400 transition-colors duration-150 ${focusRing}`}
               title="Close tab"
               aria-label={`Close ${session.title || 'session'}`}
             >
@@ -150,7 +153,7 @@ export function SessionTabs({
       <button
         onClick={onNewSession}
         disabled={newSessionDisabled}
-        className={`px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset ${
+        className={`px-3 py-2 transition-colors ${focusRing} ${
           newSessionDisabled
             ? 'text-gray-600 cursor-not-allowed'
             : 'text-gray-400 hover:text-white hover:bg-gray-800'
