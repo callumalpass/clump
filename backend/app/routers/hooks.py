@@ -31,8 +31,10 @@ class NotificationHookPayload(BaseModel):
     transcript_path: str | None = None
     cwd: str | None = None
     hook_event_name: str = "Notification"
-    # The notification message from Claude Code
-    notification: str | None = None
+    # The notification message from Claude Code (field name is "message" in actual payload)
+    message: str | None = None
+    # The notification type from Claude Code: "permission_prompt" or "idle_prompt"
+    notification_type: str | None = None
 
 
 class PermissionRequestPayload(BaseModel):
@@ -78,22 +80,26 @@ async def handle_notification_hook(payload: NotificationHookPayload):
     }
     ```
     """
-    notification_text = payload.notification or ""
-
-    # Determine notification type based on message content
-    if "permission" in notification_text.lower():
+    # Use Claude Code's notification_type field if available
+    if payload.notification_type == "permission_prompt":
         notification_type = NotificationType.PERMISSION_NEEDED
-    elif "waiting" in notification_text.lower() or "idle" in notification_text.lower():
+    elif payload.notification_type == "idle_prompt":
         notification_type = NotificationType.IDLE
     else:
-        # Default to permission needed for any notification
-        notification_type = NotificationType.PERMISSION_NEEDED
+        # Fallback: parse the message text
+        message_text = payload.message or ""
+        if "permission" in message_text.lower():
+            notification_type = NotificationType.PERMISSION_NEEDED
+        elif "waiting" in message_text.lower() or "idle" in message_text.lower():
+            notification_type = NotificationType.IDLE
+        else:
+            notification_type = NotificationType.PERMISSION_NEEDED
 
     await notification_manager.notify(
         session_id=payload.session_id,
         notification_type=notification_type,
         data={
-            "message": notification_text,
+            "message": payload.message,
             "cwd": payload.cwd,
         },
     )
