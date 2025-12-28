@@ -161,7 +161,7 @@ describe('StartSessionButton', () => {
       expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     });
 
-    it('shows checkmark next to selected command', () => {
+    it('shows checkmark next to selected command', async () => {
       render(<StartSessionButton {...defaultProps} commands={commands} />);
 
       // Open dropdown
@@ -169,14 +169,18 @@ describe('StartSessionButton', () => {
       fireEvent.click(dropdownButton);
 
       // First command should be selected (default)
-      // Find the button for the first command and check for checkmark SVG
-      const analyzeButton = screen.getAllByRole('button').find(
-        btn => btn.textContent?.includes('Analyze') && btn.textContent?.includes('Analyze the issue')
-      );
-      expect(analyzeButton?.querySelector('svg')).toBeInTheDocument();
+      // Use role="option" which is the actual role in the component
+      await waitFor(() => {
+        const options = screen.getAllByRole('option');
+        const analyzeOption = options.find(
+          opt => opt.textContent?.includes('Analyze Issue')
+        );
+        // The selected option should have a checkmark SVG inside
+        expect(analyzeOption?.querySelector('svg')).toBeInTheDocument();
+      });
     });
 
-    it('highlights selected command in dropdown', () => {
+    it('highlights selected command in dropdown', async () => {
       render(<StartSessionButton {...defaultProps} commands={commands} />);
 
       // Open dropdown
@@ -184,10 +188,11 @@ describe('StartSessionButton', () => {
       fireEvent.click(dropdownButton);
 
       // First command should have bg-gray-700 (selected style)
-      const commandButtons = screen.getAllByRole('button').filter(
-        btn => btn.classList.contains('w-full')
-      );
-      expect(commandButtons[0]).toHaveClass('bg-gray-700');
+      // Use role="option" which is the actual role in the component
+      await waitFor(() => {
+        const commandOptions = screen.getAllByRole('option');
+        expect(commandOptions[0]).toHaveClass('bg-gray-700');
+      });
     });
 
     it('displays command descriptions in dropdown', () => {
@@ -332,7 +337,7 @@ describe('StartSessionButton', () => {
       expect(parentClick).not.toHaveBeenCalled();
     });
 
-    it('stops event propagation when command selected from dropdown', () => {
+    it('stops event propagation when command selected from dropdown', async () => {
       const parentClick = vi.fn();
 
       render(
@@ -345,11 +350,12 @@ describe('StartSessionButton', () => {
       const dropdownButton = screen.getByLabelText('Select session type');
       fireEvent.click(dropdownButton);
 
-      // Click command in dropdown
-      const commandButtons = screen.getAllByRole('button').filter(
-        btn => btn.classList.contains('w-full')
-      );
-      fireEvent.click(commandButtons[0]);
+      // Click command in dropdown using role="option"
+      await waitFor(() => {
+        const commandOptions = screen.getAllByRole('option');
+        expect(commandOptions.length).toBeGreaterThan(0);
+        fireEvent.click(commandOptions[0]!);
+      });
 
       expect(parentClick).not.toHaveBeenCalled();
     });
@@ -366,7 +372,7 @@ describe('StartSessionButton', () => {
   });
 
   describe('Command Selection Persistence', () => {
-    it('remembers selected command across dropdown opens', () => {
+    it('remembers selected command across dropdown opens', async () => {
       const commands = [
         createMockCommand({ id: 'cmd-1', name: 'Analyze', shortName: 'Analyze' }),
         createMockCommand({ id: 'cmd-2', name: 'Fix Issue', shortName: 'Fix' }),
@@ -377,19 +383,27 @@ describe('StartSessionButton', () => {
       // Open dropdown and select second command
       const dropdownButton = screen.getByLabelText('Select session type');
       fireEvent.click(dropdownButton);
-      fireEvent.click(screen.getByText('Fix Issue'));
+
+      // Wait for dropdown to render, then click the second command
+      await waitFor(() => {
+        const fixIssueOption = screen.getByText('Fix Issue');
+        fireEvent.click(fixIssueOption);
+      });
 
       // Main button should now show "Fix"
-      expect(screen.getByText('Fix')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('Fix')).toBeInTheDocument();
+      });
 
       // Open dropdown again - second command should still be selected
       fireEvent.click(dropdownButton);
 
-      const commandButtons = screen.getAllByRole('button').filter(
-        btn => btn.classList.contains('w-full')
-      );
-      // Second command should have selected styling
-      expect(commandButtons[1]).toHaveClass('bg-gray-700');
+      // Use role="option" and check the second option has selected styling
+      await waitFor(() => {
+        const commandOptions = screen.getAllByRole('option');
+        // Second command should have selected styling (aria-selected)
+        expect(commandOptions[1]).toHaveAttribute('aria-selected', 'true');
+      });
     });
   });
 });
