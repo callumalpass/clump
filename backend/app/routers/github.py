@@ -9,6 +9,9 @@ import re
 import subprocess
 from pathlib import Path
 
+from contextlib import contextmanager
+from typing import Generator
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
@@ -24,6 +27,20 @@ from app.database import clear_engine_cache
 from app.services.github_client import github_client, IssueData, PRData
 
 router = APIRouter()
+
+
+@contextmanager
+def github_api_error_handler() -> Generator[None, None, None]:
+    """Context manager that converts GitHub API exceptions to HTTPException(400).
+
+    Usage:
+        with github_api_error_handler():
+            result = github_client.some_method(...)
+    """
+    try:
+        yield
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 def parse_github_remote(local_path: str) -> tuple[str, str]:
@@ -298,11 +315,9 @@ async def create_comment(
 ):
     """Add a comment to an issue."""
     repo = get_repo_or_404(repo_id)
-    try:
+    with github_api_error_handler():
         comment_id = github_client.add_comment(repo["owner"], repo["name"], issue_number, comment.body)
         return {"id": comment_id, "status": "created"}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 
 # Issue action endpoints
@@ -313,11 +328,9 @@ async def close_issue(
 ):
     """Close an issue."""
     repo = get_repo_or_404(repo_id)
-    try:
+    with github_api_error_handler():
         github_client.close_issue(repo["owner"], repo["name"], issue_number)
         return {"status": "closed"}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/repos/{repo_id}/issues/{issue_number}/reopen")
@@ -327,11 +340,9 @@ async def reopen_issue(
 ):
     """Reopen a closed issue."""
     repo = get_repo_or_404(repo_id)
-    try:
+    with github_api_error_handler():
         github_client.reopen_issue(repo["owner"], repo["name"], issue_number)
         return {"status": "opened"}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 
 class IssueCreate(BaseModel):
@@ -348,7 +359,7 @@ async def create_issue(
 ):
     """Create a new issue."""
     repo = get_repo_or_404(repo_id)
-    try:
+    with github_api_error_handler():
         created = github_client.create_issue(
             repo["owner"],
             repo["name"],
@@ -358,8 +369,6 @@ async def create_issue(
             issue.assignees,
         )
         return _issue_to_response(created)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/repos/{repo_id}/labels")
@@ -368,11 +377,9 @@ async def get_labels(
 ):
     """Get available labels for a repository."""
     repo = get_repo_or_404(repo_id)
-    try:
+    with github_api_error_handler():
         labels = github_client.get_available_labels(repo["owner"], repo["name"])
         return {"labels": labels}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/repos/{repo_id}/assignees")
@@ -381,11 +388,9 @@ async def get_assignees(
 ):
     """Get users who can be assigned to issues."""
     repo = get_repo_or_404(repo_id)
-    try:
+    with github_api_error_handler():
         assignees = github_client.get_assignable_users(repo["owner"], repo["name"])
         return {"assignees": assignees}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 
 # PR endpoints
