@@ -152,6 +152,22 @@ def _get_running_headless_session_ids() -> set[str]:
     return set(headless_analyzer.list_running())
 
 
+async def _get_active_session_ids_from_processes() -> set[str]:
+    """
+    Get session IDs from all active Claude processes.
+
+    Returns a set of session IDs for processes that have an associated session.
+    This does NOT include headless sessions - use _get_running_headless_session_ids()
+    for those if needed.
+    """
+    active_processes = await process_manager.list_processes()
+    return {
+        proc.claude_session_id
+        for proc in active_processes
+        if proc.claude_session_id
+    }
+
+
 def _message_to_response(msg: TranscriptMessage) -> TranscriptMessageResponse:
     """Convert a TranscriptMessage to a TranscriptMessageResponse."""
     tool_uses = [
@@ -556,17 +572,9 @@ async def list_sessions(
     """
     sessions = _get_cached_sessions(repo_path=repo_path)
 
-    # Get active session IDs from running processes
-    active_processes = await process_manager.list_processes()
-    active_session_ids = {
-        proc.claude_session_id
-        for proc in active_processes
-        if proc.claude_session_id
-    }
-
-    # Also include headless sessions that are currently running (e.g., scheduled jobs)
-    running_headless_ids = _get_running_headless_session_ids()
-    active_session_ids.update(running_headless_ids)
+    # Get active session IDs from running processes and headless sessions
+    active_session_ids = await _get_active_session_ids_from_processes()
+    active_session_ids.update(_get_running_headless_session_ids())
 
     # Track which sessions we've discovered (have JSONL files)
     discovered_session_ids = {s.session_id for s in sessions}
@@ -1320,12 +1328,7 @@ async def bulk_delete_sessions(data: BulkDeleteRequest):
     Returns detailed results for each session.
     """
     # Get active session IDs to skip
-    active_processes = await process_manager.list_processes()
-    active_session_ids = {
-        proc.claude_session_id
-        for proc in active_processes
-        if proc.claude_session_id
-    }
+    active_session_ids = await _get_active_session_ids_from_processes()
 
     # Get all sessions (use cached for performance)
     sessions = _get_cached_sessions()
