@@ -25,6 +25,7 @@ class Base(DeclarativeBase):
 # Cache of engines per repo path
 _engines: dict[str, AsyncEngine] = {}
 _session_factories: dict[str, async_sessionmaker[AsyncSession]] = {}
+_initialized_dbs: set[str] = set()  # Track which DBs have been initialized
 
 
 def _get_engine(local_path: str) -> AsyncEngine:
@@ -55,10 +56,16 @@ async def init_repo_db(local_path: str) -> None:
     Initialize the database for a specific repo.
 
     Creates all tables if they don't exist.
+    Caches initialization status to avoid repeated schema checks.
     """
+    if local_path in _initialized_dbs:
+        return  # Already initialized this session
+
     engine = _get_engine(local_path)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    _initialized_dbs.add(local_path)
 
 
 @asynccontextmanager
@@ -95,6 +102,8 @@ def clear_engine_cache(local_path: str | None = None) -> None:
     if local_path is None:
         _engines.clear()
         _session_factories.clear()
+        _initialized_dbs.clear()
     else:
         _engines.pop(local_path, None)
         _session_factories.pop(local_path, None)
+        _initialized_dbs.discard(local_path)
