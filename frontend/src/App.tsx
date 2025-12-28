@@ -874,7 +874,7 @@ export default function App() {
                     if (el) tabRefs.current.set(tab, el);
                   }}
                   onClick={() => setActiveTab(tab)}
-                  className={`flex-1 px-4 py-2 text-sm capitalize outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset flex items-center justify-center gap-1.5 transition-colors duration-150 ${
+                  className={`flex-1 px-4 py-2 text-sm capitalize outline-none focus-visible:bg-blue-500/10 focus-visible:text-blue-300 flex items-center justify-center gap-1.5 transition-colors duration-150 ${
                     activeTab === tab
                       ? 'text-white'
                       : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
@@ -896,14 +896,16 @@ export default function App() {
                 </button>
               );
             })}
-            {/* Sliding indicator */}
-            <div
-              className="absolute bottom-0 h-0.5 bg-blue-500 transition-all duration-200 ease-out"
-              style={{
-                left: indicatorStyle.left,
-                width: indicatorStyle.width,
-              }}
-            />
+            {/* Sliding indicator - only show when width is calculated */}
+            {indicatorStyle.width > 0 && (
+              <div
+                className="absolute bottom-0 h-0.5 bg-blue-500 transition-all duration-200 ease-out"
+                style={{
+                  left: indicatorStyle.left,
+                  width: indicatorStyle.width,
+                }}
+              />
+            )}
           </div>
 
           {/* List content */}
