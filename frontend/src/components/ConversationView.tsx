@@ -1281,7 +1281,7 @@ function SearchHighlightedMarkdown({
   const lines = content.split('\n');
 
   return (
-    <div className="prose prose-invert prose-sm max-w-none overflow-x-auto">
+    <div className="prose prose-invert prose-sm max-w-none overflow-x-auto break-words">
       {lines.map((line, lineIndex) => (
         <div key={lineIndex} className="whitespace-pre-wrap break-words">
           <HighlightedText
@@ -1451,8 +1451,8 @@ export function ConversationView({
   if (transcript.messages.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8">
-        <div className="text-center p-6 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-xs">
-          <div className="w-14 h-14 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4">
+        <div className="text-center p-6 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-xs empty-state-enter">
+          <div className="w-14 h-14 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4 empty-state-icon-float">
             <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
