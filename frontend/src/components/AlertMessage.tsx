@@ -2,6 +2,8 @@ interface AlertMessageProps {
   type: 'error' | 'warning' | 'success' | 'info';
   message: string;
   className?: string;
+  /** Optional callback to dismiss the alert. When provided, shows a close button. */
+  onDismiss?: () => void;
 }
 
 const iconPaths: Record<AlertMessageProps['type'], string> = {
@@ -39,7 +41,7 @@ const styles: Record<AlertMessageProps['type'], { container: string; icon: strin
   },
 };
 
-export function AlertMessage({ type, message, className = '' }: AlertMessageProps) {
+export function AlertMessage({ type, message, className = '', onDismiss }: AlertMessageProps) {
   const typeStyles = styles[type];
   const iconPath = iconPaths[type];
 
@@ -62,7 +64,19 @@ export function AlertMessage({ type, message, className = '' }: AlertMessageProp
       >
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={iconPath} />
       </svg>
-      <span>{message}</span>
+      <span className="flex-1">{message}</span>
+      {onDismiss && (
+        <button
+          onClick={onDismiss}
+          className="shrink-0 p-0.5 rounded-sm opacity-60 hover:opacity-100 hover:bg-white/10 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+          aria-label="Dismiss"
+          title="Dismiss"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }
