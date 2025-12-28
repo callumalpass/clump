@@ -12,7 +12,11 @@ DEFAULT_TERMINAL_ROWS = 24
 DEFAULT_TERMINAL_COLS = 80
 
 from datetime import datetime, timezone
+import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from starlette.websockets import WebSocketState
+
+logger = logging.getLogger(__name__)
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -340,8 +344,13 @@ async def process_websocket(websocket: WebSocket, process_id: str):
         while True:
             try:
                 data = await output_queue.get()
+                if websocket.client_state != WebSocketState.CONNECTED:
+                    break
                 await websocket.send_bytes(data)
-            except Exception:
+            except (WebSocketDisconnect, asyncio.CancelledError, RuntimeError):
+                # WebSocketDisconnect: client disconnected
+                # CancelledError: task was cancelled during shutdown
+                # RuntimeError: WebSocket connection closed unexpectedly
                 break
 
     async def receive_input():
@@ -360,7 +369,13 @@ async def process_websocket(websocket: WebSocket, process_id: str):
 
             except WebSocketDisconnect:
                 break
-            except Exception:
+            except asyncio.CancelledError:
+                # Task was cancelled during shutdown
+                break
+            except (RuntimeError, ValueError) as e:
+                # RuntimeError: WebSocket in invalid state
+                # ValueError: Invalid JSON received
+                logger.debug(f"WebSocket receive error for process {process_id}: {e}")
                 break
 
     # Run both tasks concurrently
