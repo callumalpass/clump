@@ -1,9 +1,7 @@
 import { useRef, useState, useLayoutEffect } from 'react';
 import type { SessionSummary, Process } from '../types';
 import { ElapsedTimer } from './ElapsedTimer';
-
-/** Consistent focus ring styling for accessibility (focus-visible for keyboard only) */
-const focusRing = 'outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900';
+import { focusRing } from '../utils/styles';
 
 /** Maximum length of a tab title before truncation */
 const MAX_TAB_TITLE_LENGTH = 30;

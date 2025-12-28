@@ -5,9 +5,7 @@ import { IssueFilters } from './IssueFilters';
 import { StartSessionButton } from './StartSessionButton';
 import { Pagination, PaginationSkeleton } from './Pagination';
 import { getContrastColor } from '../utils/colors';
-
-/** Consistent focus ring styling for accessibility */
-const focusRing = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900';
+import { focusRing } from '../utils/styles';
 
 // Memoized list item component to prevent unnecessary re-renders
 interface IssueListItemProps {

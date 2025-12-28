@@ -1,7 +1,5 @@
 import { memo } from 'react';
-
-/** Consistent focus ring styling for accessibility */
-const focusRing = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900';
+import { focusRing } from '../utils/styles';
 
 interface PaginationProps {
   page: number;
