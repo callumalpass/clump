@@ -180,7 +180,7 @@ export function RepoSelector({
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                       </svg>
                     </div>
-                    <p className="text-sm text-gray-300 font-medium">No repositories</p>
+                    <p className="text-sm text-gray-300 font-medium">No repositories added</p>
                     <p className="text-xs text-gray-500 mt-0.5">Click + to add one</p>
                   </div>
                 ) : (

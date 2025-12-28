@@ -580,50 +580,25 @@ describe('SessionList', () => {
   });
 
   describe('Duration Display', () => {
-    it('shows duration for completed sessions with both start and end time', () => {
+    it('shows relative time for completed sessions with modified_at', () => {
+      const modifiedAt = '2024-01-15T10:35:00Z';
       const sessions = [
         createMockSession({
           is_active: false,
           start_time: '2024-01-15T10:30:00Z',
-          end_time: '2024-01-15T10:35:00Z',  // 5 minute duration
-        }),
-      ];
-
-      render(<SessionList {...defaultProps} sessions={sessions} total={1} />);
-
-      // The calculateDuration function should show "5m" for 5 minutes
-      expect(screen.getByTitle('Total duration')).toBeInTheDocument();
-    });
-
-    it('does not show duration when start_time is missing', () => {
-      const sessions = [
-        createMockSession({
-          is_active: false,
-          start_time: null,
           end_time: '2024-01-15T10:35:00Z',
+          modified_at: modifiedAt,
         }),
       ];
 
       render(<SessionList {...defaultProps} sessions={sessions} total={1} />);
 
-      expect(screen.queryByTitle('Total duration')).not.toBeInTheDocument();
+      // The relative time should be shown with a title containing the full date
+      const dateTitle = new Date(modifiedAt).toLocaleString();
+      expect(screen.getByTitle(dateTitle)).toBeInTheDocument();
     });
 
-    it('does not show duration when end_time is missing for completed sessions', () => {
-      const sessions = [
-        createMockSession({
-          is_active: false,
-          start_time: '2024-01-15T10:30:00Z',
-          end_time: null,
-        }),
-      ];
-
-      render(<SessionList {...defaultProps} sessions={sessions} total={1} />);
-
-      expect(screen.queryByTitle('Total duration')).not.toBeInTheDocument();
-    });
-
-    it('shows elapsed timer instead of duration for active sessions', () => {
+    it('shows elapsed timer for active sessions', () => {
       const sessions = [
         createMockSession({
           is_active: true,

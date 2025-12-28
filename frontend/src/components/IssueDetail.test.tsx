@@ -411,7 +411,7 @@ describe('IssueDetail', () => {
       render(<IssueDetail {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText('No comments yet.')).toBeInTheDocument();
+        expect(screen.getByText('No comments yet. Be the first to comment!')).toBeInTheDocument();
       });
     });
 

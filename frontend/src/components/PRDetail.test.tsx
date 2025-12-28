@@ -281,7 +281,7 @@ describe('PRDetail', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Comments (0)')).toBeInTheDocument();
-        expect(screen.getByText('No comments yet.')).toBeInTheDocument();
+        expect(screen.getByText('No comments yet on this pull request.')).toBeInTheDocument();
       });
     });
   });
