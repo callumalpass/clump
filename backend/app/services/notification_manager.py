@@ -58,6 +58,27 @@ class NotificationManager:
         self._global_subscribers: list[Callable[[Notification], Any]] = []
         self._lock = asyncio.Lock()
 
+    async def _invoke_callback_safe(
+        self,
+        callback: Callable[[Notification], Any],
+        notification: Notification,
+        context: str,
+    ) -> None:
+        """
+        Invoke a callback safely, handling both sync and async callbacks.
+
+        Args:
+            callback: The callback function to invoke
+            notification: The notification to pass to the callback
+            context: Description for logging on failure (e.g., "session abc123")
+        """
+        try:
+            result = callback(notification)
+            if asyncio.iscoroutine(result):
+                await result
+        except Exception:
+            logger.exception("Notification callback failed for %s", context)
+
     async def notify(
         self,
         session_id: str,
@@ -85,21 +106,15 @@ class NotificationManager:
         # Notify session-specific subscribers
         subscribers = self._subscribers.get(session_id, [])
         for callback in subscribers:
-            try:
-                result = callback(notification)
-                if asyncio.iscoroutine(result):
-                    await result
-            except Exception:
-                logger.exception("Notification callback failed for session %s", session_id)
+            await self._invoke_callback_safe(
+                callback, notification, f"session {session_id}"
+            )
 
         # Notify global subscribers
         for callback in self._global_subscribers:
-            try:
-                result = callback(notification)
-                if asyncio.iscoroutine(result):
-                    await result
-            except Exception:
-                logger.exception("Global notification callback failed for session %s", session_id)
+            await self._invoke_callback_safe(
+                callback, notification, f"global subscriber (session {session_id})"
+            )
 
     async def clear_attention(self, session_id: str) -> None:
         """
