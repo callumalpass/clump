@@ -14,7 +14,19 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 from app.config import settings, DEFAULT_ALLOWED_TOOLS
+
 from app.storage import load_config, save_config
+
+# GitHub token validation constants
+GITHUB_TOKEN_VALID_PREFIXES = ("ghp_", "github_pat_")
+GITHUB_TOKEN_MIN_DISPLAY_LENGTH = 9  # Minimum length to safely display masked token
+GITHUB_TOKEN_MASK_CHARS = 4  # Characters to show at start and end of masked token
+
+
+def _mask_token(token: str) -> str:
+    """Mask a token for safe display, showing only first and last few characters."""
+    return f"{token[:GITHUB_TOKEN_MASK_CHARS]}...{token[-GITHUB_TOKEN_MASK_CHARS:]}"
+
 
 router = APIRouter()
 
@@ -60,9 +72,8 @@ async def get_github_token_status():
     """Check if GitHub token is configured."""
     token = settings.github_token or os.environ.get("GITHUB_TOKEN", "")
 
-    if token and len(token) > 8:
-        masked = f"{token[:4]}...{token[-4:]}"
-        return GitHubTokenStatus(configured=True, masked_token=masked)
+    if token and len(token) >= GITHUB_TOKEN_MIN_DISPLAY_LENGTH:
+        return GitHubTokenStatus(configured=True, masked_token=_mask_token(token))
 
     return GitHubTokenStatus(configured=False)
 
@@ -76,10 +87,10 @@ async def set_github_token(request: GitHubTokenRequest):
         raise HTTPException(status_code=400, detail="Token cannot be empty")
 
     # Validate token format (basic check)
-    if not (token.startswith("ghp_") or token.startswith("github_pat_")):
+    if not token.startswith(GITHUB_TOKEN_VALID_PREFIXES):
         raise HTTPException(
             status_code=400,
-            detail="Invalid token format. Should start with 'ghp_' or 'github_pat_'"
+            detail=f"Invalid token format. Should start with one of: {', '.join(repr(p) for p in GITHUB_TOKEN_VALID_PREFIXES)}"
         )
 
     # Save to config.json
@@ -101,8 +112,7 @@ async def set_github_token(request: GitHubTokenRequest):
     # Reload settings
     settings.reload()
 
-    masked = f"{token[:4]}...{token[-4:]}"
-    return GitHubTokenStatus(configured=True, masked_token=masked)
+    return GitHubTokenStatus(configured=True, masked_token=_mask_token(token))
 
 
 @router.delete("/settings/github-token")
