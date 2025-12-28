@@ -225,16 +225,8 @@ async def create_repo(repo: RepoCreate):
             )
 
     # Verify it exists on GitHub
-    try:
+    with github_api_error_handler():
         github_client.get_repo(owner, name)
-    except UnknownObjectException:
-        raise HTTPException(status_code=404, detail=f"Repository not found: {owner}/{name}")
-    except BadCredentialsException:
-        raise HTTPException(status_code=401, detail="GitHub authentication failed")
-    except RateLimitExceededException:
-        raise HTTPException(status_code=429, detail="GitHub API rate limit exceeded")
-    except GithubException as e:
-        raise HTTPException(status_code=502, detail=f"GitHub API error: {e.data}")
 
     try:
         repo_info = storage_add_repo(owner, name, repo.local_path)
