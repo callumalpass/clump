@@ -1,29 +1,22 @@
 # Clump
 
-A web UI for triaging GitHub issues with Claude Code.
+Web UI for running Claude Code against GitHub issues and PRs.
 
 ## What it does
 
-- Browse GitHub issues and comment threads
+- Browse GitHub issues and PRs with their comment threads
 - Run Claude Code sessions in embedded terminals
-- Keep multiple sessions open at once
-- Save and search past analyses
-
-## Claude Code flags used
-
-- `--allowedTools` and `--permission-mode` for permissions
-- `--session-id` / `--resume` for continuing conversations
-- `-p` for headless mode with JSON output
-- `--max-turns` to limit execution depth
-- `--model` for model selection
-- MCP GitHub server (optional)
+- Keep multiple sessions open in tabs
+- Save transcripts and search past sessions
+- Schedule recurring analyses with cron expressions
+- Track token usage and estimated costs
 
 ## Requirements
 
 - Python 3.11+
 - Node.js 18+
 - Claude Code CLI installed and authenticated
-- GitHub personal access token (for private repos)
+- GitHub personal access token
 
 ## Setup
 
@@ -31,19 +24,11 @@ A web UI for triaging GitHub issues with Claude Code.
 
 ```bash
 cd backend
-
-# Create virtual environment
 python -m venv venv
-source venv/bin/activate  # or `venv\Scripts\activate` on Windows
-
-# Install dependencies
+source venv/bin/activate
 pip install -e .
-
-# Copy and configure environment
 cp .env.example .env
 # Edit .env with your GitHub token
-
-# Run the server
 uvicorn app.main:app --reload
 ```
 
@@ -51,90 +36,106 @@ uvicorn app.main:app --reload
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Run dev server
 npm run dev
 ```
 
-Open http://localhost:5173 in your browser.
+Or use `./run.sh` to start both.
+
+Open http://localhost:5173
 
 ## Usage
 
-1. **Add a Repository**: Click "+" in the repo selector, enter owner/name and local path
-2. **Browse Issues**: Select "Issues" tab to see open issues
-3. **Analyze Issue**: Click "Analyze" on any issue to start a Claude Code session
-4. **Interact**: Type in the terminal to chat with Claude about the issue
-5. **Multiple Sessions**: Click "+" in session tabs to run parallel analyses
-6. **Search Analyses**: Use the Analyses tab to search past sessions
+1. Add a repository (owner/name + local path)
+2. Browse issues or PRs
+3. Click "Analyze" to start a Claude Code session
+4. Type in the terminal
+5. Open more tabs for parallel sessions
+6. Search past sessions in the Analyses tab
+
+## Data storage
+
+Everything lives in `~/.clump/`:
+
+```
+~/.clump/
+├── repos.json                        # Repository list
+└── projects/{hash}/
+    ├── data.db                       # SQLite (sessions, tags, schedules)
+    └── sessions/{id}/transcript.jsonl
+```
+
+Each repo gets its own database.
+
+## Configuration
+
+`backend/.env`:
+
+```bash
+# GitHub token
+GITHUB_TOKEN=ghp_...
+
+# Claude Code settings
+CLAUDE_PERMISSION_MODE=acceptEdits
+CLAUDE_ALLOWED_TOOLS=Read,Glob,Grep,Bash(git:*)
+CLAUDE_MAX_TURNS=10
+CLAUDE_MODEL=sonnet
+
+# Optional GitHub MCP server
+CLAUDE_MCP_GITHUB=false
+```
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Browser (React + xterm.js)                                 │
-│  - Issue list / detail view                                 │
-│  - Multiple terminal tabs                                   │
-│  - Analysis history                                         │
-└─────────────────────────┬───────────────────────────────────┘
-                          │ HTTP + WebSocket
-┌─────────────────────────▼───────────────────────────────────┐
-│  Backend (FastAPI)                                          │
-│  - GitHub API proxy                                         │
-│  - PTY session manager (spawns claude CLI)                  │
-│  - SQLite for analyses/repos                                │
-└─────────────────────────────────────────────────────────────┘
+Browser (React + xterm.js)
+    │
+    │ HTTP + WebSocket
+    ▼
+FastAPI backend
+    ├── GitHub API proxy
+    ├── PTY manager (spawns claude CLI)
+    ├── Transcript parser (JSONL → structured data)
+    ├── Scheduler (cron jobs)
+    └── SQLite per repo
 ```
 
-## API Endpoints
+## API
 
-### GitHub
-- `GET /api/repos` - List configured repositories
-- `POST /api/repos` - Add a repository
+### Repos & GitHub
+- `GET/POST /api/repos` - List/add repos
 - `GET /api/repos/:id/issues` - List issues
 - `GET /api/repos/:id/issues/:num` - Issue with comments
+- `GET /api/repos/:id/pulls` - List PRs
 
-### Interactive Sessions (PTY-based)
-- `POST /api/sessions` - Create terminal session with Claude Code options
+### Sessions
+- `POST /api/sessions` - Start terminal session
 - `GET /api/sessions` - List active sessions
-- `DELETE /api/sessions/:id` - Kill a session
-- `WS /api/sessions/:id/ws` - Terminal WebSocket for real-time I/O
+- `DELETE /api/sessions/:id` - Kill session
+- `WS /api/sessions/:id/ws` - Terminal I/O
 
-### Headless Analysis (programmatic)
-- `POST /api/headless/analyze` - Run analysis and wait for complete result
-- `POST /api/headless/analyze/stream` - Run analysis with streaming NDJSON output
-- `GET /api/headless/running` - List running headless analyses
-- `DELETE /api/headless/:id` - Cancel a running analysis
+### Headless (non-interactive)
+- `POST /api/headless/run` - Run and wait for result
+- `POST /api/headless/run/stream` - Stream NDJSON output
 
-### Analyses
-- `GET /api/analyses` - Search past analyses
-- `GET /api/analyses/:id` - Get analysis details
-- `PATCH /api/analyses/:id` - Update analysis summary/status
+### Saved analyses
+- `GET /api/analyses` - Search past sessions
+- `GET /api/analyses/:id` - Get transcript and metadata
+- `PATCH /api/analyses/:id` - Update summary/tags
 
-## Configuration
+### Schedules
+- `GET/POST /api/schedules` - Manage cron jobs
+- `POST /api/schedules/:id/run` - Trigger manually
 
-Configure Claude Code behavior via environment variables in `backend/.env`:
+### Other
+- `GET /api/stats` - Usage analytics
+- `GET /api/tags` - Tag management
+- `GET /api/commands` - Available slash commands
 
-```bash
-# Permission mode: "default", "plan", "acceptEdits", "bypassPermissions"
-CLAUDE_PERMISSION_MODE=acceptEdits
+## Claude Code flags used
 
-# Auto-approved tools (comma-separated)
-CLAUDE_ALLOWED_TOOLS=Read,Glob,Grep,Bash(git:*)
-
-# Max agentic turns (0 = unlimited)
-CLAUDE_MAX_TURNS=10
-
-# Model selection
-CLAUDE_MODEL=sonnet
-
-# Enable headless mode by default
-CLAUDE_HEADLESS_MODE=false
-
-# Enable GitHub MCP server
-CLAUDE_MCP_GITHUB=false
-```
-
-See `backend/.env.example` for all available options.
+- `--allowedTools` / `--permission-mode` - Permissions
+- `--session-id` / `--resume` - Continue conversations
+- `-p` - Headless mode with JSON output
+- `--max-turns` - Limit execution depth
+- `--model` - Model selection
