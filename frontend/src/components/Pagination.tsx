@@ -77,9 +77,27 @@ export const Pagination = memo(function Pagination({
     }
   };
 
+  // Show first/last buttons when there are enough pages to make them useful
+  const showFirstLast = safeTotal > 3;
+
   return (
     <div className="flex flex-col items-center gap-1">
       <div className="flex items-center gap-1">
+        {/* First page button - only show when useful */}
+        {showFirstLast && (
+          <button
+            onClick={() => onPageChange(1)}
+            disabled={page <= 1}
+            className={`btn-secondary p-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${focusRing}`}
+            aria-label="Go to first page"
+            title="First page"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+            </svg>
+          </button>
+        )}
+
         <button
           onClick={() => onPageChange(page - 1)}
           disabled={page <= 1}
@@ -137,6 +155,21 @@ export const Pagination = memo(function Pagination({
           <span>Next</span>
           {showKeyboardHints && <kbd className="kbd-hint">]</kbd>}
         </button>
+
+        {/* Last page button - only show when useful */}
+        {showFirstLast && (
+          <button
+            onClick={() => onPageChange(safeTotal)}
+            disabled={page >= safeTotal}
+            className={`btn-secondary p-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${focusRing}`}
+            aria-label="Go to last page"
+            title="Last page"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+            </svg>
+          </button>
+        )}
       </div>
       {/* Subtle progress indicator */}
       {safeTotal > 1 && (
@@ -173,7 +206,7 @@ export const PaginationSkeleton = memo(function PaginationSkeleton({
     <div className="flex flex-col items-center gap-1">
       <div className="flex items-center gap-1">
         <div className={`h-7 ${variant === 'compact' ? 'w-14' : 'w-16'} rounded skeleton-shimmer`} />
-        <div className="h-4 w-12 rounded mx-1 skeleton-shimmer" />
+        <div className="h-5 w-12 rounded mx-1 skeleton-shimmer" />
         <div className={`h-7 ${variant === 'compact' ? 'w-14' : 'w-16'} rounded skeleton-shimmer`} />
       </div>
       <div className="w-16 h-0.5 rounded-full skeleton-shimmer" />
