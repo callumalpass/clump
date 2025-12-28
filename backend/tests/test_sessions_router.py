@@ -908,8 +908,8 @@ class TestQuickScanTranscriptNoneHandling:
 
         result = _quick_scan_transcript(transcript)
 
-        # Should not crash, title should be empty string
-        assert result["title"] == ""
+        # Should not crash, title should be None (no valid text found)
+        assert result["title"] is None
         assert result["message_count"] == 1
 
     def test_scan_handles_missing_text_key_in_list_content(self, tmp_path):
@@ -932,8 +932,8 @@ class TestQuickScanTranscriptNoneHandling:
 
         result = _quick_scan_transcript(transcript)
 
-        # Should not crash, title should be empty string
-        assert result["title"] == ""
+        # Should not crash, title should be None (no valid text found)
+        assert result["title"] is None
         assert result["message_count"] == 1
 
     def test_scan_uses_first_valid_text_from_list(self, tmp_path):
@@ -956,8 +956,8 @@ class TestQuickScanTranscriptNoneHandling:
 
         result = _quick_scan_transcript(transcript)
 
-        # Should use the empty string from first text block (breaks after first)
-        assert result["title"] == ""
+        # Should skip the None text block and use the valid one
+        assert result["title"] == "Valid message"
         assert result["message_count"] == 1
 
 

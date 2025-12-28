@@ -426,6 +426,53 @@ class TestHeadlessAnalyzerRunningSessionsManagement:
         assert "session-1" in running
         assert "session-2" in running
 
+    def test_register_running_adds_session(self, analyzer):
+        """Test that register_running adds session ID to tracking set."""
+        analyzer.register_running("test-session-123")
+
+        assert "test-session-123" in analyzer._active_session_ids
+        running = analyzer.list_running()
+        assert "test-session-123" in running
+
+    def test_unregister_running_removes_session(self, analyzer):
+        """Test that unregister_running removes session ID from tracking set."""
+        analyzer._active_session_ids.add("session-to-remove")
+
+        analyzer.unregister_running("session-to-remove")
+
+        assert "session-to-remove" not in analyzer._active_session_ids
+
+    def test_unregister_running_handles_nonexistent_session(self, analyzer):
+        """Test that unregister_running handles non-existent session gracefully."""
+        # Should not raise an error
+        analyzer.unregister_running("nonexistent-session")
+
+        assert "nonexistent-session" not in analyzer._active_session_ids
+
+    def test_list_running_combines_both_tracking_mechanisms(self, analyzer):
+        """Test that list_running combines _running_sessions and _active_session_ids."""
+        # Add session via subprocess tracking
+        analyzer._running_sessions["process-session"] = MagicMock()
+        # Add session via explicit registration
+        analyzer.register_running("registered-session")
+
+        running = analyzer.list_running()
+
+        assert len(running) == 2
+        assert "process-session" in running
+        assert "registered-session" in running
+
+    def test_list_running_deduplicates_sessions(self, analyzer):
+        """Test that list_running deduplicates sessions in both tracking mechanisms."""
+        # Add same session to both tracking mechanisms
+        analyzer._running_sessions["shared-session"] = MagicMock()
+        analyzer._active_session_ids.add("shared-session")
+
+        running = analyzer.list_running()
+
+        # Should only appear once
+        assert running.count("shared-session") == 1
+
 
 class TestHeadlessAnalyzerCancel:
     """Tests for HeadlessAnalyzer.cancel method."""

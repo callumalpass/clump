@@ -387,9 +387,10 @@ def _quick_scan_transcript(transcript_path: Path) -> QuickScanResult:
                         elif isinstance(content, list):
                             for part in content:
                                 if isinstance(part, dict) and part.get('type') == 'text':
-                                    text = part.get('text') or ''
-                                    first_user_message = text[:100]
-                                    break
+                                    text = part.get('text')
+                                    if text:  # Skip None or empty text blocks
+                                        first_user_message = text[:100]
+                                        break
 
                     # Capture model
                     if entry_type == 'assistant' and not result["model"]:
