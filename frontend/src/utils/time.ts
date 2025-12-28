@@ -97,18 +97,22 @@ export function getTimeWithTooltip(dateString: string): { relative: string; full
  * Formats a duration in seconds as a human-readable string.
  * Examples: "45s", "2m 30s", "1h 15m", "2h 30m"
  * Returns null for null/undefined/negative inputs.
+ * Floating-point inputs are rounded down to whole seconds.
  */
 export function formatDuration(seconds: number | null | undefined): string | null {
   if (seconds === null || seconds === undefined || seconds < 0) {
     return null;
   }
 
-  if (seconds < 60) {
-    return `${seconds}s`;
+  // Round down to whole seconds to handle floating-point inputs
+  const totalSeconds = Math.floor(seconds);
+
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s`;
   }
 
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
+  const minutes = Math.floor(totalSeconds / 60);
+  const remainingSeconds = totalSeconds % 60;
 
   if (minutes < 60) {
     // For short durations, include seconds

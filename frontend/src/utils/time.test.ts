@@ -380,4 +380,45 @@ describe('formatDuration', () => {
       expect(formatDuration(0)).toBe('0s');
     });
   });
+
+  describe('floating-point handling', () => {
+    it('rounds down floating-point seconds', () => {
+      expect(formatDuration(30.5)).toBe('30s');
+      expect(formatDuration(30.9)).toBe('30s');
+      expect(formatDuration(30.1)).toBe('30s');
+    });
+
+    it('rounds down floating-point values at boundary', () => {
+      expect(formatDuration(59.9)).toBe('59s');
+      expect(formatDuration(60.1)).toBe('1m');
+      expect(formatDuration(60.9)).toBe('1m');
+    });
+
+    it('rounds down floating-point minutes', () => {
+      expect(formatDuration(90.5)).toBe('1m 30s');
+      expect(formatDuration(90.9)).toBe('1m 30s');
+    });
+
+    it('rounds down floating-point hours', () => {
+      expect(formatDuration(3660.5)).toBe('1h 1m');
+      expect(formatDuration(3660.9)).toBe('1h 1m');
+    });
+
+    it('handles very small positive floats', () => {
+      expect(formatDuration(0.1)).toBe('0s');
+      expect(formatDuration(0.9)).toBe('0s');
+      expect(formatDuration(0.001)).toBe('0s');
+    });
+
+    it('handles floating-point at minute/hour boundaries', () => {
+      // Just under a minute
+      expect(formatDuration(59.999)).toBe('59s');
+      // Just over a minute
+      expect(formatDuration(60.001)).toBe('1m');
+      // Just under an hour
+      expect(formatDuration(3599.999)).toBe('59m 59s');
+      // Just over an hour
+      expect(formatDuration(3600.001)).toBe('1h');
+    });
+  });
 });
