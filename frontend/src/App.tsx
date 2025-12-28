@@ -809,13 +809,28 @@ export default function App() {
   // Find the active process and its related session
   const activeProcess = processes.find(p => p.id === activeProcessId);
   const activeSession = activeProcess?.claude_session_id
-    ? sessions.find(s => s.session_id === activeProcess.claude_session_id)
+    ? (sessions.find(s => s.session_id === activeProcess.claude_session_id)
+      ?? cachedSessionsRef.current.get(activeProcess.claude_session_id))
     : null;
 
   // Find the session being viewed (for transcript panel)
   const viewingSession = viewingSessionId
-    ? sessions.find(s => s.session_id === viewingSessionId)
+    ? (sessions.find(s => s.session_id === viewingSessionId)
+      ?? cachedSessionsRef.current.get(viewingSessionId))
     : null;
+
+  // Find the process for the viewing session (if it's still active)
+  const viewingSessionProcess = viewingSession
+    ? processes.find(p => p.claude_session_id === viewingSession.session_id)
+    : null;
+
+  // Cache active/viewing sessions so they persist across pagination changes
+  if (activeSession && activeProcess?.claude_session_id) {
+    cachedSessionsRef.current.set(activeProcess.claude_session_id, activeSession);
+  }
+  if (viewingSession && viewingSessionId) {
+    cachedSessionsRef.current.set(viewingSessionId, viewingSession);
+  }
 
   // Check pending context for newly created processes (before analysis is fetched)
   const pendingIssueContext = pendingIssueContextRef.current;
@@ -1106,7 +1121,10 @@ export default function App() {
     <div className="h-screen flex flex-col bg-[#0d1117] text-white">
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-[#161b22]">
-        <h1 className="text-xl font-light tracking-widest uppercase text-gray-100">
+        <h1
+          className="text-2xl text-white drop-shadow-[0_0_10px_rgba(251,191,36,0.4)] hover:drop-shadow-[0_0_15px_rgba(251,191,36,0.6)] transition-all cursor-default"
+          style={{ fontFamily: "'Playfair Display', serif" }}
+        >
           Clump
         </h1>
         <div className="flex items-center gap-4">
@@ -1531,6 +1549,7 @@ export default function App() {
                     ) : viewingSession ? (
                       <SessionView
                         session={viewingSession}
+                        processId={viewingSessionProcess?.id}
                         onContinue={(prompt) => handleContinueSession(viewingSession, prompt)}
                         onClose={() => setViewingSessionId(null)}
                         onDelete={async () => {
@@ -1687,6 +1706,7 @@ export default function App() {
                   ) : viewingSession ? (
                     <SessionView
                       session={viewingSession}
+                      processId={viewingSessionProcess?.id}
                       onContinue={(prompt) => handleContinueSession(viewingSession, prompt)}
                       onClose={() => setViewingSessionId(null)}
                       onDelete={async () => {
