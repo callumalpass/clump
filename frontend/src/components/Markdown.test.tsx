@@ -20,7 +20,7 @@ describe('Markdown', () => {
     it('applies default prose classes', () => {
       const { container } = render(<Markdown>Test</Markdown>);
 
-      expect(container.firstChild).toHaveClass('prose', 'prose-invert', 'prose-sm');
+      expect(container.firstChild).toHaveClass('prose', 'prose-invert', 'prose-sm', 'max-w-full', 'break-words');
     });
 
     it('applies custom className', () => {

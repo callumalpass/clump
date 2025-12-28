@@ -162,7 +162,7 @@ export function PRDetail({
   }
 
   return (
-    <div className="p-4 overflow-auto h-full">
+    <div className="p-4 overflow-auto h-full min-w-0">
       <div className="flex items-start justify-between gap-4 mb-4">
         <div className="min-w-0 flex-1">
           <h2 className="text-xl font-semibold text-white">
@@ -229,7 +229,7 @@ export function PRDetail({
         <div className="text-sm text-gray-400 mb-2">
           Opened by <span className="text-gray-300">{pr.author}</span> <span className="cursor-help" title={getTimeWithTooltip(pr.created_at).full}>{getTimeWithTooltip(pr.created_at).relative}</span>
         </div>
-        <div className="bg-gray-800 rounded-lg p-4">
+        <div className="bg-gray-800 rounded-lg p-4 overflow-x-auto">
           {pr.body ? (
             <Markdown>{pr.body}</Markdown>
           ) : (
@@ -334,7 +334,7 @@ export function PRDetail({
         {pr.comments.length > 0 ? (
           <div className="space-y-3">
             {pr.comments.map((comment) => (
-              <div key={comment.id} className="bg-gray-800 rounded-lg p-4">
+              <div key={comment.id} className="bg-gray-800 rounded-lg p-4 overflow-x-auto">
                 <div className="text-sm text-gray-400 mb-2">
                   <span className="text-gray-300">{comment.author}</span> · <span className="cursor-help" title={getTimeWithTooltip(comment.created_at).full}>{getTimeWithTooltip(comment.created_at).relative}</span>
                 </div>

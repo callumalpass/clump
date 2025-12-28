@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { PRDetail } from './PRDetail';
+import { PRDetail, DiffBar } from './PRDetail';
 import type { PRDetail as PRDetailType, SessionSummary, Process, CommandMetadata } from '../types';
 
 // Mock the fetchPR function
@@ -393,6 +393,99 @@ describe('PRDetail', () => {
       await waitFor(() => {
         expect(screen.getByText('Pull request not found')).toBeInTheDocument();
       });
+    });
+  });
+});
+
+describe('DiffBar', () => {
+
+  it('returns null when total is 0', () => {
+    const { container } = render(<DiffBar additions={0} deletions={0} />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('renders 5 blocks by default', () => {
+    const { container } = render(<DiffBar additions={50} deletions={50} />);
+    const blocks = container.querySelectorAll('span');
+    expect(blocks.length).toBe(5);
+  });
+
+  it('respects maxBlocks prop', () => {
+    const { container } = render(<DiffBar additions={50} deletions={50} maxBlocks={10} />);
+    const blocks = container.querySelectorAll('span');
+    expect(blocks.length).toBe(10);
+  });
+
+  it('shows all green blocks when only additions', () => {
+    const { container } = render(<DiffBar additions={100} deletions={0} />);
+    const greenBlocks = container.querySelectorAll('.bg-green-500');
+    const redBlocks = container.querySelectorAll('.bg-red-500');
+    expect(greenBlocks.length).toBe(5);
+    expect(redBlocks.length).toBe(0);
+  });
+
+  it('shows all red blocks when only deletions', () => {
+    const { container } = render(<DiffBar additions={0} deletions={100} />);
+    const greenBlocks = container.querySelectorAll('.bg-green-500');
+    const redBlocks = container.querySelectorAll('.bg-red-500');
+    expect(greenBlocks.length).toBe(0);
+    expect(redBlocks.length).toBe(5);
+  });
+
+  it('shows proportional blocks for mixed changes', () => {
+    // 80% additions, 20% deletions = 4 green, 1 red
+    const { container } = render(<DiffBar additions={80} deletions={20} />);
+    const greenBlocks = container.querySelectorAll('.bg-green-500');
+    const redBlocks = container.querySelectorAll('.bg-red-500');
+    expect(greenBlocks.length).toBe(4);
+    expect(redBlocks.length).toBe(1);
+  });
+
+  it('shows at least one of each type when both exist with extreme ratio', () => {
+    // 999 additions, 1 deletion - should still show at least 1 red
+    const { container } = render(<DiffBar additions={999} deletions={1} />);
+    const greenBlocks = container.querySelectorAll('.bg-green-500');
+    const redBlocks = container.querySelectorAll('.bg-red-500');
+    expect(greenBlocks.length).toBe(4);
+    expect(redBlocks.length).toBe(1);
+  });
+
+  it('shows at least one green when additions are minimal', () => {
+    // 1 addition, 999 deletions - should still show at least 1 green
+    const { container } = render(<DiffBar additions={1} deletions={999} />);
+    const greenBlocks = container.querySelectorAll('.bg-green-500');
+    const redBlocks = container.querySelectorAll('.bg-red-500');
+    expect(greenBlocks.length).toBe(1);
+    expect(redBlocks.length).toBe(4);
+  });
+
+  it('shows equal split for 50/50 ratio', () => {
+    // 50/50 split with 5 blocks = 2 or 3 each (Math.round)
+    const { container } = render(<DiffBar additions={50} deletions={50} />);
+    const greenBlocks = container.querySelectorAll('.bg-green-500');
+    const redBlocks = container.querySelectorAll('.bg-red-500');
+    // Math.round(0.5 * 5) = 3 green, 2 red
+    expect(greenBlocks.length).toBe(3);
+    expect(redBlocks.length).toBe(2);
+  });
+
+  it('displays correct tooltip with formatted numbers', () => {
+    render(<DiffBar additions={1500} deletions={300} />);
+    const container = screen.getByTitle('+1,500 additions, -300 deletions');
+    expect(container).toBeInTheDocument();
+  });
+
+  it('has correct aria-label for accessibility', () => {
+    render(<DiffBar additions={10} deletions={5} />);
+    const container = screen.getByLabelText('10 additions, 5 deletions');
+    expect(container).toBeInTheDocument();
+  });
+
+  it('blocks have hover scale effect class', () => {
+    const { container } = render(<DiffBar additions={50} deletions={50} />);
+    const blocks = container.querySelectorAll('span');
+    blocks.forEach(block => {
+      expect(block).toHaveClass('hover:scale-125');
     });
   });
 });

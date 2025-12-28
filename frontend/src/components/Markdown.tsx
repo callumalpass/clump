@@ -10,7 +10,7 @@ interface MarkdownProps {
 export function Markdown({ children, className = '' }: MarkdownProps) {
   return (
     <ReactMarkdown
-      className={`prose prose-invert prose-sm max-w-none overflow-x-auto break-words ${className}`}
+      className={`prose prose-invert prose-sm max-w-full break-words ${className}`}
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[rehypeRaw]}
       components={{

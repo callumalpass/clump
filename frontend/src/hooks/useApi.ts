@@ -14,6 +14,20 @@ export interface EntityInput {
 
 const API_BASE = '/api';
 
+/**
+ * Type guard to check if an error is an AbortError (from AbortController).
+ */
+function isAbortError(e: unknown): boolean {
+  return e instanceof Error && e.name === 'AbortError';
+}
+
+/**
+ * Extract error message from an unknown error, with a fallback.
+ */
+function getErrorMessage(e: unknown, fallback: string): string {
+  return e instanceof Error ? e.message : fallback;
+}
+
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...options,
@@ -88,9 +102,8 @@ function usePaginatedList<TItem, TFilters>(
       setPage(data.page);
       setError(null);
     } catch (e) {
-      // Ignore abort errors
-      if (e instanceof Error && e.name === 'AbortError') return;
-      setError(e instanceof Error ? e.message : config.errorMessage);
+      if (isAbortError(e)) return;
+      setError(getErrorMessage(e, config.errorMessage));
     } finally {
       setLoading(false);
     }
@@ -143,7 +156,7 @@ export function useRepos() {
       setRepos(data);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to fetch repos');
+      setError(getErrorMessage(e, 'Failed to fetch repos'));
     } finally {
       setLoading(false);
     }
@@ -677,7 +690,7 @@ export function useClaudeSettings() {
       setSettings(data);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to fetch settings');
+      setError(getErrorMessage(e, 'Failed to fetch settings'));
     } finally {
       setLoading(false);
     }
@@ -710,7 +723,7 @@ export function useClaudeSettings() {
       setError(null);
       return data;
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save settings');
+      setError(getErrorMessage(e, 'Failed to save settings'));
       throw e;
     } finally {
       setSaving(false);
@@ -723,7 +736,7 @@ export function useClaudeSettings() {
       await fetchJson(`${API_BASE}/settings/claude/reset`, { method: 'POST' });
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to reset settings');
+      setError(getErrorMessage(e, 'Failed to reset settings'));
       throw e;
     } finally {
       setSaving(false);
@@ -752,9 +765,8 @@ export function useTags(repoId: number | null) {
       setTags(data.tags);
       setError(null);
     } catch (e) {
-      // Ignore abort errors
-      if (e instanceof Error && e.name === 'AbortError') return;
-      setError(e instanceof Error ? e.message : 'Failed to fetch tags');
+      if (isAbortError(e)) return;
+      setError(getErrorMessage(e, 'Failed to fetch tags'));
     } finally {
       setLoading(false);
     }
@@ -820,8 +832,7 @@ export function useIssueTags(repoId: number | null) {
       );
       setIssueTagsMap(data.issue_tags);
     } catch (e) {
-      // Ignore abort errors
-      if (e instanceof Error && e.name === 'AbortError') return;
+      if (isAbortError(e)) return;
       console.error('Failed to fetch issue tags:', e);
     } finally {
       setLoading(false);
@@ -935,9 +946,8 @@ export function useLabels(repoId: number | null) {
       setLabels(data);
       setError(null);
     } catch (e) {
-      // Ignore abort errors
-      if (e instanceof Error && e.name === 'AbortError') return;
-      setError(e instanceof Error ? e.message : 'Failed to fetch labels');
+      if (isAbortError(e)) return;
+      setError(getErrorMessage(e, 'Failed to fetch labels'));
     } finally {
       setLoading(false);
     }
@@ -984,9 +994,8 @@ export function useAssignees(repoId: number | null) {
       setAssignees(data);
       setError(null);
     } catch (e) {
-      // Ignore abort errors
-      if (e instanceof Error && e.name === 'AbortError') return;
-      setError(e instanceof Error ? e.message : 'Failed to fetch assignees');
+      if (isAbortError(e)) return;
+      setError(getErrorMessage(e, 'Failed to fetch assignees'));
     } finally {
       setLoading(false);
     }
@@ -1023,7 +1032,7 @@ export function useCommands(repoPath?: string | null) {
       setCommands(data);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to fetch commands');
+      setError(getErrorMessage(e, 'Failed to fetch commands'));
     } finally {
       setLoading(false);
     }
@@ -1149,9 +1158,8 @@ export function useStats() {
       setStats(data);
       setError(null);
     } catch (e) {
-      // Ignore abort errors
-      if (e instanceof Error && e.name === 'AbortError') return;
-      setError(e instanceof Error ? e.message : 'Failed to fetch stats');
+      if (isAbortError(e)) return;
+      setError(getErrorMessage(e, 'Failed to fetch stats'));
     } finally {
       setLoading(false);
     }
