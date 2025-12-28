@@ -57,7 +57,7 @@ class EventManager:
         self._subscribers: list[Callable[[Event], Any]] = []
         self._lock = asyncio.Lock()
         # Debounce state for counts_changed events
-        self._counts_pending = False
+        self._pending_counts: dict | None = None
         self._counts_task: asyncio.Task | None = None
 
     async def emit(
@@ -110,9 +110,8 @@ class EventManager:
         try:
             await asyncio.sleep(0.1)  # 100ms debounce
             async with self._lock:
-                counts = getattr(self, '_pending_counts', None)
-                if counts is not None:
-                    await self.emit(EventType.COUNTS_CHANGED, {"counts": counts})
+                if self._pending_counts is not None:
+                    await self.emit(EventType.COUNTS_CHANGED, {"counts": self._pending_counts})
                     self._pending_counts = None
                     self._counts_task = None
         except asyncio.CancelledError:
