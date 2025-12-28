@@ -15,6 +15,7 @@ Uses Claude Code CLI flags for fine-grained permission control:
 import asyncio
 import fcntl
 import json
+import logging
 import os
 import pty
 import signal
@@ -24,6 +25,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, TypedDict
 from uuid import uuid4
+
+logger = logging.getLogger(__name__)
 
 from app.config import Settings
 
@@ -301,7 +304,7 @@ class ProcessManager:
                         try:
                             callback(data)
                         except Exception:
-                            pass
+                            logger.exception("PTY subscriber callback failed for process %s", process.id)
 
                 await asyncio.sleep(READ_LOOP_POLL_INTERVAL_SECS)
 
