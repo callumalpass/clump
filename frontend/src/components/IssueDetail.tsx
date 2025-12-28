@@ -195,7 +195,7 @@ export function IssueDetail({
             {issue.labels.map((label) => (
               <span
                 key={label}
-                className="px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300"
+                className="px-2 py-0.5 text-xs rounded-full bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
               >
                 {label}
               </span>

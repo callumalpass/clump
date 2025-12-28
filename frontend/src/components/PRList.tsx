@@ -254,7 +254,7 @@ export function PRList({
                     </h3>
                     {hasRunning && (
                       <span
-                        className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-yellow-500/20 text-yellow-400 shrink-0"
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-yellow-500/20 text-yellow-400 shrink-0 active-badge-glow"
                         title="Session actively running"
                         aria-label="Active session"
                       >
@@ -275,13 +275,13 @@ export function PRList({
                   </div>
                   {/* Branch info */}
                   <div className="flex items-center gap-2 mt-1 text-xs">
-                    <span className="px-2 py-0.5 rounded bg-gray-700 text-gray-300 font-mono truncate max-w-[120px]" title={pr.head_ref}>
+                    <span className="px-2 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 font-mono truncate max-w-[120px] transition-colors" title={pr.head_ref}>
                       {pr.head_ref}
                     </span>
                     <svg className="w-3 h-3 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                     </svg>
-                    <span className="px-2 py-0.5 rounded bg-gray-700 text-gray-300 font-mono truncate max-w-[120px]" title={pr.base_ref}>
+                    <span className="px-2 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 font-mono truncate max-w-[120px] transition-colors" title={pr.base_ref}>
                       {pr.base_ref}
                     </span>
                   </div>
@@ -291,7 +291,7 @@ export function PRList({
                       {pr.labels.map((label) => (
                         <span
                           key={label}
-                          className="px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300"
+                          className="px-2 py-0.5 text-xs rounded-full bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
                         >
                           {label}
                         </span>

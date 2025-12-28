@@ -218,7 +218,7 @@ export function SessionList({
               {/* Status indicator with text label for accessibility */}
               {session.is_active ? (
                 <span
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-yellow-500/20 text-yellow-400 flex-shrink-0"
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-yellow-500/20 text-yellow-400 flex-shrink-0 active-badge-glow"
                   title="Session is actively running"
                   aria-label="Active session"
                 >
@@ -275,7 +275,7 @@ export function SessionList({
 
             <div className="flex items-center gap-2 text-xs text-gray-500">
               {/* Repo path */}
-              <span className="px-1.5 py-0.5 bg-gray-700 rounded truncate max-w-[120px]" title={session.repo_path}>
+              <span className="px-1.5 py-0.5 bg-gray-700 hover:bg-gray-600 rounded truncate max-w-[120px] transition-colors" title={session.repo_path}>
                 {formatRepoPath(session)}
               </span>
 
@@ -283,10 +283,10 @@ export function SessionList({
               {session.entities?.map((entity, idx) => (
                 <span
                   key={idx}
-                  className={`px-1 py-0.5 rounded ${
+                  className={`px-1 py-0.5 rounded transition-colors ${
                     entity.kind === 'issue'
-                      ? 'bg-green-900/30 text-green-400'
-                      : 'bg-purple-900/30 text-purple-400'
+                      ? 'bg-green-900/30 text-green-400 hover:bg-green-900/50 hover:text-green-300'
+                      : 'bg-purple-900/30 text-purple-400 hover:bg-purple-900/50 hover:text-purple-300'
                   }`}
                 >
                   #{entity.number}

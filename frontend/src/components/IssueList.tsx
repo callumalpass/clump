@@ -228,7 +228,7 @@ export function IssueList({
                     </h3>
                     {hasRunning && (
                       <span
-                        className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-yellow-500/20 text-yellow-400 shrink-0"
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-yellow-500/20 text-yellow-400 shrink-0 active-badge-glow"
                         title="Session actively running"
                         aria-label="Active session"
                       >
@@ -252,7 +252,7 @@ export function IssueList({
                       {issue.labels.map((label) => (
                         <span
                           key={label}
-                          className="px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300"
+                          className="px-2 py-0.5 text-xs rounded-full bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
                         >
                           {label}
                         </span>

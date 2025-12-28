@@ -107,7 +107,7 @@ export function PRDetail({
             {pr.labels.map((label) => (
               <span
                 key={label}
-                className="px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300"
+                className="px-2 py-0.5 text-xs rounded-full bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
               >
                 {label}
               </span>
@@ -124,13 +124,13 @@ export function PRDetail({
 
           {/* Branch info */}
           <div className="flex items-center gap-2 mt-3 text-sm">
-            <span className="px-2 py-0.5 rounded bg-gray-700 text-gray-300 font-mono" title={pr.head_ref}>
+            <span className="px-2 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 font-mono transition-colors" title={pr.head_ref}>
               {pr.head_ref}
             </span>
             <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
             </svg>
-            <span className="px-2 py-0.5 rounded bg-gray-700 text-gray-300 font-mono" title={pr.base_ref}>
+            <span className="px-2 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 font-mono transition-colors" title={pr.base_ref}>
               {pr.base_ref}
             </span>
           </div>
