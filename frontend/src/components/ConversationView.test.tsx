@@ -1,7 +1,16 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ConversationView, RawTranscriptView } from './ConversationView';
 import type { ParsedTranscript, TranscriptMessage, ToolUse } from '../types';
+
+// Mock scrollTo for jsdom
+beforeEach(() => {
+  Element.prototype.scrollTo = vi.fn();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 // Mock the dependent components
 vi.mock('./Markdown', () => ({

@@ -49,7 +49,9 @@ describe('IssueFilters', () => {
 
       expect(screen.getByRole('button', { name: 'Open' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Closed' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument();
+      // There are two "All" buttons (StateToggle and SessionStatusToggle)
+      const allButtons = screen.getAllByRole('button', { name: 'All' });
+      expect(allButtons.length).toBeGreaterThanOrEqual(1);
     });
 
     it('renders sort dropdown', () => {
@@ -200,7 +202,12 @@ describe('IssueFilters', () => {
         />
       );
 
-      fireEvent.click(screen.getByRole('button', { name: 'All' }));
+      // There are two "All" buttons - state toggle and session status toggle
+      // The state toggle "All" doesn't have a title attribute, while session status has title="Show all"
+      const allButtons = screen.getAllByRole('button', { name: 'All' });
+      // Get the one without the "Show all" title (the state toggle)
+      const stateAllButton = allButtons.find(btn => !btn.getAttribute('title'));
+      fireEvent.click(stateAllButton!);
 
       expect(onFiltersChange).toHaveBeenCalledWith({ state: 'all' });
     });
@@ -461,13 +468,14 @@ describe('IssueFilters', () => {
     it('shows clear button when state is not open', () => {
       render(<IssueFilters {...defaultProps} filters={{ state: 'closed' }} />);
 
-      expect(screen.getByText('Clear filters')).toBeInTheDocument();
+      // ActiveFiltersIndicator shows "N filter(s)" text
+      expect(screen.getByText(/filter/)).toBeInTheDocument();
     });
 
     it('shows clear button when search is active', () => {
       render(<IssueFilters {...defaultProps} filters={{ state: 'open', search: 'test' }} />);
 
-      expect(screen.getByText('Clear filters')).toBeInTheDocument();
+      expect(screen.getByText(/filter/)).toBeInTheDocument();
     });
 
     it('shows clear button when labels are selected', () => {
@@ -480,19 +488,19 @@ describe('IssueFilters', () => {
         />
       );
 
-      expect(screen.getByText('Clear filters')).toBeInTheDocument();
+      expect(screen.getByText(/filter/)).toBeInTheDocument();
     });
 
     it('shows clear button when sort is not created', () => {
       render(<IssueFilters {...defaultProps} filters={{ state: 'open', sort: 'updated' }} />);
 
-      expect(screen.getByText('Clear filters')).toBeInTheDocument();
+      expect(screen.getByText(/filter/)).toBeInTheDocument();
     });
 
     it('shows clear button when order is asc', () => {
       render(<IssueFilters {...defaultProps} filters={{ state: 'open', order: 'asc' }} />);
 
-      expect(screen.getByText('Clear filters')).toBeInTheDocument();
+      expect(screen.getByText(/filter/)).toBeInTheDocument();
     });
 
     it('clears all filters when clear button is clicked', () => {
@@ -513,7 +521,9 @@ describe('IssueFilters', () => {
         />
       );
 
-      fireEvent.click(screen.getByText('Clear filters'));
+      // Click the active filters indicator button (shows "N filters")
+      const filterButton = screen.getByText(/filter/);
+      fireEvent.click(filterButton);
 
       expect(onFiltersChange).toHaveBeenCalledWith({ state: 'open' });
     });
@@ -528,7 +538,9 @@ describe('IssueFilters', () => {
         />
       );
 
-      fireEvent.click(screen.getByText('Clear filters'));
+      // Click the active filters indicator button
+      const filterButton = screen.getByText(/filter/);
+      fireEvent.click(filterButton);
 
       // Verify onFiltersChange was called to clear filters
       expect(onFiltersChange).toHaveBeenCalledWith({ state: 'open' });

@@ -27,6 +27,7 @@ from app.schemas import (
     SessionListResponse,
     SessionMetadataResponse,
     SessionMetadataUpdate,
+    ContinueSessionRequest,
     EntityLinkResponse,
     AddEntityRequest,
     TranscriptMessageResponse,
@@ -165,6 +166,7 @@ def _build_metadata_response(
             tags=metadata.tags,
             starred=metadata.starred,
             created_at=metadata.created_at,
+            scheduled_job_id=metadata.scheduled_job_id,
         )
     return SessionMetadataResponse(session_id=session_id)
 
@@ -216,12 +218,14 @@ def _get_pending_sessions(
         title = None
         starred = False
         tags = []
+        scheduled_job_id = None
 
         if metadata:
             entities = _entities_to_response(metadata.entities)
             title = metadata.title
             starred = metadata.starred
             tags = metadata.tags
+            scheduled_job_id = metadata.scheduled_job_id
 
         # Get repo name if possible
         repo_name = _get_repo_name(encoded_path)
@@ -241,6 +245,7 @@ def _get_pending_sessions(
             entities=entities,
             tags=tags,
             starred=starred,
+            scheduled_job_id=scheduled_job_id,
             is_active=True,
         ))
 
@@ -300,6 +305,7 @@ def _get_pending_headless_sessions(
                     entities=entities,
                     tags=metadata.tags,
                     starred=metadata.starred,
+                    scheduled_job_id=metadata.scheduled_job_id,
                     is_active=True,
                 ))
 
@@ -411,10 +417,12 @@ def _session_to_summary(
     entities = []
     tags = []
     starred = False
+    scheduled_job_id = None
     if session.metadata:
         entities = _entities_to_response(session.metadata.entities)
         tags = session.metadata.tags
         starred = session.metadata.starred
+        scheduled_job_id = session.metadata.scheduled_job_id
         # Use metadata title if available
         if session.metadata.title:
             scan["title"] = session.metadata.title
@@ -434,6 +442,7 @@ def _session_to_summary(
         entities=entities,
         tags=tags,
         starred=starred,
+        scheduled_job_id=scheduled_job_id,
         is_active=is_active,
     )
 
@@ -853,11 +862,12 @@ async def remove_entity_from_session(session_id: str, entity_idx: int):
 # ==========================================
 
 @router.post("/sessions/{session_id}/continue")
-async def continue_session(session_id: str):
+async def continue_session(session_id: str, data: ContinueSessionRequest = None):
     """
     Continue an existing session by resuming its Claude conversation.
 
     Creates a new PTY process that resumes the Claude conversation.
+    Optionally sends a new message to Claude after resuming.
     """
     # Find the session (use cached for performance)
     sessions = _get_cached_sessions()
@@ -874,11 +884,14 @@ async def continue_session(session_id: str):
     else:
         repo_path = decode_path(session.encoded_path)
 
+    # Get prompt from request if provided
+    initial_prompt = data.prompt if data else None
+
     # Create new PTY process that resumes the Claude conversation
     try:
         process = await process_manager.create_process(
             working_dir=repo_path,
-            initial_prompt=None,  # No new prompt, just resuming
+            initial_prompt=initial_prompt,
             session_id=None,  # No DB session ID in new model
             resume_session=session_id,
         )

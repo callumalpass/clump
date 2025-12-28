@@ -48,6 +48,7 @@ class SessionMetadata:
     tags: list[str] = field(default_factory=list)
     starred: bool = False
     created_at: Optional[str] = None
+    scheduled_job_id: Optional[int] = None  # ID of schedule that created this session
 
     def to_dict(self) -> dict:
         return {
@@ -59,6 +60,7 @@ class SessionMetadata:
             "tags": self.tags,
             "starred": self.starred,
             "created_at": self.created_at,
+            "scheduled_job_id": self.scheduled_job_id,
         }
 
     @classmethod
@@ -76,6 +78,7 @@ class SessionMetadata:
             tags=data.get("tags", []),
             starred=data.get("starred", False),
             created_at=data.get("created_at"),
+            scheduled_job_id=data.get("scheduled_job_id"),
         )
 
 

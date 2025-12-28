@@ -256,9 +256,10 @@ class ProcessManager:
         await asyncio.sleep(CLAUDE_INIT_DELAY_SECS)
 
         # Send the prompt as if user typed it, then press Enter
+        # Use \r (carriage return) like a real terminal Enter key, not \n (line feed)
         await self.write(process.id, prompt)
         await asyncio.sleep(PROMPT_ENTER_DELAY_SECS)
-        await self.write(process.id, "\n")
+        await self.write(process.id, "\r")
 
     async def _read_loop(self, process: Process):
         """Continuously read from PTY and broadcast to subscribers."""

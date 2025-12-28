@@ -66,6 +66,8 @@ Clump is a local web application for:
 Explore the frontend codebase and implement 1 UI/UX improvement.
 
 **Focus Areas:**
+- Navigation
+- Workflow
 - Visual consistency and polish
 - Clearer visual hierarchy
 - Better use of spacing and typography
@@ -77,7 +79,7 @@ Explore the frontend codebase and implement 1 UI/UX improvement.
 **AVOID changes that:**
 - Require new npm dependencies
 - Change backend APIs
-- Alter core functionality
+- Heavily alter core functionality
 - Add complex new features
 
 **PREFER changes that:**

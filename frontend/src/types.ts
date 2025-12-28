@@ -110,6 +110,7 @@ export interface SessionMetadata {
   tags: string[];
   starred: boolean;
   created_at?: string | null;
+  scheduled_job_id?: number | null;  // ID of schedule that created this session
 }
 
 export interface SessionSummary {
@@ -133,6 +134,7 @@ export interface SessionSummary {
   entities: EntityLink[];
   tags: string[];
   starred: boolean;
+  scheduled_job_id?: number | null;  // ID of schedule that created this session
 
   // Status
   is_active: boolean;
@@ -292,9 +294,9 @@ export interface CommandMetadata {
   name: string;
   shortName: string;
   description: string;
-  category: 'issue' | 'pr';
+  category: 'issue' | 'pr' | 'general';
   template: string;
-  source: 'builtin' | 'repo';
+  source: 'builtin' | 'user' | 'repo';
 }
 
 export interface CommandCreate {
@@ -307,6 +309,7 @@ export interface CommandCreate {
 export interface CommandsResponse {
   issue: CommandMetadata[];
   pr: CommandMetadata[];
+  general: CommandMetadata[];
 }
 
 // Scheduled Jobs
@@ -349,6 +352,11 @@ export interface ScheduledJobRun {
   items_failed: number;
   error_message: string | null;
   session_ids: string[] | null;
+}
+
+export interface ScheduledJobRunsResponse {
+  runs: ScheduledJobRun[];
+  total: number;
 }
 
 export interface ScheduledJobCreate {

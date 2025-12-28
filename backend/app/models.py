@@ -107,3 +107,84 @@ class SessionEntity(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     session: Mapped["Session"] = relationship(back_populates="entities")
+
+
+class ScheduledJobStatus(str, Enum):
+    ACTIVE = "active"
+    PAUSED = "paused"
+    DISABLED = "disabled"
+
+
+class ScheduledJobTargetType(str, Enum):
+    ISSUES = "issues"
+    PRS = "prs"
+    CODEBASE = "codebase"
+    CUSTOM = "custom"
+
+
+class ScheduledJob(Base):
+    """A scheduled job configuration for automated sessions."""
+    __tablename__ = "scheduled_jobs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    repo_id: Mapped[int] = mapped_column(Integer)  # References repos.json entry
+
+    # Job configuration
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(50), default=ScheduledJobStatus.ACTIVE.value)
+
+    # Schedule (cron format)
+    cron_expression: Mapped[str] = mapped_column(String(100))  # e.g., "0 9 * * 1-5"
+    timezone: Mapped[str] = mapped_column(String(50), default="UTC")
+
+    # Target configuration
+    target_type: Mapped[str] = mapped_column(String(50))  # "issues", "prs", "codebase", "custom"
+    filter_query: Mapped[str | None] = mapped_column(Text, nullable=True)  # e.g., "state:open label:needs-triage"
+    command_id: Mapped[str | None] = mapped_column(String(100), nullable=True)  # e.g., "issue/root-cause"
+    custom_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)  # For custom target_type
+    max_items: Mapped[int] = mapped_column(Integer, default=10)  # Max items per run
+
+    # Claude configuration
+    permission_mode: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    allowed_tools: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array
+    max_turns: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    model: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    # Execution tracking
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_run_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    run_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationship to runs
+    runs: Mapped[list["ScheduledJobRun"]] = relationship(back_populates="job", cascade="all, delete-orphan")
+
+
+class ScheduledJobRun(Base):
+    """A single execution of a scheduled job."""
+    __tablename__ = "scheduled_job_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("scheduled_jobs.id", ondelete="CASCADE"))
+    repo_id: Mapped[int] = mapped_column(Integer)  # References repos.json entry
+
+    # Run status
+    status: Mapped[str] = mapped_column(String(50))  # pending, running, completed, failed
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Items processed
+    items_found: Mapped[int] = mapped_column(Integer, default=0)
+    items_processed: Mapped[int] = mapped_column(Integer, default=0)
+    items_skipped: Mapped[int] = mapped_column(Integer, default=0)
+    items_failed: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Details
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    session_ids: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array of created session IDs
+
+    job: Mapped["ScheduledJob"] = relationship(back_populates="runs")

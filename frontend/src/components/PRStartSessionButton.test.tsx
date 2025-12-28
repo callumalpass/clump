@@ -416,7 +416,7 @@ describe('PRStartSessionButton', () => {
 
       const mainButton = screen.getByRole('button', { name: 'Review' });
       expect(mainButton).toHaveClass('focus:outline-none');
-      expect(mainButton).toHaveClass('focus:ring-2');
+      expect(mainButton).toHaveClass('focus-visible:ring-2');
     });
   });
 

@@ -193,18 +193,68 @@ class GitHubClient:
         owner: str,
         name: str,
         state: str = "open",
-        limit: int = 100,
-    ) -> list[PRData]:
-        """List pull requests for a repository."""
-        repo = self.get_repo(owner, name)
+        search_query: str | None = None,
+        sort: str = "created",
+        order: str = "desc",
+        page: int = 1,
+        per_page: int = 30,
+    ) -> tuple[list[PRData], int]:
+        """List pull requests for a repository with pagination.
+
+        Args:
+            owner: Repository owner
+            name: Repository name
+            state: PR state - "open", "closed", or "all"
+            search_query: Text to search in PR title/body
+            sort: Sort field - "created" or "updated"
+            order: Sort order - "asc" or "desc"
+            page: Page number (1-indexed)
+            per_page: Results per page
+
+        Returns a tuple of (prs, total_count).
+        """
+        # Build GitHub search query
+        query = f"repo:{owner}/{name} is:pr"
+
+        # Add state filter (skip if "all")
+        if state and state != "all":
+            query += f" state:{state}"
+
+        # Add text search (prepend to search in title/body)
+        if search_query:
+            query = f"{search_query} {query}"
+
+        # Validate sort field
+        valid_sorts = {"created", "updated"}
+        if sort not in valid_sorts:
+            sort = "created"
+
+        # Validate order
+        if order not in {"asc", "desc"}:
+            order = "desc"
+
+        results = self._github.search_issues(query, sort=sort, order=order)
+
+        # Get total count first (triggers the API call)
+        total_count = results.totalCount
+
+        # Get just the page we need by iterating safely
+        start = (page - 1) * per_page
+        end = start + per_page
         prs = []
 
-        for pr in repo.get_pulls(state=state):
-            if len(prs) >= limit:
+        # Search results are Issue objects, we need to fetch full PR data
+        repo = self.get_repo(owner, name)
+        for i, issue in enumerate(results):
+            if i < start:
+                continue
+            if i >= end:
                 break
+            # Fetch full PR data since search returns limited info
+            pr = repo.get_pull(issue.number)
             prs.append(self._pr_to_data(pr))
 
-        return prs
+        return prs, total_count
 
     def get_pr(self, owner: str, name: str, number: int) -> PRData:
         """Get a single pull request with comments."""

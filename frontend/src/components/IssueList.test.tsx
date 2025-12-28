@@ -414,7 +414,7 @@ describe('IssueList', () => {
         />
       );
 
-      fireEvent.click(screen.getByLabelText('Go to previous page'));
+      fireEvent.click(screen.getByLabelText('Go to previous page (press [ key)'));
 
       expect(onPageChange).toHaveBeenCalledWith(2);
     });
@@ -434,7 +434,7 @@ describe('IssueList', () => {
         />
       );
 
-      fireEvent.click(screen.getByLabelText('Go to next page'));
+      fireEvent.click(screen.getByLabelText('Go to next page (press ] key)'));
 
       expect(onPageChange).toHaveBeenCalledWith(4);
     });
@@ -443,14 +443,14 @@ describe('IssueList', () => {
       const issues = [createMockIssue()];
       render(<IssueList {...defaultProps} issues={issues} total={100} page={1} totalPages={10} />);
 
-      expect(screen.getByLabelText('Go to previous page')).toBeDisabled();
+      expect(screen.getByLabelText('Go to previous page (press [ key)')).toBeDisabled();
     });
 
     it('disables next button on last page', () => {
       const issues = [createMockIssue()];
       render(<IssueList {...defaultProps} issues={issues} total={100} page={10} totalPages={10} />);
 
-      expect(screen.getByLabelText('Go to next page')).toBeDisabled();
+      expect(screen.getByLabelText('Go to next page (press ] key)')).toBeDisabled();
     });
   });
 

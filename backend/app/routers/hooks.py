@@ -199,13 +199,17 @@ async def notifications_websocket(websocket: WebSocket):
     # Subscribe to global notifications
     notification_manager.subscribe_global(on_notification)
 
-    # Send current attention state on connect
-    attention_sessions = notification_manager.get_sessions_needing_attention()
-    if attention_sessions:
-        await websocket.send_json({
-            "type": "initial_state",
-            "sessions_needing_attention": attention_sessions,
-        })
+    try:
+        # Send current attention state on connect
+        attention_sessions = notification_manager.get_sessions_needing_attention()
+        if attention_sessions:
+            await websocket.send_json({
+                "type": "initial_state",
+                "sessions_needing_attention": attention_sessions,
+            })
+    except WebSocketDisconnect:
+        notification_manager.unsubscribe_global(on_notification)
+        return
 
     async def send_notifications():
         """Task to send notifications to the client."""

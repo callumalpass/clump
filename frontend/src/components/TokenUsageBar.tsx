@@ -95,37 +95,37 @@ export function TokenUsageBar({
       </div>
 
       {/* Visual bar */}
-      <div className="flex h-1.5 rounded-full overflow-hidden bg-gray-700/50">
+      <div className="flex h-2 rounded-full overflow-hidden bg-gray-700/50">
         {/* Input tokens - blue */}
         {inputPct > 0 && (
           <div
-            className="bg-blue-500 transition-all"
-            style={{ width: `${inputPct}%` }}
-            title={`Input: ${formatTokenCount(inputTokens)}`}
+            className="token-bar-segment bg-blue-500"
+            style={{ width: `${inputPct}%`, '--segment-color': 'rgba(59, 130, 246, 0.4)' } as React.CSSProperties}
+            title={`Input: ${formatTokenCount(inputTokens)} (${inputPct.toFixed(1)}%)`}
           />
         )}
         {/* Output tokens - purple */}
         {outputPct > 0 && (
           <div
-            className="bg-purple-500 transition-all"
-            style={{ width: `${outputPct}%` }}
-            title={`Output: ${formatTokenCount(outputTokens)}`}
+            className="token-bar-segment bg-purple-500"
+            style={{ width: `${outputPct}%`, '--segment-color': 'rgba(168, 85, 247, 0.4)' } as React.CSSProperties}
+            title={`Output: ${formatTokenCount(outputTokens)} (${outputPct.toFixed(1)}%)`}
           />
         )}
         {/* Cache read - emerald */}
         {cacheReadPct > 0 && (
           <div
-            className="bg-emerald-500 transition-all"
-            style={{ width: `${cacheReadPct}%` }}
-            title={`Cache Read: ${formatTokenCount(cacheReadTokens)}`}
+            className="token-bar-segment bg-emerald-500"
+            style={{ width: `${cacheReadPct}%`, '--segment-color': 'rgba(16, 185, 129, 0.4)' } as React.CSSProperties}
+            title={`Cache Read: ${formatTokenCount(cacheReadTokens)} (${cacheReadPct.toFixed(1)}%)`}
           />
         )}
         {/* Cache write - amber */}
         {cacheWritePct > 0 && (
           <div
-            className="bg-amber-500 transition-all"
-            style={{ width: `${cacheWritePct}%` }}
-            title={`Cache Write: ${formatTokenCount(cacheCreationTokens)}`}
+            className="token-bar-segment bg-amber-500"
+            style={{ width: `${cacheWritePct}%`, '--segment-color': 'rgba(245, 158, 11, 0.4)' } as React.CSSProperties}
+            title={`Cache Write: ${formatTokenCount(cacheCreationTokens)} (${cacheWritePct.toFixed(1)}%)`}
           />
         )}
       </div>

@@ -316,7 +316,7 @@ describe('StartSessionButton', () => {
       render(<StartSessionButton {...defaultProps} commands={commands} />);
 
       const mainButton = screen.getByText('Analyze');
-      expect(mainButton).toHaveClass('focus:outline-none', 'focus:ring-2');
+      expect(mainButton).toHaveClass('focus:outline-none', 'focus-visible:ring-2');
     });
   });
 

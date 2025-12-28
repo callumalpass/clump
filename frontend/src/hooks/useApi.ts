@@ -129,8 +129,8 @@ export function useIssues(repoId: number | null, filters: IssueFilters = {}) {
         `${API_BASE}/repos/${repoId}/issues?${params}`,
         { signal }
       );
-      setIssues(data.issues);
-      setTotal(data.total);
+      setIssues(data.issues ?? []);
+      setTotal(data.total ?? 0);
       setPage(data.page);
       setError(null);
     } catch (e) {
@@ -188,25 +188,50 @@ export interface PRFilters {
   sessionStatus?: SessionStatusFilter;  // Client-side filter for PRs with/without sessions
 }
 
+interface PRListResponse {
+  prs: PR[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
 export function usePRs(repoId: number | null, filters: PRFilters = {}) {
-  const { state = 'open', search, sort = 'created', order = 'desc' } = filters;
   const [prs, setPRs] = useState<PR[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [perPage] = useState(30);
   // Start with loading=true if we have a repoId to prevent "No PRs" flash
   const [loading, setLoading] = useState(repoId !== null);
   const [error, setError] = useState<string | null>(null);
 
-  const [allPRs, setAllPRs] = useState<PR[]>([]);
+  // Extract filter values with defaults
+  const { state = 'open', search, sort = 'created', order = 'desc' } = filters;
 
-  const refresh = useCallback(async (signal?: AbortSignal) => {
+  const fetchPage = useCallback(async (pageNum: number, signal?: AbortSignal) => {
     if (!repoId) return;
 
     try {
       setLoading(true);
-      const data = await fetchJson<PR[]>(
-        `${API_BASE}/repos/${repoId}/prs?state=${state}`,
+
+      // Build query params
+      const params = new URLSearchParams();
+      params.set('state', state);
+      params.set('sort', sort);
+      params.set('order', order);
+      params.set('page', pageNum.toString());
+      params.set('per_page', perPage.toString());
+
+      if (search) {
+        params.set('search', search);
+      }
+
+      const data = await fetchJson<PRListResponse>(
+        `${API_BASE}/repos/${repoId}/prs?${params}`,
         { signal }
       );
-      setAllPRs(data);
+      setPRs(data.prs ?? []);
+      setTotal(data.total ?? 0);
+      setPage(data.page);
       setError(null);
     } catch (e) {
       // Ignore abort errors
@@ -215,53 +240,36 @@ export function usePRs(repoId: number | null, filters: PRFilters = {}) {
     } finally {
       setLoading(false);
     }
-  }, [repoId, state]);
+  }, [repoId, state, search, sort, order, perPage]);
 
+  const refresh = useCallback(() => fetchPage(page), [fetchPage, page]);
+
+  const goToPage = useCallback((pageNum: number) => {
+    setPage(pageNum);
+    fetchPage(pageNum);
+  }, [fetchPage]);
+
+  // Reset to page 1 when filters change
   useEffect(() => {
     if (!repoId) {
       // Clear PRs and reset loading when no repo selected
-      setAllPRs([]);
       setPRs([]);
+      setTotal(0);
       setLoading(false);
       return;
     }
 
     const controller = new AbortController();
     setLoading(true);
-    refresh(controller.signal);
+    setPage(1);
+    fetchPage(1, controller.signal);
 
     return () => controller.abort();
-  }, [repoId, state, refresh]);
+  }, [repoId, state, search, sort, order]);
 
-  // Apply client-side search and sorting
-  useEffect(() => {
-    let filtered = [...allPRs];
+  const totalPages = Math.ceil(total / perPage);
 
-    // Search filter
-    if (search) {
-      const searchLower = search.toLowerCase();
-      filtered = filtered.filter(pr =>
-        pr.title.toLowerCase().includes(searchLower) ||
-        pr.number.toString().includes(searchLower) ||
-        pr.author.toLowerCase().includes(searchLower) ||
-        pr.head_ref.toLowerCase().includes(searchLower) ||
-        pr.base_ref.toLowerCase().includes(searchLower) ||
-        pr.labels.some(label => label.toLowerCase().includes(searchLower))
-      );
-    }
-
-    // Sort
-    filtered.sort((a, b) => {
-      const aVal = sort === 'updated' ? a.updated_at : a.created_at;
-      const bVal = sort === 'updated' ? b.updated_at : b.created_at;
-      const comparison = new Date(aVal).getTime() - new Date(bVal).getTime();
-      return order === 'asc' ? comparison : -comparison;
-    });
-
-    setPRs(filtered);
-  }, [allPRs, search, sort, order]);
-
-  return { prs, loading, error, refresh: () => refresh() };
+  return { prs, loading, error, refresh, page, totalPages, total, goToPage };
 }
 
 // Processes (PTY processes running Claude Code)
@@ -400,10 +408,13 @@ export function useSessions(filters: SessionFilters = {}) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchPage]);
 
-  const continueSession = async (sessionId: string): Promise<Process> => {
+  const continueSession = async (sessionId: string, prompt?: string): Promise<Process> => {
     const result = await fetchJson<Process>(
       `${API_BASE}/sessions/${sessionId}/continue`,
-      { method: 'POST' }
+      {
+        method: 'POST',
+        body: prompt ? JSON.stringify({ prompt }) : undefined,
+      }
     );
     // Update the session to show as active in local state
     setSessions((prev) =>
@@ -832,7 +843,7 @@ export function useAssignees(repoId: number | null) {
 
 // Commands (slash commands from .claude/commands/)
 export function useCommands(repoPath?: string | null) {
-  const [commands, setCommands] = useState<CommandsResponse>({ issue: [], pr: [] });
+  const [commands, setCommands] = useState<CommandsResponse>({ issue: [], pr: [], general: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

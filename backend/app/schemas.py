@@ -40,6 +40,7 @@ class SessionMetadataResponse(BaseModel):
     tags: list[str] = []
     starred: bool = False
     created_at: Optional[str] = None
+    scheduled_job_id: Optional[int] = None  # ID of schedule that created this session
 
 
 class SessionMetadataUpdate(BaseModel):
@@ -48,6 +49,11 @@ class SessionMetadataUpdate(BaseModel):
     summary: Optional[str] = None
     tags: Optional[list[str]] = None
     starred: Optional[bool] = None
+
+
+class ContinueSessionRequest(BaseModel):
+    """Request to continue a session with an optional message."""
+    prompt: Optional[str] = None  # Message to send to Claude after resuming
 
 
 # ==========================================
@@ -76,6 +82,7 @@ class SessionSummaryResponse(BaseModel):
     entities: list[EntityLinkResponse] = []
     tags: list[str] = []
     starred: bool = False
+    scheduled_job_id: Optional[int] = None  # ID of schedule that created this session
 
     # Status (derived from file or active process)
     is_active: bool = False

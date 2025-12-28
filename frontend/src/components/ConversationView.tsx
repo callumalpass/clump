@@ -1162,6 +1162,7 @@ interface MessageBubbleProps {
 
 function MessageBubble({ message, parentSessionId, searchQuery = '', matchIndices = [], currentMatchIndex, onCopy }: MessageBubbleProps) {
   const isUser = message.role === 'user';
+  const isPending = message.uuid.startsWith('optimistic-');
   const hasMatch = matchIndices.length > 0;
   const hasCurrentMatch = currentMatchIndex !== undefined && matchIndices.includes(currentMatchIndex);
   const [showCopied, setShowCopied] = useState(false);
@@ -1190,7 +1191,9 @@ function MessageBubble({ message, parentSessionId, searchQuery = '', matchIndice
           <span className={isUser ? 'text-blue-400' : 'text-green-400'}>
             {isUser ? 'You' : 'Claude'}
           </span>
-          {message.timestamp && (
+          {isPending ? (
+            <span className="text-yellow-500 animate-pulse">Sending...</span>
+          ) : message.timestamp && (
             <span className="text-gray-500">
               {new Date(message.timestamp).toLocaleTimeString()}
             </span>
@@ -1238,7 +1241,7 @@ function MessageBubble({ message, parentSessionId, searchQuery = '', matchIndice
             isUser
               ? 'bg-blue-900/40 border border-blue-800/60 message-user'
               : 'bg-gray-800/80 border border-gray-700/60 message-assistant'
-          } ${hasCurrentMatch ? 'ring-2 ring-yellow-400' : ''}`}
+          } ${hasCurrentMatch ? 'ring-2 ring-yellow-400' : ''} ${isPending ? 'opacity-70' : ''}`}
         >
           {/* Thinking (if present) */}
           {message.thinking && <ThinkingDisplay thinking={message.thinking} />}

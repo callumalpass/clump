@@ -561,7 +561,7 @@ describe('Terminal', () => {
       render(<Terminal {...defaultProps} onClose={() => {}} />);
 
       const closeButton = screen.getByRole('button', { name: 'Close' });
-      expect(closeButton).toHaveClass('focus:ring-2');
+      expect(closeButton).toHaveClass('focus-visible:ring-2');
     });
   });
 });

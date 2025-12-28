@@ -642,7 +642,7 @@ describe('SessionList', () => {
       render(<SessionList {...defaultProps} />);
 
       const filterButton = screen.getByRole('button', { name: 'All' });
-      expect(filterButton).toHaveClass('focus:ring-2', 'focus:ring-blue-500');
+      expect(filterButton).toHaveClass('focus-visible:ring-2', 'focus-visible:ring-blue-500');
     });
 
     it('has proper aria-label on status badges', () => {

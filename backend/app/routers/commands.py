@@ -32,6 +32,7 @@ class CommandsResponse(BaseModel):
     """Response containing all available commands"""
     issue: list[CommandMetadata]
     pr: list[CommandMetadata]
+    general: list[CommandMetadata]
 
 
 class CommandCreate(BaseModel):
@@ -40,6 +41,11 @@ class CommandCreate(BaseModel):
     shortName: str
     description: str
     template: str
+
+
+def get_user_commands_dir() -> Path:
+    """Get user's global ~/.claude/commands directory (Claude Code user commands)"""
+    return Path.home() / ".claude" / "commands"
 
 
 def get_builtin_commands_dir() -> Path:
@@ -140,32 +146,45 @@ async def get_commands(
     """
     Get all available slash commands.
 
-    Loads from:
+    Loads from (in priority order, later sources override earlier):
     1. Clump's built-in commands (.claude/commands/)
-    2. Target repo's commands (if repo_path provided) - these take precedence
+    2. User's global commands (~/.claude/commands/)
+    3. Target repo's commands (if repo_path provided) - highest precedence
     """
     builtin_dir = get_builtin_commands_dir()
+    user_dir = get_user_commands_dir()
 
-    # Load built-in commands
+    # Load built-in commands (lowest priority)
     builtin_issue = load_commands_from_dir(builtin_dir, "issue", "builtin")
     builtin_pr = load_commands_from_dir(builtin_dir, "pr", "builtin")
+    builtin_general = load_commands_from_dir(builtin_dir, "general", "builtin")
 
-    # Load repo-specific commands if path provided
+    # Load user's global commands from ~/.claude/commands/
+    user_issue = load_commands_from_dir(user_dir, "issue", "user")
+    user_pr = load_commands_from_dir(user_dir, "pr", "user")
+    user_general = load_commands_from_dir(user_dir, "general", "user")
+
+    # Merge builtin with user (user overrides builtin)
+    issue_commands = merge_commands(builtin_issue, user_issue)
+    pr_commands = merge_commands(builtin_pr, user_pr)
+    general_commands = merge_commands(builtin_general, user_general)
+
+    # Load repo-specific commands if path provided (highest priority)
     if repo_path:
         repo_dir = get_repo_commands_dir(repo_path)
         repo_issue = load_commands_from_dir(repo_dir, "issue", "repo")
         repo_pr = load_commands_from_dir(repo_dir, "pr", "repo")
+        repo_general = load_commands_from_dir(repo_dir, "general", "repo")
 
         # Merge with repo taking precedence
-        issue_commands = merge_commands(builtin_issue, repo_issue)
-        pr_commands = merge_commands(builtin_pr, repo_pr)
-    else:
-        issue_commands = builtin_issue
-        pr_commands = builtin_pr
+        issue_commands = merge_commands(issue_commands, repo_issue)
+        pr_commands = merge_commands(pr_commands, repo_pr)
+        general_commands = merge_commands(general_commands, repo_general)
 
     return CommandsResponse(
         issue=issue_commands,
         pr=pr_commands,
+        general=general_commands,
     )
 
 
@@ -176,10 +195,10 @@ async def get_command(
     repo_path: Optional[str] = Query(None, description="Path to target repo")
 ) -> CommandMetadata:
     """Get a specific command by category and ID"""
-    if category not in ("issue", "pr"):
-        raise HTTPException(status_code=400, detail="Category must be 'issue' or 'pr'")
+    if category not in ("issue", "pr", "general"):
+        raise HTTPException(status_code=400, detail="Category must be 'issue', 'pr', or 'general'")
 
-    # Try repo-specific first if path provided
+    # Try repo-specific first if path provided (highest priority)
     if repo_path:
         repo_dir = get_repo_commands_dir(repo_path)
         repo_file = repo_dir / category / f"{command_id}.md"
@@ -187,6 +206,14 @@ async def get_command(
             command = parse_command_file(repo_file, category, "repo")
             if command:
                 return command
+
+    # Try user's global commands (~/.claude/commands/)
+    user_dir = get_user_commands_dir()
+    user_file = user_dir / category / f"{command_id}.md"
+    if user_file.exists():
+        command = parse_command_file(user_file, category, "user")
+        if command:
+            return command
 
     # Fall back to built-in
     builtin_dir = get_builtin_commands_dir()
@@ -209,8 +236,8 @@ async def create_command(
     repo_path: Optional[str] = Query(None, description="Path to save command (defaults to clump)")
 ) -> CommandMetadata:
     """Create a new command"""
-    if category not in ("issue", "pr"):
-        raise HTTPException(status_code=400, detail="Category must be 'issue' or 'pr'")
+    if category not in ("issue", "pr", "general"):
+        raise HTTPException(status_code=400, detail="Category must be 'issue', 'pr', or 'general'")
 
     # Determine where to save
     if repo_path:
@@ -257,8 +284,8 @@ async def update_command(
     repo_path: Optional[str] = Query(None, description="Path to repo containing the command")
 ) -> CommandMetadata:
     """Update an existing command"""
-    if category not in ("issue", "pr"):
-        raise HTTPException(status_code=400, detail="Category must be 'issue' or 'pr'")
+    if category not in ("issue", "pr", "general"):
+        raise HTTPException(status_code=400, detail="Category must be 'issue', 'pr', or 'general'")
 
     # Find the command file
     file_path = None
@@ -301,8 +328,8 @@ async def delete_command(
     repo_path: Optional[str] = Query(None, description="Path to repo containing the command")
 ) -> dict:
     """Delete a command"""
-    if category not in ("issue", "pr"):
-        raise HTTPException(status_code=400, detail="Category must be 'issue' or 'pr'")
+    if category not in ("issue", "pr", "general"):
+        raise HTTPException(status_code=400, detail="Category must be 'issue', 'pr', or 'general'")
 
     # Find the command file
     file_path = None

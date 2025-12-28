@@ -149,6 +149,13 @@ class PRDetailResponse(PRResponse):
     comments: list[dict]
 
 
+class PRListResponse(BaseModel):
+    prs: list[PRResponse]
+    total: int
+    page: int
+    per_page: int
+
+
 # Repo endpoints
 @router.get("/repos", response_model=list[RepoResponse])
 async def list_repos():
@@ -382,16 +389,41 @@ async def get_assignees(
 
 
 # PR endpoints
-@router.get("/repos/{repo_id}/prs", response_model=list[PRResponse])
+@router.get("/repos/{repo_id}/prs", response_model=PRListResponse)
 async def list_prs(
     repo_id: int,
     state: str = "open",
-    limit: int = 100,
+    search: str | None = None,
+    sort: str = "created",
+    order: str = "desc",
+    page: int = 1,
+    per_page: int = 30,
 ):
-    """List pull requests for a repository."""
+    """List pull requests for a repository with pagination and filtering.
+
+    Args:
+        state: Filter by state - "open", "closed", or "all"
+        search: Text search in PR title/body
+        sort: Sort field - "created" or "updated"
+        order: Sort order - "asc" or "desc"
+    """
     repo = get_repo_or_404(repo_id)
-    prs = github_client.list_prs(repo["owner"], repo["name"], state=state, limit=limit)
-    return [_pr_to_response(p) for p in prs]
+    prs, total = github_client.list_prs(
+        repo["owner"],
+        repo["name"],
+        state=state,
+        search_query=search,
+        sort=sort,
+        order=order,
+        page=page,
+        per_page=per_page,
+    )
+    return PRListResponse(
+        prs=[_pr_to_response(p) for p in prs],
+        total=total,
+        page=page,
+        per_page=per_page,
+    )
 
 
 @router.get("/repos/{repo_id}/prs/{pr_number}", response_model=PRDetailResponse)

@@ -13,7 +13,9 @@ import { Terminal } from './components/Terminal';
 import { SessionView } from './components/SessionView';
 import { SessionTabs } from './components/SessionTabs';
 import { SessionList } from './components/SessionList';
+import { CompactSessionList } from './components/CompactSessionList';
 import { ScheduleList } from './components/ScheduleList';
+import { ScheduleDetail } from './components/ScheduleDetail';
 import { Settings } from './components/Settings';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import type { Repo, Issue, PR, SessionSummary, CommandMetadata } from './types';
@@ -34,7 +36,7 @@ function ResizeHandle() {
   );
 }
 
-type Tab = 'issues' | 'prs' | 'sessions' | 'schedules';
+type Tab = 'issues' | 'prs' | 'history' | 'schedules';
 
 // Track pending issue/PR context for processes being created
 // This fixes the race condition where the sidepane doesn't show the issue/PR
@@ -75,6 +77,8 @@ export default function App() {
   const [selectedPR, setSelectedPR] = useState<number | null>(null);
   const [prFilters, setPRFilters] = useState<PRFilters>({ state: 'open' });
   const [isCreatingIssue, setIsCreatingIssue] = useState(false);
+  // Track selected schedule for center pane detail view
+  const [selectedSchedule, setSelectedSchedule] = useState<number | null>(null);
   // Track view mode (transcript vs terminal) per session
   const [sessionViewModes, setSessionViewModes] = useState<Record<string, 'transcript' | 'terminal'>>({});
 
@@ -197,9 +201,10 @@ export default function App() {
     setPRFilters({ state: 'open' });
     setSessionListFilters({ category: 'all' });
 
-    // Clear selections (issues/PRs belong to specific repos)
+    // Clear selections (issues/PRs/schedules belong to specific repos)
     setSelectedIssue(null);
     setSelectedPR(null);
+    setSelectedSchedule(null);
 
     // Restore tabs for new repo (or clear if none saved)
     if (selectedRepo?.id) {
@@ -822,6 +827,13 @@ export default function App() {
     setSelectedIssue(null);
   }, []);
 
+  const handleShowSchedule = useCallback((scheduleId: number) => {
+    setSelectedSchedule(scheduleId);
+    setSelectedIssue(null);
+    setSelectedPR(null);
+    setActiveTab('schedules');
+  }, []);
+
   // Handler for changing session view mode (transcript vs terminal)
   const handleSetSessionViewMode = useCallback((sessionId: string, mode: 'transcript' | 'terminal') => {
     setSessionViewModes(prev => ({ ...prev, [sessionId]: mode }));
@@ -1004,6 +1016,13 @@ export default function App() {
                 repoId={selectedRepo.id}
                 repoPath={selectedRepo.local_path}
                 commands={commands}
+                selectedScheduleId={selectedSchedule}
+                onSelectSchedule={(id) => {
+                  setSelectedSchedule(id);
+                  // Clear other selections
+                  setSelectedIssue(null);
+                  setSelectedPR(null);
+                }}
               />
             )}
             {!selectedRepo && activeTab !== 'sessions' && (
@@ -1179,11 +1198,13 @@ export default function App() {
                         }}
                         onShowIssue={handleShowIssue}
                         onShowPR={handleShowPR}
+                        onShowSchedule={handleShowSchedule}
                         issues={issues}
                         prs={prs}
                         onEntitiesChange={refreshSessions}
                         viewMode={sessionViewModes[activeSession.session_id]}
                         onViewModeChange={(mode) => handleSetSessionViewMode(activeSession.session_id, mode)}
+                        needsAttention={needsAttention}
                       />
                     ) : activeProcessId ? (
                       // Fallback to terminal-only if no analysis found yet
@@ -1208,11 +1229,13 @@ export default function App() {
                         }}
                         onShowIssue={handleShowIssue}
                         onShowPR={handleShowPR}
+                        onShowSchedule={handleShowSchedule}
                         issues={issues}
                         prs={prs}
                         onEntitiesChange={refreshSessions}
                         viewMode={sessionViewModes[viewingSession.session_id]}
                         onViewModeChange={(mode) => handleSetSessionViewMode(viewingSession.session_id, mode)}
+                        needsAttention={needsAttention}
                       />
                     ) : (
                       <div className="h-full flex items-center justify-center">
@@ -1284,6 +1307,28 @@ export default function App() {
               </div>
             )}
 
+            {/* Schedule detail panel (when schedule selected) */}
+            {selectedSchedule && selectedRepo && !showSideBySide && !selectedIssue && !selectedPR && (
+              <div className="flex-1 border-r border-gray-700 overflow-auto">
+                <ScheduleDetail
+                  repoId={selectedRepo.id}
+                  scheduleId={selectedSchedule}
+                  onShowSession={(sessionId) => {
+                    const session = sessions.find(s => s.session_id === sessionId);
+                    if (session) {
+                      handleSelectSession(session);
+                    }
+                  }}
+                  sessions={sessions}
+                  commands={commands}
+                  onScheduleDeleted={() => setSelectedSchedule(null)}
+                  onScheduleUpdated={() => {
+                    // Refresh schedules list is handled internally by useSchedules
+                  }}
+                />
+              </div>
+            )}
+
             {/* Sessions panel (no issue/PR context but open sessions exist) */}
             {openSessions.length > 0 && !hasIssueContext && !hasPRContext && (
               <div className="flex-1 flex flex-col">
@@ -1308,11 +1353,13 @@ export default function App() {
                       }}
                       onShowIssue={handleShowIssue}
                       onShowPR={handleShowPR}
+                      onShowSchedule={handleShowSchedule}
                       issues={issues}
                       prs={prs}
                       onEntitiesChange={refreshSessions}
                       viewMode={sessionViewModes[activeSession.session_id]}
                       onViewModeChange={(mode) => handleSetSessionViewMode(activeSession.session_id, mode)}
+                      needsAttention={needsAttention}
                     />
                   ) : activeProcessId ? (
                     // Fallback to terminal-only if no analysis found yet
@@ -1337,11 +1384,13 @@ export default function App() {
                       }}
                       onShowIssue={handleShowIssue}
                       onShowPR={handleShowPR}
+                      onShowSchedule={handleShowSchedule}
                       issues={issues}
                       prs={prs}
                       onEntitiesChange={refreshSessions}
                       viewMode={sessionViewModes[viewingSession.session_id]}
                       onViewModeChange={(mode) => handleSetSessionViewMode(viewingSession.session_id, mode)}
+                      needsAttention={needsAttention}
                     />
                   ) : (
                     <div className="h-full flex items-center justify-center">
@@ -1355,8 +1404,8 @@ export default function App() {
               </div>
             )}
 
-            {/* Empty state (no open session tabs and no issue/PR selected) */}
-            {openSessions.length === 0 && !selectedIssue && !selectedPR && (
+            {/* Empty state (no open session tabs and no issue/PR/schedule selected) */}
+            {openSessions.length === 0 && !selectedIssue && !selectedPR && !selectedSchedule && (
               <div className="flex-1 flex items-center justify-center p-8">
                 <div className="text-center p-8 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-sm empty-state-enter">
                   <div className="w-16 h-16 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-5 empty-state-icon-float">

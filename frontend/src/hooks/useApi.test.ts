@@ -279,10 +279,10 @@ describe('usePRs', () => {
       expect(result.current.loading).toBe(false);
     });
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      '/api/repos/1/prs?state=closed',
-      expect.any(Object)
-    );
+    // URL includes additional default params (sort, order, page, per_page)
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('/api/repos/1/prs');
+    expect(calledUrl).toContain('state=closed');
   });
 });
 

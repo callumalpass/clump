@@ -11,7 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import close_all_engines
 from app.storage import get_clump_dir
-from app.routers import github, processes, sessions, settings, headless, tags, commands, hooks
+from app.routers import github, processes, sessions, settings, headless, tags, commands, hooks, schedules
+from app.services.scheduler import scheduler
 
 
 @asynccontextmanager
@@ -19,13 +20,19 @@ async def lifespan(app: FastAPI):
     """
     Manage application lifespan.
 
-    - On startup: Ensure ~/.clump/ directory exists
-    - On shutdown: Close all database connections
+    - On startup: Ensure ~/.clump/ directory exists, start scheduler
+    - On shutdown: Stop scheduler, close all database connections
     """
     # Ensure clump directory structure exists
     get_clump_dir()
 
+    # Start the scheduler service
+    await scheduler.start()
+
     yield
+
+    # Stop the scheduler
+    await scheduler.stop()
 
     # Cleanup on shutdown
     await close_all_engines()
@@ -56,6 +63,7 @@ app.include_router(headless.router, prefix="/api", tags=["headless"])
 app.include_router(tags.router, prefix="/api", tags=["tags"])
 app.include_router(commands.router, prefix="/api", tags=["commands"])
 app.include_router(hooks.router, prefix="/api", tags=["hooks"])
+app.include_router(schedules.router, prefix="/api", tags=["schedules"])
 
 
 @app.get("/api/health")

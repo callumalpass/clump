@@ -30,10 +30,11 @@ describe('RepoSelector', () => {
   });
 
   describe('Rendering', () => {
-    it('renders select dropdown', () => {
+    it('renders dropdown button', () => {
       render(<RepoSelector {...defaultProps} />);
 
-      expect(screen.getByRole('combobox')).toBeInTheDocument();
+      // Custom dropdown uses a button with aria-haspopup="listbox"
+      expect(screen.getByRole('button', { name: 'Select repository' })).toBeInTheDocument();
     });
 
     it('renders add button', () => {
@@ -45,7 +46,7 @@ describe('RepoSelector', () => {
     it('shows placeholder when no repo selected', () => {
       render(<RepoSelector {...defaultProps} />);
 
-      expect(screen.getByRole('option', { name: 'Select repository...' })).toBeInTheDocument();
+      expect(screen.getByText('Select repository...')).toBeInTheDocument();
     });
 
     it('renders repos in dropdown', () => {
@@ -55,8 +56,11 @@ describe('RepoSelector', () => {
       ];
       render(<RepoSelector {...defaultProps} repos={repos} />);
 
-      expect(screen.getByRole('option', { name: 'owner1/repo1' })).toBeInTheDocument();
-      expect(screen.getByRole('option', { name: 'owner2/repo2' })).toBeInTheDocument();
+      // Open the dropdown first
+      fireEvent.click(screen.getByRole('button', { name: 'Select repository' }));
+
+      expect(screen.getByRole('option', { name: /owner1\/repo1/ })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: /owner2\/repo2/ })).toBeInTheDocument();
     });
 
     it('selects the current repo in dropdown', () => {
@@ -67,8 +71,8 @@ describe('RepoSelector', () => {
       const selectedRepo = repos[1];
       render(<RepoSelector {...defaultProps} repos={repos} selectedRepo={selectedRepo} />);
 
-      const select = screen.getByRole('combobox') as HTMLSelectElement;
-      expect(select.value).toBe('2');
+      // Selected repo is shown in the button text
+      expect(screen.getByText('owner2/repo2')).toBeInTheDocument();
     });
   });
 
@@ -81,37 +85,38 @@ describe('RepoSelector', () => {
       ];
       render(<RepoSelector {...defaultProps} repos={repos} onSelectRepo={onSelectRepo} />);
 
-      fireEvent.change(screen.getByRole('combobox'), { target: { value: '2' } });
+      // Open the dropdown
+      fireEvent.click(screen.getByRole('button', { name: 'Select repository' }));
+
+      // Click on a repo option
+      fireEvent.click(screen.getByRole('option', { name: /owner2\/repo2/ }));
 
       expect(onSelectRepo).toHaveBeenCalledWith(repos[1]);
     });
 
-    it('does not call onSelectRepo when selecting placeholder', () => {
+    it('closes dropdown when a repo is selected', () => {
       const onSelectRepo = vi.fn();
-      const repos = [createMockRepo({ id: 1 })];
-      const selectedRepo = repos[0];
-      render(
-        <RepoSelector
-          {...defaultProps}
-          repos={repos}
-          selectedRepo={selectedRepo}
-          onSelectRepo={onSelectRepo}
-        />
-      );
-
-      fireEvent.change(screen.getByRole('combobox'), { target: { value: '' } });
-
-      expect(onSelectRepo).not.toHaveBeenCalled();
-    });
-
-    it('does not call onSelectRepo when repo is not found', () => {
-      const onSelectRepo = vi.fn();
-      const repos = [createMockRepo({ id: 1 })];
+      const repos = [createMockRepo({ id: 1, owner: 'owner1', name: 'repo1' })];
       render(<RepoSelector {...defaultProps} repos={repos} onSelectRepo={onSelectRepo} />);
 
-      fireEvent.change(screen.getByRole('combobox'), { target: { value: '999' } });
+      // Open the dropdown
+      fireEvent.click(screen.getByRole('button', { name: 'Select repository' }));
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
 
-      expect(onSelectRepo).not.toHaveBeenCalled();
+      // Click on a repo option
+      fireEvent.click(screen.getByRole('option', { name: /owner1\/repo1/ }));
+
+      // Dropdown should close
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    });
+
+    it('shows empty message when no repos available', () => {
+      render(<RepoSelector {...defaultProps} repos={[]} />);
+
+      // Open the dropdown
+      fireEvent.click(screen.getByRole('button', { name: 'Select repository' }));
+
+      expect(screen.getByText('No repositories added')).toBeInTheDocument();
     });
   });
 
@@ -381,20 +386,20 @@ describe('RepoSelector', () => {
     it('handles empty repos array', () => {
       render(<RepoSelector {...defaultProps} repos={[]} />);
 
-      const select = screen.getByRole('combobox');
-      // Should only have the placeholder option
-      expect(select.querySelectorAll('option')).toHaveLength(1);
+      // Open the dropdown
+      fireEvent.click(screen.getByRole('button', { name: 'Select repository' }));
+
+      // Should show empty message
+      expect(screen.getByText('No repositories added')).toBeInTheDocument();
     });
 
     it('handles selectedRepo not in repos list gracefully', () => {
       const repos = [createMockRepo({ id: 1 })];
-      const selectedRepo = createMockRepo({ id: 999 }); // Not in repos list
+      const selectedRepo = createMockRepo({ id: 999, owner: 'other', name: 'other-repo' }); // Not in repos list
       render(<RepoSelector {...defaultProps} repos={repos} selectedRepo={selectedRepo} />);
 
-      const select = screen.getByRole('combobox') as HTMLSelectElement;
-      // HTML select elements revert to empty/first option when value doesn't match any option
-      // This tests that the component doesn't crash in this edge case
-      expect(select).toBeInTheDocument();
+      // Should still show the selected repo's name in the button
+      expect(screen.getByText('other/other-repo')).toBeInTheDocument();
     });
 
     it('handles rapid toggle of add form', () => {
@@ -419,18 +424,33 @@ describe('RepoSelector', () => {
       ];
       render(<RepoSelector {...defaultProps} repos={repos} />);
 
+      // Open the dropdown
+      fireEvent.click(screen.getByRole('button', { name: 'Select repository' }));
+
       expect(
-        screen.getByRole('option', { name: 'test-owner/test.repo-name_123' })
+        screen.getByRole('option', { name: /test-owner\/test\.repo-name_123/ })
       ).toBeInTheDocument();
     });
   });
 
   describe('Accessibility', () => {
-    it('has accessible select element', () => {
+    it('has accessible dropdown button', () => {
       render(<RepoSelector {...defaultProps} />);
 
-      const select = screen.getByRole('combobox');
-      expect(select).toBeInTheDocument();
+      const button = screen.getByRole('button', { name: 'Select repository' });
+      expect(button).toBeInTheDocument();
+      expect(button).toHaveAttribute('aria-haspopup', 'listbox');
+    });
+
+    it('has accessible listbox when dropdown is open', () => {
+      const repos = [createMockRepo({ id: 1, owner: 'owner1', name: 'repo1' })];
+      render(<RepoSelector {...defaultProps} repos={repos} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Select repository' }));
+
+      const listbox = screen.getByRole('listbox');
+      expect(listbox).toBeInTheDocument();
+      expect(listbox).toHaveAttribute('aria-label', 'Repository list');
     });
 
     it('has accessible form elements when form is open', () => {

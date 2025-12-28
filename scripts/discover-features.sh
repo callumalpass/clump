@@ -6,8 +6,6 @@
 #   --features N      Number of features to implement (default: 1)
 #   --tool TOOL       Use 'claude' or 'codex' (default: claude)
 
-set -e
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
@@ -58,7 +56,7 @@ Clump is a local web application for:
 - Terminal: xterm.js with PTY
 
 ## Your Task
-Explore the codebase and implement $FEATURE_COUNT feature(s) that you think would be most valuable.
+Explore the codebase and implement 1 feature that you think would be most valuable.
 
 **AVOID features that:**
 - Require new external services or third-party APIs
@@ -66,8 +64,6 @@ Explore the codebase and implement $FEATURE_COUNT feature(s) that you think woul
 - Add heavy new dependencies
 
 **PREFER features that:**
-- Improve existing functionality or UX
-- Add small UI enhancements
 - Fix obvious gaps in the current flow
 - Are low-risk and self-contained
 
@@ -85,14 +81,39 @@ Begin by exploring the codebase.
 EOF
 )
 
-if [ "$TOOL" == "codex" ]; then
-    codex --dangerously-bypass-approvals-and-sandbox "$PROMPT"
-else
-    claude --dangerously-skip-permissions -p "$PROMPT"
-fi
+for i in $(seq 1 $FEATURE_COUNT); do
+    echo "----------------------------------"
+    echo "Feature pass $i of $FEATURE_COUNT"
+    echo "----------------------------------"
+    echo ""
+
+    if [ "$TOOL" == "codex" ]; then
+        SUCCESS=0
+        codex --dangerously-bypass-approvals-and-sandbox "$PROMPT" || SUCCESS=$?
+    else
+        SUCCESS=0
+        claude --dangerously-skip-permissions -p "$PROMPT" || SUCCESS=$?
+    fi
+
+    if [ $SUCCESS -eq 0 ]; then
+        echo ""
+        echo "✓ Completed pass $i"
+    else
+        EXIT_CODE=$SUCCESS
+        echo ""
+        echo "✗ Error in pass $i (exit code: $EXIT_CODE)"
+        if [ $EXIT_CODE -eq 130 ]; then
+            echo "  Interrupted by user. Stopping."
+            exit 130
+        fi
+        echo "  Continuing with next pass..."
+    fi
+
+    echo ""
+done
 
 echo ""
 echo "=================================="
-echo "Feature implementation complete!"
+echo "All $FEATURE_COUNT feature pass(es) complete!"
 echo "=================================="
-echo "Run 'git log --oneline -5' to see implemented features."
+echo "Run 'git log --oneline -$((FEATURE_COUNT + 2))' to see implemented features."

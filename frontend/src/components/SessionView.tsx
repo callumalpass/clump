@@ -4,7 +4,7 @@ import { ConversationView } from './ConversationView';
 import { Editor } from './Editor';
 import { EntityPicker } from './EntityPicker';
 import { TokenUsageBar } from './TokenUsageBar';
-import type { SessionSummary, SessionDetail, EntityLink, Issue, PR, ParsedTranscript } from '../types';
+import type { SessionSummary, SessionDetail, EntityLink, Issue, PR, ParsedTranscript, TranscriptMessage } from '../types';
 import { fetchSessionDetail, addEntityToSession, removeEntityFromSession } from '../hooks/useApi';
 import { useWebSocket } from '../hooks/useWebSocket';
 
@@ -127,6 +127,8 @@ interface SessionViewProps {
   onShowIssue?: (issueNumber: number) => void;
   /** Navigate to a PR */
   onShowPR?: (prNumber: number) => void;
+  /** Navigate to a schedule */
+  onShowSchedule?: (scheduleId: number) => void;
   /** Available issues for linking */
   issues?: Issue[];
   /** Available PRs for linking */
@@ -137,6 +139,8 @@ interface SessionViewProps {
   viewMode?: ViewMode;
   /** Callback when view mode changes */
   onViewModeChange?: (mode: ViewMode) => void;
+  /** Check if a session needs attention (permission request, idle) */
+  needsAttention?: (sessionId: string) => boolean;
 }
 
 export function SessionView({
@@ -148,23 +152,46 @@ export function SessionView({
   onTitleChange,
   onShowIssue,
   onShowPR,
+  onShowSchedule,
   issues = [],
   prs = [],
   onEntitiesChange,
   viewMode: controlledViewMode,
   onViewModeChange,
+  needsAttention,
 }: SessionViewProps) {
   // Determine if process is active (has a running PTY)
   const isActiveProcess = !!processId || session.is_active;
 
+  // Check if Claude is waiting for user input (permission request, idle)
+  const waitingForInput = session.claude_session_id
+    ? needsAttention?.(session.claude_session_id) ?? false
+    : false;
+
   // WebSocket for sending input to active sessions
-  const { sendInput } = useWebSocket(processId ?? null);
+  const { sendInput, isConnected: wsConnected } = useWebSocket(processId ?? null);
 
   // Handler to send messages to Claude via WebSocket
-  const handleSendMessage = useCallback((message: string) => {
+  const handleSendMessage = useCallback(async (message: string) => {
     if (processId && message.trim()) {
-      // Use \r (carriage return) like a real terminal Enter key, not \n (line feed)
-      sendInput(message + '\r');
+      // Add optimistic message immediately for instant feedback
+      const optimisticId = `optimistic-${Date.now()}`;
+      setOptimisticMessages(prev => [...prev, {
+        id: optimisticId,
+        content: message.trim(),
+        timestamp: new Date().toISOString(),
+      }]);
+
+      // Send message text first, then carriage return after a small delay
+      // This mimics how the backend sends initial prompts and how real typing works
+      // Claude Code's TUI (Ink) needs time to process the text before receiving Enter
+      sendInput(message);
+
+      // Small delay before sending Enter (like backend's PROMPT_ENTER_DELAY_SECS = 0.1)
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Use \r (carriage return) like a real terminal Enter key
+      sendInput('\r');
     }
   }, [processId, sendInput]);
 
@@ -212,6 +239,13 @@ export function SessionView({
   const [continueMessage, setContinueMessage] = useState('');
   const [isContinuing, setIsContinuing] = useState(false);
 
+  // Optimistic messages (shown immediately before poll confirms)
+  const [optimisticMessages, setOptimisticMessages] = useState<Array<{
+    id: string;
+    content: string;
+    timestamp: string;
+  }>>([]);
+
   // Handler to continue session with a message
   const handleContinueWithMessage = useCallback(async () => {
     if (!onContinue || isContinuing) return;
@@ -231,6 +265,22 @@ export function SessionView({
   useEffect(() => {
     setEntities(session.entities || []);
   }, [session.entities]);
+
+  // Clear optimistic messages when they appear in the real transcript
+  useEffect(() => {
+    if (!detail?.messages || optimisticMessages.length === 0) return;
+
+    // Get the last few real user messages to compare against optimistic ones
+    const recentUserMessages = detail.messages
+      .filter(m => m.role === 'user')
+      .slice(-optimisticMessages.length - 2)
+      .map(m => m.content.trim());
+
+    // Remove optimistic messages that now appear in real messages
+    setOptimisticMessages(prev =>
+      prev.filter(opt => !recentUserMessages.includes(opt.content.trim()))
+    );
+  }, [detail?.messages]);
 
   // Handle adding entity
   const handleAddEntity = useCallback(async (kind: string, number: number) => {
@@ -516,6 +566,21 @@ export function SessionView({
                 </div>
               </>
             )}
+            {session.scheduled_job_id && (
+              <>
+                <span className="text-sm text-gray-500">|</span>
+                <button
+                  onClick={() => onShowSchedule?.(session.scheduled_job_id!)}
+                  className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs rounded bg-indigo-900/30 text-indigo-400 hover:bg-indigo-900/50 transition-colors"
+                  title="View schedule"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>Scheduled</span>
+                </button>
+              </>
+            )}
           </div>
 
           {/* Right: Controls */}
@@ -560,9 +625,18 @@ export function SessionView({
   }
 
   // Build a ParsedTranscript-compatible object for ConversationView
+  // Include optimistic messages (user messages that haven't been confirmed by poll yet)
+  const optimisticTranscriptMessages: TranscriptMessage[] = optimisticMessages.map(msg => ({
+    uuid: msg.id,
+    role: 'user' as const,
+    content: msg.content,
+    timestamp: msg.timestamp,
+    tool_uses: [],
+  }));
+
   const transcriptForView: ParsedTranscript | null = detail ? {
     session_id: detail.session_id,
-    messages: detail.messages,
+    messages: [...detail.messages, ...optimisticTranscriptMessages],
     summary: detail.summary || undefined,
     model: detail.model || undefined,
     total_input_tokens: detail.total_input_tokens,
@@ -634,6 +708,18 @@ export function SessionView({
               ))}
             </div>
           )}
+          {session.scheduled_job_id && (
+            <button
+              onClick={() => onShowSchedule?.(session.scheduled_job_id!)}
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs rounded bg-indigo-900/30 text-indigo-400 hover:bg-indigo-900/50 transition-colors shrink-0"
+              title="View schedule"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Scheduled</span>
+            </button>
+          )}
         </div>
 
         {/* Right: Controls (never truncate) */}
@@ -657,10 +743,19 @@ export function SessionView({
           )}
 
           {/* Live indicator for active sessions */}
-          {isActiveProcess && (
+          {isActiveProcess && !waitingForInput && (
             <span className="flex items-center gap-1 px-1.5 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-full shrink-0">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
               Live
+            </span>
+          )}
+          {/* Waiting for input indicator */}
+          {isActiveProcess && waitingForInput && (
+            <span className="flex items-center gap-1 px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs rounded-full shrink-0 animate-pulse">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              Waiting for input
             </span>
           )}
           {/* Search toggle button */}

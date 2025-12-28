@@ -87,6 +87,10 @@ describe('PRList', () => {
     loading: false,
     filters: { state: 'open' as const },
     onFiltersChange: vi.fn(),
+    page: 1,
+    totalPages: 1,
+    total: 0,
+    onPageChange: vi.fn(),
   };
 
   beforeEach(() => {
@@ -544,8 +548,8 @@ describe('PRList', () => {
 
       filterButtons.forEach(button => {
         expect(button).toHaveClass('focus:outline-none');
-        expect(button).toHaveClass('focus:ring-2');
-        expect(button).toHaveClass('focus:ring-blue-500');
+        expect(button).toHaveClass('focus-visible:ring-2');
+        expect(button).toHaveClass('focus-visible:ring-blue-500');
       });
     });
 

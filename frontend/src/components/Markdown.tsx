@@ -10,7 +10,7 @@ interface MarkdownProps {
 export function Markdown({ children, className = '' }: MarkdownProps) {
   return (
     <ReactMarkdown
-      className={`prose prose-invert prose-sm max-w-none ${className}`}
+      className={`prose prose-invert prose-sm max-w-none overflow-x-auto break-words ${className}`}
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[rehypeRaw]}
       components={{
@@ -39,7 +39,7 @@ export function Markdown({ children, className = '' }: MarkdownProps) {
           const isInline = !className;
           if (isInline) {
             return (
-              <code className="bg-gray-700 px-1.5 py-0.5 rounded text-sm">
+              <code className="bg-gray-700 px-1.5 py-0.5 rounded text-sm break-all">
                 {children}
               </code>
             );
@@ -80,6 +80,24 @@ export function Markdown({ children, className = '' }: MarkdownProps) {
         ),
         // Style paragraphs
         p: ({ children }) => <p className="my-2">{children}</p>,
+        // Style tables with horizontal scroll wrapper
+        table: ({ children }) => (
+          <div className="overflow-x-auto my-2">
+            <table className="min-w-full border-collapse border border-gray-700">
+              {children}
+            </table>
+          </div>
+        ),
+        th: ({ children }) => (
+          <th className="border border-gray-600 bg-gray-800 px-3 py-1.5 text-left text-sm font-medium">
+            {children}
+          </th>
+        ),
+        td: ({ children }) => (
+          <td className="border border-gray-700 px-3 py-1.5 text-sm">
+            {children}
+          </td>
+        ),
       }}
     >
       {children}

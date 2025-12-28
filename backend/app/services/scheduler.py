@@ -428,6 +428,7 @@ class SchedulerService:
             repo_path=repo["local_path"],
             entities=entities,
             created_at=datetime.utcnow().isoformat(),
+            scheduled_job_id=job.id,  # Link session to the schedule that created it
         )
         save_session_metadata(encoded_path, session_id, metadata)
 
