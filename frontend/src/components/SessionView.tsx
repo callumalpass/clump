@@ -847,7 +847,7 @@ export function SessionView({
           {detail && (
             <button
               onClick={() => handleCopy('markdown')}
-              className={`p-1.5 rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              className={`copy-button p-1.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                 copyStatus === 'copied'
                   ? 'bg-green-600 text-white'
                   : 'hover:bg-gray-700 text-gray-400 hover:text-white'
@@ -856,7 +856,7 @@ export function SessionView({
               aria-label={copyStatus === 'copied' ? 'Copied to clipboard' : 'Copy transcript to clipboard'}
             >
               {copyStatus === 'copied' ? (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 copy-success-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               ) : (

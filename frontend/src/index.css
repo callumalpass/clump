@@ -765,6 +765,44 @@ button:disabled .kbd-hint {
     0 0 0 1px rgba(255, 255, 255, 0.03);
 }
 
+/* Copy success animation - satisfying checkmark pop */
+@keyframes copy-success-pop {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.copy-success-icon {
+  animation: copy-success-pop 200ms ease-out forwards;
+}
+
+/* Copy button container transition */
+.copy-button {
+  transition: color 150ms ease, transform 100ms ease;
+}
+
+.copy-button:hover:not(:disabled) {
+  transform: scale(1.05);
+}
+
+.copy-button:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+/* Success state color transition */
+.copy-button-success {
+  color: #4ade80; /* green-400 */
+}
+
 /* Respect user's motion preferences for accessibility */
 @media (prefers-reduced-motion: reduce) {
   /* Disable all custom animations */
@@ -784,8 +822,21 @@ button:disabled .kbd-hint {
   .alert-icon-enter,
   .status-badge-enter,
   .session-tab-enter,
-  .filter-indicator-enter {
+  .filter-indicator-enter,
+  .copy-success-icon {
     animation: none;
+  }
+
+  /* Ensure copy success icon is visible */
+  .copy-success-icon {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Disable copy button hover effects */
+  .copy-button:hover:not(:disabled),
+  .copy-button:active:not(:disabled) {
+    transform: none;
   }
 
   /* Disable status dot hover animation */

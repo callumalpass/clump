@@ -1039,11 +1039,13 @@ function MessageBubble({ message, parentSessionId, searchQuery = '', matchIndice
           {message.content && (
             <button
               onClick={handleCopyMessage}
-              className="opacity-0 group-hover/bubble:opacity-70 hover:!opacity-100 p-0.5 rounded transition-opacity text-gray-400 hover:text-white"
+              className={`copy-button opacity-0 group-hover/bubble:opacity-70 hover:!opacity-100 p-0.5 rounded transition-opacity ${
+                showCopied ? 'copy-button-success !opacity-100' : 'text-gray-400 hover:text-white'
+              }`}
               title={showCopied ? 'Copied!' : 'Copy message'}
             >
               {showCopied ? (
-                <svg className="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 copy-success-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               ) : (

@@ -207,9 +207,9 @@ export function Terminal({ processId, onClose, relatedEntity, onShowRelated, sho
             <span className="text-sm text-gray-500">|</span>
             <button
               onClick={handleCopyProcessId}
-              className={`flex items-center gap-1.5 text-sm transition-colors focus:outline-none ${
+              className={`copy-button flex items-center gap-1.5 text-sm focus:outline-none ${
                 copyStatus === 'copied'
-                  ? 'text-green-400'
+                  ? 'copy-button-success'
                   : 'text-gray-400 hover:text-white'
               }`}
               title={copyStatus === 'copied' ? 'Copied!' : 'Copy process ID'}
@@ -217,7 +217,7 @@ export function Terminal({ processId, onClose, relatedEntity, onShowRelated, sho
             >
               <span>{processId.slice(0, 8)}</span>
               {copyStatus === 'copied' ? (
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 copy-success-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               ) : (
