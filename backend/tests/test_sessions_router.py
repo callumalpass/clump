@@ -566,6 +566,162 @@ class TestQuickScanTranscript:
 
         assert result["message_count"] == 1
 
+    def test_scan_nonexistent_file(self, tmp_path):
+        """Test scanning a file that doesn't exist returns defaults."""
+        nonexistent = tmp_path / "does_not_exist.jsonl"
+
+        result = _quick_scan_transcript(nonexistent)
+
+        assert result["title"] is None
+        assert result["model"] is None
+        assert result["start_time"] is None
+        assert result["end_time"] is None
+        assert result["message_count"] == 0
+
+    def test_scan_extracts_time_range(self, tmp_path):
+        """Test that start_time and end_time are correctly extracted."""
+        import json
+        transcript = tmp_path / "test.jsonl"
+        lines = [
+            json.dumps({"type": "user", "timestamp": "2024-01-15T10:00:00Z", "message": {"content": "First"}}),
+            json.dumps({"type": "assistant", "timestamp": "2024-01-15T10:05:00Z", "message": {"content": "Reply"}}),
+            json.dumps({"type": "user", "timestamp": "2024-01-15T10:10:00Z", "message": {"content": "Second"}}),
+            json.dumps({"type": "assistant", "timestamp": "2024-01-15T10:15:00Z", "message": {"content": "Final"}}),
+        ]
+        transcript.write_text("\n".join(lines))
+
+        result = _quick_scan_transcript(transcript)
+
+        assert result["start_time"] == "2024-01-15T10:00:00Z"
+        assert result["end_time"] == "2024-01-15T10:15:00Z"
+        assert result["message_count"] == 4
+
+    def test_scan_user_message_list_content(self, tmp_path):
+        """Test extracting title from user message with list content."""
+        import json
+        transcript = tmp_path / "test.jsonl"
+        lines = [
+            json.dumps({
+                "type": "user",
+                "timestamp": "2024-01-15T10:00:00Z",
+                "message": {
+                    "content": [
+                        {"type": "text", "text": "List format message content"}
+                    ]
+                }
+            }),
+        ]
+        transcript.write_text("\n".join(lines))
+
+        result = _quick_scan_transcript(transcript)
+
+        assert result["title"] == "List format message content"
+
+    def test_scan_truncates_long_title(self, tmp_path):
+        """Test that long user messages are truncated to 100 chars for title."""
+        import json
+        long_message = "x" * 200
+        transcript = tmp_path / "test.jsonl"
+        lines = [
+            json.dumps({
+                "type": "user",
+                "timestamp": "2024-01-15T10:00:00Z",
+                "message": {"content": long_message}
+            }),
+        ]
+        transcript.write_text("\n".join(lines))
+
+        result = _quick_scan_transcript(transcript)
+
+        assert result["title"] == "x" * 100
+
+    def test_scan_summary_takes_precedence(self, tmp_path):
+        """Test that summary takes precedence over first user message."""
+        import json
+        transcript = tmp_path / "test.jsonl"
+        lines = [
+            json.dumps({"type": "summary", "summary": "Official summary"}),
+            json.dumps({
+                "type": "user",
+                "timestamp": "2024-01-15T10:00:00Z",
+                "message": {"content": "First user message"}
+            }),
+        ]
+        transcript.write_text("\n".join(lines))
+
+        result = _quick_scan_transcript(transcript)
+
+        assert result["title"] == "Official summary"
+
+    def test_scan_only_uses_first_user_message(self, tmp_path):
+        """Test that only the first user message is used for title fallback."""
+        import json
+        transcript = tmp_path / "test.jsonl"
+        lines = [
+            json.dumps({
+                "type": "user",
+                "timestamp": "2024-01-15T10:00:00Z",
+                "message": {"content": "First message"}
+            }),
+            json.dumps({
+                "type": "user",
+                "timestamp": "2024-01-15T10:05:00Z",
+                "message": {"content": "Second message should be ignored"}
+            }),
+        ]
+        transcript.write_text("\n".join(lines))
+
+        result = _quick_scan_transcript(transcript)
+
+        assert result["title"] == "First message"
+
+    def test_scan_handles_empty_lines(self, tmp_path):
+        """Test that empty lines are skipped."""
+        import json
+        transcript = tmp_path / "test.jsonl"
+        content = "\n\n" + json.dumps({
+            "type": "user",
+            "timestamp": "2024-01-15T10:00:00Z",
+            "message": {"content": "Hello"}
+        }) + "\n\n"
+        transcript.write_text(content)
+
+        result = _quick_scan_transcript(transcript)
+
+        assert result["message_count"] == 1
+
+    def test_scan_ignores_other_entry_types(self, tmp_path):
+        """Test that non user/assistant/summary entries are ignored."""
+        import json
+        transcript = tmp_path / "test.jsonl"
+        lines = [
+            json.dumps({"type": "init", "version": "1.0.0"}),
+            json.dumps({"type": "metadata", "project": "test"}),
+            json.dumps({"type": "user", "timestamp": "2024-01-15T10:00:00Z", "message": {"content": "Hello"}}),
+            json.dumps({"type": "result", "status": "success"}),
+        ]
+        transcript.write_text("\n".join(lines))
+
+        result = _quick_scan_transcript(transcript)
+
+        # Only the user message should count
+        assert result["message_count"] == 1
+
+    def test_scan_handles_missing_timestamp(self, tmp_path):
+        """Test handling of messages without timestamps."""
+        import json
+        transcript = tmp_path / "test.jsonl"
+        lines = [
+            json.dumps({"type": "user", "message": {"content": "No timestamp"}}),
+        ]
+        transcript.write_text("\n".join(lines))
+
+        result = _quick_scan_transcript(transcript)
+
+        assert result["message_count"] == 1
+        assert result["start_time"] is None
+        assert result["end_time"] is None
+
 
 class TestGetPendingSessions:
     """Tests for the _get_pending_sessions helper function."""

@@ -81,7 +81,7 @@ def extract_agent_id(content: list) -> Optional[str]:
     """
     for item in content:
         if isinstance(item, dict) and item.get('type') == 'text':
-            text = item.get('text', '')
+            text = item.get('text') or ''
             # Look for pattern: "agentId: XXXXXXX" (7-char hex)
             match = re.search(r'agentId:\s*([a-f0-9]{7})', text)
             if match:

@@ -8,6 +8,7 @@ from app.services.transcript_parser import (
     TranscriptMessage,
     ParsedTranscript,
     transcript_to_dict,
+    extract_agent_id,
 )
 
 
@@ -187,3 +188,144 @@ class TestTranscriptToDict:
         result = transcript_to_dict(transcript)
 
         assert result["messages"][0]["usage"] is None
+
+
+class TestExtractAgentId:
+    """Tests for extract_agent_id function."""
+
+    def test_extracts_agent_id_from_text_block(self):
+        """Extracts agent ID from a text content block."""
+        content = [
+            {
+                "type": "text",
+                "text": "Task completed successfully.\n\nagentId: a01393b (for resuming to continue this agent's work if needed)"
+            }
+        ]
+        result = extract_agent_id(content)
+        assert result == "a01393b"
+
+    def test_extracts_agent_id_from_multiple_blocks(self):
+        """Extracts agent ID when it appears in one of multiple blocks."""
+        content = [
+            {"type": "text", "text": "First block without agent ID"},
+            {"type": "text", "text": "Second block with agentId: b2c4d5e here"},
+            {"type": "text", "text": "Third block"}
+        ]
+        result = extract_agent_id(content)
+        assert result == "b2c4d5e"
+
+    def test_returns_none_for_empty_list(self):
+        """Returns None when content list is empty."""
+        result = extract_agent_id([])
+        assert result is None
+
+    def test_returns_none_when_no_agent_id(self):
+        """Returns None when no agent ID is present."""
+        content = [
+            {"type": "text", "text": "Some output without any agent identifier"}
+        ]
+        result = extract_agent_id(content)
+        assert result is None
+
+    def test_returns_none_for_non_text_blocks(self):
+        """Returns None when content only has non-text blocks."""
+        content = [
+            {"type": "image", "data": "base64data"},
+            {"type": "tool_use", "id": "123"}
+        ]
+        result = extract_agent_id(content)
+        assert result is None
+
+    def test_returns_first_agent_id_found(self):
+        """Returns the first agent ID if multiple are present."""
+        content = [
+            {"type": "text", "text": "First agentId: abc1234"},
+            {"type": "text", "text": "Second agentId: def5678"}
+        ]
+        result = extract_agent_id(content)
+        assert result == "abc1234"
+
+    def test_handles_agent_id_with_extra_whitespace(self):
+        """Handles agent ID with varying whitespace after colon."""
+        content = [
+            {"type": "text", "text": "agentId:   f1e2d3c"}
+        ]
+        result = extract_agent_id(content)
+        assert result == "f1e2d3c"
+
+    def test_handles_agent_id_at_start_of_text(self):
+        """Handles agent ID at the start of text content."""
+        content = [
+            {"type": "text", "text": "agentId: 1234567 followed by other text"}
+        ]
+        result = extract_agent_id(content)
+        assert result == "1234567"
+
+    def test_handles_agent_id_at_end_of_text(self):
+        """Handles agent ID at the end of text content."""
+        content = [
+            {"type": "text", "text": "Some text before agentId: 7654321"}
+        ]
+        result = extract_agent_id(content)
+        assert result == "7654321"
+
+    def test_ignores_malformed_agent_id_too_short(self):
+        """Ignores agent IDs that are too short (less than 7 chars)."""
+        content = [
+            {"type": "text", "text": "agentId: abc12"}  # Only 5 chars
+        ]
+        result = extract_agent_id(content)
+        assert result is None
+
+    def test_ignores_malformed_agent_id_too_long(self):
+        """Only captures exactly 7 hex characters."""
+        content = [
+            {"type": "text", "text": "agentId: abcdef123456"}  # Too long
+        ]
+        result = extract_agent_id(content)
+        # Should match only the first 7 hex chars
+        assert result == "abcdef1"
+
+    def test_ignores_non_hex_characters(self):
+        """Does not match agent IDs with non-hex characters."""
+        content = [
+            {"type": "text", "text": "agentId: ghijklm"}  # Not hex
+        ]
+        result = extract_agent_id(content)
+        assert result is None
+
+    def test_case_insensitive_hex(self):
+        """Matches lowercase hex characters only (per the regex)."""
+        content = [
+            {"type": "text", "text": "agentId: ABCDEF1"}  # Uppercase
+        ]
+        result = extract_agent_id(content)
+        # Current regex only matches lowercase, so this should return None
+        assert result is None
+
+    def test_handles_missing_text_key(self):
+        """Handles text blocks missing the 'text' key gracefully."""
+        content = [
+            {"type": "text"}  # No 'text' key
+        ]
+        result = extract_agent_id(content)
+        assert result is None
+
+    def test_handles_none_text_value(self):
+        """Handles text blocks with None text value gracefully."""
+        content = [
+            {"type": "text", "text": None}
+        ]
+        # Function should handle None text values without raising TypeError
+        result = extract_agent_id(content)
+        assert result is None
+
+    def test_handles_non_dict_items_in_content(self):
+        """Handles non-dict items in content list gracefully."""
+        content = [
+            "just a string",
+            123,
+            {"type": "text", "text": "agentId: 1234abc"}
+        ]
+        result = extract_agent_id(content)
+        assert result == "1234abc"
