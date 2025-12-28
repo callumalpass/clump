@@ -94,29 +94,29 @@ const SessionListItem = memo(function SessionListItem({
         {/* Status indicator with text label for accessibility */}
         {session.is_active ? (
           <span
-            className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-yellow-500/20 text-yellow-400 flex-shrink-0 active-badge-glow"
+            className="status-badge status-badge-enter inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-yellow-500/20 text-yellow-400 flex-shrink-0 active-badge-glow"
             title="Session is actively running"
             aria-label="Active session"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
+            <span className="status-dot w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
             Active
           </span>
         ) : isRecentlyModified(session.modified_at) ? (
           <span
-            className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-blue-500/20 text-blue-400 flex-shrink-0"
+            className="status-badge status-badge-enter inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-blue-500/20 text-blue-400 flex-shrink-0"
             title="Session updated in the last 10 minutes"
             aria-label="Recently updated session"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+            <span className="status-dot w-1.5 h-1.5 rounded-full bg-blue-500" />
             Recent
           </span>
         ) : (
           <span
-            className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-500/20 text-green-400 flex-shrink-0"
+            className="status-badge status-badge-enter inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-500/20 text-green-400 flex-shrink-0"
             title="Session completed"
             aria-label="Completed session"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+            <span className="status-dot w-1.5 h-1.5 rounded-full bg-green-500" />
             Done
           </span>
         )}
