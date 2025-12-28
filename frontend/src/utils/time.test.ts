@@ -264,7 +264,7 @@ describe('getTimeWithTooltip', () => {
 });
 
 describe('formatDuration', () => {
-  describe('null/undefined handling', () => {
+  describe('null/undefined/invalid handling', () => {
     it('returns null for null input', () => {
       expect(formatDuration(null)).toBeNull();
     });
@@ -277,6 +277,15 @@ describe('formatDuration', () => {
       expect(formatDuration(-1)).toBeNull();
       expect(formatDuration(-100)).toBeNull();
       expect(formatDuration(-999999)).toBeNull();
+    });
+
+    it('returns null for NaN', () => {
+      expect(formatDuration(NaN)).toBeNull();
+    });
+
+    it('returns null for Infinity', () => {
+      expect(formatDuration(Infinity)).toBeNull();
+      expect(formatDuration(-Infinity)).toBeNull();
     });
   });
 
