@@ -1324,6 +1324,30 @@ export default function App() {
                     history: 'History',
                     schedules: 'Schedules',
                   };
+                  // Tab icons for visual hierarchy
+                  const tabIcons: Record<Tab, React.ReactNode> = {
+                    issues: (
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" strokeWidth={2} />
+                        <circle cx="12" cy="12" r="3" fill="currentColor" />
+                      </svg>
+                    ),
+                    prs: (
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                      </svg>
+                    ),
+                    history: (
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    ),
+                    schedules: (
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    ),
+                  };
                   // Get count for each tab
                   const count = tab === 'issues' ? issuesTotal
                     : tab === 'prs' ? prsTotal
@@ -1337,12 +1361,15 @@ export default function App() {
                         if (el) tabRefs.current.set(tab, el);
                       }}
                       onClick={() => setActiveTab(tab)}
-                      className={`flex-1 px-4 py-2 text-sm outline-none focus-visible:bg-blue-500/10 focus-visible:text-blue-300 flex items-center justify-center gap-1.5 transition-colors duration-150 ${
+                      className={`flex-1 px-3 py-2 text-sm outline-none focus-visible:bg-blue-500/10 focus-visible:text-blue-300 flex items-center justify-center gap-1.5 transition-colors duration-150 ${
                         activeTab === tab
                           ? 'text-white'
                           : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                       }`}
                     >
+                      <span className={`transition-colors duration-150 ${activeTab === tab ? 'text-blue-400' : ''}`}>
+                        {tabIcons[tab]}
+                      </span>
                       {tabLabels[tab]}
                       {(selectedRepo || tab === 'history') && count > 0 && (
                         <span className={`text-xs px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center ${
