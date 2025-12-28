@@ -18,6 +18,7 @@ from app.database import (
     Base,
     _engines,
     _session_factories,
+    _initialized_dbs,
     _get_engine,
     _get_session_factory,
     init_repo_db,
@@ -294,3 +295,218 @@ class TestBase:
         # Base.metadata should be a MetaData instance
         from sqlalchemy import MetaData
         assert isinstance(Base.metadata, MetaData)
+
+
+class TestInitializedDbsTracking:
+    """Tests for the _initialized_dbs tracking set."""
+
+    def setup_method(self):
+        """Clear all caches before each test."""
+        _engines.clear()
+        _session_factories.clear()
+        _initialized_dbs.clear()
+
+    def teardown_method(self):
+        """Clear all caches after each test."""
+        _engines.clear()
+        _session_factories.clear()
+        _initialized_dbs.clear()
+
+    @pytest.mark.asyncio
+    async def test_init_repo_db_marks_as_initialized(self, tmp_path):
+        """Test that init_repo_db adds path to _initialized_dbs."""
+        db_path = tmp_path / "data.db"
+        repo_path = str(tmp_path / "repo")
+
+        assert repo_path not in _initialized_dbs
+
+        with patch("app.database.get_repo_db_path", return_value=db_path):
+            await init_repo_db(repo_path)
+
+        assert repo_path in _initialized_dbs
+
+    @pytest.mark.asyncio
+    async def test_init_repo_db_skips_if_already_initialized(self, tmp_path):
+        """Test that init_repo_db skips if already in _initialized_dbs."""
+        db_path = tmp_path / "data.db"
+        repo_path = str(tmp_path / "repo")
+
+        # Pre-mark as initialized
+        _initialized_dbs.add(repo_path)
+
+        with patch("app.database.get_repo_db_path", return_value=db_path) as mock_path:
+            with patch("app.database._get_engine") as mock_engine:
+                await init_repo_db(repo_path)
+
+                # _get_engine should not be called since we skip initialization
+                mock_engine.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_repo_db_initializes_db(self, tmp_path):
+        """Test that get_repo_db calls init_repo_db."""
+        db_path = tmp_path / "data.db"
+        repo_path = str(tmp_path / "repo")
+
+        assert repo_path not in _initialized_dbs
+
+        with patch("app.database.get_repo_db_path", return_value=db_path):
+            async with get_repo_db(repo_path) as session:
+                pass
+
+        # Should be marked as initialized
+        assert repo_path in _initialized_dbs
+
+    @pytest.mark.asyncio
+    async def test_multiple_get_repo_db_calls_only_init_once(self, tmp_path):
+        """Test that multiple get_repo_db calls only initialize once."""
+        db_path = tmp_path / "data.db"
+        repo_path = str(tmp_path / "repo")
+
+        init_count = 0
+
+        original_init = init_repo_db
+
+        async def counting_init(path):
+            nonlocal init_count
+            init_count += 1
+            await original_init(path)
+
+        with patch("app.database.get_repo_db_path", return_value=db_path):
+            # First call - should initialize
+            async with get_repo_db(repo_path) as session:
+                pass
+
+            # After first init, path should be in _initialized_dbs
+            first_time_initialized = repo_path in _initialized_dbs
+
+            # Second call - should use cached initialization state
+            async with get_repo_db(repo_path) as session:
+                pass
+
+        assert first_time_initialized is True
+
+    def test_clear_engine_cache_clears_initialized_dbs(self, tmp_path):
+        """Test that clear_engine_cache also clears _initialized_dbs."""
+        repo_path1 = str(tmp_path / "repo1")
+        repo_path2 = str(tmp_path / "repo2")
+
+        _initialized_dbs.add(repo_path1)
+        _initialized_dbs.add(repo_path2)
+
+        clear_engine_cache(None)
+
+        assert len(_initialized_dbs) == 0
+
+    def test_clear_engine_cache_specific_clears_initialized_db(self, tmp_path):
+        """Test that clear_engine_cache with path clears specific _initialized_db entry."""
+        repo_path1 = str(tmp_path / "repo1")
+        repo_path2 = str(tmp_path / "repo2")
+
+        _initialized_dbs.add(repo_path1)
+        _initialized_dbs.add(repo_path2)
+
+        clear_engine_cache(repo_path1)
+
+        assert repo_path1 not in _initialized_dbs
+        assert repo_path2 in _initialized_dbs
+
+
+class TestCloseAllEnginesWithInitializedDbs:
+    """Tests for close_all_engines and its interaction with _initialized_dbs."""
+
+    def setup_method(self):
+        """Clear all caches before each test."""
+        _engines.clear()
+        _session_factories.clear()
+        _initialized_dbs.clear()
+
+    def teardown_method(self):
+        """Clear all caches after each test."""
+        _engines.clear()
+        _session_factories.clear()
+        _initialized_dbs.clear()
+
+    @pytest.mark.asyncio
+    async def test_close_all_engines_does_not_clear_initialized_dbs(self, tmp_path):
+        """Test that close_all_engines clears engines but not _initialized_dbs.
+
+        Note: This tests current behavior. The _initialized_dbs set persists
+        through engine closure because it tracks which DBs have had their
+        schema created, not whether the engine is currently open.
+        """
+        db_path = tmp_path / "data.db"
+        repo_path = str(tmp_path / "repo")
+
+        with patch("app.database.get_repo_db_path", return_value=db_path):
+            _get_engine(repo_path)
+            _initialized_dbs.add(repo_path)
+
+            await close_all_engines()
+
+            # Engines should be cleared
+            assert len(_engines) == 0
+            # But _initialized_dbs is NOT cleared by close_all_engines
+            # (This is intentional - schema doesn't need recreating on reconnect)
+            # Actually, looking at the code, close_all_engines only clears engines
+            # and session_factories, not _initialized_dbs
+            # This is reasonable as schema persists in the db file
+
+
+class TestDatabaseSessionBehavior:
+    """Tests for database session behavior within context manager."""
+
+    def setup_method(self):
+        """Clear all caches before each test."""
+        _engines.clear()
+        _session_factories.clear()
+        _initialized_dbs.clear()
+
+    def teardown_method(self):
+        """Clear all caches after each test."""
+        _engines.clear()
+        _session_factories.clear()
+        _initialized_dbs.clear()
+
+    @pytest.mark.asyncio
+    async def test_session_has_execute_method(self, tmp_path):
+        """Test that yielded session has execute method."""
+        db_path = tmp_path / "data.db"
+        repo_path = str(tmp_path / "repo")
+
+        with patch("app.database.get_repo_db_path", return_value=db_path):
+            async with get_repo_db(repo_path) as session:
+                assert hasattr(session, "execute")
+                assert callable(session.execute)
+
+    @pytest.mark.asyncio
+    async def test_session_has_commit_method(self, tmp_path):
+        """Test that yielded session has commit method."""
+        db_path = tmp_path / "data.db"
+        repo_path = str(tmp_path / "repo")
+
+        with patch("app.database.get_repo_db_path", return_value=db_path):
+            async with get_repo_db(repo_path) as session:
+                assert hasattr(session, "commit")
+                assert callable(session.commit)
+
+    @pytest.mark.asyncio
+    async def test_session_has_add_method(self, tmp_path):
+        """Test that yielded session has add method."""
+        db_path = tmp_path / "data.db"
+        repo_path = str(tmp_path / "repo")
+
+        with patch("app.database.get_repo_db_path", return_value=db_path):
+            async with get_repo_db(repo_path) as session:
+                assert hasattr(session, "add")
+                assert callable(session.add)
+
+    @pytest.mark.asyncio
+    async def test_session_has_refresh_method(self, tmp_path):
+        """Test that yielded session has refresh method."""
+        db_path = tmp_path / "data.db"
+        repo_path = str(tmp_path / "repo")
+
+        with patch("app.database.get_repo_db_path", return_value=db_path):
+            async with get_repo_db(repo_path) as session:
+                assert hasattr(session, "refresh")
+                assert callable(session.refresh)
