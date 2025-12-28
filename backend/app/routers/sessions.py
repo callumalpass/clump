@@ -8,6 +8,7 @@ with optional sidecar metadata stored in ~/.clump/projects/
 import json
 import time
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Callable, List, Optional, TypedDict
 
@@ -102,6 +103,31 @@ def _calculate_duration_seconds(start_time: Optional[str], end_time: Optional[st
 
 
 router = APIRouter()
+
+
+# ==========================================
+# Query Parameter Enums
+# ==========================================
+
+
+class SessionSortField(str, Enum):
+    """Valid fields for sorting sessions."""
+    CREATED = "created"
+    UPDATED = "updated"
+    MESSAGES = "messages"
+
+
+class SortOrder(str, Enum):
+    """Sort order direction."""
+    ASC = "asc"
+    DESC = "desc"
+
+
+class ModelFilter(str, Enum):
+    """Claude model variants for filtering."""
+    SONNET = "sonnet"
+    OPUS = "opus"
+    HAIKU = "haiku"
 
 
 def _get_cached_sessions(repo_path: Optional[str] = None) -> list[DiscoveredSession]:
@@ -564,9 +590,9 @@ async def list_sessions(
     starred: Optional[bool] = None,
     has_entities: Optional[bool] = None,
     search: Optional[str] = None,
-    model: Optional[str] = Query(default=None, regex="^(sonnet|opus|haiku)$"),
-    sort: Optional[str] = Query(default="updated", regex="^(created|updated|messages)$"),
-    order: Optional[str] = Query(default="desc", regex="^(asc|desc)$"),
+    model: Optional[ModelFilter] = None,
+    sort: SessionSortField = SessionSortField.UPDATED,
+    order: SortOrder = SortOrder.DESC,
     limit: int = Query(default=DEFAULT_PAGE_SIZE, le=MAX_PAGE_SIZE),
     offset: int = 0,
 ):
@@ -602,12 +628,12 @@ async def list_sessions(
     summaries.extend(pending_headless)
 
     # Sort based on the requested field and order
-    reverse = order == "desc"
-    if sort == "created":
+    reverse = order == SortOrder.DESC
+    if sort == SessionSortField.CREATED:
         summaries.sort(key=lambda s: s.start_time or "", reverse=reverse)
-    elif sort == "messages":
+    elif sort == SessionSortField.MESSAGES:
         summaries.sort(key=lambda s: s.message_count or 0, reverse=reverse)
-    else:  # default to "updated"
+    else:  # default to UPDATED
         summaries.sort(key=lambda s: s.modified_at or "", reverse=reverse)
 
     # Apply filters
@@ -1180,7 +1206,7 @@ def _export_session_to_markdown(
     return "\n".join(lines)
 
 
-class ExportFormat(str):
+class ExportFormat(str, Enum):
     """Supported export formats."""
     MARKDOWN = "markdown"
 
@@ -1195,7 +1221,7 @@ class SessionExportResponse(BaseModel):
 @router.get("/sessions/{session_id}/export", response_model=SessionExportResponse)
 async def export_session(
     session_id: str,
-    format: str = "markdown",
+    format: ExportFormat = ExportFormat.MARKDOWN,
 ):
     """
     Export a session transcript to a downloadable format.
@@ -1203,8 +1229,6 @@ async def export_session(
     Currently supports:
     - markdown: Well-formatted Markdown document
     """
-    if format != "markdown":
-        raise HTTPException(status_code=400, detail="Unsupported export format. Use 'markdown'.")
 
     # Find the session
     sessions = _get_cached_sessions()
@@ -1238,7 +1262,7 @@ async def export_session(
     return SessionExportResponse(
         content=content,
         filename=filename,
-        format="markdown",
+        format=format.value,
     )
 
 
