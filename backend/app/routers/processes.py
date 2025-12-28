@@ -70,7 +70,7 @@ async def create_process(data: ProcessCreate):
     repo = get_repo_or_404(data.repo_id)
 
     async with get_repo_db(repo["local_path"]) as db:
-        # Create session record
+        # Create session record - need to commit to get auto-generated ID
         session = Session(
             repo_id=repo["id"],
             kind=data.kind,
@@ -79,10 +79,9 @@ async def create_process(data: ProcessCreate):
             status=SessionStatus.RUNNING.value,
         )
         db.add(session)
-        await db.commit()
-        await db.refresh(session)
+        await db.flush()  # Get session.id without full commit
 
-        # Create entity links
+        # Create entity links (will be committed with final commit)
         for entity in data.entities:
             session_entity = SessionEntity(
                 session_id=session.id,
@@ -91,9 +90,6 @@ async def create_process(data: ProcessCreate):
                 entity_number=entity.number,
             )
             db.add(session_entity)
-
-        if data.entities:
-            await db.commit()
 
         # Create PTY process with Claude Code configuration
         try:
@@ -114,7 +110,7 @@ async def create_process(data: ProcessCreate):
             await db.commit()
             raise HTTPException(status_code=400, detail=str(e))
 
-        # Link process to session
+        # Link process to session and commit all changes at once
         session.process_id = process.id
         await db.commit()
 
