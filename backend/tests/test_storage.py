@@ -121,6 +121,94 @@ class TestSubsessionDetection:
         assert is_subsession("") is False
 
 
+class TestDiscoveredSession:
+    """Tests for DiscoveredSession dataclass."""
+
+    def test_repo_path_decodes_encoded_path(self, tmp_path):
+        """Test that repo_path property decodes the encoded_path correctly."""
+        session = DiscoveredSession(
+            session_id="test-session",
+            encoded_path="-home-user-myproject",
+            transcript_path=tmp_path / "test.jsonl",
+            modified_at=datetime.now(),
+            file_size=100,
+        )
+
+        assert session.repo_path == "/home/user/myproject"
+
+    def test_repo_path_handles_path_without_leading_dash(self, tmp_path):
+        """Test repo_path when encoded_path doesn't start with dash."""
+        session = DiscoveredSession(
+            session_id="test-session",
+            encoded_path="relative-path-project",
+            transcript_path=tmp_path / "test.jsonl",
+            modified_at=datetime.now(),
+            file_size=100,
+        )
+
+        # Without leading dash, decode_path returns path/with/slashes
+        assert session.repo_path == "relative/path/project"
+
+    def test_discovered_session_with_metadata(self, tmp_path):
+        """Test DiscoveredSession with attached metadata."""
+        metadata = SessionMetadata(
+            session_id="test-session",
+            title="My Session",
+            starred=True,
+        )
+
+        session = DiscoveredSession(
+            session_id="test-session",
+            encoded_path="-home-user-project",
+            transcript_path=tmp_path / "test.jsonl",
+            modified_at=datetime.now(),
+            file_size=1024,
+            metadata=metadata,
+        )
+
+        assert session.metadata is not None
+        assert session.metadata.title == "My Session"
+        assert session.metadata.starred is True
+
+    def test_discovered_session_without_metadata(self, tmp_path):
+        """Test DiscoveredSession without metadata."""
+        session = DiscoveredSession(
+            session_id="test-session",
+            encoded_path="-home-user-project",
+            transcript_path=tmp_path / "test.jsonl",
+            modified_at=datetime.now(),
+            file_size=512,
+        )
+
+        assert session.metadata is None
+
+    def test_discovered_session_file_size(self, tmp_path):
+        """Test that file_size is stored correctly."""
+        session = DiscoveredSession(
+            session_id="test-session",
+            encoded_path="-home-user-project",
+            transcript_path=tmp_path / "test.jsonl",
+            modified_at=datetime.now(),
+            file_size=2048,
+        )
+
+        assert session.file_size == 2048
+
+    def test_discovered_session_modified_at(self, tmp_path):
+        """Test that modified_at timestamp is stored correctly."""
+        modified_time = datetime(2024, 6, 15, 12, 30, 0)
+
+        session = DiscoveredSession(
+            session_id="test-session",
+            encoded_path="-home-user-project",
+            transcript_path=tmp_path / "test.jsonl",
+            modified_at=modified_time,
+            file_size=100,
+        )
+
+        assert session.modified_at == modified_time
+
+
 class TestSessionMetadata:
     """Tests for SessionMetadata dataclass."""
 
