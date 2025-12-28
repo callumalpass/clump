@@ -4,6 +4,9 @@ import { IssueFilters } from './IssueFilters';
 import { StartSessionButton } from './StartSessionButton';
 import { getContrastColor } from '../utils/colors';
 
+/** Consistent focus ring styling for accessibility */
+const focusRing = 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900';
+
 interface IssueListProps {
   issues: Issue[];
   selectedIssue: number | null;
@@ -123,7 +126,7 @@ export function IssueList({
         <div className="shrink-0 p-2 border-b border-gray-700 flex flex-wrap gap-1">
           <button
             onClick={() => onSelectTag?.(null)}
-            className={`px-2 py-0.5 text-xs rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900 ${
+            className={`px-2 py-0.5 text-xs rounded-full transition-colors ${focusRing} ${
               !selectedTagId
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -138,7 +141,7 @@ export function IssueList({
               <button
                 key={tag.id}
                 onClick={() => onSelectTag?.(isSelected ? null : tag.id)}
-                className={`px-2 py-0.5 text-xs rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900 ${
+                className={`px-2 py-0.5 text-xs rounded-full transition-colors ${focusRing} ${
                   isSelected ? 'ring-2 ring-white ring-offset-1 ring-offset-gray-900' : 'hover:opacity-80'
                 }`}
                 style={{ backgroundColor: bgColor, color: getContrastColor(bgColor) }}
@@ -178,10 +181,24 @@ export function IssueList({
                       {issue.title}
                     </h3>
                     {hasRunning && (
-                      <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse shrink-0" title="Session running" />
+                      <span
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-yellow-500/20 text-yellow-400 shrink-0"
+                        title="Session actively running"
+                        aria-label="Active session"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
+                        Running
+                      </span>
                     )}
                     {!hasRunning && hasCompleted && (
-                      <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" title={`${issueSessions.length} session(s)`} />
+                      <span
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-500/20 text-green-400 shrink-0"
+                        title={`${issueSessions.length} completed session${issueSessions.length !== 1 ? 's' : ''}`}
+                        aria-label={`${issueSessions.length} completed session${issueSessions.length !== 1 ? 's' : ''}`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                        {issueSessions.length}
+                      </span>
                     )}
                   </div>
                   {(issue.labels.length > 0 || issueTags.length > 0) && (
@@ -251,7 +268,7 @@ export function IssueList({
               {onCreateIssue && (
                 <button
                   onClick={onCreateIssue}
-                  className="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 active:scale-95 text-white rounded transition-all focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-1 focus:ring-offset-gray-900"
+                  className={`px-2 py-1 text-xs bg-green-600 hover:bg-green-700 active:scale-95 text-white rounded transition-all ${focusRing}`}
                   title="Create new issue"
                 >
                   + New
@@ -262,7 +279,7 @@ export function IssueList({
               <button
                 onClick={() => onPageChange(page - 1)}
                 disabled={page <= 1}
-                className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900 flex items-center gap-1"
+                className={`px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 transition-all ${focusRing} flex items-center gap-1`}
                 aria-label="Go to previous page"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -276,7 +293,7 @@ export function IssueList({
               <button
                 onClick={() => onPageChange(page + 1)}
                 disabled={page >= totalPages}
-                className="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-900 flex items-center gap-1"
+                className={`px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 transition-all ${focusRing} flex items-center gap-1`}
                 aria-label="Go to next page"
               >
                 <span>Next</span>
