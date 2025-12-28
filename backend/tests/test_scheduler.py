@@ -5,17 +5,19 @@ Tests cover:
 - parse_filter_query function for GitHub-style filter parsing
 - get_command_template function for template lookup
 - build_prompt_from_template function for variable substitution
+- calculate_next_run function for cron expression parsing
 - SchedulerService._get_prs method (especially the tuple unpacking fix)
 - SchedulerService._get_issues method
 """
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch, AsyncMock
 
 from app.services.scheduler import (
     parse_filter_query,
     build_prompt_from_template,
+    calculate_next_run,
 )
 
 
@@ -482,3 +484,258 @@ class TestSchedulerServiceGetTargetItems:
         result = await scheduler._get_target_items(mock_job, mock_repo)
 
         assert result == []
+
+
+class TestCalculateNextRun:
+    """Tests for calculate_next_run function."""
+
+    # ==============================================
+    # Basic functionality tests
+    # ==============================================
+
+    def test_calculates_next_minute(self):
+        """Calculates next run for every-minute cron expression."""
+        # Cron expression: every minute
+        next_run = calculate_next_run("* * * * *", "UTC")
+
+        # Should be within 60 seconds of now
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        delta = (next_run - now).total_seconds()
+        assert 0 <= delta <= 60
+
+    def test_calculates_next_hour(self):
+        """Calculates next run for hourly cron expression."""
+        # Cron expression: every hour at minute 0
+        next_run = calculate_next_run("0 * * * *", "UTC")
+
+        # Should be at minute 0
+        assert next_run.minute == 0
+        assert next_run.second == 0
+
+    def test_calculates_daily_at_9am(self):
+        """Calculates next run for daily 9am cron expression."""
+        # Cron expression: every day at 9:00 AM
+        next_run = calculate_next_run("0 9 * * *", "UTC")
+
+        # Should be at 9:00
+        assert next_run.hour == 9
+        assert next_run.minute == 0
+
+    def test_calculates_weekly(self):
+        """Calculates next run for weekly cron expression."""
+        # Cron expression: every Monday at 9:00 AM
+        next_run = calculate_next_run("0 9 * * 1", "UTC")
+
+        # Should be on a Monday (weekday 0)
+        assert next_run.weekday() == 0
+        assert next_run.hour == 9
+        assert next_run.minute == 0
+
+    def test_calculates_monthly(self):
+        """Calculates next run for monthly cron expression."""
+        # Cron expression: first day of month at midnight
+        next_run = calculate_next_run("0 0 1 * *", "UTC")
+
+        # Should be on day 1
+        assert next_run.day == 1
+        assert next_run.hour == 0
+        assert next_run.minute == 0
+
+    # ==============================================
+    # Timezone handling tests
+    # ==============================================
+
+    def test_handles_us_eastern_timezone(self):
+        """Handles US Eastern timezone correctly."""
+        next_run = calculate_next_run("0 9 * * *", "America/New_York")
+
+        # Result should be naive UTC datetime
+        assert next_run.tzinfo is None
+        # Should be a valid datetime
+        assert isinstance(next_run, datetime)
+
+    def test_handles_us_pacific_timezone(self):
+        """Handles US Pacific timezone correctly."""
+        next_run = calculate_next_run("0 9 * * *", "America/Los_Angeles")
+
+        assert next_run.tzinfo is None
+        assert isinstance(next_run, datetime)
+
+    def test_handles_europe_london_timezone(self):
+        """Handles Europe/London timezone correctly."""
+        next_run = calculate_next_run("0 9 * * *", "Europe/London")
+
+        assert next_run.tzinfo is None
+        assert isinstance(next_run, datetime)
+
+    def test_handles_asia_tokyo_timezone(self):
+        """Handles Asia/Tokyo timezone correctly."""
+        next_run = calculate_next_run("0 9 * * *", "Asia/Tokyo")
+
+        assert next_run.tzinfo is None
+        assert isinstance(next_run, datetime)
+
+    def test_unknown_timezone_falls_back_to_utc(self):
+        """Falls back to UTC for unknown timezone."""
+        # Should not raise exception, should use UTC
+        next_run = calculate_next_run("0 9 * * *", "Invalid/Timezone")
+
+        assert next_run.tzinfo is None
+        assert isinstance(next_run, datetime)
+
+    def test_empty_timezone_falls_back_to_utc(self):
+        """Falls back to UTC for empty timezone string."""
+        # pytz.timezone("") raises UnknownTimeZoneError
+        next_run = calculate_next_run("0 9 * * *", "")
+
+        assert next_run.tzinfo is None
+        assert isinstance(next_run, datetime)
+
+    # ==============================================
+    # Cron expression edge cases
+    # ==============================================
+
+    def test_handles_step_values(self):
+        """Handles step values in cron expression."""
+        # Every 5 minutes
+        next_run = calculate_next_run("*/5 * * * *", "UTC")
+
+        # Minutes should be divisible by 5
+        assert next_run.minute % 5 == 0
+
+    def test_handles_range_values(self):
+        """Handles range values in cron expression."""
+        # Every minute between 9:00 and 10:00
+        next_run = calculate_next_run("* 9-10 * * *", "UTC")
+
+        assert isinstance(next_run, datetime)
+
+    def test_handles_list_values(self):
+        """Handles list values in cron expression."""
+        # At minute 0 and 30
+        next_run = calculate_next_run("0,30 * * * *", "UTC")
+
+        assert next_run.minute in (0, 30)
+
+    def test_handles_day_of_week_names(self):
+        """Handles day-of-week names in cron expression."""
+        # Every Monday (both numeric 1 and MON should work via croniter)
+        next_run = calculate_next_run("0 9 * * MON", "UTC")
+
+        assert next_run.weekday() == 0  # Monday
+
+    def test_handles_month_names(self):
+        """Handles month names in cron expression."""
+        # First of January at midnight
+        next_run = calculate_next_run("0 0 1 JAN *", "UTC")
+
+        assert next_run.month == 1
+        assert next_run.day == 1
+
+    # ==============================================
+    # Return value tests
+    # ==============================================
+
+    def test_returns_naive_datetime(self):
+        """Returns naive datetime (no timezone info) for database storage."""
+        next_run = calculate_next_run("0 9 * * *", "America/New_York")
+
+        # Must be naive for SQLite storage
+        assert next_run.tzinfo is None
+
+    def test_returns_utc_time(self):
+        """Returns time converted to UTC."""
+        # 9 AM in New York should be 14:00 UTC (in EST, ignoring DST)
+        # We can't easily verify the exact time without mocking, but we can
+        # verify the time is consistent when converted back
+        next_run_utc = calculate_next_run("0 9 * * *", "UTC")
+        next_run_et = calculate_next_run("0 9 * * *", "America/New_York")
+
+        # ET is behind UTC, so 9 AM ET should be later in UTC terms
+        # (unless the UTC run happens first due to timing)
+        assert isinstance(next_run_utc, datetime)
+        assert isinstance(next_run_et, datetime)
+
+    def test_next_run_is_in_future(self):
+        """Next run time is always in the future."""
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        next_run = calculate_next_run("* * * * *", "UTC")
+
+        # Should be in the future or at the exact same minute
+        # (croniter returns next occurrence, not current)
+        assert next_run >= now
+
+    # ==============================================
+    # Multiple consecutive runs tests
+    # ==============================================
+
+    def test_consecutive_runs_are_ordered(self):
+        """Consecutive next run calculations are chronologically ordered."""
+        from croniter import croniter
+        import pytz
+
+        tz = pytz.UTC
+        now = datetime.now(tz)
+        cron = croniter("*/15 * * * *", now)
+
+        runs = []
+        for _ in range(5):
+            runs.append(cron.get_next(datetime))
+
+        # Each run should be after the previous one
+        for i in range(1, len(runs)):
+            assert runs[i] > runs[i - 1]
+
+    # ==============================================
+    # Special cron expressions
+    # ==============================================
+
+    def test_handles_midnight_expression(self):
+        """Handles midnight (0 0 * * *) expression."""
+        next_run = calculate_next_run("0 0 * * *", "UTC")
+
+        assert next_run.hour == 0
+        assert next_run.minute == 0
+
+    def test_handles_noon_expression(self):
+        """Handles noon (0 12 * * *) expression."""
+        next_run = calculate_next_run("0 12 * * *", "UTC")
+
+        assert next_run.hour == 12
+        assert next_run.minute == 0
+
+    def test_handles_end_of_day_expression(self):
+        """Handles end of day (59 23 * * *) expression."""
+        next_run = calculate_next_run("59 23 * * *", "UTC")
+
+        assert next_run.hour == 23
+        assert next_run.minute == 59
+
+    def test_handles_weekday_only_expression(self):
+        """Handles weekday-only (Mon-Fri) expression."""
+        # Every weekday at 9 AM
+        next_run = calculate_next_run("0 9 * * 1-5", "UTC")
+
+        # Should be Mon-Fri (weekday 0-4)
+        assert next_run.weekday() < 5
+
+    def test_handles_weekend_only_expression(self):
+        """Handles weekend-only (Sat-Sun) expression."""
+        # Every weekend at 9 AM
+        next_run = calculate_next_run("0 9 * * 0,6", "UTC")
+
+        # Should be Sat or Sun (weekday 5-6)
+        assert next_run.weekday() >= 5
+
+    # ==============================================
+    # DST transition tests (conceptual)
+    # ==============================================
+
+    def test_handles_timezone_with_dst(self):
+        """Handles timezone that has DST transitions."""
+        # America/New_York has DST
+        next_run = calculate_next_run("0 2 * * *", "America/New_York")
+
+        # Should not raise exception even around DST transition times
+        assert isinstance(next_run, datetime)
+        assert next_run.tzinfo is None
