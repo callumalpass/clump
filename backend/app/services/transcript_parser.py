@@ -10,7 +10,6 @@ import logging
 import re
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +20,7 @@ class ToolUse:
     id: str
     name: str
     input: dict
-    spawned_agent_id: Optional[str] = None  # Agent ID if this tool spawned a subsession
+    spawned_agent_id: str | None = None  # Agent ID if this tool spawned a subsession
 
 
 @dataclass
@@ -48,11 +47,11 @@ class TranscriptMessage:
     role: str  # "user" or "assistant"
     content: str  # Text content
     timestamp: str
-    thinking: Optional[str] = None  # Claude's thinking (if extended thinking enabled)
+    thinking: str | None = None  # Claude's thinking (if extended thinking enabled)
     tool_uses: list[ToolUse] = field(default_factory=list)
     tool_results: list[ToolResult] = field(default_factory=list)
-    model: Optional[str] = None  # Model used for this response
-    usage: Optional[TokenUsage] = None  # Token usage for this message
+    model: str | None = None  # Model used for this response
+    usage: TokenUsage | None = None  # Token usage for this message
 
 
 @dataclass
@@ -60,19 +59,19 @@ class ParsedTranscript:
     """A fully parsed conversation transcript."""
     session_id: str
     messages: list[TranscriptMessage]
-    summary: Optional[str] = None  # Session summary/title
-    model: Optional[str] = None  # Primary model used
+    summary: str | None = None  # Session summary/title
+    model: str | None = None  # Primary model used
     total_input_tokens: int = 0
     total_output_tokens: int = 0
     total_cache_read_tokens: int = 0
     total_cache_creation_tokens: int = 0
-    start_time: Optional[str] = None
-    end_time: Optional[str] = None
-    claude_code_version: Optional[str] = None
-    git_branch: Optional[str] = None
+    start_time: str | None = None
+    end_time: str | None = None
+    claude_code_version: str | None = None
+    git_branch: str | None = None
 
 
-def extract_agent_id(content: list) -> Optional[str]:
+def extract_agent_id(content: list) -> str | None:
     """
     Extract agentId from tool_result content blocks.
 
@@ -89,7 +88,7 @@ def extract_agent_id(content: list) -> Optional[str]:
     return None
 
 
-def find_transcript_file(session_id: str, working_dir: str) -> Optional[Path]:
+def find_transcript_file(session_id: str, working_dir: str) -> Path | None:
     """
     Find the JSONL transcript file for a given session ID.
 
@@ -121,7 +120,7 @@ def find_transcript_file(session_id: str, working_dir: str) -> Optional[Path]:
     return None
 
 
-def parse_transcript(session_id: str, working_dir: str) -> Optional[ParsedTranscript]:
+def parse_transcript(session_id: str, working_dir: str) -> ParsedTranscript | None:
     """
     Parse a Claude Code session transcript from JSONL format.
 
