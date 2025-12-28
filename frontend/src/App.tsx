@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
-import { useRepos, useIssues, usePRs, useProcesses, useSessions, useTags, useIssueTags, useCommands, buildPromptFromTemplate } from './hooks/useApi';
+import { useRepos, useIssues, usePRs, useProcesses, useSessions, useTags, useIssueTags, useCommands, useSessionCounts, buildPromptFromTemplate } from './hooks/useApi';
 import type { IssueFilters, SessionFilters, PRFilters } from './hooks/useApi';
 import { RepoSelector } from './components/RepoSelector';
 import { IssueList } from './components/IssueList';
@@ -77,6 +77,19 @@ export default function App() {
   // Ref for collapsible issue/PR context panel
   const contextPanelRef = useRef<PanelImperativeHandle>(null);
 
+  // Track previous repo for saving tabs on switch
+  const prevRepoIdRef = useRef<number | null>(null);
+
+  // Refs for current tab state (used for saving on repo switch)
+  const openSessionIdsRef = useRef<string[]>([]);
+  const activeTabSessionIdRef = useRef<string | null>(null);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    openSessionIdsRef.current = openSessionIds;
+    activeTabSessionIdRef.current = activeTabSessionId;
+  }, [openSessionIds, activeTabSessionId]);
+
   const { repos, addRepo } = useRepos();
   const {
     issues,
@@ -101,9 +114,26 @@ export default function App() {
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
   const { prs, loading: prsLoading } = usePRs(selectedRepo?.id ?? null, prFilters);
   const { commands, refresh: refreshCommands } = useCommands(selectedRepo?.local_path);
+  const { counts: sessionCounts } = useSessionCounts();
 
-  // Clear all UI state when repo changes
+  // Save/restore session tabs when repo changes
   useEffect(() => {
+    const STORAGE_KEY = 'clump:repoSessionTabs';
+
+    // Save tabs for previous repo before switching (use refs for current values)
+    if (prevRepoIdRef.current !== null && prevRepoIdRef.current !== selectedRepo?.id) {
+      try {
+        const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        stored[prevRepoIdRef.current] = {
+          openSessionIds: openSessionIdsRef.current,
+          activeTabSessionId: activeTabSessionIdRef.current,
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+      } catch (e) {
+        console.error('Failed to save session tabs:', e);
+      }
+    }
+
     // Clear filters
     setSelectedTagId(null);
     setIssueFilters({ state: 'open' });
@@ -114,19 +144,48 @@ export default function App() {
     setSelectedIssue(null);
     setSelectedPR(null);
 
-    // Clear active session (sessions are repo-specific)
-    setActiveProcessId(null);
-    setOpenSessionIds([]);
-    setActiveTabSessionId(null);
+    // Restore tabs for new repo (or clear if none saved)
+    if (selectedRepo?.id) {
+      try {
+        const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        const repoTabs = stored[selectedRepo.id];
+        if (repoTabs) {
+          setOpenSessionIds(repoTabs.openSessionIds || []);
+          setActiveTabSessionId(repoTabs.activeTabSessionId || null);
+          // If there's an active tab, try to view it
+          if (repoTabs.activeTabSessionId) {
+            setViewingSessionId(repoTabs.activeTabSessionId);
+          } else {
+            setViewingSessionId(null);
+          }
+        } else {
+          setOpenSessionIds([]);
+          setActiveTabSessionId(null);
+          setViewingSessionId(null);
+        }
+      } catch (e) {
+        console.error('Failed to restore session tabs:', e);
+        setOpenSessionIds([]);
+        setActiveTabSessionId(null);
+        setViewingSessionId(null);
+      }
+    } else {
+      setOpenSessionIds([]);
+      setActiveTabSessionId(null);
+      setViewingSessionId(null);
+    }
 
-    // Clear analysis viewing state
-    setViewingSessionId(null);
+    // Clear process (we'll check if any restored tabs have running processes separately)
+    setActiveProcessId(null);
     setExpandedSessionId(null);
 
     // Clear pending context refs
     pendingIssueContextRef.current = null;
     pendingPRContextRef.current = null;
-  }, [selectedRepo?.id]);
+
+    // Update ref for next switch
+    prevRepoIdRef.current = selectedRepo?.id ?? null;
+  }, [selectedRepo?.id]); // Note: We intentionally don't include openSessionIds/activeTabSessionId to avoid loops
 
   // Handle issue selection from list - clears expanded analysis and PR selection
   const handleSelectIssue = useCallback((issueNumber: number) => {
@@ -245,7 +304,10 @@ export default function App() {
       setOpenSessionIds(prev => prev.includes(process.claude_session_id!) ? prev : [...prev, process.claude_session_id!]);
       setActiveTabSessionId(process.claude_session_id);
     }
-  }, [selectedRepo, createProcess]);
+
+    // Trigger immediate refresh to get session data sooner
+    setTimeout(refreshSessions, 500);
+  }, [selectedRepo, createProcess, refreshSessions]);
 
   // Global keyboard shortcuts (basic navigation)
   useEffect(() => {
@@ -557,8 +619,38 @@ export default function App() {
   const hasPRContext = !!activePRNumber;
 
   // Get the list of open sessions (sessions that have tabs open)
+  // Uses optimistic UI: if a session isn't in the backend yet but has an active process,
+  // synthesize a minimal session from process data so the tab appears immediately
   const openSessions = openSessionIds
-    .map(id => sessions.find(s => s.session_id === id))
+    .map(id => {
+      // First try to find in fetched sessions
+      const session = sessions.find(s => s.session_id === id);
+      if (session) return session;
+
+      // If not found, check if there's an active process for this session
+      const process = processes.find(p => p.claude_session_id === id);
+      if (process && selectedRepo) {
+        // Create a synthetic session from process data (optimistic UI)
+        return {
+          session_id: id,
+          encoded_path: '',
+          repo_path: process.working_dir,
+          repo_name: `${selectedRepo.owner}/${selectedRepo.name}`,
+          title: 'New Session',
+          model: null,
+          start_time: process.created_at,
+          end_time: null,
+          message_count: 0,
+          modified_at: process.created_at,
+          file_size: 0,
+          entities: [],
+          tags: [],
+          starred: false,
+          is_active: true,
+        } as SessionSummary;
+      }
+      return null;
+    })
     .filter((s): s is SessionSummary => !!s);
 
   // Show side-by-side if we have open session tabs and any issue/PR selected
@@ -642,6 +734,7 @@ export default function App() {
             selectedRepo={selectedRepo}
             onSelectRepo={setSelectedRepo}
             onAddRepo={addRepo}
+            sessionCounts={sessionCounts}
           />
 
           {/* Tabs */}
