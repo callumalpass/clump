@@ -104,7 +104,7 @@ const SessionListItem = memo(function SessionListItem({
           </span>
         ) : isRecentlyModified(session.modified_at) ? (
           <span
-            className="status-badge status-badge-enter inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-blue-500/20 text-blue-400 flex-shrink-0"
+            className="status-badge status-badge-enter inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-blue-500/20 text-blue-400 flex-shrink-0 recent-badge-glow"
             title="Session updated in the last 10 minutes"
             aria-label="Recently updated session"
           >
@@ -113,7 +113,7 @@ const SessionListItem = memo(function SessionListItem({
           </span>
         ) : (
           <span
-            className="status-badge status-badge-enter inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-500/20 text-green-400 flex-shrink-0"
+            className="status-badge status-badge-enter inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-500/20 text-green-400 flex-shrink-0 done-badge-glow"
             title="Session completed"
             aria-label="Completed session"
           >

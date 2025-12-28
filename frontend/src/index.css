@@ -618,6 +618,16 @@ button:disabled .kbd-hint {
   animation: active-badge-glow 2s ease-in-out infinite;
 }
 
+/* Recent status badge glow effect - subtle static glow for recently updated items */
+.recent-badge-glow {
+  box-shadow: 0 0 4px rgba(59, 130, 246, 0.25), 0 0 8px rgba(59, 130, 246, 0.1);
+}
+
+/* Done/completed status badge glow effect - very subtle static glow */
+.done-badge-glow {
+  box-shadow: 0 0 3px rgba(34, 197, 94, 0.2), 0 0 6px rgba(34, 197, 94, 0.08);
+}
+
 /* Status badge entrance animation - subtle scale-in with spring effect */
 @keyframes status-badge-enter {
   0% {

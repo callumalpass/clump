@@ -57,7 +57,7 @@ def calculate_next_run(cron_expression: str, timezone_str: str) -> datetime:
     return next_run.astimezone(pytz.UTC).replace(tzinfo=None)
 
 
-def parse_filter_query(filter_query: str | None) -> dict | FilterParams:
+def parse_filter_query(filter_query: str | None) -> FilterParams:
     """
     Parse a GitHub-style filter query into parameters.
 
@@ -68,17 +68,18 @@ def parse_filter_query(filter_query: str | None) -> dict | FilterParams:
         -label:wontfix (exclude)
 
     Returns:
-        Empty dict if filter_query is None, empty, or whitespace-only.
-        Otherwise returns FilterParams with state, labels, and exclude_labels.
+        FilterParams with state, labels, and exclude_labels.
+        Returns default values (state="open", empty lists) if filter_query is None,
+        empty, or whitespace-only.
     """
-    if not filter_query or not filter_query.strip():
-        return {}
-
     filters: FilterParams = {
         "state": "open",
         "labels": [],
         "exclude_labels": [],
     }
+
+    if not filter_query or not filter_query.strip():
+        return filters
 
     state_prefix = "state:"
     label_prefix = "label:"

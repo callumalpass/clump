@@ -24,15 +24,19 @@ from app.services.scheduler import (
 class TestParseFilterQuery:
     """Tests for parse_filter_query function."""
 
-    def test_returns_empty_dict_for_none(self):
-        """Returns empty dict when filter_query is None."""
+    def test_returns_defaults_for_none(self):
+        """Returns default FilterParams when filter_query is None."""
         result = parse_filter_query(None)
-        assert result == {}
+        assert result["state"] == "open"
+        assert result["labels"] == []
+        assert result["exclude_labels"] == []
 
-    def test_returns_empty_dict_for_empty_string(self):
-        """Returns empty dict when filter_query is empty string."""
+    def test_returns_defaults_for_empty_string(self):
+        """Returns default FilterParams when filter_query is empty string."""
         result = parse_filter_query("")
-        assert result == {}
+        assert result["state"] == "open"
+        assert result["labels"] == []
+        assert result["exclude_labels"] == []
 
     def test_parses_state_filter(self):
         """Parses state:open filter correctly."""
@@ -90,10 +94,12 @@ class TestParseFilterQuery:
         assert "unknown" not in result
 
     def test_handles_whitespace_only(self):
-        """Handles whitespace-only filter query - returns empty dict."""
+        """Handles whitespace-only filter query - returns default FilterParams."""
         result = parse_filter_query("   ")
-        # Should return empty dict (same as None/empty string)
-        assert result == {}
+        # Should return default FilterParams (same as None/empty string)
+        assert result["state"] == "open"
+        assert result["labels"] == []
+        assert result["exclude_labels"] == []
 
     def test_handles_extra_whitespace(self):
         """Handles extra whitespace between filters."""

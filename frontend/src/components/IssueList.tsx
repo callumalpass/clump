@@ -61,7 +61,7 @@ const IssueListItem = memo(function IssueListItem({
             )}
             {!hasRunning && hasCompleted && (
               <span
-                className="status-badge status-badge-enter inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-500/20 text-green-400 shrink-0"
+                className="status-badge status-badge-enter inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-500/20 text-green-400 shrink-0 done-badge-glow"
                 title={`${issueSessions.length} completed session${issueSessions.length !== 1 ? 's' : ''}`}
                 aria-label={`${issueSessions.length} completed session${issueSessions.length !== 1 ? 's' : ''}`}
               >
