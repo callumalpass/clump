@@ -71,9 +71,12 @@ describe('StatsView', () => {
   };
 
   describe('Loading state', () => {
-    it('shows loading message when loading with no stats', () => {
+    it('shows skeleton loading state when loading with no stats', () => {
       render(<StatsView {...defaultProps} stats={null} loading={true} />);
-      expect(screen.getByText('Loading stats...')).toBeInTheDocument();
+      // The component shows a skeleton loading UI, not text
+      // Verify skeleton elements are rendered (shimmer placeholders)
+      const skeletonElements = document.querySelectorAll('.skeleton-shimmer');
+      expect(skeletonElements.length).toBeGreaterThan(0);
     });
 
     it('shows stats while loading if stats exist (refresh scenario)', () => {
