@@ -11,6 +11,7 @@ import { useTheme } from '../hooks/useTheme';
 import { useTabIndicator } from '../hooks/useTabIndicator';
 import { formatDuration } from '../utils/time';
 import { focusRing } from '../utils/styles';
+import { downloadFile, sanitizeFilename } from '../utils/download';
 
 // =============================================================================
 // Constants
@@ -567,16 +568,9 @@ export function SessionView({
     const extensions = { markdown: 'md', text: 'txt', json: 'json' };
     const mimeTypes = { markdown: 'text/markdown', text: 'text/plain', json: 'application/json' };
     const title = detail?.metadata?.title || session.title || 'session';
+    const filename = `${sanitizeFilename(title)}.${extensions[format]}`;
 
-    const blob = new Blob([content], { type: mimeTypes[format] });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.${extensions[format]}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadFile(content, filename, mimeTypes[format]);
     setShowExportMenu(false);
   }, [getExportContent, detail, session.title]);
 
