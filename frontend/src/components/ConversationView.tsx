@@ -15,11 +15,12 @@ import { calculateDuration } from '../hooks/useElapsedTime';
 const HighlightedText = memo(function HighlightedText({
   text,
   searchQuery,
-  isCurrentMatch
+  currentMatchIndexInText
 }: {
   text: string;
   searchQuery: string;
-  isCurrentMatch?: boolean;
+  /** The specific match index within this text that should be highlighted as "current" */
+  currentMatchIndexInText?: number;
 }) {
   // Memoize the parts calculation to avoid string manipulation on every render
   const parts = useMemo(() => {
@@ -42,12 +43,15 @@ const HighlightedText = memo(function HighlightedText({
         result.push(text.slice(lastIndex, index));
       }
 
+      // Only highlight the specific match that is the current one
+      const isThisMatchCurrent = currentMatchIndexInText === matchIndex;
+
       // Add highlighted match
       result.push(
         <mark
           key={`match-${matchIndex}`}
           className={`rounded px-0.5 ${
-            isCurrentMatch
+            isThisMatchCurrent
               ? 'bg-yellow-400 text-black'
               : 'bg-yellow-500/30 text-inherit'
           }`}
@@ -67,7 +71,7 @@ const HighlightedText = memo(function HighlightedText({
     }
 
     return result;
-  }, [text, searchQuery, isCurrentMatch]);
+  }, [text, searchQuery, currentMatchIndexInText]);
 
   if (parts === null) {
     return <>{text}</>;
@@ -146,7 +150,7 @@ function countToolUsage(messages: TranscriptMessage[]): Record<string, number> {
 // Tool styling configuration for the summary
 const TOOL_STYLES: Record<string, { color: string; label: string }> = {
   Edit: { color: 'text-emerald-400', label: 'edits' },
-  Read: { color: 'text-blue-400', label: 'reads' },
+  Read: { color: 'text-blurple-400', label: 'reads' },
   Write: { color: 'text-cyan-400', label: 'writes' },
   Bash: { color: 'text-amber-400', label: 'cmds' },
   Grep: { color: 'text-orange-400', label: 'searches' },
@@ -213,7 +217,7 @@ function SessionStats({ transcript }: { transcript: ParsedTranscript }) {
   const toolCounts = useMemo(() => countToolUsage(transcript.messages), [transcript.messages]);
 
   return (
-    <div className="bg-gray-850 border-b border-gray-700 px-3 py-2">
+    <div className="bg-gray-850 border-b border-gray-750 px-3 py-2">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-4 text-xs">
           {/* Model badge - color-coded by model type */}
@@ -374,7 +378,7 @@ function EditToolDisplay({ tool }: ToolDisplayProps) {
 
       <div className="tool-card-content" data-expanded={expanded}>
         <div className="tool-card-content-inner">
-          <div className="border-t border-gray-700">
+          <div className="border-t border-gray-750">
             {/* File path */}
             <div className="px-2 py-1 bg-gray-900/50 text-gray-500 font-mono text-[10px] truncate">
               {filePath}
@@ -585,10 +589,10 @@ function ReadToolDisplay({ tool }: ToolDisplayProps) {
         className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-gray-750 text-left transition-colors"
       >
         {/* Read icon */}
-        <svg className="w-3.5 h-3.5 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-3.5 h-3.5 text-blurple-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
-        <span className="text-blue-400 font-medium">Read</span>
+        <span className="text-blurple-400 font-medium">Read</span>
         <span className="text-gray-300 font-mono truncate flex-1" title={filePath}>
           {fileName}
         </span>
@@ -623,9 +627,9 @@ function ReadToolDisplay({ tool }: ToolDisplayProps) {
 
       <div className="tool-card-content" data-expanded={expanded}>
         <div className="tool-card-content-inner">
-          <div className="border-t border-gray-700">
+          <div className="border-t border-gray-750">
             {/* File path header */}
-            <div className="px-2 py-1.5 bg-gray-900/50 border-b border-gray-700">
+            <div className="px-2 py-1.5 bg-gray-900/50 border-b border-gray-750">
               <div className="font-mono text-gray-400 text-[10px] break-all">
                 {filePath}
               </div>
@@ -651,7 +655,7 @@ function ReadToolDisplay({ tool }: ToolDisplayProps) {
                       <img
                         src={resultContent.src}
                         alt={fileName}
-                        className="max-w-full max-h-96 h-auto rounded-lg border border-gray-700 transition-all group-hover:border-blue-500"
+                        className="max-w-full max-h-96 h-auto rounded-lg border border-gray-750 transition-all group-hover:border-blue-500"
                         loading="lazy"
                       />
                       {/* Zoom indicator */}
@@ -739,9 +743,9 @@ function BashToolDisplay({ tool }: ToolDisplayProps) {
 
       <div className="tool-card-content" data-expanded={expanded}>
         <div className="tool-card-content-inner">
-          <div className="border-t border-gray-700">
+          <div className="border-t border-gray-750">
             {description && (
-              <div className="px-2 py-1 bg-gray-900/50 text-gray-400 text-[10px] border-b border-gray-700">
+              <div className="px-2 py-1 bg-gray-900/50 text-gray-400 text-[10px] border-b border-gray-750">
                 {description}
               </div>
             )}
@@ -795,7 +799,7 @@ function WriteToolDisplay({ tool }: ToolDisplayProps) {
 
       <div className="tool-card-content" data-expanded={expanded}>
         <div className="tool-card-content-inner">
-          <div className="border-t border-gray-700">
+          <div className="border-t border-gray-750">
             <div className="px-2 py-1 bg-gray-900/50 text-gray-500 font-mono text-[10px] truncate">
               {filePath}
             </div>
@@ -853,7 +857,7 @@ function GrepToolDisplay({ tool }: ToolDisplayProps) {
 
       <div className="tool-card-content" data-expanded={expanded}>
         <div className="tool-card-content-inner">
-          <div className="border-t border-gray-700 p-2 bg-gray-900/30 space-y-1">
+          <div className="border-t border-gray-750 p-2 bg-gray-900/30 space-y-1">
             <div>
               <span className="text-gray-500">Pattern: </span>
               <code className="text-orange-300 font-mono">{pattern}</code>
@@ -918,7 +922,7 @@ function GlobToolDisplay({ tool }: ToolDisplayProps) {
 
       <div className="tool-card-content" data-expanded={expanded && !!path}>
         <div className="tool-card-content-inner">
-          <div className="border-t border-gray-700 px-2 py-1.5 bg-gray-900/30">
+          <div className="border-t border-gray-750 px-2 py-1.5 bg-gray-900/30">
             <span className="text-gray-500">In: </span>
             <span className="text-gray-300 font-mono">{path}</span>
           </div>
@@ -975,9 +979,9 @@ function TaskToolDisplay({ tool, parentSessionId }: ToolDisplayProps) {
 
       <div className="tool-card-content" data-expanded={expanded}>
         <div className="tool-card-content-inner">
-          <div className="border-t border-gray-700">
+          <div className="border-t border-gray-750">
             {description && (
-              <div className="px-2 py-1 bg-gray-900/50 text-gray-400 text-[10px] border-b border-gray-700">
+              <div className="px-2 py-1 bg-gray-900/50 text-gray-400 text-[10px] border-b border-gray-750">
                 {description}
               </div>
             )}
@@ -990,7 +994,7 @@ function TaskToolDisplay({ tool, parentSessionId }: ToolDisplayProps) {
 
       {/* Subsession expansion */}
       {hasSpawnedAgent && parentSessionId && (
-        <div className="border-t border-gray-700">
+        <div className="border-t border-gray-750">
           <button
             onClick={() => setSubsessionExpanded(!subsessionExpanded)}
             className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-purple-900/20 text-left transition-colors text-purple-400"
@@ -1196,7 +1200,7 @@ function MessageBubble({ message, parentSessionId, searchQuery = '', matchIndice
       <div className={`max-w-[85%] min-w-0 ${isUser ? 'ml-8' : 'mr-8'}`}>
         {/* Role indicator */}
         <div className={`text-xs mb-1 flex items-center gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
-          <span className={isUser ? 'text-blue-400' : 'text-green-400'}>
+          <span className={isUser ? 'text-blurple-400' : 'text-green-400'}>
             {isUser ? 'You' : 'Claude'}
           </span>
           {isPending ? (
@@ -1250,7 +1254,7 @@ function MessageBubble({ message, parentSessionId, searchQuery = '', matchIndice
           className={`rounded-lg px-3 py-2 message-bubble-enter ${
             isUser
               ? 'bg-blue-900/40 border border-blue-800/60 message-user'
-              : 'bg-gray-800/80 border border-gray-700/60 message-assistant'
+              : 'bg-gray-800/80 border border-gray-750/60 message-assistant'
           } ${hasCurrentMatch ? 'ring-2 ring-yellow-400' : ''} ${isPending ? 'opacity-70' : ''}`}
         >
           {/* Thinking (if present) */}
@@ -1302,21 +1306,53 @@ function SearchHighlightedMarkdown({
   // This sacrifices some markdown rendering for accurate highlighting
   const lines = content.split('\n');
 
+  // Calculate which match index within the message content corresponds to the global current match
+  // matchIndices contains the global indices for all matches in this message
+  // We need to find which local index (0-based within this message) is current
+  const localCurrentMatchIndex = useMemo(() => {
+    if (currentMatchIndex === undefined) return undefined;
+    const localIndex = matchIndices.indexOf(currentMatchIndex);
+    return localIndex >= 0 ? localIndex : undefined;
+  }, [matchIndices, currentMatchIndex]);
+
+  // Pre-calculate cumulative match counts per line so we know which local match index
+  // corresponds to each line
+  const lineMatchInfo = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+
+    let cumulativeCount = 0;
+    return lines.map(line => {
+      const startIndex = cumulativeCount;
+      const matchesInLine = countMatches(line, searchQuery);
+      cumulativeCount += matchesInLine;
+      return { startIndex, count: matchesInLine };
+    });
+  }, [lines, searchQuery]);
+
   return (
     <div className="prose prose-invert prose-sm max-w-none overflow-x-auto break-words">
-      {lines.map((line, lineIndex) => (
-        <div key={lineIndex} className="whitespace-pre-wrap break-words">
-          <HighlightedText
-            text={line}
-            searchQuery={searchQuery}
-            isCurrentMatch={
-              currentMatchIndex !== undefined &&
-              matchIndices.includes(currentMatchIndex)
-            }
-          />
-          {lineIndex < lines.length - 1 && '\n'}
-        </div>
-      ))}
+      {lines.map((line, lineIndex) => {
+        // Calculate which match index within this line is the current one (if any)
+        let currentMatchInLine: number | undefined;
+        if (localCurrentMatchIndex !== undefined && lineMatchInfo[lineIndex]) {
+          const { startIndex, count } = lineMatchInfo[lineIndex];
+          // Check if the current match falls within this line
+          if (localCurrentMatchIndex >= startIndex && localCurrentMatchIndex < startIndex + count) {
+            currentMatchInLine = localCurrentMatchIndex - startIndex;
+          }
+        }
+
+        return (
+          <div key={lineIndex} className="whitespace-pre-wrap break-words">
+            <HighlightedText
+              text={line}
+              searchQuery={searchQuery}
+              currentMatchIndexInText={currentMatchInLine}
+            />
+            {lineIndex < lines.length - 1 && '\n'}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1473,7 +1509,7 @@ export function ConversationView({
   if (transcript.messages.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8">
-        <div className="text-center p-6 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-xs empty-state-enter">
+        <div className="text-center p-6 rounded-xl bg-gray-800/40 border border-gray-750/50 max-w-xs empty-state-enter">
           <div className="w-14 h-14 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4 empty-state-icon-float">
             <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -1517,7 +1553,7 @@ export function ConversationView({
       </div>
       {/* Inline editor for active sessions */}
       {isActiveSession && onSendMessage && (
-        <div className="shrink-0 border-t border-gray-700 bg-gray-900 p-3">
+        <div className="shrink-0 border-t border-gray-750 bg-gray-900 p-3">
           <Editor
             value={inputMessage}
             onChange={setInputMessage}
@@ -1531,7 +1567,7 @@ export function ConversationView({
             <button
               onClick={handleSend}
               disabled={sending || !inputMessage.trim()}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center gap-2"
+              className="px-3 py-1.5 bg-blurple-500 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center gap-2"
             >
               {sending ? (
                 <span>Sending...</span>

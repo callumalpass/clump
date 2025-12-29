@@ -3,9 +3,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ConversationView, RawTranscriptView } from './ConversationView';
 import type { ParsedTranscript, TranscriptMessage } from '../types';
 
-// Mock scrollTo for jsdom
+// Mock scrollTo and scrollIntoView for jsdom
 beforeEach(() => {
   Element.prototype.scrollTo = vi.fn();
+  Element.prototype.scrollIntoView = vi.fn();
 });
 
 afterEach(() => {
@@ -497,6 +498,219 @@ describe('ConversationView', () => {
       );
 
       expect(onMatchesFound).toHaveBeenCalledWith(0);
+    });
+
+    it('highlights only the current match with emphasis styling', () => {
+      // Create a transcript with multiple matches of the same word
+      const transcript = createMockTranscript({
+        messages: [
+          createMockMessage({
+            uuid: 'msg-1',
+            role: 'user',
+            content: 'Hello world Hello again Hello there',
+          }),
+        ],
+      });
+
+      render(
+        <ConversationView
+          transcript={transcript}
+          searchQuery="Hello"
+          currentMatchIndex={1} // Second match should be current
+          onMatchesFound={vi.fn()}
+        />
+      );
+
+      const marks = document.querySelectorAll('mark');
+      expect(marks.length).toBe(3); // 3 matches of "Hello"
+
+      // Only the second match (index 1) should have the current match styling
+      expect(marks[0]).toHaveClass('bg-yellow-500/30');
+      expect(marks[0]).not.toHaveClass('bg-yellow-400');
+      expect(marks[1]).toHaveClass('bg-yellow-400'); // Current match
+      expect(marks[2]).toHaveClass('bg-yellow-500/30');
+    });
+
+    it('does not highlight any match as current when currentMatchIndex is undefined', () => {
+      const transcript = createMockTranscript({
+        messages: [
+          createMockMessage({
+            uuid: 'msg-1',
+            role: 'user',
+            content: 'Hello world Hello again',
+          }),
+        ],
+      });
+
+      render(
+        <ConversationView
+          transcript={transcript}
+          searchQuery="Hello"
+          currentMatchIndex={undefined}
+          onMatchesFound={vi.fn()}
+        />
+      );
+
+      const marks = document.querySelectorAll('mark');
+      expect(marks.length).toBe(2);
+
+      // No match should have the "current" styling
+      marks.forEach(mark => {
+        expect(mark).toHaveClass('bg-yellow-500/30');
+        expect(mark).not.toHaveClass('bg-yellow-400');
+      });
+    });
+
+    it('handles current match in multi-line content correctly', () => {
+      const transcript = createMockTranscript({
+        messages: [
+          createMockMessage({
+            uuid: 'msg-1',
+            role: 'user',
+            content: 'test line one\ntest line two\ntest line three',
+          }),
+        ],
+      });
+
+      render(
+        <ConversationView
+          transcript={transcript}
+          searchQuery="test"
+          currentMatchIndex={2} // Third match (on third line)
+          onMatchesFound={vi.fn()}
+        />
+      );
+
+      const marks = document.querySelectorAll('mark');
+      expect(marks.length).toBe(3);
+
+      // Only the third match should be highlighted as current
+      expect(marks[0]).not.toHaveClass('bg-yellow-400');
+      expect(marks[1]).not.toHaveClass('bg-yellow-400');
+      expect(marks[2]).toHaveClass('bg-yellow-400');
+    });
+
+    it('handles multiple matches on the same line with correct current highlight', () => {
+      const transcript = createMockTranscript({
+        messages: [
+          createMockMessage({
+            uuid: 'msg-1',
+            role: 'user',
+            content: 'foo bar foo baz foo qux',
+          }),
+        ],
+      });
+
+      // Test each match being current
+      const { rerender } = render(
+        <ConversationView
+          transcript={transcript}
+          searchQuery="foo"
+          currentMatchIndex={0}
+          onMatchesFound={vi.fn()}
+        />
+      );
+
+      let marks = document.querySelectorAll('mark');
+      expect(marks.length).toBe(3);
+      expect(marks[0]).toHaveClass('bg-yellow-400');
+      expect(marks[1]).not.toHaveClass('bg-yellow-400');
+      expect(marks[2]).not.toHaveClass('bg-yellow-400');
+
+      // Navigate to second match
+      rerender(
+        <ConversationView
+          transcript={transcript}
+          searchQuery="foo"
+          currentMatchIndex={1}
+          onMatchesFound={vi.fn()}
+        />
+      );
+
+      marks = document.querySelectorAll('mark');
+      expect(marks[0]).not.toHaveClass('bg-yellow-400');
+      expect(marks[1]).toHaveClass('bg-yellow-400');
+      expect(marks[2]).not.toHaveClass('bg-yellow-400');
+
+      // Navigate to third match
+      rerender(
+        <ConversationView
+          transcript={transcript}
+          searchQuery="foo"
+          currentMatchIndex={2}
+          onMatchesFound={vi.fn()}
+        />
+      );
+
+      marks = document.querySelectorAll('mark');
+      expect(marks[0]).not.toHaveClass('bg-yellow-400');
+      expect(marks[1]).not.toHaveClass('bg-yellow-400');
+      expect(marks[2]).toHaveClass('bg-yellow-400');
+    });
+
+    it('handles current match across multiple messages', () => {
+      const transcript = createMockTranscript({
+        messages: [
+          createMockMessage({
+            uuid: 'msg-1',
+            role: 'user',
+            content: 'test message one',
+          }),
+          createMockMessage({
+            uuid: 'msg-2',
+            role: 'assistant',
+            content: 'test message two with test',
+          }),
+        ],
+      });
+
+      // Third "test" should be in the second message
+      render(
+        <ConversationView
+          transcript={transcript}
+          searchQuery="test"
+          currentMatchIndex={2} // Third match overall
+          onMatchesFound={vi.fn()}
+        />
+      );
+
+      const marks = document.querySelectorAll('mark');
+      expect(marks.length).toBe(3); // 1 in first msg, 2 in second msg
+
+      // First message's match should not be current
+      expect(marks[0]).not.toHaveClass('bg-yellow-400');
+      // Second message's first match should not be current
+      expect(marks[1]).not.toHaveClass('bg-yellow-400');
+      // Second message's second match should be current
+      expect(marks[2]).toHaveClass('bg-yellow-400');
+    });
+
+    it('handles out-of-range currentMatchIndex gracefully', () => {
+      const transcript = createMockTranscript({
+        messages: [
+          createMockMessage({
+            uuid: 'msg-1',
+            role: 'user',
+            content: 'Hello world',
+          }),
+        ],
+      });
+
+      // Index 5 is out of range (only 1 match exists)
+      render(
+        <ConversationView
+          transcript={transcript}
+          searchQuery="Hello"
+          currentMatchIndex={5}
+          onMatchesFound={vi.fn()}
+        />
+      );
+
+      const marks = document.querySelectorAll('mark');
+      expect(marks.length).toBe(1);
+
+      // Should not crash, and no match should be highlighted as current
+      expect(marks[0]).not.toHaveClass('bg-yellow-400');
     });
   });
 
