@@ -195,17 +195,33 @@ function ContextPanelHeader({ isCollapsed, isIssue, onExpand, onCollapse }: Cont
 // Empty State
 // =============================================================================
 
+function KeyHint({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="kbd-hint mx-0.5">{children}</kbd>
+  );
+}
+
 function EmptyState() {
   return (
     <div className="flex-1 flex items-center justify-center p-8">
-      <div className="text-center p-8 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-sm empty-state-enter">
+      <div className="text-center p-8 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-md empty-state-enter">
         <div className="w-16 h-16 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-5 empty-state-icon-float">
           <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
           </svg>
         </div>
         <p className="text-gray-300 font-medium mb-2">Select an issue or PR to view details</p>
-        <p className="text-gray-400 text-sm">or start a session from an issue or PR</p>
+        <p className="text-gray-400 text-sm mb-5">or start a session from an issue or PR</p>
+
+        {/* Keyboard shortcut hints */}
+        <div className="pt-4 border-t border-gray-700/50 space-y-2 text-xs text-gray-500">
+          <p>
+            Press <KeyHint>1</KeyHint> Issues <KeyHint>2</KeyHint> PRs <KeyHint>3</KeyHint> History <KeyHint>4</KeyHint> Schedules
+          </p>
+          <p>
+            <KeyHint>⌘K</KeyHint> Command palette · <KeyHint>?</KeyHint> All shortcuts
+          </p>
+        </div>
       </div>
     </div>
   );
