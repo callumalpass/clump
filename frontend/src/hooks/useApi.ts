@@ -512,6 +512,9 @@ export function useSessions(filters: SessionFilters = {}) {
   // Initial load and when filters change - reset to page 1
   useEffect(() => {
     setPage(1);
+    // Clear old sessions immediately to prevent showing stale data from wrong repo
+    setSessions([]);
+    setTotal(0);
     fetchPage(1, true);
   // fetchPage captures all filter values, so we just need it as a dependency
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -649,6 +652,8 @@ export function useActiveSessions(repoPath?: string) {
 
   // Initial load and when repo changes
   useEffect(() => {
+    // Clear old sessions immediately to prevent showing stale data from wrong repo
+    setSessions([]);
     fetchActiveSessions(true);
   }, [fetchActiveSessions]);
 

@@ -213,6 +213,20 @@ export default function App() {
   // Sessions are cached when viewed so tabs persist across page changes
   const cachedSessionsRef = useRef(new LRUCache<string, SessionSummary>(100));
 
+  // Helper to get cached session only if it belongs to the current repo
+  // Prevents showing wrong session data when switching repos
+  const getCachedSession = useCallback((sessionId: string): SessionSummary | undefined => {
+    const cached = cachedSessionsRef.current.get(sessionId);
+    if (!cached) return undefined;
+    // Validate the cached session belongs to the current repo
+    if (selectedRepo?.local_path && cached.repo_path !== selectedRepo.local_path) {
+      // Stale cache entry from different repo - remove it
+      cachedSessionsRef.current.delete(sessionId);
+      return undefined;
+    }
+    return cached;
+  }, [selectedRepo?.local_path]);
+
   // Refs for animated tab indicator
   const tabsContainerRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Map<Tab, HTMLButtonElement>>(new Map());
@@ -292,17 +306,19 @@ export default function App() {
   // WebSocket connection manager for persistent connections across tab switches
   const { closeConnection: closeWebSocketConnection } = useWebSocketManager();
 
+  // Ref for debounced session refresh timeout (allows cancellation on repo switch)
+  const refreshSessionsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Debounced session refresh to coalesce multiple rapid refresh requests
   const refreshSessionsDebounced = useMemo(() => {
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
+      if (refreshSessionsTimeoutRef.current) {
+        clearTimeout(refreshSessionsTimeoutRef.current);
       }
-      timeoutId = setTimeout(() => {
+      refreshSessionsTimeoutRef.current = setTimeout(() => {
         refreshSessions();
         refreshActiveSessions();
-        timeoutId = null;
+        refreshSessionsTimeoutRef.current = null;
       }, 500);
     };
   }, [refreshSessions, refreshActiveSessions]);
@@ -470,6 +486,10 @@ export default function App() {
   useEffect(() => {
     const STORAGE_KEY = 'clump:repoSessionTabs';
 
+    // Check if repo actually changed BEFORE updating refs (fixes cache clear bug)
+    const previousRepoId = tabsRepoIdRef.current;
+    const repoActuallyChanged = previousRepoId !== null && previousRepoId !== selectedRepo?.id;
+
     // Clear filters
     setSelectedTagId(null);
     setIssueFilters({ state: 'open' });
@@ -480,6 +500,21 @@ export default function App() {
     setSelectedIssue(null);
     setSelectedPR(null);
     setSelectedSchedule(null);
+
+    // Clear process/cache if repo changed (BEFORE restoring tabs for new repo)
+    if (repoActuallyChanged || !selectedRepo?.id) {
+      setActiveProcessId(null);
+      setExpandedSessionId(null);
+      // Clear pending context refs and session cache
+      pendingIssueContextRef.current = null;
+      pendingPRContextRef.current = null;
+      cachedSessionsRef.current.clear();
+      // Cancel any pending debounced refresh to prevent stale context
+      if (refreshSessionsTimeoutRef.current) {
+        clearTimeout(refreshSessionsTimeoutRef.current);
+        refreshSessionsTimeoutRef.current = null;
+      }
+    }
 
     // Restore tabs for new repo (or clear if none saved)
     if (selectedRepo?.id) {
@@ -513,17 +548,6 @@ export default function App() {
       setActiveTabSessionId(null);
       setViewingSessionId(null);
       tabsRepoIdRef.current = null;
-    }
-
-    // Only clear process/cache if repo actually changed (not on hot reload)
-    const repoActuallyChanged = tabsRepoIdRef.current !== null && tabsRepoIdRef.current !== selectedRepo?.id;
-    if (repoActuallyChanged || !selectedRepo?.id) {
-      setActiveProcessId(null);
-      setExpandedSessionId(null);
-      // Clear pending context refs and session cache
-      pendingIssueContextRef.current = null;
-      pendingPRContextRef.current = null;
-      cachedSessionsRef.current.clear();
     }
   }, [selectedRepo?.id]);
 
@@ -792,8 +816,7 @@ export default function App() {
   // Handler for closing a session tab (not deleting the session)
   const handleCloseSessionTab = useCallback((sessionId: string) => {
     // Find the session to check if it has a running process
-    const session = sessionsById.get(sessionId)
-      ?? cachedSessionsRef.current.get(sessionId);
+    const session = sessionsById.get(sessionId) ?? getCachedSession(sessionId);
     const activeProcess = session?.is_active ? processesBySessionId.get(sessionId) : null;
 
     if (activeProcess) {
@@ -813,12 +836,11 @@ export default function App() {
       setActiveProcessId(null);
       setViewingSessionId(null);
     }
-  }, [sessionsById, processesBySessionId, killProcess, activeTabSessionId, closeWebSocketConnection]);
+  }, [sessionsById, processesBySessionId, killProcess, activeTabSessionId, closeWebSocketConnection, getCachedSession]);
 
   // Handler for selecting a session tab
   const handleSelectSessionTab = useCallback((sessionId: string) => {
-    const session = sessionsById.get(sessionId)
-      ?? cachedSessionsRef.current.get(sessionId);
+    const session = sessionsById.get(sessionId) ?? getCachedSession(sessionId);
     if (!session) return;
 
     setActiveTabSessionId(sessionId);
@@ -847,7 +869,7 @@ export default function App() {
       setSelectedPR(firstPR.number);
       setSelectedIssue(null);
     }
-  }, [sessionsById, processesBySessionId, clearAttention]);
+  }, [sessionsById, processesBySessionId, clearAttention, getCachedSession]);
 
   // Session tab keyboard shortcuts (Alt + 1-9, [, ], N)
   useEffect(() => {
@@ -915,7 +937,7 @@ export default function App() {
   const activeProcess = activeProcessId ? processesById.get(activeProcessId) : undefined;
   const activeSessionFromList = activeProcess?.claude_session_id
     ? (sessionsById.get(activeProcess.claude_session_id)
-      ?? cachedSessionsRef.current.get(activeProcess.claude_session_id))
+      ?? getCachedSession(activeProcess.claude_session_id))
     : null;
 
   // Synthesize session from process data if not found (handles hot reloads, pagination gaps)
@@ -940,8 +962,7 @@ export default function App() {
 
   // Find the session being viewed (for transcript panel)
   const viewingSession = viewingSessionId
-    ? (sessionsById.get(viewingSessionId)
-      ?? cachedSessionsRef.current.get(viewingSessionId))
+    ? (sessionsById.get(viewingSessionId) ?? getCachedSession(viewingSessionId))
     : null;
 
 
@@ -1007,8 +1028,8 @@ export default function App() {
           return session;
         }
 
-        // If not on current page, check our cache (for sessions on other pages)
-        const cachedSession = cachedSessionsRef.current.get(id);
+        // If not on current page, check our cache (validates repo context)
+        const cachedSession = getCachedSession(id);
         if (cachedSession) {
           return cachedSession;
         }
@@ -1041,7 +1062,7 @@ export default function App() {
         return null;
       })
       .filter((s): s is SessionSummary => !!s);
-  }, [openSessionIds, sessionsById, processesBySessionId, selectedRepo]);
+  }, [openSessionIds, sessionsById, processesBySessionId, selectedRepo, getCachedSession]);
 
   // Compute layout mode using the centralized hook
   const { mode: layoutMode } = useLayoutMode({
@@ -1152,8 +1173,7 @@ export default function App() {
       if (e.key === 's' && !e.altKey && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         const currentSession = activeTabSessionId
-          ? (sessionsById.get(activeTabSessionId)
-            ?? cachedSessionsRef.current.get(activeTabSessionId))
+          ? (sessionsById.get(activeTabSessionId) ?? getCachedSession(activeTabSessionId))
           : null;
         if (currentSession) {
           handleToggleStar(currentSession);
@@ -1245,7 +1265,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [commandPaletteOpen, settingsOpen, shortcutsOpen, statsModalOpen, activeProcessId, selectedIssue, selectedPR, activeTab, issuesPage, issuesTotalPages, goToIssuesPage, prsPage, prsTotalPages, goToPRsPage, sessionsPage, sessionsTotalPages, goToSessionsPage, activeTabSessionId, handleCloseSessionTab, sessionsById, handleToggleStar, sessionViewModes, handleSetSessionViewMode, refreshIssues, refreshPRs, refreshSessions]);
+  }, [commandPaletteOpen, settingsOpen, shortcutsOpen, statsModalOpen, activeProcessId, selectedIssue, selectedPR, activeTab, issuesPage, issuesTotalPages, goToIssuesPage, prsPage, prsTotalPages, goToPRsPage, sessionsPage, sessionsTotalPages, goToSessionsPage, activeTabSessionId, handleCloseSessionTab, sessionsById, handleToggleStar, sessionViewModes, handleSetSessionViewMode, refreshIssues, refreshPRs, refreshSessions, getCachedSession]);
 
   // Command palette commands
   const paletteCommands = useMemo((): Command[] => {
