@@ -36,10 +36,10 @@ const IssueListItem = memo(function IssueListItem({
     <div
       role="button"
       tabIndex={0}
-      className={`group p-4 mx-2 my-2 cursor-pointer rounded-stoody-lg transition-all duration-150 ease-out list-item-enter shadow-stoody-sm ${
+      className={`group p-4 mx-2 my-2 cursor-pointer rounded-stoody-lg transition-colors duration-150 list-item-enter shadow-stoody-sm focus-visible:ring-2 focus-visible:ring-blurple-400 focus-visible:ring-inset ${
         isSelected
           ? 'bg-blurple-500/10'
-          : 'bg-gray-800 hover:bg-gray-850'
+          : 'bg-gray-800 hover:bg-gray-750'
       }`}
       style={{ '--item-index': Math.min(index, 15) } as React.CSSProperties}
       onClick={onSelect}

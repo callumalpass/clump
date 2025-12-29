@@ -98,7 +98,7 @@ export function CompactSessionList({
             key={session.session_id}
             role="button"
             tabIndex={0}
-            className={`group flex items-center gap-3 px-4 py-3 cursor-pointer rounded-stoody-lg transition-all duration-150 list-item-enter shadow-stoody-sm bg-gray-800 hover:bg-gray-850`}
+            className={`group flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:gap-3 sm:px-4 sm:py-3 cursor-pointer rounded-stoody-lg hover:bg-gray-750 transition-colors duration-150 list-item-enter shadow-stoody-sm bg-gray-800 focus-visible:ring-2 focus-visible:ring-blurple-400 focus-visible:ring-inset`}
             style={{ '--item-index': index } as React.CSSProperties}
             onClick={() => onSelectSession(session)}
             onKeyDown={(e) => {
@@ -108,59 +108,65 @@ export function CompactSessionList({
               }
             }}
           >
-            {/* Status dot */}
-            <span
-              className={`flex-shrink-0 w-2.5 h-2.5 rounded-full ${
-                session.is_active ? 'bg-warning-500 animate-pulse' : 'bg-blurple-400'
-              }`}
-            />
-
-            {/* Title - truncated */}
-            <span className="flex-1 text-sm text-white truncate group-hover:text-pink-400 transition-colors" title={session.title || 'Untitled session'}>
-              {session.title || 'Untitled session'}
-            </span>
-
-            {/* Duration for active sessions, relative time for inactive */}
-            {session.is_active && session.start_time ? (
-              <span className="text-xs text-warning-500/80 tabular-nums flex-shrink-0 font-medium">
-                <ElapsedTimer startTime={session.start_time} />
-              </span>
-            ) : session.modified_at && (
+            {/* Top row: status, title, and time */}
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              {/* Status dot */}
               <span
-                className="text-xs text-gray-500 flex-shrink-0"
-                title={new Date(session.modified_at).toLocaleString()}
-              >
-                {formatRelativeTime(session.modified_at)}
+                className={`flex-shrink-0 w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full ${
+                  session.is_active ? 'bg-warning-500 animate-pulse' : 'bg-blurple-400'
+                }`}
+              />
+
+              {/* Title - truncated */}
+              <span className="flex-1 text-xs sm:text-sm text-white truncate group-hover:text-pink-400 transition-colors" title={session.title || 'Untitled session'}>
+                {session.title || 'Untitled session'}
               </span>
-            )}
 
-            {/* Stop button for active sessions */}
-            {session.is_active && onKillSession && (
-              <button
-                onClick={(e) => handleKill(e, session)}
-                className="flex-shrink-0 px-2.5 py-1 text-xs text-danger-400 bg-danger-500/20 hover:bg-danger-500 hover:text-white active:scale-95 rounded-stoody-sm flex items-center gap-1.5 transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-danger-400"
-                title="Stop this session"
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-                Stop
-              </button>
-            )}
+              {/* Duration for active sessions, relative time for inactive */}
+              {session.is_active && session.start_time ? (
+                <span className="text-[10px] sm:text-xs text-warning-500/80 tabular-nums flex-shrink-0 font-medium">
+                  <ElapsedTimer startTime={session.start_time} />
+                </span>
+              ) : session.modified_at && (
+                <span
+                  className="text-[10px] sm:text-xs text-gray-500 flex-shrink-0"
+                  title={new Date(session.modified_at).toLocaleString()}
+                >
+                  {formatRelativeTime(session.modified_at)}
+                </span>
+              )}
+            </div>
 
-            {/* Continue button for non-active */}
-            {!session.is_active && onContinueSession && (
-              <button
-                onClick={(e) => handleContinue(e, session)}
-                className="flex-shrink-0 px-2.5 py-1 text-xs text-blurple-400 bg-blurple-500/20 hover:bg-blurple-500 hover:text-pink-400 active:scale-95 rounded-stoody-sm flex items-center gap-1.5 transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-blurple-400"
-                title="Continue this session"
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
-                Continue
-              </button>
-            )}
+            {/* Action buttons - full width on mobile, shrink on desktop */}
+            <div className="flex items-center gap-2 sm:flex-shrink-0">
+              {/* Stop button for active sessions */}
+              {session.is_active && onKillSession && (
+                <button
+                  onClick={(e) => handleKill(e, session)}
+                  className="flex-1 sm:flex-initial px-2 py-1 sm:px-2.5 text-[10px] sm:text-xs text-danger-400 bg-danger-500/20 hover:bg-danger-500 hover:text-white active:scale-95 rounded-stoody-sm flex items-center justify-center gap-1 sm:gap-1.5 transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-danger-400"
+                  title="Stop this session"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  <span>Stop</span>
+                </button>
+              )}
+
+              {/* Continue button for non-active */}
+              {!session.is_active && onContinueSession && (
+                <button
+                  onClick={(e) => handleContinue(e, session)}
+                  className="flex-1 sm:flex-initial px-2 py-1 sm:px-2.5 text-[10px] sm:text-xs text-blurple-400 bg-blurple-500/20 hover:bg-blurple-500 hover:text-pink-400 active:scale-95 rounded-stoody-sm flex items-center justify-center gap-1 sm:gap-1.5 transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-blurple-400"
+                  title="Continue this session"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                  <span>Continue</span>
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>
