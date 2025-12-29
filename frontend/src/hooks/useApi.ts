@@ -58,6 +58,53 @@ interface PaginatedListConfig<TItem, TFilters> {
   getFilterDeps: (filters: TFilters) => unknown[];
 }
 
+/** Common filter fields shared between Issues and PRs */
+interface BaseEntityFilters {
+  state?: 'open' | 'closed' | 'all';
+  search?: string;
+  sort?: string;
+  order?: 'asc' | 'desc';
+}
+
+/**
+ * Build common URLSearchParams for entity lists (Issues, PRs).
+ * Handles state, sort, order, pagination, and search.
+ */
+function buildEntityListParams(
+  filters: BaseEntityFilters,
+  page: number,
+  perPage: number,
+  defaults: { state: string; sort: string; order: 'asc' | 'desc' }
+): URLSearchParams {
+  const { state = defaults.state, search, sort = defaults.sort, order = defaults.order } = filters;
+  const params = new URLSearchParams();
+  params.set('state', state);
+  params.set('sort', sort);
+  params.set('order', order);
+  params.set('page', page.toString());
+  params.set('per_page', perPage.toString());
+  if (search) {
+    params.set('search', search);
+  }
+  return params;
+}
+
+/**
+ * Get common filter dependencies for entity lists.
+ * Returns an array of values that should trigger a refetch when changed.
+ */
+function getEntityFilterDeps(
+  filters: BaseEntityFilters,
+  defaults: { state: string; sort: string; order: 'asc' | 'desc' }
+): unknown[] {
+  return [
+    filters.state ?? defaults.state,
+    filters.search,
+    filters.sort ?? defaults.sort,
+    filters.order ?? defaults.order,
+  ];
+}
+
 interface PaginatedListResult<TItem> {
   items: TItem[];
   loading: boolean;
@@ -199,32 +246,23 @@ interface IssueListResponse extends PaginatedResponse {
   issues: Issue[];
 }
 
+const ISSUE_FILTER_DEFAULTS = { state: 'open', sort: 'created', order: 'desc' as const };
+
 const issuesConfig: PaginatedListConfig<Issue, IssueFilters> = {
   buildUrl: (repoId) => `/repos/${repoId}/issues`,
   getItems: (response) => (response as IssueListResponse).issues ?? [],
   buildParams: (filters, page, perPage) => {
-    const { state = 'open', search, labels, sort = 'created', order = 'desc' } = filters;
-    const params = new URLSearchParams();
-    params.set('state', state);
-    params.set('sort', sort);
-    params.set('order', order);
-    params.set('page', page.toString());
-    params.set('per_page', perPage.toString());
-    if (search) {
-      params.set('search', search);
-    }
-    if (labels && labels.length > 0) {
-      labels.forEach(label => params.append('labels', label));
+    const params = buildEntityListParams(filters, page, perPage, ISSUE_FILTER_DEFAULTS);
+    // Issue-specific: append labels
+    if (filters.labels && filters.labels.length > 0) {
+      filters.labels.forEach(label => params.append('labels', label));
     }
     return params;
   },
   errorMessage: 'Failed to fetch issues',
   getFilterDeps: (filters) => [
-    filters.state ?? 'open',
-    filters.search,
+    ...getEntityFilterDeps(filters, ISSUE_FILTER_DEFAULTS),
     filters.labels?.join(',') ?? '',
-    filters.sort ?? 'created',
-    filters.order ?? 'desc',
   ],
 };
 
@@ -264,29 +302,14 @@ interface PRListResponse extends PaginatedResponse {
   prs: PR[];
 }
 
+const PR_FILTER_DEFAULTS = { state: 'open', sort: 'created', order: 'desc' as const };
+
 const prsConfig: PaginatedListConfig<PR, PRFilters> = {
   buildUrl: (repoId) => `/repos/${repoId}/prs`,
   getItems: (response) => (response as PRListResponse).prs ?? [],
-  buildParams: (filters, page, perPage) => {
-    const { state = 'open', search, sort = 'created', order = 'desc' } = filters;
-    const params = new URLSearchParams();
-    params.set('state', state);
-    params.set('sort', sort);
-    params.set('order', order);
-    params.set('page', page.toString());
-    params.set('per_page', perPage.toString());
-    if (search) {
-      params.set('search', search);
-    }
-    return params;
-  },
+  buildParams: (filters, page, perPage) => buildEntityListParams(filters, page, perPage, PR_FILTER_DEFAULTS),
   errorMessage: 'Failed to fetch PRs',
-  getFilterDeps: (filters) => [
-    filters.state ?? 'open',
-    filters.search,
-    filters.sort ?? 'created',
-    filters.order ?? 'desc',
-  ],
+  getFilterDeps: (filters) => getEntityFilterDeps(filters, PR_FILTER_DEFAULTS),
 };
 
 export function usePRs(repoId: number | null, filters: PRFilters = {}) {
