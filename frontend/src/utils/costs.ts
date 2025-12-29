@@ -62,28 +62,33 @@ const DEFAULT_PRICING: ModelPricing = {
   cacheWrite: 3.75,
 };
 
+// Model family to default model mapping for fallback pricing lookup.
+// When a model string contains a family keyword (e.g., "opus"), use the corresponding
+// default model for pricing. Update these when new model versions are released.
+const MODEL_FAMILY_DEFAULTS: Record<string, string> = {
+  opus: 'claude-opus-4-5-20251101',
+  sonnet: 'claude-sonnet-4-20250514',
+  haiku: 'claude-3-5-haiku-20241022',
+};
+
 /**
  * Get pricing for a model, with fallback to default pricing.
  */
 function getPricing(model: string | null | undefined): ModelPricing {
   if (!model) return DEFAULT_PRICING;
 
-  // Try exact match
+  // Try exact match first
   const exactMatch = MODEL_PRICING[model];
   if (exactMatch) {
     return exactMatch;
   }
 
-  // Try to match by model family (e.g., "claude-sonnet-4" matches "claude-sonnet-4-20250514")
+  // Try to match by model family (e.g., "claude-sonnet-4" matches the default sonnet model)
   const modelLower = model.toLowerCase();
-  if (modelLower.includes('opus')) {
-    return MODEL_PRICING['claude-opus-4-20250514'] ?? DEFAULT_PRICING;
-  }
-  if (modelLower.includes('haiku')) {
-    return MODEL_PRICING['claude-3-5-haiku-20241022'] ?? DEFAULT_PRICING;
-  }
-  if (modelLower.includes('sonnet')) {
-    return MODEL_PRICING['claude-sonnet-4-20250514'] ?? DEFAULT_PRICING;
+  for (const [family, defaultModel] of Object.entries(MODEL_FAMILY_DEFAULTS)) {
+    if (modelLower.includes(family)) {
+      return MODEL_PRICING[defaultModel] ?? DEFAULT_PRICING;
+    }
   }
 
   return DEFAULT_PRICING;
