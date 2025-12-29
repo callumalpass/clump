@@ -167,9 +167,9 @@ export function SessionTabs({
             <span
               className={`w-2.5 h-2.5 rounded-full shrink-0 ${
                 sessionNeedsAttention
-                  ? 'bg-warning-500 animate-pulse'
+                  ? 'bg-danger-400 status-pulse-urgent'
                   : isRunning
-                    ? 'bg-warning-500 animate-pulse'
+                    ? 'bg-blurple-400 animate-pulse'
                     : 'bg-mint-400'
               }`}
               title={

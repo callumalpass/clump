@@ -1332,6 +1332,28 @@ button:disabled .kbd-hint {
   animation: status-dot-pulse 600ms ease-in-out;
 }
 
+/* Urgent pulse animation - faster, more noticeable for attention-needed states */
+@keyframes status-pulse-urgent {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.2);
+  }
+}
+
+.status-pulse-urgent {
+  animation: status-pulse-urgent 800ms ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-pulse-urgent {
+    animation: none;
+  }
+}
+
 /* Star button toggle animation - satisfying pop effect when starring/unstarring */
 @keyframes star-pop {
   0% {
