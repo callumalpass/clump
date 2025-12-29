@@ -134,11 +134,11 @@ def encode_path(local_path: str) -> str:
     """
     Encode a local path using Claude's format.
 
-    Replaces slashes with dashes.
-    e.g., /home/user/projects/myapp -> -home-user-projects-myapp
+    Replaces slashes and underscores with dashes.
+    e.g., /home/user/projects/my_app -> -home-user-projects-my-app
     """
     normalized = str(Path(local_path).resolve())
-    return normalized.replace("/", "-")
+    return normalized.replace("/", "-").replace("_", "-")
 
 
 def decode_path(encoded: str) -> str:
