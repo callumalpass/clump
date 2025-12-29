@@ -225,7 +225,8 @@ function WelcomeState() {
     <div className="flex-1 flex items-center justify-center p-8 empty-state-pattern">
       <div className="text-center p-8 rounded-xl bg-gray-800/40 border border-gray-750/50 max-w-md empty-state-enter">
         {/* Logo/Icon */}
-        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blurple-500/20 to-mint-500/20 flex items-center justify-center mx-auto mb-6 empty-state-icon-float">
+        <div className="relative w-20 h-20 rounded-full bg-gradient-to-br from-blurple-500/20 to-mint-500/20 flex items-center justify-center mx-auto mb-6 empty-state-icon-float cursor-pointer">
+          <span className="empty-state-tooltip">let's gooo!</span>
           <svg className="w-10 h-10 text-blurple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
@@ -311,13 +312,13 @@ const emptyStateContent: Record<Tab, { title: string; description: string; empty
     ),
   },
   schedules: {
-    title: 'Select a schedule to view details',
-    description: 'manage automated sessions',
+    title: 'Automate recurring tasks',
+    description: 'Create or select a schedule from the panel',
     emptyTitle: 'No schedules yet',
     emptyDescription: 'Create a schedule to automate recurring tasks',
     icon: (
       <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     ),
   },
@@ -340,7 +341,8 @@ function EmptyState({ activeTab, listEmpty, listError, onTabChange }: EmptyState
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="text-center p-8 rounded-xl bg-danger-500/5 border border-danger-500/20 max-w-md empty-state-enter">
           {/* Error icon */}
-          <div className="w-16 h-16 rounded-full bg-danger-500/10 flex items-center justify-center mx-auto mb-5 empty-state-icon-float">
+          <div className="relative w-16 h-16 rounded-full bg-danger-500/10 flex items-center justify-center mx-auto mb-5 empty-state-icon-float cursor-pointer">
+            <span className="empty-state-tooltip">oopsie!</span>
             <svg className="w-8 h-8 text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
@@ -371,11 +373,18 @@ function EmptyState({ activeTab, listEmpty, listError, onTabChange }: EmptyState
   // If the list has items, show a minimal "select an item" prompt
   // If the list is empty, show the full empty state with navigation shortcuts
   if (!listEmpty) {
+    const tooltips = {
+      issues: 'pick one!',
+      prs: 'review time!',
+      history: 'memories...',
+      schedules: 'automate it!',
+    };
     return (
       <div className="flex-1 flex items-center justify-center p-8 empty-state-pattern">
         <div className="text-center empty-state-enter">
           {/* Subtle icon */}
-          <div className="w-12 h-12 rounded-full bg-gray-800/60 flex items-center justify-center mx-auto mb-3 empty-state-icon-float">
+          <div className="relative w-12 h-12 rounded-full bg-gray-800/60 flex items-center justify-center mx-auto mb-3 empty-state-icon-float cursor-pointer">
+            <span className="empty-state-tooltip">{tooltips[activeTab]}</span>
             {content.icon}
           </div>
           {/* Simple prompt */}
@@ -387,11 +396,18 @@ function EmptyState({ activeTab, listEmpty, listError, onTabChange }: EmptyState
   }
 
   // Full empty state for when the list is truly empty
+  const emptyTooltips = {
+    issues: 'so peaceful!',
+    prs: 'nothing to review',
+    history: 'fresh start!',
+    schedules: 'set one up!',
+  };
   return (
     <div className="flex-1 flex items-center justify-center p-8 empty-state-pattern">
       <div className="text-center p-8 rounded-xl bg-gray-800/40 border border-gray-750/50 max-w-lg empty-state-enter">
         {/* Icon */}
-        <div className="w-16 h-16 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-5 empty-state-icon-float">
+        <div className="relative w-16 h-16 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-5 empty-state-icon-float cursor-pointer">
+          <span className="empty-state-tooltip">{emptyTooltips[activeTab]}</span>
           {content.icon}
         </div>
 
@@ -487,12 +503,6 @@ export function MainContentArea(props: MainContentAreaProps) {
   // Ref for collapsible context panel
   const contextPanelRef = useRef<PanelImperativeHandle>(null);
 
-  // Find the active PR (for side-by-side with terminal/transcript)
-  const activePR = activePRNumber ? prs.find(p => p.number === activePRNumber) : null;
-
-  // Find the selected PR data (for standalone PR detail view)
-  const selectedPRData = selectedPR ? prs.find(p => p.number === selectedPR) : null;
-
   // Common session panel props
   const sessionPanelProps = {
     openSessions,
@@ -564,14 +574,17 @@ export function MainContentArea(props: MainContentAreaProps) {
   };
 
   // Render PRDetail component
-  const renderPRDetail = (pr: PR) => {
+  const renderPRDetail = (prNumber: number) => {
     if (!selectedRepo) return null;
     return (
       <PRDetail
         repoId={selectedRepo.id}
-        prNumber={pr.number}
+        prNumber={prNumber}
         prCommands={commands.pr}
-        onStartSession={(command) => onStartPRSession(pr, command)}
+        onStartSession={(command) => {
+          const pr = prs.find((p) => p.number === prNumber);
+          if (pr) onStartPRSession(pr, command);
+        }}
         sessions={sessions}
         processes={processes}
         onSelectSession={onSelectSession}
@@ -654,7 +667,7 @@ export function MainContentArea(props: MainContentAreaProps) {
             onCollapse={handleCollapseContextPanel}
           />
           <div className={`flex-1 overflow-auto transition-opacity duration-150 ${issuePanelCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-            {activePR && renderPRDetail(activePR)}
+            {activePRNumber && renderPRDetail(activePRNumber)}
           </div>
         </Panel>
         <ResizeHandle />
@@ -692,7 +705,7 @@ export function MainContentArea(props: MainContentAreaProps) {
     // PR detail only (no sessions)
     'pr-only': () => (
       <div className="flex-1 border-r border-gray-750 overflow-auto">
-        {selectedPRData && renderPRDetail(selectedPRData)}
+        {selectedPR && renderPRDetail(selectedPR)}
       </div>
     ),
 
