@@ -386,6 +386,15 @@
   background-color: #f4f4f0;
 }
 
+/* Session card metadata text - improved contrast in light theme */
+[data-theme="light"] .session-card-light .list-item-metadata .text-gray-500 {
+  color: #475569 !important; /* slate-600 - better contrast than #b2bec3 */
+}
+
+[data-theme="light"] .session-card-light .list-item-metadata .text-gray-400 {
+  color: #475569 !important; /* slate-600 - consistent with gray-500 override */
+}
+
 /* Improve Stop button styling in light theme - less harsh red */
 [data-theme="light"] .btn-stop-light {
   background-color: rgba(214, 48, 49, 0.12);
@@ -1789,6 +1798,39 @@ button:disabled .kbd-hint {
   animation: copy-success-pop 200ms ease-out forwards;
 }
 
+/* Refresh success animation - checkmark with draw and fade */
+@keyframes refresh-success {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) rotate(-45deg);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.15) rotate(0deg);
+  }
+  60% {
+    transform: scale(0.95) rotate(0deg);
+  }
+  80% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.refresh-success-icon {
+  animation: refresh-success 1200ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.refresh-success-icon path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: checkmark-draw 300ms ease-out 100ms forwards;
+}
+
 /* New session button plus icon wiggle animation */
 @keyframes plus-wiggle {
   0%, 100% {
@@ -1938,7 +1980,8 @@ button:disabled .kbd-hint {
   .checkbox-bounce,
   .page-number-flip-in,
   .page-number-flip-out,
-  .option-check-icon {
+  .option-check-icon,
+  .refresh-success-icon {
     animation: none;
   }
 
@@ -1973,6 +2016,20 @@ button:disabled .kbd-hint {
   .copy-success-icon {
     opacity: 1;
     transform: none;
+  }
+
+  /* Ensure refresh success icon is visible without animation */
+  .refresh-success-icon {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .refresh-success-icon path {
+    animation: none;
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+    opacity: 1;
   }
 
   /* Disable copy button hover effects */

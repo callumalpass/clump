@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, ReactNode } from 'react';
+import { useState, useEffect, useRef, ReactNode, useMemo } from 'react';
 import { focusRing, focusRingInset } from '../utils/styles';
 import { pluralize } from '../utils/text';
 import { useTabIndicator } from '../hooks/useTabIndicator';
@@ -403,30 +403,61 @@ export function ItemCount({ count, singular, plural }: ItemCountProps) {
   return <span className={filterBarStyles.count}>{count} {label}</span>;
 }
 
-// Refresh button
+// Refresh button with success feedback animation
 interface RefreshButtonProps {
   onClick: () => void;
   loading?: boolean;
 }
 
 export function RefreshButton({ onClick, loading }: RefreshButtonProps) {
+  const [showSuccess, setShowSuccess] = useState(false);
+  const wasLoadingRef = useRef(false);
+
+  // Check for reduced motion preference
+  const prefersReducedMotion = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }, []);
+
+  // Detect when loading finishes to show success animation
+  useEffect(() => {
+    if (wasLoadingRef.current && !loading && !prefersReducedMotion) {
+      setShowSuccess(true);
+      const timer = setTimeout(() => setShowSuccess(false), 1200);
+      return () => clearTimeout(timer);
+    }
+    wasLoadingRef.current = loading ?? false;
+  }, [loading, prefersReducedMotion]);
+
   return (
     <button
       onClick={onClick}
       disabled={loading}
-      className={`icon-btn p-1 rounded-stoody-sm hover:bg-gray-750 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed ${focusRing}`}
-      title={loading ? 'Refreshing...' : 'Refresh'}
-      aria-label={loading ? 'Refreshing data' : 'Refresh data'}
+      className={`icon-btn p-1 rounded-stoody-sm hover:bg-gray-750 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed ${focusRing} ${showSuccess ? 'text-mint-400' : ''}`}
+      title={loading ? 'Refreshing...' : showSuccess ? 'Refreshed!' : 'Refresh'}
+      aria-label={loading ? 'Refreshing data' : showSuccess ? 'Data refreshed successfully' : 'Refresh data'}
     >
-      <svg
-        className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`}
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-        aria-hidden="true"
-      >
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-      </svg>
+      {showSuccess ? (
+        <svg
+          className="w-3 h-3 refresh-success-icon"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+        </svg>
+      ) : (
+        <svg
+          className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+      )}
     </button>
   );
 }
