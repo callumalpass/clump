@@ -50,6 +50,10 @@ const SessionListItem = memo(function SessionListItem({
   const [isBouncing, setIsBouncing] = useState(false);
   const prevSelectedRef = useRef(isSelected);
 
+  // Track star pop animation
+  const [isStarAnimating, setIsStarAnimating] = useState(false);
+  const prevStarredRef = useRef(session.starred);
+
   // Trigger bounce animation when selection changes
   useEffect(() => {
     if (isSelected !== prevSelectedRef.current) {
@@ -57,6 +61,14 @@ const SessionListItem = memo(function SessionListItem({
       prevSelectedRef.current = isSelected;
     }
   }, [isSelected]);
+
+  // Trigger star pop animation when starred status changes
+  useEffect(() => {
+    if (session.starred !== prevStarredRef.current) {
+      setIsStarAnimating(true);
+      prevStarredRef.current = session.starred;
+    }
+  }, [session.starred]);
 
   // Format repo path for display - show last 2-3 segments
   const formatRepoPath = (s: SessionSummary) => {
@@ -151,11 +163,12 @@ const SessionListItem = memo(function SessionListItem({
         {showStarButton && onToggleStar && (
           <button
             onClick={onToggleStar}
-            className={`flex-shrink-0 p-1 transition-colors rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 ${
+            onAnimationEnd={() => setIsStarAnimating(false)}
+            className={`star-button flex-shrink-0 p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 ${
               session.starred
-                ? 'text-yellow-400'
+                ? 'text-yellow-400 star-button-starred'
                 : 'text-gray-600 group-hover:text-gray-400 hover:!text-yellow-400'
-            }`}
+            } ${isStarAnimating ? 'star-button-animate' : ''}`}
             title={session.starred ? 'Unstar' : 'Star'}
           >
             <svg className="w-4 h-4" fill={session.starred ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
