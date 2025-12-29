@@ -73,8 +73,8 @@ vi.mock('@xterm/addon-unicode11', () => ({
   },
 }));
 
-vi.mock('../hooks/useWebSocket', () => ({
-  useWebSocket: (...args: unknown[]) => mockUseWebSocket(...args),
+vi.mock('../hooks/useProcessWebSocket', () => ({
+  useProcessWebSocket: (...args: unknown[]) => mockUseWebSocket(...args),
 }));
 
 // Import component after mocks

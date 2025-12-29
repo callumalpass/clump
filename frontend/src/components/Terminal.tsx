@@ -3,7 +3,7 @@ import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
-import { useWebSocket } from '../hooks/useWebSocket';
+import { useProcessWebSocket } from '../hooks/useProcessWebSocket';
 import '@xterm/xterm/css/xterm.css';
 
 interface RelatedEntity {
@@ -40,7 +40,7 @@ export function Terminal({ processId, onClose, relatedEntity, onShowRelated, sho
     }
   };
 
-  const { isConnected, sendInput, sendResize } = useWebSocket(processId, {
+  const { isConnected, sendInput, sendResize } = useProcessWebSocket(processId, {
     onMessage: (data) => {
       if (terminalRef.current) {
         // Write raw bytes directly to preserve ANSI escape sequences

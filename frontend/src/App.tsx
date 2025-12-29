@@ -3,6 +3,7 @@ import { Group, Panel, Separator } from 'react-resizable-panels';
 import { useRepos, useIssues, usePRs, useProcesses, useSessions, useActiveSessions, useTags, useIssueTags, useCommands, useSessionCounts, useStats, buildPromptFromTemplate, exportSession, downloadExport } from './hooks/useApi';
 import { useNotifications } from './hooks/useNotifications';
 import { useLayoutMode } from './hooks/useLayoutMode';
+import { useWebSocketManager } from './contexts/WebSocketContext';
 import type { IssueFilters, SessionFilters, PRFilters } from './hooks/useApi';
 import { RepoSelector } from './components/RepoSelector';
 import { IssueList } from './components/IssueList';
@@ -287,6 +288,9 @@ export default function App() {
   // Separate hook for active/recent sessions (independent of history pagination)
   const { sessions: activeSessions, refresh: refreshActiveSessions } = useActiveSessions(selectedRepo?.local_path);
   const { stats, loading: statsLoading, error: statsError, refresh: refreshStats } = useStats();
+
+  // WebSocket connection manager for persistent connections across tab switches
+  const { closeConnection: closeWebSocketConnection } = useWebSocketManager();
 
   // Debounced session refresh to coalesce multiple rapid refresh requests
   const refreshSessionsDebounced = useMemo(() => {
@@ -790,11 +794,13 @@ export default function App() {
     // Find the session to check if it has a running process
     const session = sessionsById.get(sessionId)
       ?? cachedSessionsRef.current.get(sessionId);
-    if (session?.is_active) {
-      const activeProcess = processesBySessionId.get(sessionId);
-      if (activeProcess) {
-        killProcess(activeProcess.id);
-      }
+    const activeProcess = session?.is_active ? processesBySessionId.get(sessionId) : null;
+
+    if (activeProcess) {
+      // Close the WebSocket connection for this process
+      closeWebSocketConnection(activeProcess.id);
+      // Kill the backend process
+      killProcess(activeProcess.id);
     }
 
     // Remove from open tabs and cache
@@ -807,7 +813,7 @@ export default function App() {
       setActiveProcessId(null);
       setViewingSessionId(null);
     }
-  }, [sessionsById, processesBySessionId, killProcess, activeTabSessionId]);
+  }, [sessionsById, processesBySessionId, killProcess, activeTabSessionId, closeWebSocketConnection]);
 
   // Handler for selecting a session tab
   const handleSelectSessionTab = useCallback((sessionId: string) => {

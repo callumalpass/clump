@@ -6,7 +6,7 @@ import { EntityPicker } from './EntityPicker';
 import { TokenUsageBar } from './TokenUsageBar';
 import type { SessionSummary, SessionDetail, EntityLink, Issue, PR, ParsedTranscript, TranscriptMessage } from '../types';
 import { fetchSessionDetail, addEntityToSession, removeEntityFromSession } from '../hooks/useApi';
-import { useWebSocket } from '../hooks/useWebSocket';
+import { useProcessWebSocket } from '../hooks/useProcessWebSocket';
 import { formatDuration } from '../utils/time';
 
 // =============================================================================
@@ -217,7 +217,7 @@ export function SessionView({
     : false;
 
   // WebSocket for sending input to active sessions
-  const { sendInput } = useWebSocket(processId ?? null);
+  const { sendInput } = useProcessWebSocket(processId ?? null);
 
   // Handler to send messages to Claude via WebSocket
   const handleSendMessage = useCallback(async (message: string) => {

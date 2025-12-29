@@ -3,11 +3,11 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { SessionView, ViewMode } from './SessionView';
 import type { SessionSummary, SessionDetail, Issue, PR, EntityLink, TranscriptMessage } from '../types';
 import * as useApiModule from '../hooks/useApi';
-import * as useWebSocketModule from '../hooks/useWebSocket';
+import * as useProcessWebSocketModule from '../hooks/useProcessWebSocket';
 
 // Mock dependencies
 vi.mock('../hooks/useApi');
-vi.mock('../hooks/useWebSocket');
+vi.mock('../hooks/useProcessWebSocket');
 vi.mock('./Terminal', () => ({
   Terminal: ({ processId, onConnectionChange }: { processId: string; onConnectionChange?: (connected: boolean) => void }) => {
     // Simulate connection after mount
@@ -197,7 +197,7 @@ describe('SessionView', () => {
     vi.mocked(useApiModule.fetchSessionDetail).mockImplementation(mockFetchSessionDetail);
     vi.mocked(useApiModule.addEntityToSession).mockImplementation(mockAddEntityToSession);
     vi.mocked(useApiModule.removeEntityFromSession).mockImplementation(mockRemoveEntityFromSession);
-    vi.mocked(useWebSocketModule.useWebSocket).mockReturnValue({
+    vi.mocked(useProcessWebSocketModule.useProcessWebSocket).mockReturnValue({
       isConnected: false,
       sendInput: mockSendInput,
       sendResize: vi.fn(),
