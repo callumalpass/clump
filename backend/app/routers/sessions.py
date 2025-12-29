@@ -665,56 +665,82 @@ async def list_sessions(
     else:  # default to UPDATED
         summaries.sort(key=lambda s: s.modified_at or "", reverse=reverse)
 
-    # Apply filters
-    if starred is not None:
-        summaries = [s for s in summaries if s.starred == starred]
+    # Apply all filters in a single pass for performance
+    # Pre-parse date filters outside the loop
+    from_date_parsed = None
+    to_date_parsed = None
+    search_lower = search.lower() if search else None
 
-    if has_entities is not None:
-        if has_entities:
-            summaries = [s for s in summaries if len(s.entities) > 0]
-        else:
-            summaries = [s for s in summaries if len(s.entities) == 0]
-
-    if is_active is not None:
-        summaries = [s for s in summaries if s.is_active == is_active]
-
-    if model:
-        # Filter by model name (sonnet, opus, haiku)
-        summaries = [s for s in summaries if s.model and model in s.model.lower()]
-
-    if search:
-        search_lower = search.lower()
-        summaries = [
-            s for s in summaries
-            if (s.title and search_lower in s.title.lower()) or
-               (s.repo_path and search_lower in s.repo_path.lower()) or
-               (s.repo_name and search_lower in s.repo_name.lower())
-        ]
-
-    # Apply date range filters
     if date_from:
         try:
-            from_date = datetime.fromisoformat(date_from)
-            # Use start of day for comparison
-            from_date = from_date.replace(hour=0, minute=0, second=0, microsecond=0)
-            summaries = [
-                s for s in summaries
-                if s.modified_at and _parse_datetime_naive(s.modified_at) >= from_date
-            ]
+            from_date_parsed = datetime.fromisoformat(date_from)
+            from_date_parsed = from_date_parsed.replace(hour=0, minute=0, second=0, microsecond=0)
         except ValueError:
-            pass  # Invalid date format - skip filter
+            pass
 
     if date_to:
         try:
-            to_date = datetime.fromisoformat(date_to)
-            # Use end of day for comparison
-            to_date = to_date.replace(hour=23, minute=59, second=59, microsecond=999999)
-            summaries = [
-                s for s in summaries
-                if s.modified_at and _parse_datetime_naive(s.modified_at) <= to_date
-            ]
+            to_date_parsed = datetime.fromisoformat(date_to)
+            to_date_parsed = to_date_parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
         except ValueError:
-            pass  # Invalid date format - skip filter
+            pass
+
+    # Check if any filters are active
+    has_filters = (
+        starred is not None or
+        has_entities is not None or
+        is_active is not None or
+        model is not None or
+        search_lower is not None or
+        from_date_parsed is not None or
+        to_date_parsed is not None
+    )
+
+    if has_filters:
+        def matches_filters(s: SessionSummaryResponse) -> bool:
+            # Check starred filter
+            if starred is not None and s.starred != starred:
+                return False
+
+            # Check has_entities filter
+            if has_entities is not None:
+                entity_count = len(s.entities)
+                if has_entities and entity_count == 0:
+                    return False
+                if not has_entities and entity_count > 0:
+                    return False
+
+            # Check is_active filter
+            if is_active is not None and s.is_active != is_active:
+                return False
+
+            # Check model filter
+            if model and (not s.model or model not in s.model.lower()):
+                return False
+
+            # Check search filter
+            if search_lower:
+                title_match = s.title and search_lower in s.title.lower()
+                path_match = s.repo_path and search_lower in s.repo_path.lower()
+                name_match = s.repo_name and search_lower in s.repo_name.lower()
+                if not (title_match or path_match or name_match):
+                    return False
+
+            # Check date_from filter
+            if from_date_parsed:
+                modified = _parse_datetime_naive(s.modified_at) if s.modified_at else None
+                if not modified or modified < from_date_parsed:
+                    return False
+
+            # Check date_to filter
+            if to_date_parsed:
+                modified = _parse_datetime_naive(s.modified_at) if s.modified_at else None
+                if not modified or modified > to_date_parsed:
+                    return False
+
+            return True
+
+        summaries = [s for s in summaries if matches_filters(s)]
 
     total = len(summaries)
 

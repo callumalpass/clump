@@ -5,8 +5,8 @@ Repo information is stored in ~/.clump/repos.json.
 Per-repo data is stored in ~/.clump/projects/{hash}/data.db.
 """
 
+import asyncio
 import re
-import subprocess
 from pathlib import Path
 
 from contextlib import contextmanager
@@ -64,7 +64,7 @@ def github_api_error_handler() -> Generator[None, None, None]:
         raise HTTPException(status_code=400, detail=f"GitHub API error: {e.data}")
 
 
-def parse_github_remote(local_path: str) -> tuple[str, str]:
+async def parse_github_remote(local_path: str) -> tuple[str, str]:
     """
     Parse the GitHub owner and repo name from a local git repository's origin remote.
 
@@ -88,18 +88,20 @@ def parse_github_remote(local_path: str) -> tuple[str, str]:
         raise ValueError(f"Not a git repository: {local_path}")
 
     try:
-        result = subprocess.run(
-            ["git", "remote", "get-url", "origin"],
+        # Use async subprocess to avoid blocking the event loop
+        proc = await asyncio.create_subprocess_exec(
+            "git", "remote", "get-url", "origin",
             cwd=path,
-            capture_output=True,
-            text=True,
-            timeout=10,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
-        if result.returncode != 0:
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+
+        if proc.returncode != 0:
             raise ValueError(f"No 'origin' remote found in {local_path}")
 
-        remote_url = result.stdout.strip()
-    except subprocess.TimeoutExpired:
+        remote_url = stdout.decode().strip()
+    except asyncio.TimeoutError:
         raise ValueError("Timed out reading git remote")
     except FileNotFoundError:
         raise ValueError("git command not found")
@@ -215,7 +217,7 @@ async def create_repo(repo: RepoCreate):
     # Infer owner/name from git remote if not provided
     if not owner or not name:
         try:
-            inferred_owner, inferred_name = parse_github_remote(repo.local_path)
+            inferred_owner, inferred_name = await parse_github_remote(repo.local_path)
             owner = owner or inferred_owner
             name = name or inferred_name
         except ValueError as e:
