@@ -120,6 +120,28 @@ def _parse_datetime_naive(timestamp: str) -> Optional[datetime]:
         return None
 
 
+def _parse_date_filter(date_str: Optional[str], end_of_day: bool = False) -> Optional[datetime]:
+    """
+    Parse a date filter string to a naive datetime boundary.
+
+    Args:
+        date_str: ISO format date string (e.g., "2025-01-15")
+        end_of_day: If True, set time to 23:59:59.999999; if False, set to 00:00:00
+
+    Returns:
+        Naive datetime at start or end of the specified day, or None if invalid.
+    """
+    if not date_str:
+        return None
+    try:
+        dt = datetime.fromisoformat(date_str)
+        if end_of_day:
+            return dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+        return dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
 def _calculate_duration_seconds(start_time: Optional[str], end_time: Optional[str]) -> Optional[int]:
     """
     Calculate session duration in seconds from start and end timestamps.
@@ -831,25 +853,13 @@ async def list_sessions(
                     continue
 
             # Check date filters (use file mtime)
-            if date_from:
-                try:
-                    from_date = datetime.fromisoformat(date_from).replace(
-                        hour=0, minute=0, second=0, microsecond=0
-                    )
-                    if s.modified_at.replace(tzinfo=None) < from_date:
-                        continue
-                except ValueError:
-                    pass
+            from_date = _parse_date_filter(date_from)
+            if from_date and s.modified_at.replace(tzinfo=None) < from_date:
+                continue
 
-            if date_to:
-                try:
-                    to_date = datetime.fromisoformat(date_to).replace(
-                        hour=23, minute=59, second=59, microsecond=999999
-                    )
-                    if s.modified_at.replace(tzinfo=None) > to_date:
-                        continue
-                except ValueError:
-                    pass
+            to_date = _parse_date_filter(date_to, end_of_day=True)
+            if to_date and s.modified_at.replace(tzinfo=None) > to_date:
+                continue
 
             filtered_sessions.append(s)
 
@@ -951,23 +961,9 @@ async def list_sessions(
 
     # Apply all filters in a single pass for performance
     # Pre-parse date filters outside the loop
-    from_date_parsed = None
-    to_date_parsed = None
+    from_date_parsed = _parse_date_filter(date_from)
+    to_date_parsed = _parse_date_filter(date_to, end_of_day=True)
     search_lower = search.lower() if search else None
-
-    if date_from:
-        try:
-            from_date_parsed = datetime.fromisoformat(date_from)
-            from_date_parsed = from_date_parsed.replace(hour=0, minute=0, second=0, microsecond=0)
-        except ValueError:
-            pass
-
-    if date_to:
-        try:
-            to_date_parsed = datetime.fromisoformat(date_to)
-            to_date_parsed = to_date_parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
-        except ValueError:
-            pass
 
     # Check if any filters are active
     has_filters = (
