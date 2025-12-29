@@ -54,7 +54,7 @@ export function PRStartSessionButton({ pr, commands, onStart, size = 'md', class
       <div className={`inline-flex ${className}`}>
         <button
           disabled
-          className={`inline-flex items-center gap-1.5 px-3 ${sizeClasses} bg-gray-600 text-gray-400 rounded-md font-medium cursor-not-allowed`}
+          className={`inline-flex items-center gap-1.5 px-3 ${sizeClasses} bg-gray-750 text-gray-400 rounded-stoody font-medium cursor-not-allowed`}
           aria-busy="true"
           aria-label="Loading session commands"
         >
@@ -76,7 +76,7 @@ export function PRStartSessionButton({ pr, commands, onStart, size = 'md', class
           e.stopPropagation();
           handleMainClick();
         }}
-        className={`px-3 ${sizeClasses} bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-l-md font-medium border-r border-purple-500 transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900 focus-visible:z-10`}
+        className={`px-3 ${sizeClasses} bg-blurple-500 hover:bg-blurple-600 hover:text-pink-400 active:scale-95 text-white rounded-l-stoody font-medium border-r border-blurple-400/30 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-400 focus-visible:z-10 shadow-stoody-sm`}
       >
         {selectedCommand?.shortName || 'Start'}
       </button>
@@ -87,7 +87,7 @@ export function PRStartSessionButton({ pr, commands, onStart, size = 'md', class
           e.stopPropagation();
           setShowDropdown(!showDropdown);
         }}
-        className={`px-2 ${sizeClasses} bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-r-md transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900`}
+        className={`px-2 ${sizeClasses} bg-blurple-500 hover:bg-blurple-600 hover:text-pink-400 active:scale-95 text-white rounded-r-stoody transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-400 shadow-stoody-sm`}
         aria-label="Select PR session type"
         aria-expanded={showDropdown}
         aria-haspopup="listbox"
@@ -100,7 +100,7 @@ export function PRStartSessionButton({ pr, commands, onStart, size = 'md', class
       {/* Dropdown menu */}
       {showDropdown && (
       <div
-        className="absolute right-0 top-full mt-1 w-64 bg-gray-800 border border-gray-600 rounded-md shadow-lg z-20 dropdown-menu-enter"
+        className="absolute right-0 top-full mt-2 w-64 bg-gray-800 rounded-stoody shadow-stoody-lg z-20 dropdown-menu-enter overflow-hidden"
         role="listbox"
         aria-label="Select PR session command"
       >
@@ -111,19 +111,19 @@ export function PRStartSessionButton({ pr, commands, onStart, size = 'md', class
                 e.stopPropagation();
                 handleCommandSelect(command);
               }}
-              className={`w-full px-3 py-2 text-left hover:bg-gray-700 first:rounded-t-md last:rounded-b-md focus:bg-gray-700 ${focusRingInset} ${
-                selectedCommand?.id === command.id ? 'bg-gray-700' : ''
+              className={`w-full px-4 py-3 text-left hover:bg-gray-750 focus:bg-gray-750 transition-colors ${focusRingInset} ${
+                selectedCommand?.id === command.id ? 'bg-gray-750' : ''
               }`}
             >
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-white">{command.name}</span>
                 {selectedCommand?.id === command.id && (
-                  <svg className="w-4 h-4 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="w-4 h-4 text-blurple-400" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
                 )}
               </div>
-              <p className="text-xs text-gray-400 mt-0.5">{command.description}</p>
+              <p className="text-xs text-gray-400 mt-1">{command.description}</p>
             </button>
         ))}
       </div>

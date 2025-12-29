@@ -603,24 +603,21 @@ button:disabled .kbd-hint {
   animation: message-fade-in 150ms ease-out forwards;
 }
 
-/* Assistant message left border accent */
+/* Message bubble hover effects - subtle for clean look */
 .message-assistant {
-  border-left: 2px solid rgba(85, 239, 196, 0.4);
-  transition: border-color 150ms ease;
+  transition: background-color 150ms ease, box-shadow 150ms ease;
 }
 
 .message-assistant:hover {
-  border-color: rgba(85, 239, 196, 0.6);
+  background-color: rgba(53, 59, 72, 0.9);
 }
 
-/* User message right border accent */
 .message-user {
-  border-right: 2px solid rgba(162, 155, 254, 0.4);
-  transition: border-color 150ms ease;
+  transition: background-color 150ms ease, box-shadow 150ms ease;
 }
 
 .message-user:hover {
-  border-color: rgba(162, 155, 254, 0.6);
+  background-color: rgba(162, 155, 254, 0.15);
 }
 
 /* Tool card hover effects - subtle lift and glow for tool displays in conversation */

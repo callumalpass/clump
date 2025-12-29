@@ -86,16 +86,16 @@ export function ScheduleList({ repoId, commands, selectedScheduleId, onSelectSch
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-700">
+      <div className="flex items-center justify-between p-5 border-b border-gray-750">
         <div>
-          <h2 className="text-lg font-medium">Scheduled Jobs</h2>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <h2 className="text-lg font-medium text-white">Scheduled Jobs</h2>
+          <p className="text-xs text-gray-400 mt-1">
             Automatically run sessions on a schedule
           </p>
         </div>
         <button
           onClick={() => setIsCreating(true)}
-          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="px-4 py-2 bg-blurple-500 hover:bg-blurple-600 hover:text-pink-400 text-white text-sm rounded-stoody transition-all focus:outline-none focus:ring-2 focus:ring-blurple-500 shadow-stoody-sm"
         >
           New Schedule
         </button>
@@ -103,7 +103,7 @@ export function ScheduleList({ repoId, commands, selectedScheduleId, onSelectSch
 
       {/* Error */}
       {(error || actionError) && (
-        <div className="mx-4 mt-4 p-3 bg-red-900/30 border border-red-700 rounded text-sm text-red-300">
+        <div className="mx-4 mt-4 p-4 bg-danger-400/10 rounded-stoody text-sm text-danger-400">
           {error || actionError}
         </div>
       )}
@@ -144,7 +144,7 @@ export function ScheduleList({ repoId, commands, selectedScheduleId, onSelectSch
           </div>
         ) : schedules.length === 0 ? (
           <div className="text-center py-12 empty-state-enter">
-            <div className="w-16 h-16 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4 empty-state-icon-float">
+            <div className="w-16 h-16 rounded-full bg-gray-750 flex items-center justify-center mx-auto mb-4 empty-state-icon-float">
               <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -155,7 +155,7 @@ export function ScheduleList({ repoId, commands, selectedScheduleId, onSelectSch
             </p>
             <button
               onClick={() => setIsCreating(true)}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors btn-primary"
+              className="px-5 py-2.5 bg-blurple-500 hover:bg-blurple-600 hover:text-pink-400 text-white text-sm rounded-stoody transition-all shadow-stoody-sm"
             >
               Create your first schedule
             </button>
@@ -208,12 +208,12 @@ const ScheduleCard = memo(function ScheduleCard({ schedule, selected, onSelect, 
   return (
     <div
       onClick={onSelect}
-      className={`bg-gray-800 rounded-lg p-4 border transition-all duration-150 ease-out cursor-pointer list-item-hover ${
+      className={`bg-gray-800 rounded-stoody-lg p-4 transition-all duration-150 ease-out cursor-pointer list-item-hover shadow-stoody-sm ${
         selected
-          ? 'border-blue-500 ring-1 ring-blue-500/50 list-item-selected'
+          ? 'bg-blurple-500/10'
           : isPaused
-          ? 'border-gray-600 opacity-60 hover:border-gray-500'
-          : 'border-gray-700 hover:border-gray-600'
+          ? 'opacity-60 hover:bg-gray-850'
+          : 'hover:bg-gray-850'
       }`}
     >
       <div className="flex justify-between items-start">
@@ -229,7 +229,7 @@ const ScheduleCard = memo(function ScheduleCard({ schedule, selected, onSelect, 
         <div className="flex items-center gap-1 ml-2" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={onTrigger}
-            className="p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-green-400 transition-all active:scale-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-800"
+            className="p-1.5 hover:bg-gray-750 rounded-stoody-sm text-gray-400 hover:text-mint-400 transition-all active:scale-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500"
             title="Run now"
             aria-label="Run schedule now"
           >
@@ -240,8 +240,8 @@ const ScheduleCard = memo(function ScheduleCard({ schedule, selected, onSelect, 
           </button>
           <button
             onClick={onTogglePause}
-            className={`p-1.5 hover:bg-gray-700 rounded transition-all active:scale-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-800 ${
-              isPaused ? 'text-yellow-500 hover:text-yellow-400' : 'text-gray-400 hover:text-yellow-400'
+            className={`p-1.5 hover:bg-gray-750 rounded-stoody-sm transition-all active:scale-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 ${
+              isPaused ? 'text-warning-500 hover:text-warning-400' : 'text-gray-400 hover:text-warning-400'
             }`}
             title={isPaused ? 'Resume' : 'Pause'}
             aria-label={isPaused ? 'Resume schedule' : 'Pause schedule'}
@@ -258,7 +258,7 @@ const ScheduleCard = memo(function ScheduleCard({ schedule, selected, onSelect, 
           </button>
           <button
             onClick={onDelete}
-            className="p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-red-400 transition-all active:scale-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-800"
+            className="p-1.5 hover:bg-gray-750 rounded-stoody-sm text-gray-400 hover:text-danger-400 transition-all active:scale-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-danger-500"
             title="Delete"
             aria-label="Delete schedule"
           >
@@ -313,14 +313,14 @@ const ScheduleCard = memo(function ScheduleCard({ schedule, selected, onSelect, 
 function StatusBadge({ status }: { status: string }) {
   const config = {
     active: {
-      containerClass: 'bg-green-500/20 text-green-400',
-      dotClass: 'bg-green-500',
+      containerClass: 'bg-mint-400/20 text-mint-400',
+      dotClass: 'bg-mint-400',
       pulse: false,
       label: 'Schedule is active and will run on its cron schedule',
     },
     paused: {
-      containerClass: 'bg-yellow-500/20 text-yellow-400',
-      dotClass: 'bg-yellow-500',
+      containerClass: 'bg-warning-500/20 text-warning-500',
+      dotClass: 'bg-warning-500',
       pulse: false,
       label: 'Schedule is paused and will not run until resumed',
     },
@@ -331,8 +331,8 @@ function StatusBadge({ status }: { status: string }) {
       label: 'Schedule is disabled',
     },
     running: {
-      containerClass: 'bg-blue-500/20 text-blue-400 active-badge-glow',
-      dotClass: 'bg-blue-500',
+      containerClass: 'bg-blurple-500/20 text-blurple-400 active-badge-glow',
+      dotClass: 'bg-blurple-400',
       pulse: true,
       label: 'Schedule is currently running',
     },
@@ -342,7 +342,7 @@ function StatusBadge({ status }: { status: string }) {
 
   return (
     <span
-      className={`status-badge status-badge-enter inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full ${containerClass}`}
+      className={`status-badge status-badge-enter inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-medium rounded-stoody ${containerClass}`}
       title={label}
       aria-label={label}
     >
@@ -432,13 +432,13 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop-enter">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-[#161b22] border border-gray-700 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col mx-4 modal-content-enter">
+      <div className="relative bg-gray-900 rounded-stoody-lg shadow-stoody-lg w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col mx-4 modal-content-enter">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
-          <h2 className="text-lg font-semibold">Create Scheduled Job</h2>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-750">
+          <h2 className="text-lg font-semibold text-white">Create Scheduled Job</h2>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="p-1.5 hover:bg-gray-800 rounded-stoody-sm text-gray-400 hover:text-pink-400 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500"
             title="Close"
             aria-label="Close dialog"
           >
@@ -449,41 +449,41 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-auto p-4 space-y-4">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-auto p-5 space-y-5">
           {error && (
-            <div className="p-3 bg-red-900/30 border border-red-700 rounded text-sm text-red-300">
+            <div className="p-4 bg-danger-400/10 rounded-stoody text-sm text-danger-400">
               {error}
             </div>
           )}
 
           {/* Name */}
           <div>
-            <label className="block text-sm font-medium mb-1">Name</label>
+            <label className="block text-sm font-medium mb-2">Name</label>
             <input
               type="text"
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               placeholder="Daily issue triage"
-              className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full bg-gray-800 border border-gray-750 rounded-stoody px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blurple-500 focus:border-blurple-500 transition-colors"
               required
             />
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium mb-1">Description (optional)</label>
+            <label className="block text-sm font-medium mb-2">Description (optional)</label>
             <input
               type="text"
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               placeholder="Analyze new issues labeled needs-triage"
-              className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full bg-gray-800 border border-gray-750 rounded-stoody px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blurple-500 focus:border-blurple-500 transition-colors"
             />
           </div>
 
           {/* Schedule */}
           <div>
-            <label className="block text-sm font-medium mb-1">Schedule</label>
+            <label className="block text-sm font-medium mb-2">Schedule</label>
             <select
               value={isCustomCron ? 'custom' : form.cron_expression}
               onChange={(e) => {
@@ -495,7 +495,7 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
                   setForm((f) => ({ ...f, cron_expression: e.target.value }));
                 }
               }}
-              className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-gray-800 border border-gray-750 rounded-stoody px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blurple-500 transition-colors"
             >
               {CRON_PRESETS.map((preset) => (
                 <option key={preset.value} value={preset.value}>
@@ -510,10 +510,10 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
                   value={form.cron_expression}
                   onChange={(e) => setForm((f) => ({ ...f, cron_expression: e.target.value }))}
                   placeholder="e.g., 30 14 * * 1,3,5"
-                  className={`w-full bg-gray-800 border rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  className={`w-full bg-gray-800 border rounded-stoody px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blurple-500 transition-colors ${
                     form.cron_expression && !isValidCronExpression(form.cron_expression)
-                      ? 'border-red-500'
-                      : 'border-gray-600'
+                      ? 'border-danger-500'
+                      : 'border-gray-750'
                   }`}
                 />
                 <p className="text-xs text-gray-500 mt-1">
@@ -534,7 +534,7 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
 
           {/* Target Type */}
           <div>
-            <label className="block text-sm font-medium mb-1">Target</label>
+            <label className="block text-sm font-medium mb-2">Target</label>
             <div className="grid grid-cols-4 gap-2">
               {(['issues', 'prs', 'codebase', 'custom'] as const).map((type) => (
                 <button
@@ -547,10 +547,10 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
                       : type === 'prs' ? commands.pr[0]?.id || ''
                       : '',
                   }))}
-                  className={`px-3 py-2 text-sm rounded border capitalize ${
+                  className={`px-3 py-2.5 text-sm rounded-stoody capitalize transition-all ${
                     form.target_type === type
-                      ? 'border-blue-500 bg-blue-900/30 text-white'
-                      : 'border-gray-600 text-gray-400 hover:border-gray-500'
+                      ? 'bg-blurple-500/10 text-white shadow-stoody-sm'
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-850'
                   }`}
                 >
                   {type}
@@ -562,13 +562,13 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
           {/* Filter (for issues/prs) */}
           {(form.target_type === 'issues' || form.target_type === 'prs') && (
             <div>
-              <label className="block text-sm font-medium mb-1">Filter</label>
+              <label className="block text-sm font-medium mb-2">Filter</label>
               <input
                 type="text"
                 value={form.filter_query}
                 onChange={(e) => setForm((f) => ({ ...f, filter_query: e.target.value }))}
                 placeholder="state:open label:needs-triage"
-                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-gray-800 border border-gray-750 rounded-stoody px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blurple-500 transition-colors"
               />
               <p className="text-xs text-gray-500 mt-1">
                 GitHub-style filter: state:open, label:bug, -label:wontfix
@@ -578,30 +578,32 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
 
           {/* Only New (for issues/prs) */}
           {(form.target_type === 'issues' || form.target_type === 'prs') && (
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 cursor-pointer">
+            <div className="bg-gray-800 rounded-stoody p-4">
+              <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={form.only_new}
                   onChange={(e) => setForm((f) => ({ ...f, only_new: e.target.checked }))}
-                  className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-900"
+                  className="w-5 h-5 rounded-stoody-sm border-gray-600 bg-gray-750 focus:ring-blurple-500 focus:ring-offset-0 accent-blurple-500"
                 />
-                <span className="text-sm font-medium">Only new items</span>
+                <div>
+                  <span className="text-sm font-medium">Only new items</span>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Skip items already processed by this schedule
+                  </p>
+                </div>
               </label>
-              <p className="text-xs text-gray-500">
-                Skip items already processed by this schedule
-              </p>
             </div>
           )}
 
           {/* Command (for issues/prs/codebase) */}
           {form.target_type !== 'custom' && (
             <div>
-              <label className="block text-sm font-medium mb-1">Command</label>
+              <label className="block text-sm font-medium mb-2">Command</label>
               <select
                 value={form.command_id}
                 onChange={(e) => setForm((f) => ({ ...f, command_id: e.target.value }))}
-                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-gray-800 border border-gray-750 rounded-stoody px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blurple-500 transition-colors"
               >
                 {availableCommands.length === 0 ? (
                   <option value="">No commands available</option>
@@ -622,7 +624,7 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
               {/* Show all commands from all categories */}
               {(commands.issue.length > 0 || commands.pr.length > 0 || commands.general.length > 0) && (
                 <div>
-                  <label className="block text-sm font-medium mb-1">Use a command (optional)</label>
+                  <label className="block text-sm font-medium mb-2">Use a command (optional)</label>
                   <select
                     value={form.command_id}
                     onChange={(e) => {
@@ -634,7 +636,7 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
                         custom_prompt: cmd ? cmd.template : f.custom_prompt,
                       }));
                     }}
-                    className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full bg-gray-800 border border-gray-750 rounded-stoody px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blurple-500 transition-colors"
                   >
                     <option value="">-- Write custom prompt --</option>
                     {commands.general.length > 0 && (
@@ -668,13 +670,13 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium mb-1">Prompt</label>
+                <label className="block text-sm font-medium mb-2">Prompt</label>
                 <textarea
                   value={form.custom_prompt}
                   onChange={(e) => setForm((f) => ({ ...f, custom_prompt: e.target.value, command_id: '' }))}
                   placeholder="Run a security audit on all API endpoints..."
                   rows={4}
-                  className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  className="w-full bg-gray-800 border border-gray-750 rounded-stoody px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blurple-500 transition-colors resize-none"
                 />
               </div>
             </div>
@@ -683,7 +685,7 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
           {/* Max Items */}
           {(form.target_type === 'issues' || form.target_type === 'prs') && (
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label className="block text-sm font-medium mb-2">
                 Max items per run: {form.max_items}
               </label>
               <input
@@ -692,9 +694,9 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
                 max="50"
                 value={form.max_items}
                 onChange={(e) => setForm((f) => ({ ...f, max_items: parseInt(e.target.value) }))}
-                className="w-full"
+                className="w-full accent-blurple-500"
               />
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-500 mt-1">
                 Limit how many issues/PRs are processed each run
               </p>
             </div>
@@ -702,18 +704,18 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
         </form>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 px-4 py-3 border-t border-gray-700">
+        <div className="flex justify-end gap-3 px-5 py-4 border-t border-gray-750 bg-gray-800/50">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+            className="px-5 py-2.5 text-sm text-gray-400 hover:text-pink-400 rounded-stoody transition-all"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={saving}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded transition-colors"
+            className="px-5 py-2.5 bg-blurple-500 hover:bg-blurple-600 hover:text-pink-400 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-stoody transition-all shadow-stoody-sm"
           >
             {saving ? 'Creating...' : 'Create Schedule'}
           </button>

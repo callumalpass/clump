@@ -59,7 +59,7 @@ const SessionListItem = memo(function SessionListItem({
     <div
       role="button"
       tabIndex={0}
-      className={`group p-4 mx-2 my-2 cursor-pointer rounded-stoody-lg bg-gray-800 hover:bg-gray-850 transition-all duration-150 ease-out list-item-enter shadow-stoody-sm ${statusClasses}`}
+      className={`group p-4 mx-2 my-2 cursor-pointer rounded-stoody-lg bg-gray-800 list-item-hover list-item-enter shadow-stoody-sm ${statusClasses}`}
       style={{ '--item-index': Math.min(index, 15) } as React.CSSProperties}
       onClick={onSelect}
       onKeyDown={(e) => {
@@ -145,7 +145,7 @@ const SessionListItem = memo(function SessionListItem({
         {showContinueButton && !session.is_active && onContinue && (
           <button
             onClick={onContinue}
-            className="flex-shrink-0 px-3 py-1.5 text-xs bg-blurple-500/20 text-blurple-400 hover:bg-blurple-500 hover:text-white active:scale-95 rounded-stoody flex items-center gap-1.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
+            className="flex-shrink-0 px-3 py-1.5 text-xs bg-blurple-500/20 text-blurple-400 hover:bg-blurple-500 hover:text-pink-400 active:scale-95 rounded-stoody flex items-center gap-1.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-400"
             title="Continue this conversation"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -516,11 +516,12 @@ export function SessionList({
 
   const filterBar = (
     <FilterBar>
+      {/* Row 1: Search + count/refresh + clear filters */}
       <div className="flex items-center gap-2">
         {hasBulkOperations && !someSelected && (
           <button
             onClick={toggleSelectAll}
-            className="flex-shrink-0 w-4 h-4 rounded border border-gray-600 hover:border-gray-500 transition-colors"
+            className="flex-shrink-0 w-3.5 h-3.5 rounded border border-gray-600 hover:border-gray-500 transition-colors"
             title="Select sessions"
           />
         )}
@@ -531,10 +532,16 @@ export function SessionList({
             placeholder="Search sessions..."
           />
         </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <ItemCount count={total} singular="session" />
+          {onRefresh && <RefreshButton onClick={onRefresh} loading={loading} />}
+          <ActiveFiltersIndicator onClick={clearFilters} filterCount={activeFilterCount} />
+        </div>
       </div>
-      <FilterBarRow className="flex-wrap gap-2 overflow-x-auto scrollbar-none sm:overflow-visible">
-        {/* Status filter group - scrollable on mobile due to many options */}
-        <FilterGroup label="Status" scrollable className="shrink-0">
+      {/* Row 2: All filters in one row */}
+      <FilterBarRow className="flex-wrap gap-1 overflow-x-auto scrollbar-none">
+        {/* Status filter group */}
+        <FilterGroup scrollable className="shrink-0">
           {CATEGORY_FILTERS.map((f) => (
             <button
               key={f.value}
@@ -546,35 +553,35 @@ export function SessionList({
           ))}
         </FilterGroup>
 
-        {/* Model filter group */}
-        <FilterGroup label="Model" scrollable className="shrink-0">
+        {/* Model filter - compact dropdown */}
+        <select
+          value={filters.model || 'all'}
+          onChange={(e) => setModel(e.target.value as ModelFilter)}
+          className={filterBarStyles.select}
+          aria-label="Filter by model"
+        >
           {MODEL_FILTERS.map((f) => (
-            <button
-              key={f.value}
-              onClick={() => setModel(f.value)}
-              className={`${filterBarStyles.pillButton((filters.model || 'all') === f.value)} ${
-                (filters.model || 'all') === f.value ? f.color : ''
-              } shrink-0`}
-            >
+            <option key={f.value} value={f.value}>
               {f.label}
-            </button>
+            </option>
           ))}
-        </FilterGroup>
+        </select>
 
-        {/* Date range filter group - scrollable on mobile due to many options */}
-        <FilterGroup label="When" scrollable className="shrink-0">
+        {/* Date range filter - compact dropdown */}
+        <select
+          value={filters.dateRange || 'all'}
+          onChange={(e) => setDateRange(e.target.value as DateRangePreset)}
+          className={filterBarStyles.select}
+          aria-label="Filter by date"
+        >
           {DATE_RANGE_FILTERS.map((f) => (
-            <button
-              key={f.value}
-              onClick={() => setDateRange(f.value)}
-              className={`${filterBarStyles.pillButton((filters.dateRange || 'all') === f.value)} shrink-0`}
-            >
+            <option key={f.value} value={f.value}>
               {f.label}
-            </button>
+            </option>
           ))}
-        </FilterGroup>
-      </FilterBarRow>
-      <FilterBarRow className="justify-between">
+        </select>
+
+        {/* Sort control */}
         <SortControl
           sortValue={filters.sort || 'created'}
           orderValue={filters.order || 'desc'}
@@ -582,12 +589,7 @@ export function SessionList({
           onSortChange={setSort}
           onOrderChange={setOrder}
         />
-        <div className="flex items-center gap-1.5">
-          <ItemCount count={total} singular="session" />
-          {onRefresh && <RefreshButton onClick={onRefresh} loading={loading} />}
-        </div>
       </FilterBarRow>
-      <ActiveFiltersIndicator onClick={clearFilters} filterCount={activeFilterCount} />
     </FilterBar>
   );
 
@@ -595,11 +597,11 @@ export function SessionList({
     return (
       <div className="flex flex-col flex-1 min-h-0">
         {filterBar}
-        <div className="divide-y divide-gray-700">
+        <div>
           {[0, 1, 2, 3].map((i) => (
             <div
               key={i}
-              className="p-3 skeleton-item-enter"
+              className="p-3 mx-2 my-2 bg-gray-800 rounded-stoody-lg skeleton-item-enter"
               style={{ '--item-index': i } as React.CSSProperties}
             >
               <div className="flex items-center gap-2 mb-1">
@@ -670,7 +672,7 @@ export function SessionList({
       <div className="flex flex-col flex-1 min-h-0">
         {filterBar}
         {bulkActionsBar}
-        <div className="divide-y divide-gray-700 overflow-auto flex-1 min-h-0">
+        <div className="overflow-auto flex-1 min-h-0">
           {sessions.map((session, index) => (
             <SessionListItem
               key={session.session_id}

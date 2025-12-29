@@ -217,7 +217,7 @@ function SessionStats({ transcript }: { transcript: ParsedTranscript }) {
   const toolCounts = useMemo(() => countToolUsage(transcript.messages), [transcript.messages]);
 
   return (
-    <div className="bg-gray-800 border-b border-gray-750 px-4 py-3">
+    <div className="bg-gray-800/80 backdrop-blur-sm px-4 py-3 shadow-stoody-sm">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-4 text-xs">
           {/* Model badge - color-coded by model type */}
@@ -1057,7 +1057,7 @@ function GenericToolDisplay({ tool, parentSessionId }: ToolDisplayProps) {
       </button>
       <div className="tool-card-content" data-expanded={expanded}>
         <div className="tool-card-content-inner">
-          <div className="p-2 border-t border-gray-600">
+          <div className="p-2 border-t border-gray-750">
             <pre className="text-xs text-gray-300 whitespace-pre-wrap overflow-auto max-h-60">
               {JSON.stringify(tool.input, null, 2)}
             </pre>
@@ -1066,7 +1066,7 @@ function GenericToolDisplay({ tool, parentSessionId }: ToolDisplayProps) {
       </div>
 
       {hasSpawnedAgent && parentSessionId && (
-        <div className="border-t border-gray-600">
+        <div className="border-t border-gray-750">
           <button
             onClick={() => setSubsessionExpanded(!subsessionExpanded)}
             className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-purple-900/20 text-left transition-colors text-purple-400"
@@ -1132,7 +1132,7 @@ function ThinkingDisplay({ thinking }: { thinking: string }) {
   const hasMore = thinking.length > 150;
 
   return (
-    <div className="mt-2 text-xs border border-gray-600 rounded bg-gray-900 overflow-hidden">
+    <div className="mt-2 text-xs rounded-stoody bg-gray-800 overflow-hidden shadow-stoody-sm">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-2 py-1 hover:bg-gray-800 text-left transition-colors"
@@ -1154,7 +1154,7 @@ function ThinkingDisplay({ thinking }: { thinking: string }) {
       </button>
       <div className="tool-card-content" data-expanded={expanded}>
         <div className="tool-card-content-inner">
-          <div className="p-2 border-t border-gray-600 text-gray-400 italic whitespace-pre-wrap">
+          <div className="p-2 border-t border-gray-750 text-gray-400 italic whitespace-pre-wrap">
             {thinking}
           </div>
         </div>
@@ -1231,8 +1231,8 @@ function MessageBubble({ message, parentSessionId, searchQuery = '', matchIndice
           {message.content && (
             <button
               onClick={handleCopyMessage}
-              className={`copy-button opacity-0 group-hover/bubble:opacity-70 hover:!opacity-100 p-0.5 rounded transition-opacity ${
-                showCopied ? 'copy-button-success !opacity-100' : 'text-gray-400 hover:text-white'
+              className={`copy-button opacity-0 group-hover/bubble:opacity-70 hover:!opacity-100 p-1 rounded-stoody-sm transition-all ${
+                showCopied ? 'copy-button-success !opacity-100' : 'text-gray-400 hover:text-pink-400'
               }`}
               title={showCopied ? 'Copied!' : 'Copy message'}
             >
@@ -1251,10 +1251,10 @@ function MessageBubble({ message, parentSessionId, searchQuery = '', matchIndice
 
         {/* Message content */}
         <div
-          className={`rounded-lg px-3 py-2 message-bubble-enter ${
+          className={`rounded-stoody-lg px-4 py-3 message-bubble-enter shadow-stoody-sm ${
             isUser
-              ? 'bg-blue-900/40 border border-blue-800/60 message-user'
-              : 'bg-gray-800/80 border border-gray-750/60 message-assistant'
+              ? 'bg-blurple-500/10 message-user'
+              : 'bg-gray-800 message-assistant'
           } ${hasCurrentMatch ? 'ring-2 ring-yellow-400' : ''} ${isPending ? 'opacity-70' : ''}`}
         >
           {/* Thinking (if present) */}
@@ -1509,8 +1509,8 @@ export function ConversationView({
   if (transcript.messages.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8">
-        <div className="text-center p-6 rounded-xl bg-gray-800/40 border border-gray-750/50 max-w-xs empty-state-enter">
-          <div className="w-14 h-14 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4 empty-state-icon-float">
+        <div className="text-center p-6 rounded-stoody-lg bg-gray-800 max-w-xs empty-state-enter shadow-stoody">
+          <div className="w-14 h-14 rounded-full bg-gray-750 flex items-center justify-center mx-auto mb-4 empty-state-icon-float">
             <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
@@ -1528,7 +1528,7 @@ export function ConversationView({
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-auto space-y-4 p-3 min-w-0"
+        className="flex-1 overflow-auto space-y-5 p-4 min-w-0"
       >
         {transcript.messages.map((message, index) => {
           // Calculate time gap from previous message
@@ -1553,7 +1553,7 @@ export function ConversationView({
       </div>
       {/* Inline editor for active sessions */}
       {isActiveSession && onSendMessage && (
-        <div className="shrink-0 border-t border-gray-750 bg-gray-900 p-3">
+        <div className="shrink-0 bg-gray-800/80 backdrop-blur-sm p-4 shadow-stoody-sm">
           <Editor
             value={inputMessage}
             onChange={setInputMessage}
@@ -1567,14 +1567,14 @@ export function ConversationView({
             <button
               onClick={handleSend}
               disabled={sending || !inputMessage.trim()}
-              className="px-3 py-1.5 bg-blurple-500 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-blurple-500 hover:bg-blurple-600 hover:text-pink-400 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-stoody transition-all flex items-center gap-2 shadow-stoody-sm"
             >
               {sending ? (
                 <span>Sending...</span>
               ) : (
                 <>
                   <span>Send</span>
-                  <kbd className="text-xs bg-blue-700/50 px-1 py-0.5 rounded">⌘↵</kbd>
+                  <kbd className="text-xs bg-blurple-700/50 px-1.5 py-0.5 rounded-stoody-sm">⌘↵</kbd>
                 </>
               )}
             </button>
@@ -1588,7 +1588,7 @@ export function ConversationView({
 // Fallback for raw transcripts
 export function RawTranscriptView({ transcript }: { transcript: string }) {
   return (
-    <pre className="text-xs text-gray-300 bg-gray-900 rounded p-3 overflow-auto max-h-96 whitespace-pre-wrap font-mono">
+    <pre className="text-xs text-gray-300 bg-gray-800 rounded-stoody p-4 overflow-auto max-h-96 whitespace-pre-wrap font-mono shadow-stoody-sm">
       {cleanTerminalOutput(transcript)}
     </pre>
   );

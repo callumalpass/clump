@@ -380,13 +380,13 @@ interface FilterGroupProps {
 
 export function FilterGroup({ children, label, className = '', scrollable = false }: FilterGroupProps) {
   return (
-    <div className={`flex items-center gap-1 px-2 py-1 rounded-stoody-sm bg-gray-800/50 ${scrollable ? 'overflow-x-auto scrollbar-none' : ''} ${className}`}>
+    <div className={`flex items-center gap-0.5 px-1 py-0.5 rounded-stoody-sm bg-gray-800/50 ${scrollable ? 'overflow-x-auto scrollbar-none' : ''} ${className}`}>
       {label && (
-        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide mr-1 shrink-0">
+        <span className="text-[9px] font-medium text-gray-500 uppercase tracking-wide mr-0.5 shrink-0">
           {label}
         </span>
       )}
-      <div className={`flex items-center gap-1 ${scrollable ? 'flex-nowrap' : ''}`}>
+      <div className={`flex items-center gap-0.5 ${scrollable ? 'flex-nowrap' : ''}`}>
         {children}
       </div>
     </div>
@@ -421,7 +421,7 @@ export function RefreshButton({ onClick, loading }: RefreshButtonProps) {
       aria-label={loading ? 'Refreshing data' : 'Refresh data'}
     >
       <svg
-        className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`}
+        className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`}
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -444,15 +444,15 @@ export function ActiveFiltersIndicator({ onClick, filterCount }: ActiveFiltersIn
   return (
     <button
       onClick={onClick}
-      className={`filter-indicator-enter inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-stoody-sm bg-blurple-500/20 text-blurple-400 hover:bg-blurple-500/30 hover:text-blurple-300 border border-blurple-500/30 transition-all active:scale-95 ${focusRing}`}
+      className={`filter-indicator-enter inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded-stoody-sm bg-blurple-500/20 text-blurple-400 hover:bg-blurple-500/30 hover:text-blurple-300 border border-blurple-500/30 transition-all active:scale-95 ${focusRing}`}
       title="Clear all active filters"
       aria-label={`Clear ${filterCount} active filter${filterCount !== 1 ? 's' : ''}`}
     >
-      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
       </svg>
       <span>{filterCount} filter{filterCount !== 1 ? 's' : ''}</span>
-      <svg className="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <svg className="w-2.5 h-2.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
       </svg>
     </button>

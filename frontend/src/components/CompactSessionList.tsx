@@ -152,7 +152,7 @@ export function CompactSessionList({
             {!session.is_active && onContinueSession && (
               <button
                 onClick={(e) => handleContinue(e, session)}
-                className="flex-shrink-0 px-2.5 py-1 text-xs text-blurple-400 bg-blurple-500/20 hover:bg-blurple-500 hover:text-white active:scale-95 rounded-stoody-sm flex items-center gap-1.5 transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-blurple-400"
+                className="flex-shrink-0 px-2.5 py-1 text-xs text-blurple-400 bg-blurple-500/20 hover:bg-blurple-500 hover:text-pink-400 active:scale-95 rounded-stoody-sm flex items-center gap-1.5 transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-blurple-400"
                 title="Continue this session"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -175,13 +175,13 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative bg-[#161b22] border border-gray-750 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col mx-4 modal-content-enter">
+      <div className="relative bg-gray-900 rounded-stoody-lg shadow-stoody-lg w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col mx-4 modal-content-enter">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-750">
-          <h2 className="text-lg font-semibold">Settings</h2>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-750">
+          <h2 className="text-lg font-semibold text-white">Settings</h2>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-gray-750 rounded text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
+            className="p-1.5 hover:bg-gray-800 rounded-stoody-sm text-gray-400 hover:text-pink-400 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500"
             aria-label="Close"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -191,7 +191,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
         </div>
 
         {/* Tabs with sliding indicator */}
-        <div ref={tabContainerRef} className="relative flex border-b border-gray-750">
+        <div ref={tabContainerRef} className="relative flex border-b border-gray-750 bg-gray-800/50">
           {(['github', 'permissions', 'execution', 'commands', 'advanced'] as const).map((tab) => (
             <button
               key={tab}
@@ -199,10 +199,10 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                 if (el) tabRefs.current.set(tab, el);
               }}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2.5 text-sm capitalize focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset transition-colors duration-150 ${
+              className={`px-5 py-3 text-sm capitalize focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 focus-visible:ring-inset transition-all duration-150 ${
                 activeTab === tab
                   ? 'text-white'
-                  : 'text-gray-400 hover:text-gray-200'
+                  : 'text-gray-400 hover:text-pink-400'
               }`}
             >
               {tab === 'github' ? 'GitHub' : tab}
@@ -210,7 +210,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
           ))}
           {/* Sliding indicator - animates between tabs */}
           <div
-            className="absolute bottom-0 h-0.5 bg-blue-500 transition-all duration-200 ease-out"
+            className="absolute bottom-0 h-0.5 bg-blurple-400 transition-all duration-200 ease-out"
             style={{
               transform: `translateX(${indicatorStyle.left}px)`,
               width: indicatorStyle.width,
@@ -219,7 +219,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto p-4">
+        <div className="flex-1 overflow-auto p-5">
           {loading && activeTab !== 'github' && (
             <div className="flex items-center justify-center py-8 tab-content-enter">
               <div className="text-gray-400">Loading settings...</div>
@@ -227,8 +227,8 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
           )}
 
           {error && (
-            <div className="bg-red-900/50 border border-red-700 rounded p-3 mb-4">
-              <p className="text-red-300 text-sm">{error}</p>
+            <div className="bg-danger-400/10 rounded-stoody p-4 mb-4">
+              <p className="text-danger-400 text-sm">{error}</p>
             </div>
           )}
 
@@ -243,30 +243,30 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
 
                 {tokenLoading ? (
                   <div className="space-y-3">
-                    <div className="h-12 rounded bg-gray-700/50 skeleton-shimmer" />
-                    <div className="h-4 w-48 rounded bg-gray-700/50 skeleton-shimmer" style={{ animationDelay: '100ms' }} />
+                    <div className="h-12 rounded-stoody bg-gray-800 skeleton-shimmer" />
+                    <div className="h-4 w-48 rounded-stoody bg-gray-800 skeleton-shimmer" style={{ animationDelay: '100ms' }} />
                   </div>
                 ) : tokenStatus.configured && !isEditingToken ? (
-                  <div className="bg-green-900/30 border border-green-700 rounded p-3">
+                  <div className="bg-mint-400/10 rounded-stoody p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 text-mint-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
                         <span className="text-sm text-gray-300">
-                          Token configured: <code className="text-green-400">{tokenStatus.masked_token}</code>
+                          Token configured: <code className="text-mint-400">{tokenStatus.masked_token}</code>
                         </span>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-3">
                         <button
                           onClick={() => setIsEditingToken(true)}
-                          className="text-sm text-gray-400 hover:text-white focus:outline-none focus:text-white focus:underline"
+                          className="text-sm text-gray-400 hover:text-pink-400 focus:outline-none focus:text-pink-400 transition-colors"
                         >
                           Change
                         </button>
                         <button
                           onClick={handleRemoveToken}
-                          className="text-sm text-gray-400 hover:text-red-400 focus:outline-none focus:text-red-400 focus:underline"
+                          className="text-sm text-gray-400 hover:text-danger-400 focus:outline-none focus:text-danger-400 transition-colors"
                         >
                           Remove
                         </button>
@@ -276,33 +276,33 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                 ) : (
                   <div className="space-y-4">
                     {!tokenStatus.configured && !isEditingToken && (
-                      <div className="bg-yellow-900/30 border border-yellow-700 rounded p-3">
-                        <div className="flex items-start gap-2">
-                          <svg className="w-4 h-4 text-yellow-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="bg-warning-500/10 rounded-stoody p-4">
+                        <div className="flex items-start gap-3">
+                          <svg className="w-4 h-4 text-warning-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                           </svg>
                           <div className="flex-1">
-                            <p className="text-sm text-yellow-200">No token configured</p>
+                            <p className="text-sm text-warning-400">No token configured</p>
                             <p className="text-xs text-gray-400 mt-1">Limited to 60 API requests per hour</p>
                           </div>
                         </div>
                       </div>
                     )}
 
-                    <form onSubmit={handleSaveToken} className="space-y-3">
-                      <div className="bg-gray-800 rounded p-3 text-sm">
+                    <form onSubmit={handleSaveToken} className="space-y-4">
+                      <div className="bg-gray-800 rounded-stoody p-4 text-sm">
                         <p className="text-gray-300 mb-2">Create a token with these permissions:</p>
-                        <ul className="text-gray-400 list-disc list-inside space-y-1 text-xs">
-                          <li><code className="bg-gray-700 px-1 rounded">repo</code> - Full access to repositories</li>
-                          <li><code className="bg-gray-700 px-1 rounded">read:org</code> - Read org membership (optional)</li>
+                        <ul className="text-gray-400 list-disc list-inside space-y-1.5 text-xs">
+                          <li><code className="bg-gray-750 px-1.5 py-0.5 rounded-stoody-sm">repo</code> - Full access to repositories</li>
+                          <li><code className="bg-gray-750 px-1.5 py-0.5 rounded-stoody-sm">read:org</code> - Read org membership (optional)</li>
                         </ul>
                         <a
                           href="https://github.com/settings/tokens/new?description=Claude%20Code%20Hub&scopes=repo,read:org"
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-block mt-3 text-blurple-400 hover:text-blue-300 text-xs"
+                          className="inline-block mt-3 text-blurple-400 hover:text-pink-400 text-xs transition-colors"
                         >
-                          Create new token on GitHub
+                          Create new token on GitHub →
                         </a>
                       </div>
 
@@ -311,7 +311,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                         value={newToken}
                         onChange={(e) => setNewToken(e.target.value)}
                         placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                        className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:border-blue-500"
+                        className="w-full bg-gray-800 border border-gray-750 rounded-stoody px-4 py-2.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 focus:border-blurple-500 transition-colors"
                         required
                       />
 
@@ -319,11 +319,11 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                         <AlertMessage type="error" message={tokenError} />
                       )}
 
-                      <div className="flex gap-2">
+                      <div className="flex gap-3">
                         <button
                           type="submit"
                           disabled={tokenSaving}
-                          className="px-4 py-2 bg-blurple-500 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
+                          className="px-5 py-2.5 bg-blurple-500 hover:bg-blurple-600 hover:text-pink-400 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-stoody transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-400 shadow-stoody-sm"
                         >
                           {tokenSaving ? 'Saving...' : 'Save Token'}
                         </button>
@@ -335,7 +335,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                               setNewToken('');
                               setTokenError('');
                             }}
-                            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
+                            className="px-5 py-2.5 bg-gray-800 hover:bg-gray-750 text-gray-300 hover:text-pink-400 text-sm rounded-stoody transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500"
                           >
                             Cancel
                           </button>
@@ -356,7 +356,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                 <p className="text-xs text-gray-400 mb-3">
                   Controls how Claude Code handles tool permissions
                 </p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-3">
                   {[
                     { value: 'default', label: 'Default', desc: 'Prompts for each permission' },
                     { value: 'plan', label: 'Plan Only', desc: 'Read-only analysis, no modifications' },
@@ -367,14 +367,14 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                       key={mode.value}
                       onClick={() => handlePermissionModeChange(mode.value as PermissionMode)}
                       disabled={saving}
-                      className={`p-3 rounded border text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                      className={`p-4 rounded-stoody text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all ${
                         settings.permission_mode === mode.value
-                          ? 'border-blue-500 bg-blue-900/30'
-                          : 'border-gray-600 hover:border-gray-500'
+                          ? 'bg-blurple-500/10 shadow-stoody-sm'
+                          : 'bg-gray-800 hover:bg-gray-850'
                       }`}
                     >
                       <div className="font-medium text-sm">{mode.label}</div>
-                      <div className="text-xs text-gray-400">{mode.desc}</div>
+                      <div className="text-xs text-gray-400 mt-1">{mode.desc}</div>
                     </button>
                   ))}
                 </div>
@@ -386,17 +386,17 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                 <p className="text-xs text-gray-400 mb-3">
                   Tools that are auto-approved without prompting
                 </p>
-                <div className="flex flex-wrap gap-2 mb-3">
+                <div className="flex flex-wrap gap-2 mb-4">
                   {settings.allowed_tools.map((tool) => (
                     <span
                       key={tool}
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-gray-700 rounded text-sm"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 rounded-stoody text-sm"
                     >
                       {tool}
                       <button
                         onClick={() => handleRemoveTool(tool)}
                         disabled={saving}
-                        className="text-gray-400 hover:text-red-400 focus:outline-none focus:text-red-400 rounded"
+                        className="text-gray-400 hover:text-danger-400 focus:outline-none focus:text-danger-400 rounded transition-colors"
                       >
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -405,24 +405,24 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                     </span>
                   ))}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                   <input
                     type="text"
                     value={customTool}
                     onChange={(e) => setCustomTool(e.target.value)}
                     placeholder="Add tool (e.g., Bash(npm:*))"
-                    className="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus:border-blue-500"
+                    className="flex-1 bg-gray-800 border border-gray-750 rounded-stoody px-4 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 focus:border-blurple-500 transition-colors"
                     onKeyDown={(e) => e.key === 'Enter' && handleAddTool()}
                   />
                   <button
                     onClick={handleAddTool}
                     disabled={saving || !customTool.trim()}
-                    className="px-3 py-1.5 bg-blurple-500 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
+                    className="px-4 py-2 bg-blurple-500 hover:bg-blurple-600 hover:text-pink-400 disabled:opacity-50 disabled:cursor-not-allowed rounded-stoody text-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-400 shadow-stoody-sm"
                   >
                     Add
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
+                <p className="text-xs text-gray-500 mt-3">
                   Defaults: {settings.default_allowed_tools.join(', ')}
                 </p>
               </div>
@@ -459,16 +459,16 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                 <p className="text-xs text-gray-400 mb-3">
                   Claude model to use for analysis
                 </p>
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                   {['sonnet', 'opus', 'haiku'].map((model) => (
                     <button
                       key={model}
                       onClick={() => handleModelChange(model)}
                       disabled={saving}
-                      className={`flex-1 px-4 py-2 rounded border capitalize focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                      className={`flex-1 px-4 py-2.5 rounded-stoody capitalize focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all ${
                         settings.model === model
-                          ? 'border-blue-500 bg-blue-900/30'
-                          : 'border-gray-600 hover:border-gray-500'
+                          ? 'bg-blurple-500/10 shadow-stoody-sm'
+                          : 'bg-gray-800 hover:bg-gray-850'
                       }`}
                     >
                       {model}
@@ -483,7 +483,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                 <p className="text-xs text-gray-400 mb-3">
                   Format for headless mode output
                 </p>
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                   {[
                     { value: 'text', label: 'Text' },
                     { value: 'json', label: 'JSON' },
@@ -493,10 +493,10 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                       key={format.value}
                       onClick={() => handleOutputFormatChange(format.value as OutputFormat)}
                       disabled={saving}
-                      className={`flex-1 px-4 py-2 rounded border focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                      className={`flex-1 px-4 py-2.5 rounded-stoody focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all ${
                         settings.output_format === format.value
-                          ? 'border-blue-500 bg-blue-900/30'
-                          : 'border-gray-600 hover:border-gray-500'
+                          ? 'bg-blurple-500/10 shadow-stoody-sm'
+                          : 'bg-gray-800 hover:bg-gray-850'
                       }`}
                     >
                       {format.label}
@@ -537,18 +537,18 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
           {settings && activeTab === 'advanced' && (
             <div className="space-y-6 tab-content-enter" key="advanced-tab">
               {/* MCP GitHub */}
-              <div>
-                <label className="flex items-center gap-3 cursor-pointer">
+              <div className="bg-gray-800 rounded-stoody p-4">
+                <label className="flex items-center gap-4 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={settings.mcp_github}
                     onChange={(e) => handleMcpGithubChange(e.target.checked)}
                     disabled={saving}
-                    className="w-4 h-4 rounded border-gray-600 bg-gray-800 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-0"
+                    className="w-5 h-5 rounded-stoody-sm border-gray-600 bg-gray-750 focus-visible:ring-2 focus-visible:ring-blurple-500 focus-visible:ring-offset-0 accent-blurple-500"
                   />
                   <div>
                     <div className="text-sm font-medium">Enable GitHub MCP Server</div>
-                    <div className="text-xs text-gray-400">
+                    <div className="text-xs text-gray-400 mt-0.5">
                       Allows Claude to interact with GitHub directly via MCP
                     </div>
                   </div>
@@ -556,15 +556,15 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
               </div>
 
               {/* Reset */}
-              <div className="pt-4 border-t border-gray-750">
+              <div className="pt-5 border-t border-gray-750">
                 <button
                   onClick={handleReset}
                   disabled={saving}
-                  className="btn-danger px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
+                  className="px-5 py-2.5 bg-danger-500 hover:bg-danger-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-stoody text-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-danger-400 shadow-stoody-sm"
                 >
                   Reset to Defaults
                 </button>
-                <p className="text-xs text-gray-400 mt-2">
+                <p className="text-xs text-gray-400 mt-3">
                   This will reset all Claude Code settings to their default values.
                 </p>
               </div>
@@ -573,13 +573,13 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-750 bg-[#0d1117]">
+        <div className="flex items-center justify-between px-5 py-4 border-t border-gray-750 bg-gray-800/50">
           <div className="text-xs text-gray-400">
             {saving ? 'Saving...' : 'Changes are saved automatically'}
           </div>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
+            className="px-5 py-2 bg-gray-800 hover:bg-gray-750 hover:text-pink-400 rounded-stoody text-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500"
           >
             Close
           </button>

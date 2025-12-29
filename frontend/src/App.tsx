@@ -1480,7 +1480,7 @@ export default function App() {
 
       <Group orientation="horizontal" className="flex-1 min-h-0">
         {/* Left sidebar */}
-        <Panel defaultSize="380px" minSize="240px" maxSize="500px" className="border-r border-gray-750 flex flex-col bg-gray-900">
+        <Panel defaultSize="380px" minSize="240px" maxSize="700px" className="border-r border-gray-750 flex flex-col bg-gray-900">
           <RepoSelector
             repos={repos}
             selectedRepo={selectedRepo}

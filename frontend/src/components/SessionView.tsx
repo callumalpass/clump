@@ -1180,7 +1180,7 @@ export function SessionView({
 
       {/* Message input for inactive sessions (continue with message) */}
       {!isActiveProcess && onContinue && (
-        <div className="shrink-0 border-t border-gray-750 bg-gray-900 p-3">
+        <div className="shrink-0 border-t border-gray-750 bg-gray-800/50 p-4">
           <Editor
             value={continueMessage}
             onChange={setContinueMessage}
@@ -1194,7 +1194,7 @@ export function SessionView({
             <button
               onClick={handleContinueWithMessage}
               disabled={isContinuing}
-              className="px-3 py-1.5 bg-blurple-500 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center gap-2 btn-press"
+              className="px-4 py-2 bg-blurple-500 hover:bg-blurple-600 hover:text-pink-400 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-stoody transition-all flex items-center gap-2 shadow-stoody-sm"
             >
               {isContinuing ? (
                 <>
@@ -1210,7 +1210,7 @@ export function SessionView({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                   </svg>
                   <span>{continueMessage.trim() ? 'Continue with message' : 'Continue'}</span>
-                  <kbd className="text-xs bg-blue-700/50 px-1 py-0.5 rounded">⌘↵</kbd>
+                  <kbd className="text-xs bg-blurple-700/50 px-1.5 py-0.5 rounded-stoody-sm">⌘↵</kbd>
                 </>
               )}
             </button>

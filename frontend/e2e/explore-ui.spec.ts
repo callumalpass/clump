@@ -1042,12 +1042,16 @@ test.describe('UI Exploration - Filter Bar Responsiveness', () => {
       commands: mockCommands,
     });
 
-    await page.setViewportSize({ width: 500, height: 800 });
+    // Navigate and select repo at default viewport first
     await page.goto('/');
     await selectRepo(page);
 
-    // Go to History tab where filter bar is most dense
+    // Go to History tab before resizing
     await page.getByRole('tab', { name: /History/i }).click();
+    await waitForAnimations(page);
+
+    // Now resize to narrow viewport
+    await page.setViewportSize({ width: 500, height: 800 });
     await waitForAnimations(page);
 
     await screenshot(page, '48-filter-bar-narrow-viewport');
@@ -1064,12 +1068,16 @@ test.describe('UI Exploration - Filter Bar Responsiveness', () => {
       commands: mockCommands,
     });
 
-    await page.setViewportSize({ width: 600, height: 900 });
+    // Navigate and select repo at default viewport first
     await page.goto('/');
     await selectRepo(page);
 
-    // Go to History tab
+    // Go to History tab before resizing
     await page.getByRole('tab', { name: /History/i }).click();
+    await waitForAnimations(page);
+
+    // Now resize to tablet viewport
+    await page.setViewportSize({ width: 600, height: 900 });
     await waitForAnimations(page);
 
     await screenshot(page, '49-filter-bar-tablet-viewport');

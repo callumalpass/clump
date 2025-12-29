@@ -292,7 +292,7 @@ export function PRDetail({
                             onContinueSession(session);
                           }}
                           disabled={isContinuing}
-                          className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
+                          className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-blurple-500/20 text-blurple-400 hover:bg-blurple-500 hover:text-pink-400 disabled:opacity-50 disabled:cursor-not-allowed rounded-stoody transition-all active:scale-95"
                           title="Continue this session"
                         >
                           {isContinuing ? (
