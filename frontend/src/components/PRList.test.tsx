@@ -116,6 +116,63 @@ describe('PRList', () => {
     });
   });
 
+  describe('Error State', () => {
+    it('renders error state when error prop is provided', () => {
+      render(<PRList {...defaultProps} error="Network error" />);
+
+      expect(screen.getByText('Failed to load pull requests')).toBeInTheDocument();
+      expect(screen.getByText('Network error')).toBeInTheDocument();
+    });
+
+    it('shows filter tabs even when error occurs', () => {
+      render(<PRList {...defaultProps} error="API failure" />);
+
+      expect(screen.getByText('Open')).toBeInTheDocument();
+      expect(screen.getByText('Closed')).toBeInTheDocument();
+    });
+
+    it('shows retry button when onRefresh is provided and error occurs', () => {
+      const onRefresh = vi.fn();
+      render(<PRList {...defaultProps} error="API failure" onRefresh={onRefresh} />);
+
+      const retryButton = screen.getByText('Try again');
+      expect(retryButton).toBeInTheDocument();
+
+      fireEvent.click(retryButton);
+      expect(onRefresh).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not show retry button when onRefresh is not provided', () => {
+      render(<PRList {...defaultProps} error="API failure" onRefresh={undefined} />);
+
+      expect(screen.queryByText('Try again')).not.toBeInTheDocument();
+    });
+
+    it('prioritizes loading state over error state', () => {
+      render(<PRList {...defaultProps} loading={true} error="API failure" />);
+
+      // Should show loading, not error
+      const skeletons = document.querySelectorAll('.skeleton-shimmer');
+      expect(skeletons.length).toBeGreaterThan(0);
+      expect(screen.queryByText('Failed to load pull requests')).not.toBeInTheDocument();
+    });
+
+    it('does not show error state when error is null', () => {
+      render(<PRList {...defaultProps} error={null} prs={[createMockPR()]} />);
+
+      expect(screen.queryByText('Failed to load pull requests')).not.toBeInTheDocument();
+      expect(screen.getByText('Test PR')).toBeInTheDocument();
+    });
+
+    it('does not show PR list when error occurs', () => {
+      const prs = [createMockPR({ title: 'My PR' })];
+      render(<PRList {...defaultProps} prs={prs} error="API failure" />);
+
+      expect(screen.queryByText('My PR')).not.toBeInTheDocument();
+      expect(screen.getByText('Failed to load pull requests')).toBeInTheDocument();
+    });
+  });
+
   describe('Empty State', () => {
     it('renders empty state when no PRs and not loading', () => {
       render(<PRList {...defaultProps} prs={[]} loading={false} />);
