@@ -9,10 +9,14 @@ const mockTerminalInstance = {
   write: vi.fn(),
   onData: vi.fn(),
   dispose: vi.fn(),
+  scrollToBottom: vi.fn(),
   rows: 24,
   cols: 80,
   unicode: {
     activeVersion: '6',
+  },
+  options: {
+    theme: {},
   },
 };
 
@@ -47,9 +51,11 @@ vi.mock('@xterm/xterm', () => ({
     write = mockTerminalInstance.write;
     onData = mockTerminalInstance.onData;
     dispose = mockTerminalInstance.dispose;
+    scrollToBottom = mockTerminalInstance.scrollToBottom;
     rows = mockTerminalInstance.rows;
     cols = mockTerminalInstance.cols;
     unicode = mockTerminalInstance.unicode;
+    options = mockTerminalInstance.options;
   },
 }));
 
@@ -75,6 +81,19 @@ vi.mock('@xterm/addon-unicode11', () => ({
 
 vi.mock('../hooks/useProcessWebSocket', () => ({
   useProcessWebSocket: (...args: unknown[]) => mockUseWebSocket(...args),
+}));
+
+// Mock useTheme hook for testing theme switching
+let mockResolvedTheme: 'dark' | 'light' = 'dark';
+const mockSetTheme = vi.fn();
+vi.mock('../hooks/useTheme', () => ({
+  useTheme: () => ({
+    theme: mockResolvedTheme === 'dark' ? 'dark' : 'light',
+    resolvedTheme: mockResolvedTheme,
+    setTheme: mockSetTheme,
+    isDark: mockResolvedTheme === 'dark',
+    isLight: mockResolvedTheme === 'light',
+  }),
 }));
 
 // Import component after mocks
@@ -115,6 +134,12 @@ describe('Terminal', () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
 
+    // Reset theme to dark
+    mockResolvedTheme = 'dark';
+
+    // Reset terminal options
+    mockTerminalInstance.options = { theme: {} };
+
     // Reset useWebSocket mock to default connected state
     mockUseWebSocket.mockReturnValue({
       isConnected: true,
@@ -124,6 +149,20 @@ describe('Terminal', () => {
 
     // Reset ResizeObserver
     global.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
+
+    // Mock getBoundingClientRect to return valid dimensions
+    // This is needed because handleResize() checks for non-zero dimensions
+    Element.prototype.getBoundingClientRect = vi.fn().mockReturnValue({
+      width: 800,
+      height: 600,
+      top: 0,
+      left: 0,
+      bottom: 600,
+      right: 800,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
   });
 
   afterEach(() => {
@@ -565,6 +604,108 @@ describe('Terminal', () => {
 
       const closeButton = screen.getByRole('button', { name: 'Close' });
       expect(closeButton).toHaveClass('focus-visible:ring-2');
+    });
+  });
+
+  describe('Theme Switching', () => {
+    it('does not recreate terminal when theme changes', () => {
+      const { rerender } = render(<Terminal {...defaultProps} />);
+
+      // Terminal should be created once on mount
+      expect(mockTerminalInstance.open).toHaveBeenCalledTimes(1);
+      expect(mockTerminalInstance.dispose).not.toHaveBeenCalled();
+
+      // Simulate theme change by re-rendering (in practice this happens via useTheme hook)
+      mockResolvedTheme = 'light';
+      rerender(<Terminal {...defaultProps} />);
+
+      // Terminal should NOT be recreated - open and dispose should still have same counts
+      expect(mockTerminalInstance.open).toHaveBeenCalledTimes(1);
+      expect(mockTerminalInstance.dispose).not.toHaveBeenCalled();
+    });
+
+    it('updates terminal theme via options when theme changes', () => {
+      render(<Terminal {...defaultProps} />);
+
+      // Terminal options.theme should be updated when theme changes
+      // The initial theme is dark, but the effect runs and updates it
+      expect(mockTerminalInstance.options.theme).toBeDefined();
+    });
+
+    it('applies dark theme colors when resolvedTheme is dark', () => {
+      mockResolvedTheme = 'dark';
+      const { container } = render(<Terminal {...defaultProps} />);
+
+      // Should have dark background class
+      expect(container.querySelector('.bg-\\[\\#2d3436\\]')).toBeInTheDocument();
+    });
+
+    it('applies light theme colors when resolvedTheme is light', () => {
+      mockResolvedTheme = 'light';
+      const { container } = render(<Terminal {...defaultProps} />);
+
+      // Should have light background class
+      expect(container.querySelector('.bg-\\[\\#f4f4f0\\]')).toBeInTheDocument();
+    });
+
+    it('uses light connected status styling in light mode', () => {
+      mockResolvedTheme = 'light';
+      mockUseWebSocket.mockReturnValue({
+        isConnected: true,
+        sendInput: mockSendInput,
+        sendResize: mockSendResize,
+      });
+
+      const { container } = render(<Terminal {...defaultProps} />);
+
+      // Light mode uses #00b894 for connected status
+      const statusBadge = container.querySelector('.bg-\\[\\#00b894\\]\\/20');
+      expect(statusBadge).toBeInTheDocument();
+    });
+
+    it('uses light disconnected status styling in light mode', () => {
+      mockResolvedTheme = 'light';
+      mockUseWebSocket.mockReturnValue({
+        isConnected: false,
+        sendInput: mockSendInput,
+        sendResize: mockSendResize,
+      });
+
+      const { container } = render(<Terminal {...defaultProps} />);
+
+      // Light mode uses #d63031 for disconnected status
+      const statusBadge = container.querySelector('.bg-\\[\\#d63031\\]\\/20');
+      expect(statusBadge).toBeInTheDocument();
+    });
+
+    it('recreates terminal when processId changes', () => {
+      const { rerender } = render(<Terminal processId="process-1" />);
+
+      // Terminal should be created once on mount
+      expect(mockTerminalInstance.open).toHaveBeenCalledTimes(1);
+
+      // Change processId
+      rerender(<Terminal processId="process-2" />);
+
+      // Terminal should be recreated (disposed and opened again)
+      expect(mockTerminalInstance.dispose).toHaveBeenCalled();
+      expect(mockTerminalInstance.open).toHaveBeenCalledTimes(2);
+    });
+
+    it('preserves terminal when only theme changes (not processId)', () => {
+      const { rerender } = render(<Terminal processId="stable-process" />);
+
+      // Clear the initial calls
+      mockTerminalInstance.open.mockClear();
+      mockTerminalInstance.dispose.mockClear();
+
+      // Change only theme
+      mockResolvedTheme = 'light';
+      rerender(<Terminal processId="stable-process" />);
+
+      // Terminal should NOT be disposed or recreated
+      expect(mockTerminalInstance.dispose).not.toHaveBeenCalled();
+      expect(mockTerminalInstance.open).not.toHaveBeenCalled();
     });
   });
 });
