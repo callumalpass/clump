@@ -129,6 +129,14 @@ def mock_parsed_transcript():
 class TestListSessions:
     """Tests for GET /sessions endpoint."""
 
+    @pytest.fixture(autouse=True)
+    def clear_cache(self):
+        """Clear the session cache before and after each test."""
+        from app.routers.sessions import _session_cache
+        _session_cache.clear()
+        yield
+        _session_cache.clear()
+
     def test_list_sessions_empty(self, client):
         """Test listing sessions when none exist."""
         with patch("app.routers.sessions.discover_sessions", return_value=[]), \
@@ -270,6 +278,14 @@ class TestListSessions:
 class TestGetSession:
     """Tests for GET /sessions/{session_id} endpoint."""
 
+    @pytest.fixture(autouse=True)
+    def clear_cache(self):
+        """Clear the session cache before and after each test."""
+        from app.routers.sessions import _session_cache
+        _session_cache.clear()
+        yield
+        _session_cache.clear()
+
     def test_get_session_success(self, client, mock_discovered_session, mock_parsed_transcript):
         """Test getting a session detail successfully."""
         with patch("app.routers.sessions.discover_sessions", return_value=[mock_discovered_session]), \
@@ -333,6 +349,14 @@ class TestGetSession:
 
 class TestUpdateSessionMetadata:
     """Tests for PATCH /sessions/{session_id} endpoint."""
+
+    @pytest.fixture(autouse=True)
+    def clear_cache(self):
+        """Clear the session cache before and after each test."""
+        from app.routers.sessions import _session_cache
+        _session_cache.clear()
+        yield
+        _session_cache.clear()
 
     def test_update_session_title(self, client, mock_discovered_session):
         """Test updating session title."""
@@ -415,6 +439,14 @@ class TestUpdateSessionMetadata:
 
 class TestEntityManagement:
     """Tests for entity link endpoints."""
+
+    @pytest.fixture(autouse=True)
+    def clear_cache(self):
+        """Clear the session cache before and after each test."""
+        from app.routers.sessions import _session_cache
+        _session_cache.clear()
+        yield
+        _session_cache.clear()
 
     def test_add_entity_to_session(self, client, mock_discovered_session):
         """Test adding an entity link to a session."""
@@ -741,6 +773,14 @@ class TestQuickScanTranscript:
 class TestGetPendingSessions:
     """Tests for the _get_pending_sessions helper function."""
 
+    @pytest.fixture(autouse=True)
+    def clear_cache(self):
+        """Clear the session cache before and after each test."""
+        from app.routers.sessions import _session_cache
+        _session_cache.clear()
+        yield
+        _session_cache.clear()
+
     def test_no_pending_sessions(self):
         """Test when there are no pending sessions."""
         # Need to patch where process_manager is imported inside the function
@@ -830,6 +870,14 @@ class TestGetPendingSessions:
 
 class TestContinueSession:
     """Tests for POST /sessions/{session_id}/continue endpoint."""
+
+    @pytest.fixture(autouse=True)
+    def clear_cache(self):
+        """Clear the session cache before and after each test."""
+        from app.routers.sessions import _session_cache
+        _session_cache.clear()
+        yield
+        _session_cache.clear()
 
     def test_continue_session_success(self, client, mock_discovered_session):
         """Test continuing a session successfully."""
@@ -1008,10 +1056,10 @@ class TestSessionCacheInvalidation:
         """Test that invalidating with repo_path clears that repo's cache."""
         from app.routers.sessions import invalidate_session_cache, _session_cache
 
-        # Set up cache manually
-        _session_cache["/test/path1"] = ([], 0)
-        _session_cache["/test/path2"] = ([], 0)
-        _session_cache["__all__"] = ([], 0)
+        # Set up cache manually using the new API
+        _session_cache.set("/test/path1", [], 0)
+        _session_cache.set("/test/path2", [], 0)
+        _session_cache.set("__all__", [], 0)
 
         # Invalidate specific path
         invalidate_session_cache(repo_path="/test/path1")
@@ -1024,10 +1072,10 @@ class TestSessionCacheInvalidation:
         """Test that invalidating without repo_path clears all cache entries."""
         from app.routers.sessions import invalidate_session_cache, _session_cache
 
-        # Set up cache manually
-        _session_cache["/test/path1"] = ([], 0)
-        _session_cache["/test/path2"] = ([], 0)
-        _session_cache["__all__"] = ([], 0)
+        # Set up cache manually using the new API
+        _session_cache.set("/test/path1", [], 0)
+        _session_cache.set("/test/path2", [], 0)
+        _session_cache.set("__all__", [], 0)
 
         # Invalidate all
         invalidate_session_cache()
@@ -1801,6 +1849,14 @@ class TestParseDatetimeNaive:
 
 class TestKillSession:
     """Tests for POST /sessions/{session_id}/kill endpoint."""
+
+    @pytest.fixture(autouse=True)
+    def clear_cache(self):
+        """Clear the session cache before and after each test."""
+        from app.routers.sessions import _session_cache
+        _session_cache.clear()
+        yield
+        _session_cache.clear()
 
     def test_kill_pty_process_success(self, client, mock_discovered_session):
         """Test killing a session with an active PTY process."""

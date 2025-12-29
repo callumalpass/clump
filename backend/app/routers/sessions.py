@@ -9,6 +9,7 @@ import asyncio
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from functools import partial
@@ -55,23 +56,94 @@ from app.services.transcript_parser import parse_transcript, ParsedTranscript, T
 from app.services.session_manager import process_manager
 from app.services.event_manager import event_manager, EventType
 
-# Session discovery cache with TTL and mtime-based invalidation
-# This avoids redundant filesystem scans when polling frequently
-# Cache entry format: (sessions, cache_time, dir_mtime)
-_session_cache: dict[str, tuple[list, float, float]] = {}  # key -> (sessions, timestamp, mtime)
+# Cache configuration constants
 SESSION_CACHE_TTL = 30.0  # seconds - longer TTL since we also check mtime
 SESSION_CACHE_MTIME_CHECK_INTERVAL = 2.0  # Check directory mtime every 2 seconds
-
-# Track last mtime check time to avoid excessive stat calls
-_last_mtime_check: dict[str, float] = {}  # key -> last check timestamp
-_cached_mtimes: dict[str, float] = {}  # key -> cached directory mtime
+MAX_CACHE_ENTRIES = 100
 
 # Pagination defaults
 DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 200
 
-# Cache management
-MAX_CACHE_ENTRIES = 100
+
+@dataclass
+class SessionCacheEntry:
+    """A single cache entry for discovered sessions."""
+    sessions: list
+    cached_at: float
+    dir_mtime: float
+
+
+@dataclass
+class SessionCache:
+    """
+    Manages session discovery cache with TTL and mtime-based invalidation.
+
+    This avoids redundant filesystem scans when polling frequently by:
+    - Serving from cache if within TTL and directory hasn't changed
+    - Refreshing if directory mtime has changed (new/modified sessions)
+    - Hard refresh after TTL expires regardless of mtime
+    """
+    entries: dict[str, SessionCacheEntry] = field(default_factory=dict)
+    last_mtime_check: dict[str, float] = field(default_factory=dict)
+    cached_mtimes: dict[str, float] = field(default_factory=dict)
+
+    def get(self, key: str) -> Optional[SessionCacheEntry]:
+        """Get a cache entry by key."""
+        return self.entries.get(key)
+
+    def set(self, key: str, sessions: list, mtime: float) -> None:
+        """Set a cache entry with current timestamp."""
+        self.entries[key] = SessionCacheEntry(
+            sessions=sessions,
+            cached_at=time.time(),
+            dir_mtime=mtime,
+        )
+
+    def invalidate(self, key: Optional[str] = None) -> None:
+        """
+        Invalidate cache entries.
+
+        If key is provided, invalidates that key and the global "__all__" key.
+        If key is None, clears all cache state.
+        """
+        if key:
+            self.entries.pop(key, None)
+            self.entries.pop("__all__", None)
+            self.last_mtime_check.pop(key, None)
+            self.last_mtime_check.pop("__all__", None)
+            self.cached_mtimes.pop(key, None)
+            self.cached_mtimes.pop("__all__", None)
+        else:
+            self.entries.clear()
+            self.last_mtime_check.clear()
+            self.cached_mtimes.clear()
+
+    def cleanup_old_entries(self, max_entries: int = MAX_CACHE_ENTRIES) -> None:
+        """Remove old cache entries if cache exceeds max size."""
+        if len(self.entries) > max_entries:
+            now = time.time()
+            cutoff = now - SESSION_CACHE_TTL * 10
+            self.entries = {
+                k: v for k, v in self.entries.items()
+                if v.cached_at > cutoff
+            }
+
+    def clear(self) -> None:
+        """Clear all cache state. Alias for invalidate() with no arguments."""
+        self.invalidate()
+
+    def __contains__(self, key: str) -> bool:
+        """Support 'key in cache' syntax for checking entry existence."""
+        return key in self.entries
+
+    def __len__(self) -> int:
+        """Return number of cache entries."""
+        return len(self.entries)
+
+
+# Global session cache instance
+_session_cache = SessionCache()
 
 # Text truncation limits
 TITLE_PREVIEW_LENGTH = 100  # First user message preview for title fallback
@@ -224,21 +296,19 @@ def _should_refresh_cache(cache_key: str, cached_mtime: float) -> bool:
 
     Only actually stats the directory if enough time has passed since last check.
     """
-    global _last_mtime_check, _cached_mtimes
-
     now = time.time()
 
     # Check if we need to re-stat the directory
-    last_check = _last_mtime_check.get(cache_key, 0)
+    last_check = _session_cache.last_mtime_check.get(cache_key, 0)
     if now - last_check < SESSION_CACHE_MTIME_CHECK_INTERVAL:
         # Use cached mtime value
-        current_mtime = _cached_mtimes.get(cache_key, 0)
+        current_mtime = _session_cache.cached_mtimes.get(cache_key, 0)
     else:
         # Actually check the filesystem
         repo_path = None if cache_key == "__all__" else cache_key
         current_mtime = _get_projects_dir_mtime(repo_path)
-        _last_mtime_check[cache_key] = now
-        _cached_mtimes[cache_key] = current_mtime
+        _session_cache.last_mtime_check[cache_key] = now
+        _session_cache.cached_mtimes[cache_key] = current_mtime
 
     # Cache is stale if directory was modified after cache was created
     return current_mtime > cached_mtime
@@ -253,20 +323,17 @@ def _get_cached_sessions(repo_path: Optional[str] = None) -> list[DiscoveredSess
     - Refreshes cache if directory mtime has changed (new/modified sessions)
     - Hard refresh after TTL expires regardless of mtime
     """
-    global _session_cache
-
     cache_key = repo_path or "__all__"
     now = time.time()
 
     # Check if we have a cache entry
-    if cache_key in _session_cache:
-        cached_sessions, cached_time, cached_mtime = _session_cache[cache_key]
-
+    entry = _session_cache.get(cache_key)
+    if entry is not None:
         # Check if cache is still fresh (within TTL)
-        if now - cached_time < SESSION_CACHE_TTL:
+        if now - entry.cached_at < SESSION_CACHE_TTL:
             # Within TTL - check if directory has been modified
-            if not _should_refresh_cache(cache_key, cached_mtime):
-                return cached_sessions
+            if not _should_refresh_cache(cache_key, entry.dir_mtime):
+                return entry.sessions
             # Directory changed, fall through to refresh
 
     # Cache miss, expired, or directory changed - fetch fresh data
@@ -274,15 +341,10 @@ def _get_cached_sessions(repo_path: Optional[str] = None) -> list[DiscoveredSess
     sessions = discover_sessions(repo_path=repo_path)
 
     # Update cache with new data and current mtime
-    _session_cache[cache_key] = (sessions, now, current_mtime)
+    _session_cache.set(cache_key, sessions, current_mtime)
 
     # Clean up old cache entries (keep cache size bounded)
-    if len(_session_cache) > MAX_CACHE_ENTRIES:
-        cutoff = now - SESSION_CACHE_TTL * 10  # Remove entries older than 10x TTL
-        _session_cache = {
-            k: v for k, v in _session_cache.items()
-            if v[1] > cutoff
-        }
+    _session_cache.cleanup_old_entries()
 
     return sessions
 
@@ -294,19 +356,7 @@ def invalidate_session_cache(repo_path: Optional[str] = None) -> None:
     Call this when sessions are created, deleted, or modified.
     Also clears mtime tracking to force fresh checks.
     """
-    global _session_cache, _last_mtime_check, _cached_mtimes
-    if repo_path:
-        cache_key = repo_path
-        _session_cache.pop(cache_key, None)
-        _session_cache.pop("__all__", None)  # Also invalidate global cache
-        _last_mtime_check.pop(cache_key, None)
-        _last_mtime_check.pop("__all__", None)
-        _cached_mtimes.pop(cache_key, None)
-        _cached_mtimes.pop("__all__", None)
-    else:
-        _session_cache.clear()
-        _last_mtime_check.clear()
-        _cached_mtimes.clear()
+    _session_cache.invalidate(repo_path)
 
 
 def _get_running_headless_session_ids() -> set[str]:
