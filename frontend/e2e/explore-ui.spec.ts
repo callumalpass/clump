@@ -1440,3 +1440,100 @@ test.describe('UI Exploration - Hover Arrow Animation', () => {
     await screenshot(page, '62-pr-hover-arrow');
   });
 });
+
+test.describe('UI Exploration - Light Theme Extended', () => {
+  test('light theme - history tab with session badges', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+
+    await page.goto('/');
+    await waitForAnimations(page);
+
+    // Switch to light theme
+    await page.locator('button[title="Settings"]').click();
+    await waitForAnimations(page);
+    await page.getByRole('button', { name: /advanced/i }).click();
+    await waitForAnimations(page);
+    await page.getByRole('button', { name: /light/i }).click();
+    await waitForAnimations(page);
+    await page.getByLabel('Close').click();
+    await waitForAnimations(page);
+
+    // Select repo and go to history tab
+    await selectRepo(page);
+    await page.getByRole('tab', { name: /History/i }).click();
+    await waitForAnimations(page);
+
+    await screenshot(page, '63-light-theme-history');
+  });
+
+  test('light theme - filter pills active state', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+
+    await page.goto('/');
+    await waitForAnimations(page);
+
+    // Switch to light theme
+    await page.locator('button[title="Settings"]').click();
+    await waitForAnimations(page);
+    await page.getByRole('button', { name: /advanced/i }).click();
+    await waitForAnimations(page);
+    await page.getByRole('button', { name: /light/i }).click();
+    await waitForAnimations(page);
+    await page.getByLabel('Close').click();
+    await waitForAnimations(page);
+
+    // Select repo
+    await selectRepo(page);
+
+    // Click "Closed" filter to show active filter state
+    await page.getByRole('button', { name: 'Closed' }).click();
+    await waitForAnimations(page);
+
+    await screenshot(page, '64-light-theme-filter-active');
+  });
+
+  test('light theme - settings modal', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+
+    await page.goto('/');
+    await waitForAnimations(page);
+
+    // Switch to light theme first
+    await page.locator('button[title="Settings"]').click();
+    await waitForAnimations(page);
+    await page.getByRole('button', { name: /advanced/i }).click();
+    await waitForAnimations(page);
+    await page.getByRole('button', { name: /light/i }).click();
+    await waitForAnimations(page);
+
+    // Go back to GitHub tab to show settings in light mode
+    await page.getByRole('button', { name: /github/i }).click();
+    await waitForAnimations(page);
+
+    await screenshot(page, '65-light-theme-settings');
+  });
+});
