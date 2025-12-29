@@ -425,6 +425,38 @@
   border-color: #6c5ce7 !important;
 }
 
+/* Primary action buttons in light theme - ensure good contrast */
+[data-theme="light"] .bg-blurple-500 {
+  background-color: #6c5ce7 !important;
+  box-shadow: 0 1px 2px rgba(108, 92, 231, 0.2);
+}
+
+[data-theme="light"] .bg-blurple-500:hover:not(:disabled) {
+  background-color: #5849be !important;
+}
+
+/* Green action buttons in light theme */
+[data-theme="light"] .bg-green-600 {
+  background-color: #00b894 !important;
+  box-shadow: 0 1px 2px rgba(0, 184, 148, 0.2);
+}
+
+[data-theme="light"] .bg-green-600:hover:not(:disabled) {
+  background-color: #00a884 !important;
+}
+
+/* Improve command palette in light theme */
+[data-theme="light"] .command-palette-light {
+  background-color: #ffffff;
+  border: 1px solid #dfe6e9;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+}
+
+/* Modal backdrop in light theme - slightly lighter */
+[data-theme="light"] .modal-backdrop-light {
+  background-color: rgba(45, 52, 54, 0.5);
+}
+
 /* Terminal light theme colors */
 [data-theme="light"] .terminal-light {
   background-color: #f4f4f0 !important;
@@ -598,6 +630,27 @@ a:hover {
   animation: empty-state-float 3s ease-in-out infinite;
 }
 
+/* Typewriter text animation */
+.typewriter-text {
+  display: inline;
+}
+
+@keyframes cursor-blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
+
+.typewriter-cursor {
+  display: inline-block;
+  margin-left: 1px;
+  color: var(--stoody-blurple);
+  animation: cursor-blink 1s step-end infinite;
+}
+
 /* List item entrance animation - subtle fade and slide */
 @keyframes list-item-enter {
   from {
@@ -657,6 +710,28 @@ a:hover {
     -4px 0 16px rgba(162, 155, 254, 0.15),
     0 4px 12px rgba(0, 0, 0, 0.2),
     0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Animated hover arrow - appears on list item hover for better discoverability */
+.list-item-hover-arrow {
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity 200ms ease-out, transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+
+.list-item-hover:hover .list-item-hover-arrow {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* Light theme - hide arrow animation (use flat design) */
+[data-theme="light"] .list-item-hover-arrow {
+  opacity: 0;
+}
+
+[data-theme="light"] .list-item-hover:hover .list-item-hover-arrow {
+  opacity: 0.6;
 }
 
 /* Active/pressed state for clickable list items - provides tactile feedback */
@@ -1447,8 +1522,14 @@ button:disabled .kbd-hint {
   .session-tab-enter,
   .filter-indicator-enter,
   .copy-success-icon,
-  .input-shake {
+  .input-shake,
+  .typewriter-cursor {
     animation: none;
+  }
+
+  /* Show cursor as static when reduced motion is preferred */
+  .typewriter-cursor {
+    opacity: 1;
   }
 
   /* Ensure copy success icon is visible */

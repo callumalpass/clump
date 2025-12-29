@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState, useEffect, useRef } from 'react';
 
 // Standard icons used across empty states
 const Icons = {
@@ -46,6 +46,91 @@ const Icons = {
 
 export type EmptyStateIconType = keyof typeof Icons;
 
+/**
+ * TypewriterText - Animates text with a typing effect
+ * Shows text appearing character by character with a blinking cursor
+ */
+export interface TypewriterTextProps {
+  text: string;
+  /** Delay between each character in ms */
+  charDelay?: number;
+  /** Initial delay before typing starts in ms */
+  startDelay?: number;
+  /** Whether to show the blinking cursor */
+  showCursor?: boolean;
+  /** Class name for the text */
+  className?: string;
+}
+
+export function TypewriterText({
+  text,
+  charDelay = 50,
+  startDelay = 300,
+  showCursor = true,
+  className = '',
+}: TypewriterTextProps) {
+  const [displayedText, setDisplayedText] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [isDone, setIsDone] = useState(false);
+  const indexRef = useRef(0);
+  const hasStartedRef = useRef(false);
+
+  // Check for reduced motion preference
+  const prefersReducedMotion = typeof window !== 'undefined'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  useEffect(() => {
+    // Skip animation if reduced motion is preferred
+    if (prefersReducedMotion) {
+      setDisplayedText(text);
+      setIsDone(true);
+      return;
+    }
+
+    // Reset state when text changes
+    if (hasStartedRef.current && text !== displayedText.slice(0, text.length)) {
+      setDisplayedText('');
+      indexRef.current = 0;
+      setIsTyping(false);
+      setIsDone(false);
+      hasStartedRef.current = false;
+    }
+
+    // Start typing after initial delay
+    const startTimer = setTimeout(() => {
+      setIsTyping(true);
+      hasStartedRef.current = true;
+    }, startDelay);
+
+    return () => clearTimeout(startTimer);
+  }, [text, startDelay, prefersReducedMotion]);
+
+  useEffect(() => {
+    if (!isTyping || prefersReducedMotion) return;
+
+    if (indexRef.current < text.length) {
+      const charTimer = setTimeout(() => {
+        setDisplayedText(text.slice(0, indexRef.current + 1));
+        indexRef.current += 1;
+      }, charDelay);
+
+      return () => clearTimeout(charTimer);
+    } else {
+      setIsDone(true);
+      setIsTyping(false);
+    }
+  }, [isTyping, displayedText, text, charDelay, prefersReducedMotion]);
+
+  return (
+    <span className={`typewriter-text ${className}`}>
+      {displayedText}
+      {showCursor && !isDone && (
+        <span className="typewriter-cursor" aria-hidden="true">|</span>
+      )}
+    </span>
+  );
+}
+
 interface EmptyStateProps {
   /** Icon to display - use preset name or provide custom ReactNode */
   icon?: EmptyStateIconType | ReactNode;
@@ -59,6 +144,8 @@ interface EmptyStateProps {
   size?: 'sm' | 'md' | 'lg';
   /** Whether to show the floating animation on the icon */
   animate?: boolean;
+  /** Whether to show the title with a typewriter effect */
+  typewriter?: boolean;
   /** Custom className for the container */
   className?: string;
 }
@@ -80,6 +167,7 @@ export function EmptyState({
   action,
   size = 'md',
   animate = true,
+  typewriter = false,
   className = '',
 }: EmptyStateProps) {
   // Resolve icon - either use preset or render custom
@@ -123,7 +211,7 @@ export function EmptyState({
 
         {/* Title */}
         <p className={`text-gray-300 ${classes.title}`}>
-          {title}
+          {typewriter ? <TypewriterText text={title} /> : title}
         </p>
 
         {/* Description */}

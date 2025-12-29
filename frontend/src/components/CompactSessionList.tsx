@@ -1,5 +1,6 @@
 import type { SessionSummary } from '../types';
 import { ElapsedTimer } from './ElapsedTimer';
+import { TypewriterText } from './EmptyState';
 import { formatRelativeTime } from '../utils/time';
 
 // Check if a session was modified recently (within last 10 minutes)
@@ -61,7 +62,7 @@ export function CompactSessionList({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
           </div>
-          <p className="text-sm text-gray-400 font-medium mb-1">No active sessions</p>
+          <p className="text-sm text-gray-400 font-medium mb-1"><TypewriterText text="No active sessions" charDelay={45} /></p>
           <p className="text-xs text-gray-500">Start one from an issue or PR</p>
         </div>
         {onViewAll && (
