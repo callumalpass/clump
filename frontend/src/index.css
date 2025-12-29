@@ -1483,6 +1483,29 @@ button:disabled .kbd-hint {
   animation: copy-success-pop 200ms ease-out forwards;
 }
 
+/* New session button plus icon wiggle animation */
+@keyframes plus-wiggle {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  20% {
+    transform: rotate(90deg) scale(1.1);
+  }
+  40% {
+    transform: rotate(75deg) scale(1.05);
+  }
+  60% {
+    transform: rotate(95deg) scale(1.08);
+  }
+  80% {
+    transform: rotate(85deg) scale(1.03);
+  }
+}
+
+.plus-icon-wiggle {
+  animation: plus-wiggle 400ms ease-out forwards;
+}
+
 /* Copy button container transition */
 .copy-button {
   transition: color 150ms ease, transform 100ms ease;
@@ -1542,6 +1565,12 @@ button:disabled .kbd-hint {
   .copy-button:hover:not(:disabled),
   .copy-button:active:not(:disabled) {
     transform: none;
+  }
+
+  /* Disable plus icon wiggle animation */
+  .plus-icon-wiggle {
+    animation: none;
+    transform: rotate(90deg);
   }
 
   /* Disable status dot hover animation */

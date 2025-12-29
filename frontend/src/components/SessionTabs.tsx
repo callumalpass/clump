@@ -1,4 +1,4 @@
-import { useRef, useState, useLayoutEffect, useCallback, useEffect } from 'react';
+import { useRef, useState, useLayoutEffect, useCallback, useEffect, useMemo } from 'react';
 import type { SessionSummary, Process } from '../types';
 import { ElapsedTimer } from './ElapsedTimer';
 import { formatRelativeTime } from '../utils/time';
@@ -95,6 +95,15 @@ export function SessionTabs({
 
   // Track scroll overflow for fade indicators
   const { canScrollLeft, canScrollRight } = useScrollOverflow(containerRef);
+
+  // State for the plus icon wiggle animation
+  const [isWiggling, setIsWiggling] = useState(false);
+
+  // Check for reduced motion preference
+  const prefersReducedMotion = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }, []);
 
   // Update the sliding tab indicator position when active tab changes
   useLayoutEffect(() => {
@@ -266,6 +275,13 @@ export function SessionTabs({
       <button
         onClick={onNewSession}
         disabled={newSessionDisabled}
+        onMouseEnter={() => {
+          if (!newSessionDisabled && !prefersReducedMotion) {
+            setIsWiggling(true);
+          }
+        }}
+        onMouseLeave={() => setIsWiggling(false)}
+        onAnimationEnd={() => setIsWiggling(false)}
         className={`group/new p-2.5 rounded-stoody-lg transition-all active:scale-95 disabled:active:scale-100 ${focusRing} ${
           newSessionDisabled
             ? 'text-gray-600 cursor-not-allowed'
@@ -275,7 +291,7 @@ export function SessionTabs({
         aria-label="Create new session"
       >
         <svg
-          className={`w-4 h-4 transition-transform ${newSessionDisabled ? '' : 'group-hover/new:rotate-90'}`}
+          className={`w-4 h-4 transition-transform ${isWiggling ? 'plus-icon-wiggle' : ''}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
