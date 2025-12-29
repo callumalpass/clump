@@ -19,28 +19,26 @@ import type { Repo, Issue, PR, SessionSummary, CommandMetadata, EntityLink } fro
 import type { SessionListFilters } from './components/SessionList';
 import { LRUCache } from './utils/cache';
 
-function ResizeHandle() {
+function ResizeHandle({ orientation = 'vertical' }: { orientation?: 'vertical' | 'horizontal' }) {
+  const isVertical = orientation === 'vertical';
   return (
-    <Separator className="group relative flex items-center justify-center w-2 cursor-col-resize transition-all resize-handle">
+    <Separator
+      className={`group relative flex items-center justify-center transition-all resize-handle ${
+        isVertical ? 'w-2 cursor-col-resize' : 'h-2 cursor-row-resize'
+      }`}
+    >
       {/* Visible drag line */}
-      <div className="w-px h-full bg-gray-700 group-hover:bg-blue-500 group-active:bg-blue-400 transition-colors" />
+      <div
+        className={`bg-gray-700 group-hover:bg-blue-500 group-active:bg-blue-400 transition-colors ${
+          isVertical ? 'w-px h-full' : 'h-px w-full'
+        }`}
+      />
       {/* Grip dots indicator - subtly visible, enhanced on hover */}
-      <div className="absolute inset-y-0 flex flex-col items-center justify-center gap-1 opacity-30 group-hover:opacity-100 transition-opacity pointer-events-none resize-handle-dots">
-        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blue-400 transition-colors" />
-        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blue-400 transition-colors" />
-        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blue-400 transition-colors" />
-      </div>
-    </Separator>
-  );
-}
-
-function HorizontalResizeHandle() {
-  return (
-    <Separator className="group relative flex items-center justify-center h-2 cursor-row-resize transition-all resize-handle">
-      {/* Visible drag line */}
-      <div className="h-px w-full bg-gray-700 group-hover:bg-blue-500 group-active:bg-blue-400 transition-colors" />
-      {/* Grip dots indicator - subtly visible, enhanced on hover */}
-      <div className="absolute inset-x-0 flex flex-row items-center justify-center gap-1 opacity-30 group-hover:opacity-100 transition-opacity pointer-events-none resize-handle-dots">
+      <div
+        className={`absolute flex items-center justify-center gap-1 opacity-30 group-hover:opacity-100 transition-opacity pointer-events-none resize-handle-dots ${
+          isVertical ? 'inset-y-0 flex-col' : 'inset-x-0 flex-row'
+        }`}
+      >
         <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blue-400 transition-colors" />
         <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blue-400 transition-colors" />
         <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blue-400 transition-colors" />
@@ -285,7 +283,7 @@ export default function App() {
     order: sessionListFilters.order,
     dateRange: sessionListFilters.dateRange,
   };
-  const { sessions, loading: sessionsLoading, refresh: refreshSessions, continueSession, deleteSession, updateSessionMetadata, bulkDeleteSessions, bulkUpdateSessions, total: sessionsTotal, page: sessionsPage, totalPages: sessionsTotalPages, goToPage: goToSessionsPage } = useSessions(sessionFilters);
+  const { sessions, loading: sessionsLoading, refresh: refreshSessions, continueSession, killSession, deleteSession, updateSessionMetadata, bulkDeleteSessions, bulkUpdateSessions, total: sessionsTotal, page: sessionsPage, totalPages: sessionsTotalPages, goToPage: goToSessionsPage } = useSessions(sessionFilters);
   // Separate hook for active/recent sessions (independent of history pagination)
   const { sessions: activeSessions, refresh: refreshActiveSessions } = useActiveSessions(selectedRepo?.local_path);
   const { stats, loading: statsLoading, error: statsError, refresh: refreshStats } = useStats();
@@ -767,6 +765,24 @@ export default function App() {
       await updateSessionMetadata(session.session_id, { starred: !session.starred });
     },
     [updateSessionMetadata]
+  );
+
+  const handleKillSession = useCallback(
+    async (session: SessionSummary) => {
+      await killSession(session.session_id);
+      // Refresh active sessions to update the list
+      refreshActiveSessions();
+    },
+    [killSession, refreshActiveSessions]
+  );
+
+  // Handler for killing a session by ID (for MainContentArea/SessionPanel)
+  const handleKillSessionById = useCallback(
+    async (sessionId: string) => {
+      await killSession(sessionId);
+      refreshActiveSessions();
+    },
+    [killSession, refreshActiveSessions]
   );
 
   // Handler for closing a session tab (not deleting the session)
@@ -1453,11 +1469,12 @@ export default function App() {
                 sessions={activeSessions}
                 onSelectSession={handleSelectSession}
                 onContinueSession={handleContinueSession}
+                onKillSession={handleKillSession}
                 onViewAll={() => setActiveTab('history')}
               />
             </Panel>
 
-            <HorizontalResizeHandle />
+            <ResizeHandle orientation="horizontal" />
 
             {/* Bottom: Tabs for Issues/PRs/History/Schedules */}
             <Panel minSize="200px" className="flex flex-col">
@@ -1734,6 +1751,7 @@ export default function App() {
             onCloseViewingSession={() => setViewingSessionId(null)}
             onSetViewMode={handleSetSessionViewMode}
             onKillProcess={killProcess}
+            onKillSession={handleKillSessionById}
             onClearActiveProcess={() => setActiveProcessId(null)}
             onShowIssue={handleShowIssue}
             onShowPR={handleShowPR}
