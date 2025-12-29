@@ -206,8 +206,8 @@ describe('SessionTabs', () => {
       />
     );
 
-    // Should show the pulsing indicator (warning-500 background)
-    const statusDot = document.querySelector('.bg-warning-500.animate-pulse');
+    // Should show the pulsing indicator (blurple-400 background for running sessions)
+    const statusDot = document.querySelector('.bg-blurple-400.animate-pulse');
     expect(statusDot).toBeInTheDocument();
   });
 
