@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useReducer } from 'react';
 import { useClaudeSettings } from '../hooks/useApi';
 import { useTheme } from '../hooks/useTheme';
 import { useTabIndicator } from '../hooks/useTabIndicator';
@@ -9,6 +9,70 @@ import { AlertMessage } from './AlertMessage';
 interface TokenStatus {
   configured: boolean;
   masked_token: string | null;
+}
+
+// Token state management using reducer pattern
+interface TokenState {
+  status: TokenStatus;
+  loading: boolean;
+  saving: boolean;
+  isEditing: boolean;
+  inputValue: string;
+  error: string;
+}
+
+type TokenAction =
+  | { type: 'FETCH_START' }
+  | { type: 'FETCH_SUCCESS'; payload: TokenStatus }
+  | { type: 'FETCH_ERROR' }
+  | { type: 'SAVE_START' }
+  | { type: 'SAVE_SUCCESS'; payload: TokenStatus }
+  | { type: 'SAVE_ERROR'; payload: string }
+  | { type: 'START_EDITING' }
+  | { type: 'CANCEL_EDITING' }
+  | { type: 'SET_INPUT'; payload: string }
+  | { type: 'REMOVE_TOKEN' };
+
+const initialTokenState: TokenState = {
+  status: { configured: false, masked_token: null },
+  loading: false,
+  saving: false,
+  isEditing: false,
+  inputValue: '',
+  error: '',
+};
+
+function tokenReducer(state: TokenState, action: TokenAction): TokenState {
+  switch (action.type) {
+    case 'FETCH_START':
+      return { ...state, loading: true };
+    case 'FETCH_SUCCESS':
+      return { ...state, loading: false, status: action.payload };
+    case 'FETCH_ERROR':
+      return { ...state, loading: false };
+    case 'SAVE_START':
+      return { ...state, saving: true, error: '' };
+    case 'SAVE_SUCCESS':
+      return {
+        ...state,
+        saving: false,
+        status: action.payload,
+        isEditing: false,
+        inputValue: '',
+      };
+    case 'SAVE_ERROR':
+      return { ...state, saving: false, error: action.payload };
+    case 'START_EDITING':
+      return { ...state, isEditing: true };
+    case 'CANCEL_EDITING':
+      return { ...state, isEditing: false, inputValue: '', error: '' };
+    case 'SET_INPUT':
+      return { ...state, inputValue: action.payload };
+    case 'REMOVE_TOKEN':
+      return { ...state, status: { configured: false, masked_token: null } };
+    default:
+      return state;
+  }
 }
 
 interface SettingsProps {
@@ -31,13 +95,8 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
     { enabled: isOpen }
   );
 
-  // GitHub token state
-  const [tokenStatus, setTokenStatus] = useState<TokenStatus>({ configured: false, masked_token: null });
-  const [tokenLoading, setTokenLoading] = useState(false);
-  const [isEditingToken, setIsEditingToken] = useState(false);
-  const [newToken, setNewToken] = useState('');
-  const [tokenError, setTokenError] = useState('');
-  const [tokenSaving, setTokenSaving] = useState(false);
+  // GitHub token state - consolidated into single reducer
+  const [tokenState, dispatchToken] = useReducer(tokenReducer, initialTokenState);
 
   // Fetch token status when modal opens
   useEffect(() => {
@@ -47,30 +106,30 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
   }, [isOpen]);
 
   const fetchTokenStatus = async () => {
-    setTokenLoading(true);
+    dispatchToken({ type: 'FETCH_START' });
     try {
       const res = await fetch('/api/settings/github-token');
       if (res.ok) {
         const data = await res.json();
-        setTokenStatus(data);
+        dispatchToken({ type: 'FETCH_SUCCESS', payload: data });
+      } else {
+        dispatchToken({ type: 'FETCH_ERROR' });
       }
     } catch (e) {
       console.error('Failed to fetch token status:', e);
-    } finally {
-      setTokenLoading(false);
+      dispatchToken({ type: 'FETCH_ERROR' });
     }
   };
 
   const handleSaveToken = async (e: React.FormEvent) => {
     e.preventDefault();
-    setTokenError('');
-    setTokenSaving(true);
+    dispatchToken({ type: 'SAVE_START' });
 
     try {
       const res = await fetch('/api/settings/github-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: newToken }),
+        body: JSON.stringify({ token: tokenState.inputValue }),
       });
 
       if (!res.ok) {
@@ -79,20 +138,19 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
       }
 
       const data = await res.json();
-      setTokenStatus(data);
-      setNewToken('');
-      setIsEditingToken(false);
+      dispatchToken({ type: 'SAVE_SUCCESS', payload: data });
     } catch (e) {
-      setTokenError(e instanceof Error ? e.message : 'Failed to save token');
-    } finally {
-      setTokenSaving(false);
+      dispatchToken({
+        type: 'SAVE_ERROR',
+        payload: e instanceof Error ? e.message : 'Failed to save token',
+      });
     }
   };
 
   const handleRemoveToken = async () => {
     try {
       await fetch('/api/settings/github-token', { method: 'DELETE' });
-      setTokenStatus({ configured: false, masked_token: null });
+      dispatchToken({ type: 'REMOVE_TOKEN' });
     } catch (e) {
       console.error('Failed to remove token:', e);
     }
@@ -226,12 +284,12 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                   Required for higher API rate limits (5,000/hour vs 60/hour unauthenticated)
                 </p>
 
-                {tokenLoading ? (
+                {tokenState.loading ? (
                   <div className="space-y-3">
                     <div className="h-12 rounded-stoody bg-gray-800 skeleton-shimmer" />
                     <div className="h-4 w-48 rounded-stoody bg-gray-800 skeleton-shimmer" style={{ animationDelay: '100ms' }} />
                   </div>
-                ) : tokenStatus.configured && !isEditingToken ? (
+                ) : tokenState.status.configured && !tokenState.isEditing ? (
                   <div className="bg-mint-400/10 rounded-stoody p-4 border border-mint-400/20">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3 min-w-0">
@@ -250,12 +308,12 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                               5,000 req/hour
                             </span>
                           </div>
-                          <code className="text-xs text-mint-400/80 mt-1 block truncate">{tokenStatus.masked_token}</code>
+                          <code className="text-xs text-mint-400/80 mt-1 block truncate">{tokenState.status.masked_token}</code>
                         </div>
                       </div>
                       <div className="flex gap-2 flex-shrink-0">
                         <button
-                          onClick={() => setIsEditingToken(true)}
+                          onClick={() => dispatchToken({ type: 'START_EDITING' })}
                           className="px-3 py-1.5 text-xs text-gray-400 hover:text-pink-400 hover:bg-gray-800/50 rounded-stoody-sm focus:outline-none focus:text-pink-400 transition-colors"
                         >
                           Change
@@ -271,7 +329,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {!tokenStatus.configured && !isEditingToken && (
+                    {!tokenState.status.configured && !tokenState.isEditing && (
                       <div className="bg-warning-500/10 rounded-stoody p-4 border border-warning-500/20">
                         <div className="flex items-start gap-3">
                           <div className="flex-shrink-0 w-8 h-8 rounded-full bg-warning-500/20 flex items-center justify-center">
@@ -314,33 +372,29 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
 
                       <input
                         type="password"
-                        value={newToken}
-                        onChange={(e) => setNewToken(e.target.value)}
+                        value={tokenState.inputValue}
+                        onChange={(e) => dispatchToken({ type: 'SET_INPUT', payload: e.target.value })}
                         placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
                         className="w-full bg-gray-800 border border-gray-750 rounded-stoody px-4 py-2.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 focus:border-blurple-500 transition-colors"
                         required
                       />
 
-                      {tokenError && (
-                        <AlertMessage type="error" message={tokenError} />
+                      {tokenState.error && (
+                        <AlertMessage type="error" message={tokenState.error} />
                       )}
 
                       <div className="flex gap-3">
                         <button
                           type="submit"
-                          disabled={tokenSaving}
+                          disabled={tokenState.saving}
                           className="px-5 py-2.5 bg-blurple-500 hover:bg-blurple-600 hover:text-pink-400 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-stoody transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-400 shadow-stoody-sm"
                         >
-                          {tokenSaving ? 'Saving...' : 'Save Token'}
+                          {tokenState.saving ? 'Saving...' : 'Save Token'}
                         </button>
-                        {isEditingToken && (
+                        {tokenState.isEditing && (
                           <button
                             type="button"
-                            onClick={() => {
-                              setIsEditingToken(false);
-                              setNewToken('');
-                              setTokenError('');
-                            }}
+                            onClick={() => dispatchToken({ type: 'CANCEL_EDITING' })}
                             className="px-5 py-2.5 bg-gray-800 hover:bg-gray-750 text-gray-300 hover:text-pink-400 text-sm rounded-stoody transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500"
                           >
                             Cancel
@@ -479,20 +533,31 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                   Claude model to use for analysis
                 </p>
                 <div className="flex gap-3">
-                  {['sonnet', 'opus', 'haiku'].map((model) => (
-                    <button
-                      key={model}
-                      onClick={() => handleModelChange(model)}
-                      disabled={saving}
-                      className={`flex-1 px-4 py-2.5 rounded-stoody capitalize focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all border-2 ${
-                        settings.model === model
-                          ? 'bg-blurple-500/10 border-blurple-400 shadow-stoody-sm'
-                          : 'bg-gray-800 border-transparent hover:bg-gray-850 hover:border-gray-700'
-                      }`}
-                    >
-                      {model}
-                    </button>
-                  ))}
+                  {['sonnet', 'opus', 'haiku'].map((model) => {
+                    // Support both short names ('sonnet') and full model IDs ('claude-sonnet-4-...')
+                    const isSelected = settings.model === model || settings.model?.toLowerCase().includes(model);
+                    return (
+                      <button
+                        key={model}
+                        onClick={() => handleModelChange(model)}
+                        disabled={saving}
+                        className={`flex-1 px-4 py-2.5 rounded-stoody capitalize focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all border-2 relative ${
+                          isSelected
+                            ? 'bg-blurple-500/10 border-blurple-400 shadow-stoody-sm'
+                            : 'bg-gray-800 border-transparent hover:bg-gray-850 hover:border-gray-700'
+                        }`}
+                      >
+                        {isSelected && (
+                          <span className="absolute top-1 right-1.5">
+                            <svg className="w-3.5 h-3.5 text-blurple-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          </span>
+                        )}
+                        {model}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -510,20 +575,30 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                     { value: 'text', label: 'Text' },
                     { value: 'json', label: 'JSON' },
                     { value: 'stream-json', label: 'Stream JSON' },
-                  ].map((format) => (
-                    <button
-                      key={format.value}
-                      onClick={() => handleOutputFormatChange(format.value as OutputFormat)}
-                      disabled={saving}
-                      className={`flex-1 px-4 py-2.5 rounded-stoody focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all border-2 ${
-                        settings.output_format === format.value
-                          ? 'bg-blurple-500/10 border-blurple-400 shadow-stoody-sm'
-                          : 'bg-gray-800 border-transparent hover:bg-gray-850 hover:border-gray-700'
-                      }`}
-                    >
-                      {format.label}
-                    </button>
-                  ))}
+                  ].map((format) => {
+                    const isSelected = settings.output_format === format.value;
+                    return (
+                      <button
+                        key={format.value}
+                        onClick={() => handleOutputFormatChange(format.value as OutputFormat)}
+                        disabled={saving}
+                        className={`flex-1 px-4 py-2.5 rounded-stoody focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all border-2 relative ${
+                          isSelected
+                            ? 'bg-blurple-500/10 border-blurple-400 shadow-stoody-sm'
+                            : 'bg-gray-800 border-transparent hover:bg-gray-850 hover:border-gray-700'
+                        }`}
+                      >
+                        {isSelected && (
+                          <span className="absolute top-1 right-1.5">
+                            <svg className="w-3.5 h-3.5 text-blurple-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          </span>
+                        )}
+                        {format.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -568,12 +643,19 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                   {/* Dark mode */}
                   <button
                     onClick={() => setTheme('dark')}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-stoody focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all border-2 ${
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-stoody focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all border-2 relative ${
                       theme === 'dark'
                         ? 'bg-blurple-500/10 border-blurple-400 shadow-stoody-sm'
                         : 'bg-gray-800 border-transparent hover:bg-gray-850 hover:border-gray-700'
                     }`}
                   >
+                    {theme === 'dark' && (
+                      <span className="absolute top-1 right-1.5">
+                        <svg className="w-3.5 h-3.5 text-blurple-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </span>
+                    )}
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
                     </svg>
@@ -583,12 +665,19 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                   {/* Light mode */}
                   <button
                     onClick={() => setTheme('light')}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-stoody focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all border-2 ${
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-stoody focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all border-2 relative ${
                       theme === 'light'
                         ? 'bg-blurple-500/10 border-blurple-400 shadow-stoody-sm'
                         : 'bg-gray-800 border-transparent hover:bg-gray-850 hover:border-gray-700'
                     }`}
                   >
+                    {theme === 'light' && (
+                      <span className="absolute top-1 right-1.5">
+                        <svg className="w-3.5 h-3.5 text-blurple-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </span>
+                    )}
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
                     </svg>
@@ -598,12 +687,19 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                   {/* System mode */}
                   <button
                     onClick={() => setTheme('system')}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-stoody focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all border-2 ${
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-stoody focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all border-2 relative ${
                       theme === 'system'
                         ? 'bg-blurple-500/10 border-blurple-400 shadow-stoody-sm'
                         : 'bg-gray-800 border-transparent hover:bg-gray-850 hover:border-gray-700'
                     }`}
                   >
+                    {theme === 'system' && (
+                      <span className="absolute top-1 right-1.5">
+                        <svg className="w-3.5 h-3.5 text-blurple-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </span>
+                    )}
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
