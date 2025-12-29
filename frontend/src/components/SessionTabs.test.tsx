@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { SessionTabs } from './SessionTabs';
 import type { SessionSummary, Process } from '../types';
@@ -9,6 +9,18 @@ vi.mock('./ElapsedTimer', () => ({
     <span data-testid="elapsed-timer" className={className}>{startTime}</span>
   ),
 }));
+
+// Mock matchMedia for prefers-reduced-motion detection
+const createMatchMediaMock = (matches: boolean) => ({
+  matches,
+  media: '',
+  onchange: null,
+  addListener: vi.fn(),
+  removeListener: vi.fn(),
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+  dispatchEvent: vi.fn(),
+});
 
 function createMockSession(overrides: Partial<SessionSummary> = {}): SessionSummary {
   return {
@@ -51,8 +63,18 @@ describe('SessionTabs', () => {
     onNewSession: vi.fn(),
   };
 
+  let originalMatchMedia: typeof window.matchMedia;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    // Save original and setup mock for window.matchMedia
+    originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn().mockReturnValue(createMatchMediaMock(false));
+  });
+
+  afterEach(() => {
+    // Restore original
+    window.matchMedia = originalMatchMedia;
   });
 
   it('renders empty state with new session button', () => {

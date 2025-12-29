@@ -1310,4 +1310,180 @@ describe('SessionList', () => {
       expect(completedButton).toHaveClass('bg-blurple-500');
     });
   });
+
+  describe('Checkbox Bounce Animation', () => {
+    it('applies checkbox-bounce class when session is selected', () => {
+      const sessions = [createMockSession({ session_id: 'sess-1', is_active: false })];
+
+      const { rerender } = render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={1}
+          onBulkDelete={vi.fn()}
+        />
+      );
+
+      // Initially no bounce class
+      const checkbox = screen.getByTitle('Select');
+      expect(checkbox).not.toHaveClass('checkbox-bounce');
+
+      // Click to select - this should trigger the bounce
+      fireEvent.click(checkbox);
+
+      // After selection, the checkbox should have the bounce class
+      const selectedCheckbox = screen.getByTitle('Deselect');
+      expect(selectedCheckbox).toHaveClass('checkbox-bounce');
+    });
+
+    it('applies checkbox-bounce class when session is deselected', () => {
+      const sessions = [createMockSession({ session_id: 'sess-1', is_active: false })];
+
+      render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={1}
+          onBulkDelete={vi.fn()}
+        />
+      );
+
+      // Select the session first
+      const selectCheckbox = screen.getByTitle('Select');
+      fireEvent.click(selectCheckbox);
+
+      // Deselect the session
+      const deselectCheckbox = screen.getByTitle('Deselect');
+      fireEvent.click(deselectCheckbox);
+
+      // After deselection, the checkbox should have the bounce class
+      const checkbox = screen.getByTitle('Select');
+      expect(checkbox).toHaveClass('checkbox-bounce');
+    });
+
+    it('removes checkbox-bounce class after animation ends', () => {
+      const sessions = [createMockSession({ session_id: 'sess-1', is_active: false })];
+
+      render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={1}
+          onBulkDelete={vi.fn()}
+        />
+      );
+
+      // Click to select
+      const checkbox = screen.getByTitle('Select');
+      fireEvent.click(checkbox);
+
+      // Checkbox should have bounce class
+      const selectedCheckbox = screen.getByTitle('Deselect');
+      expect(selectedCheckbox).toHaveClass('checkbox-bounce');
+
+      // Trigger animation end
+      fireEvent.animationEnd(selectedCheckbox);
+
+      // Bounce class should be removed after animation ends
+      expect(selectedCheckbox).not.toHaveClass('checkbox-bounce');
+    });
+
+    it('checkbox bounce animation resets on multiple toggle cycles', () => {
+      const sessions = [createMockSession({ session_id: 'sess-1', is_active: false })];
+
+      render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={1}
+          onBulkDelete={vi.fn()}
+        />
+      );
+
+      // First cycle: select
+      let checkbox = screen.getByTitle('Select');
+      fireEvent.click(checkbox);
+
+      // Should have bounce class
+      checkbox = screen.getByTitle('Deselect');
+      expect(checkbox).toHaveClass('checkbox-bounce');
+
+      // Complete animation
+      fireEvent.animationEnd(checkbox);
+      expect(checkbox).not.toHaveClass('checkbox-bounce');
+
+      // Second cycle: deselect
+      fireEvent.click(checkbox);
+      checkbox = screen.getByTitle('Select');
+      expect(checkbox).toHaveClass('checkbox-bounce');
+
+      // Complete animation
+      fireEvent.animationEnd(checkbox);
+      expect(checkbox).not.toHaveClass('checkbox-bounce');
+
+      // Third cycle: select again
+      fireEvent.click(checkbox);
+      checkbox = screen.getByTitle('Deselect');
+      expect(checkbox).toHaveClass('checkbox-bounce');
+    });
+
+    it('multiple checkboxes bounce independently', async () => {
+      const sessions = [
+        createMockSession({ session_id: 'sess-1', is_active: false, title: 'Session 1' }),
+        createMockSession({ session_id: 'sess-2', is_active: false, title: 'Session 2' }),
+      ];
+
+      render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={2}
+          onBulkDelete={vi.fn()}
+        />
+      );
+
+      // Get both checkboxes (both are 'Select' initially)
+      const checkboxes = screen.getAllByTitle('Select');
+      expect(checkboxes).toHaveLength(2);
+
+      // Select only the first session
+      fireEvent.click(checkboxes[0]);
+
+      // First checkbox should bounce and be selected
+      const firstSelected = screen.getByTitle('Deselect');
+      expect(firstSelected).toHaveClass('checkbox-bounce');
+
+      // Second checkbox should not bounce (it wasn't changed)
+      const secondCheckbox = screen.getAllByTitle('Select')[0]; // Only one 'Select' remains
+      expect(secondCheckbox).not.toHaveClass('checkbox-bounce');
+    });
+
+    it('select all triggers bounce on all non-active session checkboxes', () => {
+      const sessions = [
+        createMockSession({ session_id: 'sess-1', is_active: false, title: 'Session 1' }),
+        createMockSession({ session_id: 'sess-2', is_active: false, title: 'Session 2' }),
+        createMockSession({ session_id: 'sess-3', is_active: true, title: 'Session 3' }),
+      ];
+
+      render(
+        <SessionList
+          {...defaultProps}
+          sessions={sessions}
+          total={3}
+          onBulkDelete={vi.fn()}
+        />
+      );
+
+      // Click select all
+      fireEvent.click(screen.getByTitle('Select sessions'));
+
+      // All deselect buttons (for non-active sessions) should be bouncing
+      const deselectButtons = screen.getAllByTitle('Deselect');
+      expect(deselectButtons).toHaveLength(2); // Only 2 non-active sessions
+
+      deselectButtons.forEach(btn => {
+        expect(btn).toHaveClass('checkbox-bounce');
+      });
+    });
+  });
 });
