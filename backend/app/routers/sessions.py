@@ -5,10 +5,13 @@ Sessions are discovered from Claude's JSONL files in ~/.claude/projects/
 with optional sidecar metadata stored in ~/.clump/projects/
 """
 
+import asyncio
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from enum import Enum
+from functools import partial
 from pathlib import Path
 from typing import Callable, List, Optional, TypedDict
 
@@ -52,10 +55,16 @@ from app.services.transcript_parser import parse_transcript, ParsedTranscript, T
 from app.services.session_manager import process_manager
 from app.services.event_manager import event_manager, EventType
 
-# Session discovery cache with TTL
+# Session discovery cache with TTL and mtime-based invalidation
 # This avoids redundant filesystem scans when polling frequently
-_session_cache: dict[str, tuple[list, float]] = {}  # key -> (sessions, timestamp)
-SESSION_CACHE_TTL = 5.0  # seconds (increased from 2s to reduce filesystem I/O)
+# Cache entry format: (sessions, cache_time, dir_mtime)
+_session_cache: dict[str, tuple[list, float, float]] = {}  # key -> (sessions, timestamp, mtime)
+SESSION_CACHE_TTL = 30.0  # seconds - longer TTL since we also check mtime
+SESSION_CACHE_MTIME_CHECK_INTERVAL = 2.0  # Check directory mtime every 2 seconds
+
+# Track last mtime check time to avoid excessive stat calls
+_last_mtime_check: dict[str, float] = {}  # key -> last check timestamp
+_cached_mtimes: dict[str, float] = {}  # key -> cached directory mtime
 
 # Pagination defaults
 DEFAULT_PAGE_SIZE = 50
@@ -67,6 +76,15 @@ MAX_CACHE_ENTRIES = 100
 # Text truncation limits
 TITLE_PREVIEW_LENGTH = 100  # First user message preview for title fallback
 EXPORT_TITLE_LENGTH = 50  # Safe filename title truncation
+
+# Transcript scan cache - avoids re-parsing files that haven't changed
+# Cache entry format: (scan_result, file_mtime)
+_transcript_scan_cache: dict[str, tuple[dict, float]] = {}
+TRANSCRIPT_CACHE_MAX_ENTRIES = 500  # Keep last N transcript scans cached
+
+# Thread pool for parallel session summary conversion
+# Using a modest pool size to avoid overwhelming the system with file I/O
+_summary_thread_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="session_summary")
 
 
 class QuickScanResult(TypedDict):
@@ -153,28 +171,88 @@ class ModelFilter(str, Enum):
     HAIKU = "haiku"
 
 
+def _get_projects_dir_mtime(repo_path: Optional[str] = None) -> float:
+    """
+    Get the modification time of the Claude projects directory.
+
+    If repo_path is specified, gets mtime of that specific project directory.
+    Returns 0.0 if directory doesn't exist.
+    """
+    try:
+        if repo_path:
+            # Check specific project directory
+            encoded = encode_path(repo_path)
+            projects_dir = get_claude_projects_dir()
+            project_dir = projects_dir / encoded
+            if project_dir.exists():
+                return project_dir.stat().st_mtime
+        else:
+            # Check root projects directory
+            projects_dir = get_claude_projects_dir()
+            if projects_dir.exists():
+                return projects_dir.stat().st_mtime
+    except OSError:
+        pass
+    return 0.0
+
+
+def _should_refresh_cache(cache_key: str, cached_mtime: float) -> bool:
+    """
+    Check if cache should be refreshed based on directory mtime.
+
+    Only actually stats the directory if enough time has passed since last check.
+    """
+    global _last_mtime_check, _cached_mtimes
+
+    now = time.time()
+
+    # Check if we need to re-stat the directory
+    last_check = _last_mtime_check.get(cache_key, 0)
+    if now - last_check < SESSION_CACHE_MTIME_CHECK_INTERVAL:
+        # Use cached mtime value
+        current_mtime = _cached_mtimes.get(cache_key, 0)
+    else:
+        # Actually check the filesystem
+        repo_path = None if cache_key == "__all__" else cache_key
+        current_mtime = _get_projects_dir_mtime(repo_path)
+        _last_mtime_check[cache_key] = now
+        _cached_mtimes[cache_key] = current_mtime
+
+    # Cache is stale if directory was modified after cache was created
+    return current_mtime > cached_mtime
+
+
 def _get_cached_sessions(repo_path: Optional[str] = None) -> list[DiscoveredSession]:
     """
     Get sessions with caching to avoid redundant filesystem scans.
 
-    Uses a simple TTL cache keyed by repo_path.
+    Uses both TTL and mtime-based invalidation:
+    - Serves from cache if within TTL and directory hasn't changed
+    - Refreshes cache if directory mtime has changed (new/modified sessions)
+    - Hard refresh after TTL expires regardless of mtime
     """
     global _session_cache
 
     cache_key = repo_path or "__all__"
     now = time.time()
 
-    # Check if we have a valid cache entry
+    # Check if we have a cache entry
     if cache_key in _session_cache:
-        cached_sessions, cached_time = _session_cache[cache_key]
-        if now - cached_time < SESSION_CACHE_TTL:
-            return cached_sessions
+        cached_sessions, cached_time, cached_mtime = _session_cache[cache_key]
 
-    # Cache miss or expired - fetch fresh data
+        # Check if cache is still fresh (within TTL)
+        if now - cached_time < SESSION_CACHE_TTL:
+            # Within TTL - check if directory has been modified
+            if not _should_refresh_cache(cache_key, cached_mtime):
+                return cached_sessions
+            # Directory changed, fall through to refresh
+
+    # Cache miss, expired, or directory changed - fetch fresh data
+    current_mtime = _get_projects_dir_mtime(repo_path)
     sessions = discover_sessions(repo_path=repo_path)
 
-    # Update cache
-    _session_cache[cache_key] = (sessions, now)
+    # Update cache with new data and current mtime
+    _session_cache[cache_key] = (sessions, now, current_mtime)
 
     # Clean up old cache entries (keep cache size bounded)
     if len(_session_cache) > MAX_CACHE_ENTRIES:
@@ -192,14 +270,21 @@ def invalidate_session_cache(repo_path: Optional[str] = None) -> None:
     Invalidate session cache.
 
     Call this when sessions are created, deleted, or modified.
+    Also clears mtime tracking to force fresh checks.
     """
-    global _session_cache
+    global _session_cache, _last_mtime_check, _cached_mtimes
     if repo_path:
         cache_key = repo_path
         _session_cache.pop(cache_key, None)
         _session_cache.pop("__all__", None)  # Also invalidate global cache
+        _last_mtime_check.pop(cache_key, None)
+        _last_mtime_check.pop("__all__", None)
+        _cached_mtimes.pop(cache_key, None)
+        _cached_mtimes.pop("__all__", None)
     else:
         _session_cache.clear()
+        _last_mtime_check.clear()
+        _cached_mtimes.clear()
 
 
 def _get_running_headless_session_ids() -> set[str]:
@@ -441,6 +526,55 @@ def _find_session_by_id(
 def _quick_scan_transcript(transcript_path: Path) -> QuickScanResult:
     """
     Quickly scan a transcript file for summary info without full parsing.
+
+    Uses mtime-based caching to avoid re-parsing files that haven't changed.
+    """
+    global _transcript_scan_cache
+
+    cache_key = str(transcript_path)
+
+    # Check cache first
+    try:
+        current_mtime = transcript_path.stat().st_mtime
+    except OSError:
+        # File doesn't exist or can't be accessed
+        return {
+            "title": None,
+            "model": None,
+            "start_time": None,
+            "end_time": None,
+            "message_count": 0,
+        }
+
+    if cache_key in _transcript_scan_cache:
+        cached_result, cached_mtime = _transcript_scan_cache[cache_key]
+        if cached_mtime >= current_mtime:
+            # File hasn't been modified, return cached result
+            return cached_result
+
+    # Cache miss or file modified - scan the file
+    result = _do_quick_scan_transcript(transcript_path)
+
+    # Update cache
+    _transcript_scan_cache[cache_key] = (result, current_mtime)
+
+    # Clean up old cache entries if too many
+    if len(_transcript_scan_cache) > TRANSCRIPT_CACHE_MAX_ENTRIES:
+        # Remove oldest half of entries (simple LRU-ish cleanup)
+        # Sort by mtime and keep the most recently modified
+        sorted_entries = sorted(
+            _transcript_scan_cache.items(),
+            key=lambda x: x[1][1],  # Sort by cached mtime
+            reverse=True
+        )
+        _transcript_scan_cache = dict(sorted_entries[:TRANSCRIPT_CACHE_MAX_ENTRIES // 2])
+
+    return result
+
+
+def _do_quick_scan_transcript(transcript_path: Path) -> QuickScanResult:
+    """
+    Actually scan a transcript file for summary info (uncached).
     """
     result: QuickScanResult = {
         "title": None,
@@ -636,17 +770,42 @@ async def list_sessions(
 
     Uses caching to avoid redundant filesystem scans when polling frequently.
     """
-    sessions = _get_cached_sessions(repo_path=repo_path)
+    # Run session discovery and active session detection in parallel
+    # This reduces latency by overlapping I/O operations
+    sessions_task = asyncio.get_event_loop().run_in_executor(
+        None, _get_cached_sessions, repo_path
+    )
+    process_ids_task = _get_active_session_ids_from_processes()
 
-    # Get active session IDs from running processes and headless sessions
-    active_session_ids = await _get_active_session_ids_from_processes()
+    # Wait for both to complete
+    sessions, process_session_ids = await asyncio.gather(
+        sessions_task,
+        process_ids_task,
+    )
+
+    # Get headless session IDs (fast in-memory lookup)
+    active_session_ids = process_session_ids
     active_session_ids.update(_get_running_headless_session_ids())
 
     # Track which sessions we've discovered (have JSONL files)
     discovered_session_ids = {s.session_id for s in sessions}
 
-    # Convert to summaries
-    summaries = [_session_to_summary(s, active_session_ids) for s in sessions]
+    # Convert to summaries in parallel using thread pool
+    # This speeds up the I/O-bound transcript scanning when cache misses occur
+    loop = asyncio.get_event_loop()
+    if len(sessions) > 1:
+        # Use thread pool for parallel conversion when there are multiple sessions
+        conversion_tasks = [
+            loop.run_in_executor(
+                _summary_thread_pool,
+                partial(_session_to_summary, s, active_session_ids)
+            )
+            for s in sessions
+        ]
+        summaries = list(await asyncio.gather(*conversion_tasks))
+    else:
+        # Single session - convert directly without thread pool overhead
+        summaries = [_session_to_summary(s, active_session_ids) for s in sessions]
 
     # Add pending sessions (active processes without JSONL files yet)
     pending = _get_pending_sessions(active_session_ids, discovered_session_ids, repo_path)
@@ -762,10 +921,13 @@ async def get_session_counts():
     Returns total and active session counts per repo.
     Useful for showing badges in the repo selector.
     """
-    repos = load_repos()
+    # Load repos and active processes in parallel
+    repos_task = asyncio.get_event_loop().run_in_executor(None, load_repos)
+    processes_task = process_manager.list_processes()
 
-    # Get active session IDs from running processes
-    active_processes = await process_manager.list_processes()
+    repos, active_processes = await asyncio.gather(repos_task, processes_task)
+
+    # Build active session IDs set
     active_session_ids = {
         proc.claude_session_id
         for proc in active_processes
@@ -1111,6 +1273,64 @@ async def continue_session(session_id: str, data: ContinueSessionRequest = None)
         "working_dir": process.working_dir,
         "created_at": process.created_at.isoformat(),
         "claude_session_id": process.claude_session_id,
+    }
+
+
+# ==========================================
+# Kill Session
+# ==========================================
+
+@router.post("/sessions/{session_id}/kill")
+async def kill_session(session_id: str):
+    """
+    Kill an active session by terminating its process.
+
+    Works for both PTY processes (interactive) and headless sessions.
+    Returns success if the session was killed or wasn't running.
+    """
+    from app.services.headless_analyzer import headless_analyzer
+
+    killed_pty = False
+    killed_headless = False
+
+    # Try to find and kill a PTY process with this session ID
+    active_processes = await process_manager.list_processes()
+    for proc in active_processes:
+        if proc.claude_session_id == session_id:
+            await process_manager.kill(proc.id)
+            killed_pty = True
+            # Emit process ended event
+            await event_manager.emit(EventType.PROCESS_ENDED, {
+                "process_id": proc.id,
+                "session_id": session_id,
+                "working_dir": proc.working_dir,
+            })
+            break
+
+    # Try to cancel if it's a headless session
+    if await headless_analyzer.cancel(session_id):
+        killed_headless = True
+        headless_analyzer.unregister_running(session_id)
+
+    # Emit session completed event if we killed anything
+    if killed_pty or killed_headless:
+        # Try to find repo path for the event
+        sessions = _get_cached_sessions()
+        session = _find_session_by_id(sessions, session_id)
+        repo_path = session.repo_path if session else None
+
+        await event_manager.emit(EventType.SESSION_COMPLETED, {
+            "session_id": session_id,
+            "repo_path": repo_path,
+        })
+
+        # Invalidate cache since session status changed
+        invalidate_session_cache()
+
+    return {
+        "status": "killed" if (killed_pty or killed_headless) else "not_running",
+        "killed_pty": killed_pty,
+        "killed_headless": killed_headless,
     }
 
 

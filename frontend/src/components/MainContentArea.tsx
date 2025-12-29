@@ -106,6 +106,7 @@ export interface MainContentAreaProps {
   onCloseViewingSession: () => void;
   onSetViewMode: (sessionId: string, mode: ViewMode) => void;
   onKillProcess: (processId: string) => Promise<void>;
+  onKillSession: (sessionId: string) => Promise<void>;
   onClearActiveProcess: () => void;
 
   // Navigation
@@ -275,6 +276,7 @@ export function MainContentArea(props: MainContentAreaProps) {
     onCloseViewingSession,
     onSetViewMode,
     onKillProcess,
+    onKillSession,
     onClearActiveProcess,
     onShowIssue,
     onShowPR,
@@ -310,6 +312,7 @@ export function MainContentArea(props: MainContentAreaProps) {
     onCloseViewingSession,
     onSetViewMode,
     onKillProcess,
+    onKillSession,
     onClearActiveProcess,
     onShowIssue,
     onShowPR,

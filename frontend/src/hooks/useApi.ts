@@ -537,6 +537,20 @@ export function useSessions(filters: SessionFilters = {}) {
     return result;
   };
 
+  const killSession = async (sessionId: string): Promise<{ status: string; killed_pty: boolean; killed_headless: boolean }> => {
+    const result = await fetchJson<{ status: string; killed_pty: boolean; killed_headless: boolean }>(
+      `${API_BASE}/sessions/${sessionId}/kill`,
+      { method: 'POST' }
+    );
+    // Update the session to show as inactive in local state
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.session_id === sessionId ? { ...s, is_active: false } : s
+      )
+    );
+    return result;
+  };
+
   const deleteSession = async (sessionId: string): Promise<void> => {
     await fetchJson(`${API_BASE}/sessions/${sessionId}`, { method: 'DELETE' });
     // Remove from local state
@@ -588,7 +602,7 @@ export function useSessions(filters: SessionFilters = {}) {
 
   const totalPages = Math.ceil(total / perPage);
 
-  return { sessions, total, loading, refresh, continueSession, deleteSession, updateSessionMetadata, bulkDeleteSessions, bulkUpdateSessions, page, totalPages, goToPage };
+  return { sessions, total, loading, refresh, continueSession, killSession, deleteSession, updateSessionMetadata, bulkDeleteSessions, bulkUpdateSessions, page, totalPages, goToPage };
 }
 
 // Active/Recent Sessions (for the always-visible sessions panel)

@@ -1797,3 +1797,188 @@ class TestParseDatetimeNaive:
 
         # Since we strip timezone, they should compare as equal (same local time)
         assert result1 == result2
+
+
+class TestKillSession:
+    """Tests for POST /sessions/{session_id}/kill endpoint."""
+
+    def test_kill_pty_process_success(self, client, mock_discovered_session):
+        """Test killing a session with an active PTY process."""
+        mock_process = MagicMock()
+        mock_process.id = "proc-123"
+        mock_process.claude_session_id = "test-uuid-1234"
+        mock_process.working_dir = "/home/user/projects/myapp"
+
+        with patch("app.routers.sessions._get_cached_sessions", return_value=[mock_discovered_session]), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions.event_manager") as mock_events, \
+             patch("app.routers.sessions.invalidate_session_cache") as mock_invalidate:
+            mock_pm.list_processes = AsyncMock(return_value=[mock_process])
+            mock_pm.kill = AsyncMock(return_value=True)
+            mock_events.emit = AsyncMock()
+
+            response = client.post("/sessions/test-uuid-1234/kill")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "killed"
+            assert data["killed_pty"] is True
+            assert data["killed_headless"] is False
+
+            mock_pm.kill.assert_called_once_with("proc-123")
+            mock_invalidate.assert_called_once()
+
+    def test_kill_headless_session_success(self, client, mock_discovered_session):
+        """Test killing a headless session."""
+        with patch("app.routers.sessions._get_cached_sessions", return_value=[mock_discovered_session]), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions.headless_analyzer") as mock_headless, \
+             patch("app.routers.sessions.event_manager") as mock_events, \
+             patch("app.routers.sessions.invalidate_session_cache") as mock_invalidate:
+            mock_pm.list_processes = AsyncMock(return_value=[])  # No PTY processes
+            mock_headless.cancel = AsyncMock(return_value=True)
+            mock_headless.unregister_running = MagicMock()
+            mock_events.emit = AsyncMock()
+
+            response = client.post("/sessions/test-uuid-1234/kill")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "killed"
+            assert data["killed_pty"] is False
+            assert data["killed_headless"] is True
+
+            mock_headless.cancel.assert_called_once_with("test-uuid-1234")
+            mock_headless.unregister_running.assert_called_once_with("test-uuid-1234")
+            mock_invalidate.assert_called_once()
+
+    def test_kill_both_pty_and_headless(self, client, mock_discovered_session):
+        """Test killing when both PTY and headless are running (edge case)."""
+        mock_process = MagicMock()
+        mock_process.id = "proc-123"
+        mock_process.claude_session_id = "test-uuid-1234"
+        mock_process.working_dir = "/home/user/projects/myapp"
+
+        with patch("app.routers.sessions._get_cached_sessions", return_value=[mock_discovered_session]), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions.headless_analyzer") as mock_headless, \
+             patch("app.routers.sessions.event_manager") as mock_events, \
+             patch("app.routers.sessions.invalidate_session_cache") as mock_invalidate:
+            mock_pm.list_processes = AsyncMock(return_value=[mock_process])
+            mock_pm.kill = AsyncMock(return_value=True)
+            mock_headless.cancel = AsyncMock(return_value=True)
+            mock_headless.unregister_running = MagicMock()
+            mock_events.emit = AsyncMock()
+
+            response = client.post("/sessions/test-uuid-1234/kill")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "killed"
+            assert data["killed_pty"] is True
+            assert data["killed_headless"] is True
+
+    def test_kill_session_not_running(self, client, mock_discovered_session):
+        """Test killing a session that isn't running returns not_running."""
+        with patch("app.routers.sessions._get_cached_sessions", return_value=[mock_discovered_session]), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions.headless_analyzer") as mock_headless, \
+             patch("app.routers.sessions.event_manager") as mock_events, \
+             patch("app.routers.sessions.invalidate_session_cache") as mock_invalidate:
+            mock_pm.list_processes = AsyncMock(return_value=[])  # No PTY processes
+            mock_headless.cancel = AsyncMock(return_value=False)  # Not a headless session
+            mock_events.emit = AsyncMock()
+
+            response = client.post("/sessions/test-uuid-1234/kill")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "not_running"
+            assert data["killed_pty"] is False
+            assert data["killed_headless"] is False
+
+            # Cache should NOT be invalidated when nothing was killed
+            mock_invalidate.assert_not_called()
+
+    def test_kill_session_emits_events(self, client, mock_discovered_session):
+        """Test that killing a session emits appropriate events."""
+        mock_process = MagicMock()
+        mock_process.id = "proc-123"
+        mock_process.claude_session_id = "test-uuid-1234"
+        mock_process.working_dir = "/home/user/projects/myapp"
+
+        with patch("app.routers.sessions._get_cached_sessions", return_value=[mock_discovered_session]), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions.event_manager") as mock_events, \
+             patch("app.routers.sessions.invalidate_session_cache"):
+            mock_pm.list_processes = AsyncMock(return_value=[mock_process])
+            mock_pm.kill = AsyncMock(return_value=True)
+            mock_events.emit = AsyncMock()
+
+            response = client.post("/sessions/test-uuid-1234/kill")
+
+            assert response.status_code == 200
+
+            # Should emit PROCESS_ENDED and SESSION_COMPLETED events
+            assert mock_events.emit.call_count == 2
+
+            # Check PROCESS_ENDED event
+            process_ended_call = mock_events.emit.call_args_list[0]
+            from app.services.event_manager import EventType
+            assert process_ended_call[0][0] == EventType.PROCESS_ENDED
+            assert process_ended_call[0][1]["process_id"] == "proc-123"
+
+            # Check SESSION_COMPLETED event
+            session_completed_call = mock_events.emit.call_args_list[1]
+            assert session_completed_call[0][0] == EventType.SESSION_COMPLETED
+            assert session_completed_call[0][1]["session_id"] == "test-uuid-1234"
+
+    def test_kill_nonexistent_session_still_tries_kill(self, client):
+        """Test killing a session that doesn't have a transcript still attempts kill."""
+        # The endpoint doesn't require the session to exist in discovered sessions
+        # It just tries to kill any matching PTY/headless processes
+        with patch("app.routers.sessions._get_cached_sessions", return_value=[]), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions.headless_analyzer") as mock_headless, \
+             patch("app.routers.sessions.event_manager") as mock_events:
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_headless.cancel = AsyncMock(return_value=False)
+            mock_events.emit = AsyncMock()
+
+            response = client.post("/sessions/nonexistent-uuid/kill")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "not_running"
+
+    def test_kill_session_only_kills_matching_process(self, client, mock_discovered_session):
+        """Test that kill only affects processes with matching session ID."""
+        # Create two processes, only one matches the session ID
+        matching_process = MagicMock()
+        matching_process.id = "proc-match"
+        matching_process.claude_session_id = "test-uuid-1234"
+        matching_process.working_dir = "/home/user/projects/myapp"
+
+        other_process = MagicMock()
+        other_process.id = "proc-other"
+        other_process.claude_session_id = "different-uuid"
+        other_process.working_dir = "/home/user/projects/other"
+
+        with patch("app.routers.sessions._get_cached_sessions", return_value=[mock_discovered_session]), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions.headless_analyzer") as mock_headless, \
+             patch("app.routers.sessions.event_manager") as mock_events, \
+             patch("app.routers.sessions.invalidate_session_cache"):
+            mock_pm.list_processes = AsyncMock(return_value=[matching_process, other_process])
+            mock_pm.kill = AsyncMock(return_value=True)
+            mock_headless.cancel = AsyncMock(return_value=False)
+            mock_events.emit = AsyncMock()
+
+            response = client.post("/sessions/test-uuid-1234/kill")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["killed_pty"] is True
+
+            # Should only kill the matching process
+            mock_pm.kill.assert_called_once_with("proc-match")

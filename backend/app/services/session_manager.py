@@ -36,10 +36,21 @@ INITIAL_PTY_ROWS = 30
 INITIAL_PTY_COLS = 120
 
 # Timing constants for PTY operations
-CLAUDE_INIT_DELAY_SECS = 2.0  # Wait for Claude Code to initialize before sending prompt
+CLAUDE_INIT_POLL_INTERVAL_SECS = 0.05  # Polling interval when waiting for Claude to be ready
+CLAUDE_INIT_MAX_WAIT_SECS = 10.0  # Maximum time to wait for Claude to initialize
+CLAUDE_INIT_FALLBACK_SECS = 0.5  # Fallback delay if detection fails quickly
 PROMPT_ENTER_DELAY_SECS = 0.1  # Delay between typing prompt and pressing Enter
 READ_LOOP_POLL_INTERVAL_SECS = 0.01  # Polling interval for read loop to prevent busy waiting
 SIGTERM_SIGKILL_DELAY_SECS = 0.1  # Grace period between SIGTERM and SIGKILL
+
+# Patterns that indicate Claude Code is ready for input
+# These appear in the terminal output when Claude has finished initializing
+CLAUDE_READY_PATTERNS = [
+    "│",  # Box drawing character from Claude's UI
+    "╭",  # Top corner of Claude's prompt box
+    ">",  # Simple prompt indicator
+    "?",  # Query prompt
+]
 
 # Buffer size for reading from PTY file descriptor
 PTY_READ_BUFFER_SIZE = 4096
@@ -77,7 +88,13 @@ class Process:
     working_dir: str
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     session_id: int | None = None  # Links to Session (formerly Analysis) record
-    transcript: str = ""
+
+    # Transcript stored as list of chunks for O(1) append instead of O(n) string concat
+    _transcript_chunks: list[str] = field(default_factory=list)
+    # Cached versions to avoid repeated joins/encodes
+    _transcript_cache: str | None = field(default=None, repr=False)
+    _transcript_bytes_cache: bytes | None = field(default=None, repr=False)
+
     subscribers: list[Callable[[bytes], None]] = field(default_factory=list)
     _read_task: asyncio.Task | None = field(default=None, repr=False)
 
@@ -89,6 +106,34 @@ class Process:
     permission_mode: str = "default"
     max_turns: int = 0
     model: str = ""
+
+    def append_transcript(self, data: str) -> None:
+        """Append data to transcript efficiently using list accumulation."""
+        self._transcript_chunks.append(data)
+        # Invalidate caches
+        self._transcript_cache = None
+        self._transcript_bytes_cache = None
+
+    @property
+    def transcript(self) -> str:
+        """Get the full transcript as a string (cached)."""
+        if self._transcript_cache is None:
+            self._transcript_cache = "".join(self._transcript_chunks)
+        return self._transcript_cache
+
+    @property
+    def transcript_bytes(self) -> bytes:
+        """Get the full transcript as UTF-8 bytes (cached)."""
+        if self._transcript_bytes_cache is None:
+            self._transcript_bytes_cache = self.transcript.encode("utf-8", errors="replace")
+        return self._transcript_bytes_cache
+
+    @property
+    def transcript_length(self) -> int:
+        """Get the current transcript length without building full string."""
+        if self._transcript_cache is not None:
+            return len(self._transcript_cache)
+        return sum(len(chunk) for chunk in self._transcript_chunks)
 
 
 class ProcessManager:
@@ -275,14 +320,62 @@ class ProcessManager:
 
     async def _send_initial_prompt(self, process: Process, prompt: str):
         """Send initial prompt after Claude Code starts and is ready."""
-        # Wait for Claude to initialize and show the prompt
-        await asyncio.sleep(CLAUDE_INIT_DELAY_SECS)
+        # Wait for Claude to initialize by detecting ready patterns in output
+        await self._wait_for_claude_ready(process)
 
         # Send the prompt as if user typed it, then press Enter
         # Use \r (carriage return) like a real terminal Enter key, not \n (line feed)
         await self.write(process.id, prompt)
         await asyncio.sleep(PROMPT_ENTER_DELAY_SECS)
         await self.write(process.id, "\r")
+
+    async def _wait_for_claude_ready(self, process: Process):
+        """
+        Wait for Claude Code to be ready for input by detecting UI patterns.
+
+        Uses pattern matching on the terminal output instead of a fixed delay.
+        Falls back to a short delay if patterns aren't detected within timeout.
+        """
+        start_time = asyncio.get_event_loop().time()
+        last_transcript_len = 0
+
+        while True:
+            elapsed = asyncio.get_event_loop().time() - start_time
+
+            # Check if we've exceeded max wait time
+            if elapsed >= CLAUDE_INIT_MAX_WAIT_SECS:
+                logger.warning(
+                    "Claude ready detection timed out after %.1fs for process %s",
+                    elapsed, process.id
+                )
+                break
+
+            # Check transcript for ready patterns
+            current_transcript = process.transcript
+            if current_transcript:
+                # Look for any ready pattern in the output
+                for pattern in CLAUDE_READY_PATTERNS:
+                    if pattern in current_transcript:
+                        logger.debug(
+                            "Claude ready detected after %.2fs for process %s (pattern: %r)",
+                            elapsed, process.id, pattern
+                        )
+                        # Small additional delay to ensure UI is fully rendered
+                        await asyncio.sleep(0.1)
+                        return
+
+            # If transcript hasn't changed and we've waited a bit, use fallback
+            current_len = process.transcript_length
+            if elapsed >= CLAUDE_INIT_FALLBACK_SECS and current_len == last_transcript_len:
+                # No new output for a while, assume ready
+                logger.debug(
+                    "Claude ready (no new output) after %.2fs for process %s",
+                    elapsed, process.id
+                )
+                return
+
+            last_transcript_len = current_len
+            await asyncio.sleep(CLAUDE_INIT_POLL_INTERVAL_SECS)
 
     async def _read_loop(self, process: Process):
         """Continuously read from PTY and broadcast to subscribers."""
@@ -297,7 +390,8 @@ class ProcessManager:
 
                 if data:
                     decoded = data.decode("utf-8", errors="replace")
-                    process.transcript += decoded
+                    # Use append_transcript for O(1) performance instead of O(n) string concat
+                    process.append_transcript(decoded)
 
                     # Notify all subscribers
                     for callback in process.subscribers:

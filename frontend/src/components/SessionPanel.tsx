@@ -28,6 +28,7 @@ interface SessionPanelProps {
 
   // Process actions
   onKillProcess: (processId: string) => Promise<void>;
+  onKillSession: (sessionId: string) => Promise<void>;
   onClearActiveProcess: () => void;
 
   // Navigation
@@ -115,6 +116,7 @@ export function SessionPanel({
   onCloseViewingSession,
   onSetViewMode,
   onKillProcess,
+  onKillSession,
   onClearActiveProcess,
   onShowIssue,
   onShowPR,
@@ -161,7 +163,8 @@ export function SessionPanel({
             session={activeSession}
             processId={activeProcessId}
             onClose={async () => {
-              await onKillProcess(activeProcessId);
+              // Use killSession to handle both PTY and headless sessions
+              await onKillSession(activeSession.session_id);
               onClearActiveProcess();
             }}
             onShowIssue={onShowIssue}
@@ -175,7 +178,7 @@ export function SessionPanel({
             needsAttention={needsAttention}
           />
         ) : activeProcessId ? (
-          // Fallback to terminal-only if no session found yet
+          // Fallback to terminal-only if no session found yet (orphan process)
           <Terminal
             processId={activeProcessId}
             onClose={async () => {

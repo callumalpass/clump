@@ -335,9 +335,10 @@ async def process_websocket(websocket: WebSocket, process_id: str):
 
     process_manager.subscribe(process_id, on_output)
 
-    # Send existing transcript
-    if process.transcript:
-        await websocket.send_bytes(process.transcript.encode())
+    # Send existing transcript using cached bytes (avoids re-encoding on each reconnect)
+    transcript_bytes = process.transcript_bytes
+    if transcript_bytes:
+        await websocket.send_bytes(transcript_bytes)
 
     async def send_output():
         """Task to send output to client."""
