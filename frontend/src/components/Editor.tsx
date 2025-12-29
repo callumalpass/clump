@@ -15,7 +15,11 @@ const darkTheme = EditorView.theme({
     color: '#e6edf3',
     fontSize: '14px',
   },
+  '.cm-scroller': {
+    backgroundColor: '#0d1117',
+  },
   '.cm-content': {
+    backgroundColor: '#0d1117',
     caretColor: '#58a6ff',
     fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
   },
@@ -26,7 +30,7 @@ const darkTheme = EditorView.theme({
     borderLeftColor: '#58a6ff',
   },
   '.cm-selectionBackground, ::selection': {
-    backgroundColor: '#264f78 !important',
+    backgroundColor: '#264f78',
   },
   '&.cm-focused .cm-selectionBackground': {
     backgroundColor: '#264f78',
@@ -37,10 +41,10 @@ const darkTheme = EditorView.theme({
     border: 'none',
   },
   '.cm-activeLineGutter': {
-    backgroundColor: '#161b22',
+    backgroundColor: '#0d1117',
   },
   '.cm-activeLine': {
-    backgroundColor: '#161b2280',
+    backgroundColor: '#0d1117',
   },
   '.cm-line': {
     padding: '0 4px',
@@ -165,7 +169,7 @@ export function Editor({
         ...historyKeymap,
       ]),
       markdown(),
-      darkTheme,
+      Prec.highest(darkTheme),
       EditorView.lineWrapping,
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
@@ -261,7 +265,7 @@ export function Editor({
     <div className="relative">
       <div
         ref={containerRef}
-        className={`border border-gray-600 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent ${
+        className={`bg-[#0d1117] border border-gray-600 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent ${
           disabled ? 'opacity-50 cursor-not-allowed' : ''
         }`}
         style={{
