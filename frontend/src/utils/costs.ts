@@ -118,12 +118,12 @@ export function calculateCost(
 
 /**
  * Format cost as a currency string.
- * Handles edge cases: negative costs are shown as $0.00, very small costs as <$0.01.
+ * Handles edge cases: zero/negative costs are shown as $0.00, very small costs as <$0.01.
  */
 export function formatCost(cost: number): string {
-  // Handle negative costs defensively (shouldn't happen, but treat as zero)
+  // Handle zero and negative costs defensively (negatives shouldn't happen, treat as zero)
   if (cost <= 0) {
-    return '<$0.01';
+    return '$0.00';
   }
   if (cost < 0.01) {
     // Show in cents for very small amounts

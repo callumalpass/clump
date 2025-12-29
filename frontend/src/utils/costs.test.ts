@@ -151,14 +151,14 @@ describe('formatCost', () => {
   });
 
   it('handles zero cost', () => {
-    expect(formatCost(0)).toBe('<$0.01');
+    expect(formatCost(0)).toBe('$0.00');
   });
 
   it('handles negative costs defensively', () => {
-    // Negative costs shouldn't occur but should be handled gracefully
-    expect(formatCost(-1)).toBe('<$0.01');
-    expect(formatCost(-0.50)).toBe('<$0.01');
-    expect(formatCost(-0.001)).toBe('<$0.01');
+    // Negative costs shouldn't occur but should be handled gracefully as $0.00
+    expect(formatCost(-1)).toBe('$0.00');
+    expect(formatCost(-0.50)).toBe('$0.00');
+    expect(formatCost(-0.001)).toBe('$0.00');
   });
 
   it('handles boundary values correctly', () => {

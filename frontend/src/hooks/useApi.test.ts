@@ -1017,3 +1017,456 @@ describe('downloadExport', () => {
     expect(mockClick).toHaveBeenCalled();
   });
 });
+
+// Import additional hooks and functions for extended tests
+import {
+  useSessionCounts,
+  useStats,
+  fetchIssue,
+  fetchPR,
+  fetchSessionDetail,
+  fetchSubsession,
+  addEntityToSession,
+  removeEntityFromSession,
+  closeIssue,
+  reopenIssue,
+  createIssue,
+  createCommand,
+  updateCommand,
+  deleteCommand,
+  exportSession,
+} from './useApi';
+
+describe('useSessionCounts', () => {
+  it('fetches session counts on mount', async () => {
+    const mockCounts = {
+      counts: [
+        { repo_id: 1, total: 10, active: 2 },
+        { repo_id: 2, total: 5, active: 0 },
+      ],
+    };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockCounts));
+
+    const { result } = renderHook(() => useSessionCounts());
+
+    expect(result.current.loading).toBe(true);
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.counts.get(1)).toEqual({ repo_id: 1, total: 10, active: 2 });
+    expect(result.current.counts.get(2)).toEqual({ repo_id: 2, total: 5, active: 0 });
+  });
+
+  it('returns empty map when no counts', async () => {
+    const mockCounts = { counts: [] };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockCounts));
+
+    const { result } = renderHook(() => useSessionCounts());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.counts.size).toBe(0);
+  });
+
+  it('handles fetch errors gracefully', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+    const { result } = renderHook(() => useSessionCounts());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.counts.size).toBe(0);
+    expect(consoleSpy).toHaveBeenCalled();
+
+    consoleSpy.mockRestore();
+  });
+
+  it('updateCounts updates the counts map', async () => {
+    const mockCounts = {
+      counts: [{ repo_id: 1, total: 10, active: 2 }],
+    };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockCounts));
+
+    const { result } = renderHook(() => useSessionCounts());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    act(() => {
+      result.current.updateCounts({
+        '2': { repo_id: 2, total: 5, active: 1 },
+      });
+    });
+
+    expect(result.current.counts.get(1)).toEqual({ repo_id: 1, total: 10, active: 2 });
+    expect(result.current.counts.get(2)).toEqual({ repo_id: 2, total: 5, active: 1 });
+  });
+});
+
+describe('useStats', () => {
+  it('fetches stats on mount', async () => {
+    const mockStats = {
+      total_sessions: 100,
+      total_tokens: 1000000,
+      models: { 'claude-3-5-sonnet': 80, 'claude-3-opus': 20 },
+    };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockStats));
+
+    const { result } = renderHook(() => useStats());
+
+    expect(result.current.loading).toBe(true);
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.stats).toEqual(mockStats);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('handles fetch errors', async () => {
+    mockFetch.mockResolvedValueOnce(createMockResponse({}, false, 500));
+
+    const { result } = renderHook(() => useStats());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.error).toBe('HTTP 500: Error');
+    expect(result.current.stats).toBeNull();
+  });
+
+  it('provides refresh function', async () => {
+    const mockStats = { total_sessions: 50 };
+    mockFetch
+      .mockResolvedValueOnce(createMockResponse(mockStats))
+      .mockResolvedValueOnce(createMockResponse({ total_sessions: 60 }));
+
+    const { result } = renderHook(() => useStats());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    await act(async () => {
+      result.current.refresh();
+    });
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+  });
+});
+
+describe('fetchIssue', () => {
+  it('fetches issue detail', async () => {
+    const mockIssue = { number: 42, title: 'Test Issue', body: 'Description' };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockIssue));
+
+    const result = await fetchIssue(1, 42);
+
+    expect(result).toEqual(mockIssue);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/repos/1/issues/42',
+      expect.objectContaining({
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+  });
+
+  it('throws on HTTP error', async () => {
+    mockFetch.mockResolvedValueOnce(createMockResponse({}, false, 404));
+
+    await expect(fetchIssue(1, 999)).rejects.toThrow('HTTP 404');
+  });
+});
+
+describe('fetchPR', () => {
+  it('fetches PR detail', async () => {
+    const mockPR = { number: 123, title: 'Test PR', body: 'Changes' };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockPR));
+
+    const result = await fetchPR(1, 123);
+
+    expect(result).toEqual(mockPR);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/repos/1/prs/123',
+      expect.objectContaining({
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+  });
+});
+
+describe('fetchSessionDetail', () => {
+  it('fetches session detail', async () => {
+    const mockSession = {
+      session_id: 'sess-123',
+      messages: [],
+      total_tokens: 5000,
+    };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockSession));
+
+    const result = await fetchSessionDetail('sess-123');
+
+    expect(result).toEqual(mockSession);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/sessions/sess-123',
+      expect.objectContaining({
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+  });
+});
+
+describe('fetchSubsession', () => {
+  it('fetches subsession detail', async () => {
+    const mockSubsession = {
+      agent_id: 'agent-abc',
+      parent_session_id: 'sess-123',
+      messages: [],
+    };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockSubsession));
+
+    const result = await fetchSubsession('sess-123', 'agent-abc');
+
+    expect(result).toEqual(mockSubsession);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/sessions/sess-123/subsession/agent-abc',
+      expect.objectContaining({
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+  });
+});
+
+describe('addEntityToSession', () => {
+  it('adds entity to session', async () => {
+    const mockEntity = { kind: 'issue', number: 42 };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockEntity));
+
+    const result = await addEntityToSession('sess-123', 'issue', 42);
+
+    expect(result).toEqual(mockEntity);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/sessions/sess-123/entities',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ kind: 'issue', number: 42 }),
+      })
+    );
+  });
+});
+
+describe('removeEntityFromSession', () => {
+  it('removes entity from session', async () => {
+    mockFetch.mockResolvedValueOnce(createMockResponse({}));
+
+    await removeEntityFromSession('sess-123', 0);
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/sessions/sess-123/entities/0',
+      expect.objectContaining({
+        method: 'DELETE',
+      })
+    );
+  });
+});
+
+describe('closeIssue', () => {
+  it('closes an issue', async () => {
+    mockFetch.mockResolvedValueOnce(createMockResponse({}));
+
+    await closeIssue(1, 42);
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/repos/1/issues/42/close',
+      expect.objectContaining({
+        method: 'POST',
+      })
+    );
+  });
+});
+
+describe('reopenIssue', () => {
+  it('reopens an issue', async () => {
+    mockFetch.mockResolvedValueOnce(createMockResponse({}));
+
+    await reopenIssue(1, 42);
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/repos/1/issues/42/reopen',
+      expect.objectContaining({
+        method: 'POST',
+      })
+    );
+  });
+});
+
+describe('createIssue', () => {
+  it('creates an issue with all parameters', async () => {
+    const mockIssue = { number: 99, title: 'New Issue' };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockIssue));
+
+    const result = await createIssue(1, {
+      title: 'New Issue',
+      body: 'Issue description',
+      labels: ['bug', 'urgent'],
+      assignees: ['user1'],
+    });
+
+    expect(result).toEqual(mockIssue);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/repos/1/issues',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'New Issue',
+          body: 'Issue description',
+          labels: ['bug', 'urgent'],
+          assignees: ['user1'],
+        }),
+      })
+    );
+  });
+
+  it('creates issue with minimal parameters', async () => {
+    const mockIssue = { number: 100, title: 'Minimal Issue' };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockIssue));
+
+    const result = await createIssue(1, {
+      title: 'Minimal Issue',
+      body: 'Description',
+    });
+
+    expect(result).toEqual(mockIssue);
+  });
+});
+
+describe('createCommand', () => {
+  it('creates a command for issues', async () => {
+    const mockCommand = { id: 'cmd-new', name: 'New Command', shortName: 'new' };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockCommand));
+
+    const result = await createCommand('issue', {
+      name: 'New Command',
+      shortName: 'new',
+      description: 'A new command',
+      template: 'Do something for {{number}}',
+    });
+
+    expect(result).toEqual(mockCommand);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/commands/issue',
+      expect.objectContaining({
+        method: 'POST',
+      })
+    );
+  });
+
+  it('includes repoPath when provided', async () => {
+    const mockCommand = { id: 'cmd-new', name: 'New Command' };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockCommand));
+
+    await createCommand('pr', {
+      name: 'PR Command',
+      shortName: 'pr-cmd',
+      description: 'PR command',
+      template: 'Review PR {{number}}',
+    }, '/path/to/repo');
+
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('repo_path=%2Fpath%2Fto%2Frepo');
+  });
+});
+
+describe('updateCommand', () => {
+  it('updates a command', async () => {
+    const mockCommand = { id: 'cmd-1', name: 'Updated Command' };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockCommand));
+
+    const result = await updateCommand('issue', 'cmd-1', {
+      name: 'Updated Command',
+      shortName: 'updated',
+      description: 'Updated description',
+      template: 'Updated template',
+    });
+
+    expect(result).toEqual(mockCommand);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/commands/issue/cmd-1',
+      expect.objectContaining({
+        method: 'PUT',
+      })
+    );
+  });
+});
+
+describe('deleteCommand', () => {
+  it('deletes a command', async () => {
+    mockFetch.mockResolvedValueOnce(createMockResponse({}));
+
+    await deleteCommand('issue', 'cmd-1');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/commands/issue/cmd-1',
+      expect.objectContaining({
+        method: 'DELETE',
+      })
+    );
+  });
+
+  it('includes repoPath when provided', async () => {
+    mockFetch.mockResolvedValueOnce(createMockResponse({}));
+
+    await deleteCommand('pr', 'cmd-2', '/path/to/repo');
+
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('repo_path=%2Fpath%2Fto%2Frepo');
+  });
+});
+
+describe('exportSession', () => {
+  it('exports session as markdown by default', async () => {
+    const mockExport = {
+      content: '# Session\n\nContent here',
+      filename: 'session-abc123.md',
+      format: 'markdown',
+    };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockExport));
+
+    const result = await exportSession('sess-123');
+
+    expect(result).toEqual(mockExport);
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/sessions/sess-123/export?format=markdown',
+      expect.objectContaining({
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+  });
+
+  it('exports session with specified format', async () => {
+    const mockExport = {
+      content: '{"messages": []}',
+      filename: 'session-abc123.json',
+      format: 'json',
+    };
+    mockFetch.mockResolvedValueOnce(createMockResponse(mockExport));
+
+    const result = await exportSession('sess-123', 'json');
+
+    expect(result).toEqual(mockExport);
+    const calledUrl = mockFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('format=json');
+  });
+});
