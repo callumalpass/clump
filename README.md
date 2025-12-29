@@ -1,6 +1,12 @@
 # Clump
 
-Web UI for running Claude Code against GitHub issues and PRs.
+Web UI for running multiple Claude Code sessions against GitHub issues and PRs.
+
+## Motivation
+
+Claude Code runs in a terminal. GitHub issues and PRs live in a browser. Working on GitHub repos with Claude Code means switching between the two and manually providing context.
+
+Clump embeds Claude Code terminals in a web UI alongside GitHub data. It fetches issues and PRs via the GitHub API, spawns Claude Code processes, and saves transcripts to disk. Sessions are linked to the issues or PRs they analyze, so you can see what analyses have been run on a given issue. You can run multiple sessions in parallel across tabs, browse session history, and search past transcripts. A scheduler handles cron-based recurring runs.
 
 ## What it does
 
