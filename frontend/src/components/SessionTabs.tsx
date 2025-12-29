@@ -50,6 +50,59 @@ const MAX_TAB_TITLE_LENGTH = 30;
 /** Suffix appended to truncated titles */
 const TRUNCATION_SUFFIX = '...';
 
+/** Session status for styling and accessibility purposes */
+type SessionStatus = 'needs-attention' | 'running' | 'completed';
+
+/** Derives session status from attention and running state */
+function getSessionStatus(needsAttention: boolean, isRunning: boolean): SessionStatus {
+  if (needsAttention) return 'needs-attention';
+  if (isRunning) return 'running';
+  return 'completed';
+}
+
+/** Returns the CSS classes for a tab based on active and attention state */
+function getTabClassName(isActive: boolean, needsAttention: boolean): string {
+  if (isActive) return 'text-white bg-gray-800';
+  if (needsAttention) return 'text-warning-300 bg-warning-500/10 hover:bg-warning-500/15';
+  return 'text-gray-400 bg-gray-800 hover:text-pink-400 hover:bg-gray-850';
+}
+
+/** Returns the CSS classes for status indicator based on session status */
+function getStatusIndicatorClassName(status: SessionStatus): string {
+  switch (status) {
+    case 'needs-attention':
+      return 'bg-danger-400 status-pulse-urgent';
+    case 'running':
+      return 'bg-blurple-400 animate-pulse';
+    case 'completed':
+      return 'bg-mint-400';
+  }
+}
+
+/** Returns the title attribute for status indicator */
+function getStatusTitle(status: SessionStatus): string {
+  switch (status) {
+    case 'needs-attention':
+      return 'Needs attention - permission request pending';
+    case 'running':
+      return 'Session is running';
+    case 'completed':
+      return 'Session completed';
+  }
+}
+
+/** Returns the aria-label for status indicator */
+function getStatusAriaLabel(status: SessionStatus): string {
+  switch (status) {
+    case 'needs-attention':
+      return 'Needs attention';
+    case 'running':
+      return 'Running';
+    case 'completed':
+      return 'Completed';
+  }
+}
+
 interface SessionTabsProps {
   /** Sessions to show as tabs */
   sessions: SessionSummary[];
@@ -138,6 +191,8 @@ export function SessionTabs({
         const sessionNeedsAttention = needsAttention?.(session.session_id) ?? false;
         const isActiveTab = activeSessionId === session.session_id;
 
+        const sessionStatus = getSessionStatus(sessionNeedsAttention, isRunning);
+
         return (
           <div
             key={session.session_id}
@@ -146,13 +201,7 @@ export function SessionTabs({
             }}
             role="tab"
             tabIndex={0}
-            className={`session-tab session-tab-enter group flex items-center gap-2 px-4 py-2.5 cursor-pointer rounded-stoody-lg transition-all duration-150 ${focusRing} ${
-              isActiveTab
-                ? 'text-white bg-gray-800'
-                : sessionNeedsAttention
-                  ? 'text-warning-300 bg-warning-500/10 hover:bg-warning-500/15'
-                  : 'text-gray-400 bg-gray-800 hover:text-pink-400 hover:bg-gray-850'
-            }`}
+            className={`session-tab session-tab-enter group flex items-center gap-2 px-4 py-2.5 cursor-pointer rounded-stoody-lg transition-all duration-150 ${focusRing} ${getTabClassName(isActiveTab, sessionNeedsAttention)}`}
             onClick={() => onSelectSession(session.session_id)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
@@ -165,27 +214,9 @@ export function SessionTabs({
           >
             {/* Status indicator */}
             <span
-              className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                sessionNeedsAttention
-                  ? 'bg-danger-400 status-pulse-urgent'
-                  : isRunning
-                    ? 'bg-blurple-400 animate-pulse'
-                    : 'bg-mint-400'
-              }`}
-              title={
-                sessionNeedsAttention
-                  ? 'Needs attention - permission request pending'
-                  : isRunning
-                    ? 'Session is running'
-                    : 'Session completed'
-              }
-              aria-label={
-                sessionNeedsAttention
-                  ? 'Needs attention'
-                  : isRunning
-                    ? 'Running'
-                    : 'Completed'
-              }
+              className={`w-2.5 h-2.5 rounded-full shrink-0 ${getStatusIndicatorClassName(sessionStatus)}`}
+              title={getStatusTitle(sessionStatus)}
+              aria-label={getStatusAriaLabel(sessionStatus)}
             />
             {/* Entity badges - show linked issues/PRs */}
             {session.entities && session.entities.length > 0 && (
