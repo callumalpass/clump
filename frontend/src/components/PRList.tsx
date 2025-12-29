@@ -1,6 +1,7 @@
 import { useMemo, memo } from 'react';
 import type { PR, SessionSummary, Process, CommandMetadata } from '../types';
 import type { PRFilters, SessionStatusFilter } from '../hooks/useApi';
+import { useSessionStatus } from '../hooks/useSessionStatus';
 import { PRStartSessionButton } from './PRStartSessionButton';
 import { DiffBar } from './PRDetail';
 import { Pagination, PaginationSkeleton } from './Pagination';
@@ -37,17 +38,14 @@ const PRListItem = memo(function PRListItem({
   onSelect,
   onStartSession,
 }: PRListItemProps) {
-  const hasRunning = prSessions.some(s => s.is_active);
-  const hasCompleted = prSessions.length > 0 && !hasRunning;
+  const { hasRunning, hasCompleted } = useSessionStatus(prSessions);
 
   return (
     <div
       role="button"
       tabIndex={0}
-      className={`group p-4 mx-2 my-2 cursor-pointer rounded-stoody-lg transition-colors duration-150 list-item-enter shadow-stoody-sm focus-visible:ring-2 focus-visible:ring-blurple-400 focus-visible:ring-inset ${
-        isSelected
-          ? 'bg-blurple-500/10'
-          : 'bg-gray-800 hover:bg-gray-750'
+      className={`group p-4 mx-2 my-2 cursor-pointer rounded-stoody-lg transition-colors duration-150 list-item-enter list-item-hover focus-visible:ring-2 focus-visible:ring-blurple-400 focus-visible:ring-inset ${
+        isSelected ? 'list-item-selected' : ''
       }`}
       style={{ '--item-index': Math.min(index, 15) } as React.CSSProperties}
       onClick={onSelect}
@@ -276,7 +274,7 @@ export function PRList({
     return (
       <div className="flex flex-col flex-1 min-h-0">
         {filterBar}
-        <div className="divide-y divide-gray-700">
+        <div className="flex flex-col">
           {[0, 1, 2, 3, 4].map((i) => (
             <div
               key={i}
@@ -357,7 +355,7 @@ export function PRList({
   return (
     <div className="flex flex-col flex-1 min-h-0">
       {filterBar}
-      <div className="flex-1 overflow-auto min-h-0 divide-y divide-gray-700">
+      <div className="flex-1 overflow-auto min-h-0 flex flex-col">
         {filteredPRs.map((pr, index) => (
           <PRListItem
             key={pr.number}

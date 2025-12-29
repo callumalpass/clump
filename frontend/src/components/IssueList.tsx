@@ -1,6 +1,7 @@
 import { useMemo, memo } from 'react';
 import type { Issue, SessionSummary, Tag, IssueTagsMap, Process, CommandMetadata } from '../types';
 import type { IssueFilters as IssueFiltersType } from '../hooks/useApi';
+import { useSessionStatus } from '../hooks/useSessionStatus';
 import { IssueFilters } from './IssueFilters';
 import { StartSessionButton } from './StartSessionButton';
 import { Pagination, PaginationSkeleton } from './Pagination';
@@ -29,17 +30,14 @@ const IssueListItem = memo(function IssueListItem({
   onSelect,
   onStartSession,
 }: IssueListItemProps) {
-  const hasRunning = issueSessions.some(s => s.is_active);
-  const hasCompleted = issueSessions.length > 0 && !hasRunning;
+  const { hasRunning, hasCompleted } = useSessionStatus(issueSessions);
 
   return (
     <div
       role="button"
       tabIndex={0}
-      className={`group p-4 mx-2 my-2 cursor-pointer rounded-stoody-lg transition-colors duration-150 list-item-enter shadow-stoody-sm focus-visible:ring-2 focus-visible:ring-blurple-400 focus-visible:ring-inset ${
-        isSelected
-          ? 'bg-blurple-500/10'
-          : 'bg-gray-800 hover:bg-gray-750'
+      className={`group p-4 mx-2 my-2 cursor-pointer rounded-stoody-lg transition-colors duration-150 list-item-enter list-item-hover focus-visible:ring-2 focus-visible:ring-blurple-400 focus-visible:ring-inset ${
+        isSelected ? 'list-item-selected' : ''
       }`}
       style={{ '--item-index': Math.min(index, 15) } as React.CSSProperties}
       onClick={onSelect}
@@ -131,6 +129,7 @@ interface IssueListProps {
   issueCommands: CommandMetadata[];
   onStartSession: (issue: Issue, command: CommandMetadata) => void;
   loading: boolean;
+  error?: string | null;
   page: number;
   totalPages: number;
   total: number;
@@ -154,6 +153,7 @@ export function IssueList({
   issueCommands,
   onStartSession,
   loading,
+  error,
   page,
   totalPages,
   total,
@@ -220,7 +220,7 @@ export function IssueList({
 
       {/* Loading state - show skeleton items with shimmer effect */}
       {loading && (
-        <div className="divide-y divide-gray-700">
+        <div className="flex flex-col">
           {[0, 1, 2, 3, 4].map((i) => (
             <div
               key={i}
@@ -246,8 +246,36 @@ export function IssueList({
         </div>
       )}
 
+      {/* Error state - API failure */}
+      {!loading && error && (
+        <div className="flex-1 flex flex-col items-center justify-center p-8">
+          <div className="text-center p-6 rounded-xl bg-danger-500/10 border border-danger-500/30 max-w-sm empty-state-enter">
+            <div className="w-14 h-14 rounded-full bg-danger-500/20 flex items-center justify-center mx-auto mb-4">
+              <svg className="w-7 h-7 text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <p className="text-danger-300 font-medium mb-1">Failed to load issues</p>
+            <p className="text-gray-400 text-sm mb-4">{error}</p>
+            {onRefresh && (
+              <button
+                onClick={onRefresh}
+                className={`px-4 py-2 text-xs bg-danger-500/20 hover:bg-danger-500/30 active:scale-95 text-danger-300 hover:text-danger-200 border border-danger-500/30 rounded-stoody transition-all ${focusRing}`}
+              >
+                <span className="flex items-center gap-2">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Try again
+                </span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Empty state - distinguish between "no issues exist" vs "filters too restrictive" */}
-      {!loading && issues.length === 0 && (
+      {!loading && !error && issues.length === 0 && (
         <div className="flex-1 flex flex-col items-center justify-center p-8">
           <div className="text-center p-6 rounded-xl bg-gray-800/40 border border-gray-750/50 max-w-xs empty-state-enter">
             <div className="w-14 h-14 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4 empty-state-icon-float">
@@ -350,7 +378,7 @@ export function IssueList({
 
       {/* Issue list */}
       {!loading && filteredIssues.length > 0 && (
-        <div className="flex-1 overflow-auto min-h-0 divide-y divide-gray-700">
+        <div className="flex-1 overflow-auto min-h-0 flex flex-col">
           {filteredIssues.map((issue, index) => (
             <IssueListItem
               key={issue.number}
