@@ -6,6 +6,7 @@ import type {
   CommandsResponse, CommandMetadata, SubsessionDetail,
   RepoSessionCount, SessionCountsResponse, StatsResponse, BulkOperationResult
 } from '../types';
+import { formatLocalDate } from '../utils/time';
 
 export interface EntityInput {
   kind: EntityKind;
@@ -459,29 +460,25 @@ export function useSessions(filters: SessionFilters = {}) {
       // Handle date range filtering
       if (dateRange && dateRange !== 'all') {
         const today = new Date();
-        const formatDate = (d: Date): string => {
-          const iso = d.toISOString();
-          return iso.substring(0, 10); // YYYY-MM-DD format
-        };
 
         if (dateRange === 'today') {
-          params.set('date_from', formatDate(today));
-          params.set('date_to', formatDate(today));
+          params.set('date_from', formatLocalDate(today));
+          params.set('date_to', formatLocalDate(today));
         } else if (dateRange === 'yesterday') {
           const yesterday = new Date(today);
           yesterday.setDate(yesterday.getDate() - 1);
-          params.set('date_from', formatDate(yesterday));
-          params.set('date_to', formatDate(yesterday));
+          params.set('date_from', formatLocalDate(yesterday));
+          params.set('date_to', formatLocalDate(yesterday));
         } else if (dateRange === 'week') {
           const weekAgo = new Date(today);
           weekAgo.setDate(weekAgo.getDate() - 7);
-          params.set('date_from', formatDate(weekAgo));
-          params.set('date_to', formatDate(today));
+          params.set('date_from', formatLocalDate(weekAgo));
+          params.set('date_to', formatLocalDate(today));
         } else if (dateRange === 'month') {
           const monthAgo = new Date(today);
           monthAgo.setDate(monthAgo.getDate() - 30);
-          params.set('date_from', formatDate(monthAgo));
-          params.set('date_to', formatDate(today));
+          params.set('date_from', formatLocalDate(monthAgo));
+          params.set('date_to', formatLocalDate(today));
         } else if (dateRange === 'custom') {
           // Use explicit dateFrom/dateTo for custom range
           if (dateFrom) params.set('date_from', dateFrom);

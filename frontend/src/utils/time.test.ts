@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { formatRelativeTime, getTimeWithTooltip, formatDuration, isRecentlyModified } from './time';
+import { formatRelativeTime, getTimeWithTooltip, formatDuration, isRecentlyModified, formatLocalDate } from './time';
 
 describe('formatRelativeTime', () => {
   beforeEach(() => {
@@ -503,6 +503,94 @@ describe('isRecentlyModified', () => {
     it('returns false for malformed dates', () => {
       expect(isRecentlyModified('2024-13-45')).toBe(false);
       expect(isRecentlyModified('abc-def-ghi')).toBe(false);
+    });
+  });
+});
+
+describe('formatLocalDate', () => {
+  describe('basic formatting', () => {
+    it('formats dates with correct YYYY-MM-DD format', () => {
+      const date = new Date(2024, 0, 15); // January 15, 2024 (months are 0-indexed)
+      expect(formatLocalDate(date)).toBe('2024-01-15');
+    });
+
+    it('pads single-digit months with leading zero', () => {
+      const date = new Date(2024, 0, 1); // January 1
+      expect(formatLocalDate(date)).toBe('2024-01-01');
+
+      const date2 = new Date(2024, 8, 15); // September 15
+      expect(formatLocalDate(date2)).toBe('2024-09-15');
+    });
+
+    it('pads single-digit days with leading zero', () => {
+      const date = new Date(2024, 5, 5); // June 5
+      expect(formatLocalDate(date)).toBe('2024-06-05');
+
+      const date2 = new Date(2024, 11, 9); // December 9
+      expect(formatLocalDate(date2)).toBe('2024-12-09');
+    });
+
+    it('handles double-digit months correctly', () => {
+      const date = new Date(2024, 9, 15); // October 15
+      expect(formatLocalDate(date)).toBe('2024-10-15');
+
+      const date2 = new Date(2024, 10, 20); // November 20
+      expect(formatLocalDate(date2)).toBe('2024-11-20');
+
+      const date3 = new Date(2024, 11, 25); // December 25
+      expect(formatLocalDate(date3)).toBe('2024-12-25');
+    });
+
+    it('handles double-digit days correctly', () => {
+      const date = new Date(2024, 5, 15); // June 15
+      expect(formatLocalDate(date)).toBe('2024-06-15');
+
+      const date2 = new Date(2024, 5, 31); // June 31 (invalid, becomes July 1)
+      // JavaScript auto-corrects this
+      expect(formatLocalDate(date2)).toBe('2024-07-01');
+    });
+  });
+
+  describe('uses local time (not UTC)', () => {
+    it('uses local date components, not UTC', () => {
+      // This is the key test: formatLocalDate should use getFullYear/getMonth/getDate
+      // (local time) instead of toISOString which converts to UTC first.
+      //
+      // For a date object created from local time, formatLocalDate should return
+      // the date in local timezone, matching how the Date was constructed.
+      const localDate = new Date(2024, 5, 15, 23, 59, 59); // June 15, 2024 at 11:59:59 PM local
+      expect(formatLocalDate(localDate)).toBe('2024-06-15');
+    });
+
+    it('handles dates that might cross day boundaries in UTC', () => {
+      // Create a date late at night - in some timezones, the UTC day would be different
+      // formatLocalDate should still return the LOCAL date
+      const lateNight = new Date(2024, 5, 15, 23, 0, 0); // 11 PM local time on June 15
+      expect(formatLocalDate(lateNight)).toBe('2024-06-15');
+
+      const earlyMorning = new Date(2024, 5, 15, 1, 0, 0); // 1 AM local time on June 15
+      expect(formatLocalDate(earlyMorning)).toBe('2024-06-15');
+    });
+  });
+
+  describe('edge cases', () => {
+    it('handles year boundaries', () => {
+      const newYearsEve = new Date(2024, 11, 31); // December 31
+      expect(formatLocalDate(newYearsEve)).toBe('2024-12-31');
+
+      const newYearsDay = new Date(2025, 0, 1); // January 1
+      expect(formatLocalDate(newYearsDay)).toBe('2025-01-01');
+    });
+
+    it('handles leap years', () => {
+      const leapDay = new Date(2024, 1, 29); // February 29, 2024 (leap year)
+      expect(formatLocalDate(leapDay)).toBe('2024-02-29');
+    });
+
+    it('handles different years', () => {
+      expect(formatLocalDate(new Date(2020, 5, 15))).toBe('2020-06-15');
+      expect(formatLocalDate(new Date(2000, 0, 1))).toBe('2000-01-01');
+      expect(formatLocalDate(new Date(1999, 11, 31))).toBe('1999-12-31');
     });
   });
 });

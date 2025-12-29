@@ -403,6 +403,182 @@ describe('useSessions', () => {
     expect(calledUrl).toContain('has_entities=true');
     expect(calledUrl).toContain('search=test');
   });
+
+  describe('date range filtering', () => {
+    it('does not include date params when dateRange is "all"', async () => {
+      const mockResponse = { sessions: [], total: 0 };
+      mockFetch.mockResolvedValueOnce(createMockResponse(mockResponse));
+
+      renderHook(() => useSessions({ dateRange: 'all' }));
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalled();
+      });
+
+      const calledUrl = mockFetch.mock.calls[0][0] as string;
+      expect(calledUrl).not.toContain('date_from');
+      expect(calledUrl).not.toContain('date_to');
+    });
+
+    it('sets date params for "today" with same from and to date', async () => {
+      const mockResponse = { sessions: [], total: 0 };
+      mockFetch.mockResolvedValueOnce(createMockResponse(mockResponse));
+
+      renderHook(() => useSessions({ dateRange: 'today' }));
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalled();
+      });
+
+      const calledUrl = mockFetch.mock.calls[0][0] as string;
+      // Both date_from and date_to should be present and equal (same date)
+      expect(calledUrl).toContain('date_from=');
+      expect(calledUrl).toContain('date_to=');
+      // Extract date values to verify they're the same
+      const params = new URLSearchParams(calledUrl.split('?')[1]);
+      expect(params.get('date_from')).toBe(params.get('date_to'));
+    });
+
+    it('sets date params for "yesterday" with same from and to date', async () => {
+      const mockResponse = { sessions: [], total: 0 };
+      mockFetch.mockResolvedValueOnce(createMockResponse(mockResponse));
+
+      renderHook(() => useSessions({ dateRange: 'yesterday' }));
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalled();
+      });
+
+      const calledUrl = mockFetch.mock.calls[0][0] as string;
+      // Both should be present and equal
+      const params = new URLSearchParams(calledUrl.split('?')[1]);
+      expect(params.get('date_from')).toBe(params.get('date_to'));
+      // Yesterday should be different from today
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      expect(params.get('date_from')).not.toBe(todayStr);
+    });
+
+    it('sets date range for "week" with 7 day span', async () => {
+      const mockResponse = { sessions: [], total: 0 };
+      mockFetch.mockResolvedValueOnce(createMockResponse(mockResponse));
+
+      renderHook(() => useSessions({ dateRange: 'week' }));
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalled();
+      });
+
+      const calledUrl = mockFetch.mock.calls[0][0] as string;
+      const params = new URLSearchParams(calledUrl.split('?')[1]);
+      const dateFrom = params.get('date_from');
+      const dateTo = params.get('date_to');
+
+      expect(dateFrom).toBeTruthy();
+      expect(dateTo).toBeTruthy();
+
+      // Verify the span is 7 days
+      const fromDate = new Date(dateFrom!);
+      const toDate = new Date(dateTo!);
+      const diffDays = Math.round((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24));
+      expect(diffDays).toBe(7);
+    });
+
+    it('sets date range for "month" with 30 day span', async () => {
+      const mockResponse = { sessions: [], total: 0 };
+      mockFetch.mockResolvedValueOnce(createMockResponse(mockResponse));
+
+      renderHook(() => useSessions({ dateRange: 'month' }));
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalled();
+      });
+
+      const calledUrl = mockFetch.mock.calls[0][0] as string;
+      const params = new URLSearchParams(calledUrl.split('?')[1]);
+      const dateFrom = params.get('date_from');
+      const dateTo = params.get('date_to');
+
+      expect(dateFrom).toBeTruthy();
+      expect(dateTo).toBeTruthy();
+
+      // Verify the span is 30 days
+      const fromDate = new Date(dateFrom!);
+      const toDate = new Date(dateTo!);
+      const diffDays = Math.round((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24));
+      expect(diffDays).toBe(30);
+    });
+
+    it('uses explicit dateFrom/dateTo for "custom" range', async () => {
+      const mockResponse = { sessions: [], total: 0 };
+      mockFetch.mockResolvedValueOnce(createMockResponse(mockResponse));
+
+      renderHook(() => useSessions({
+        dateRange: 'custom',
+        dateFrom: '2024-01-01',
+        dateTo: '2024-03-31',
+      }));
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalled();
+      });
+
+      const calledUrl = mockFetch.mock.calls[0][0] as string;
+      expect(calledUrl).toContain('date_from=2024-01-01');
+      expect(calledUrl).toContain('date_to=2024-03-31');
+    });
+
+    it('handles custom range with only dateFrom', async () => {
+      const mockResponse = { sessions: [], total: 0 };
+      mockFetch.mockResolvedValueOnce(createMockResponse(mockResponse));
+
+      renderHook(() => useSessions({
+        dateRange: 'custom',
+        dateFrom: '2024-01-01',
+      }));
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalled();
+      });
+
+      const calledUrl = mockFetch.mock.calls[0][0] as string;
+      expect(calledUrl).toContain('date_from=2024-01-01');
+      expect(calledUrl).not.toContain('date_to=');
+    });
+
+    it('handles custom range with only dateTo', async () => {
+      const mockResponse = { sessions: [], total: 0 };
+      mockFetch.mockResolvedValueOnce(createMockResponse(mockResponse));
+
+      renderHook(() => useSessions({
+        dateRange: 'custom',
+        dateTo: '2024-03-31',
+      }));
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalled();
+      });
+
+      const calledUrl = mockFetch.mock.calls[0][0] as string;
+      expect(calledUrl).not.toContain('date_from=');
+      expect(calledUrl).toContain('date_to=2024-03-31');
+    });
+
+    it('does not include date params when dateRange is undefined', async () => {
+      const mockResponse = { sessions: [], total: 0 };
+      mockFetch.mockResolvedValueOnce(createMockResponse(mockResponse));
+
+      renderHook(() => useSessions({}));
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalled();
+      });
+
+      const calledUrl = mockFetch.mock.calls[0][0] as string;
+      expect(calledUrl).not.toContain('date_from');
+      expect(calledUrl).not.toContain('date_to');
+    });
+  });
 });
 
 describe('useActiveSessions', () => {
