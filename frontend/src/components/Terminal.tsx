@@ -61,29 +61,30 @@ export function Terminal({ processId, onClose, relatedEntity, onShowRelated, sho
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // Stoody-themed terminal colors - warm, cozy dark theme
     const terminal = new XTerm({
       theme: {
-        background: '#0d1117',
-        foreground: '#e6edf3',
-        cursor: '#58a6ff',
-        cursorAccent: '#0d1117',
-        selectionBackground: '#388bfd66',
-        black: '#484f58',
-        red: '#ff7b72',
-        green: '#3fb950',
-        yellow: '#d29922',
-        blue: '#58a6ff',
-        magenta: '#bc8cff',
-        cyan: '#39c5cf',
-        white: '#b1bac4',
-        brightBlack: '#6e7681',
-        brightRed: '#ffa198',
-        brightGreen: '#56d364',
-        brightYellow: '#e3b341',
-        brightBlue: '#79c0ff',
-        brightMagenta: '#d2a8ff',
-        brightCyan: '#56d4dd',
-        brightWhite: '#f0f6fc',
+        background: '#2d3436',           // --stoody-bg-deep
+        foreground: '#dfe6e9',           // --stoody-text-primary
+        cursor: '#a29bfe',               // --stoody-blurple
+        cursorAccent: '#2d3436',         // --stoody-bg-deep
+        selectionBackground: '#a29bfe44', // blurple with transparency
+        black: '#2f3640',                // --stoody-bg-elevated
+        red: '#ff7675',                  // coral-red
+        green: '#55efc4',                // --stoody-mint
+        yellow: '#fdcb6e',               // warm yellow
+        blue: '#74b9ff',                 // --stoody-sky
+        magenta: '#a29bfe',              // --stoody-blurple
+        cyan: '#81ecec',                 // teal
+        white: '#b2bec3',                // --stoody-text-secondary
+        brightBlack: '#636e72',          // --stoody-text-muted
+        brightRed: '#fab1a0',            // --stoody-coral
+        brightGreen: '#00b894',          // --stoody-mint-hover
+        brightYellow: '#ffeaa7',         // bright warm yellow
+        brightBlue: '#a29bfe',           // --stoody-blurple
+        brightMagenta: '#ff69b4',        // --stoody-pink
+        brightCyan: '#55efc4',           // --stoody-mint
+        brightWhite: '#dfe6e9',          // --stoody-text-primary
       },
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       fontSize: 14,
@@ -188,19 +189,19 @@ export function Terminal({ processId, onClose, relatedEntity, onShowRelated, sho
   }, [processId]); // Only re-run when processId changes
 
   return (
-    <div className={`flex flex-col h-full bg-[#0d1117] overflow-hidden ${showHeader ? 'rounded-lg border border-gray-700' : ''}`}>
+    <div className={`flex flex-col h-full bg-[#2d3436] overflow-hidden ${showHeader ? 'rounded-lg border border-[#464f5b]' : ''}`}>
       {showHeader && (
-        <div className="flex items-center justify-between px-3 py-2 bg-[#161b22] border-b border-gray-700">
+        <div className="flex items-center justify-between px-3 py-2 bg-[#353b48] border-b border-[#464f5b]">
           <div className="flex items-center gap-3">
             <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
               isConnected
-                ? 'bg-green-500/20 text-green-400'
-                : 'bg-red-500/20 text-red-400'
+                ? 'bg-[#55efc4]/20 text-[#55efc4]'
+                : 'bg-[#ff7675]/20 text-[#ff7675]'
             }`}>
               <span className={`w-1.5 h-1.5 rounded-full ${
                 isConnected
-                  ? 'bg-green-400'
-                  : 'bg-red-400 animate-pulse'
+                  ? 'bg-[#55efc4]'
+                  : 'bg-[#ff7675] animate-pulse'
               }`} />
               {isConnected ? 'Connected' : 'Disconnected'}
             </div>
@@ -231,7 +232,7 @@ export function Terminal({ processId, onClose, relatedEntity, onShowRelated, sho
                 <span className="text-sm text-gray-500">|</span>
                 <button
                   onClick={onShowRelated}
-                  className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                  className="text-sm text-[#a29bfe] hover:text-[#ff69b4] transition-colors"
                 >
                   {relatedEntity.type === 'issue' ? 'Issue' : 'PR'} #{relatedEntity.number}
                 </button>
@@ -241,7 +242,7 @@ export function Terminal({ processId, onClose, relatedEntity, onShowRelated, sho
           {onClose && (
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-white text-sm px-2 py-1 rounded hover:bg-gray-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
+              className="text-gray-400 hover:text-white text-sm px-2 py-1 rounded hover:bg-[#3d4655] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#a29bfe] focus-visible:ring-offset-1 focus-visible:ring-offset-[#2d3436]"
             >
               Close
             </button>
