@@ -185,7 +185,6 @@ export default function App() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const [issueFilters, setIssueFilters] = useState<IssueFilters>({ state: 'open' });
-  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [sessionListFilters, setSessionListFilters] = useState<SessionListFilters>({ category: 'all' });
   const [viewingSessionId, setViewingSessionId] = useState<string | null>(null);
   const [selectedPR, setSelectedPR] = useState<number | null>(null);
@@ -506,7 +505,6 @@ export default function App() {
     // Clear process/cache if repo changed (BEFORE restoring tabs for new repo)
     if (repoActuallyChanged || !selectedRepo?.id) {
       setActiveProcessId(null);
-      setExpandedSessionId(null);
       // Clear pending context refs (session cache is NOT cleared - getCachedSession validates repo_path)
       pendingIssueContextRef.current = null;
       pendingPRContextRef.current = null;
@@ -552,18 +550,16 @@ export default function App() {
     }
   }, [selectedRepo?.id]);
 
-  // Handle issue selection from list - clears expanded analysis and PR selection
+  // Handle issue selection from list - clears PR selection
   const handleSelectIssue = useCallback((issueNumber: number) => {
     setSelectedIssue(issueNumber);
     setSelectedPR(null);
-    setExpandedSessionId(null);
   }, []);
 
   // Handle PR selection from list - clears issue selection
   const handleSelectPR = useCallback((prNumber: number) => {
     setSelectedPR(prNumber);
     setSelectedIssue(null);
-    setExpandedSessionId(null);
   }, []);
 
   // Note: Session list is now event-driven via WebSocket - no polling needed
@@ -726,7 +722,6 @@ export default function App() {
       // Process is still running - open the terminal
       setActiveProcessId(activeProcess.id);
       setViewingSessionId(null);
-      setExpandedSessionId(null);
 
       // Store pending context for immediate side-by-side view
       if (firstIssue) {
@@ -745,7 +740,6 @@ export default function App() {
       // Process ended - show transcript in details panel
       setActiveProcessId(null);
       setViewingSessionId(session.session_id);
-      setExpandedSessionId(null);
     }
   }, [processesBySessionId]);
 
@@ -1760,11 +1754,9 @@ export default function App() {
             activeProcessId={activeProcessId}
             viewingSessionId={viewingSessionId}
             sessionViewModes={sessionViewModes}
-            expandedSessionId={expandedSessionId}
             onStartIssueSession={handleStartIssueSession}
             onSelectSession={handleSelectSession}
             onContinueSession={handleContinueSession}
-            onToggleExpandedSession={setExpandedSessionId}
             onAddTagToIssue={addTagToIssue}
             onRemoveTagFromIssue={removeTagFromIssue}
             onCreateTag={createTag}
