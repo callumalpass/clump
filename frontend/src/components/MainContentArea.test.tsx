@@ -612,4 +612,71 @@ describe('MainContentArea', () => {
       expect(svg).toBeInTheDocument();
     });
   });
+
+  describe('Empty State Pattern Styling', () => {
+    const repo = createMockRepo();
+
+    it('applies empty-state-pattern class to welcome state when no repo selected', () => {
+      const { container } = render(<MainContentArea {...createDefaultProps({ selectedRepo: null })} />);
+
+      const patternElement = container.querySelector('.empty-state-pattern');
+      expect(patternElement).toBeInTheDocument();
+    });
+
+    it('applies empty-state-pattern class to simplified empty state (list has items)', () => {
+      const { container } = render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: false, selectedRepo: repo })} />);
+
+      const patternElement = container.querySelector('.empty-state-pattern');
+      expect(patternElement).toBeInTheDocument();
+    });
+
+    it('applies empty-state-pattern class to full empty state (list is empty)', () => {
+      const { container } = render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: true, selectedRepo: repo })} />);
+
+      const patternElement = container.querySelector('.empty-state-pattern');
+      expect(patternElement).toBeInTheDocument();
+    });
+
+    it('does not apply empty-state-pattern class to error state', () => {
+      const { container } = render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listError: 'Failed to load', selectedRepo: repo })} />);
+
+      // Error state should not have the pattern
+      const patternElement = container.querySelector('.empty-state-pattern');
+      expect(patternElement).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Error Empty State', () => {
+    const repo = createMockRepo();
+
+    it('renders error state with danger styling when listError is provided', () => {
+      const { container } = render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listError: 'API Error', selectedRepo: repo })} />);
+
+      expect(screen.getByText('Unable to load issues')).toBeInTheDocument();
+      expect(screen.getByText('There was a problem fetching data from the server.')).toBeInTheDocument();
+    });
+
+    it('shows appropriate error message for each tab type', () => {
+      const { rerender } = render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listError: 'Error', activeTab: 'prs', selectedRepo: repo })} />);
+      expect(screen.getByText('Unable to load pull requests')).toBeInTheDocument();
+
+      rerender(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listError: 'Error', activeTab: 'history', selectedRepo: repo })} />);
+      expect(screen.getByText('Unable to load sessions')).toBeInTheDocument();
+
+      rerender(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listError: 'Error', activeTab: 'schedules', selectedRepo: repo })} />);
+      expect(screen.getByText('Unable to load schedules')).toBeInTheDocument();
+    });
+
+    it('offers navigation to other tabs when in error state', () => {
+      const onTabChange = vi.fn();
+      render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listError: 'Error', activeTab: 'issues', onTabChange, selectedRepo: repo })} />);
+
+      // Should show History shortcut when on issues tab with error
+      const historyButton = screen.getByRole('button', { name: /History/i });
+      expect(historyButton).toBeInTheDocument();
+
+      fireEvent.click(historyButton);
+      expect(onTabChange).toHaveBeenCalledWith('history');
+    });
+  });
 });

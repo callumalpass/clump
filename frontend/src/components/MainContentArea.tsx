@@ -222,7 +222,7 @@ function QuickNavItem({ shortcut, label, active = false, onClick }: { shortcut: 
 // Welcome state shown when no repo is selected
 function WelcomeState() {
   return (
-    <div className="flex-1 flex items-center justify-center p-8">
+    <div className="flex-1 flex items-center justify-center p-8 empty-state-pattern">
       <div className="text-center p-8 rounded-xl bg-gray-800/40 border border-gray-750/50 max-w-md empty-state-enter">
         {/* Logo/Icon */}
         <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blurple-500/20 to-mint-500/20 flex items-center justify-center mx-auto mb-6 empty-state-icon-float">
@@ -372,7 +372,7 @@ function EmptyState({ activeTab, listEmpty, listError, onTabChange }: EmptyState
   // If the list is empty, show the full empty state with navigation shortcuts
   if (!listEmpty) {
     return (
-      <div className="flex-1 flex items-center justify-center p-8">
+      <div className="flex-1 flex items-center justify-center p-8 empty-state-pattern">
         <div className="text-center empty-state-enter">
           {/* Subtle icon */}
           <div className="w-12 h-12 rounded-full bg-gray-800/60 flex items-center justify-center mx-auto mb-3 empty-state-icon-float">
@@ -388,7 +388,7 @@ function EmptyState({ activeTab, listEmpty, listError, onTabChange }: EmptyState
 
   // Full empty state for when the list is truly empty
   return (
-    <div className="flex-1 flex items-center justify-center p-8">
+    <div className="flex-1 flex items-center justify-center p-8 empty-state-pattern">
       <div className="text-center p-8 rounded-xl bg-gray-800/40 border border-gray-750/50 max-w-lg empty-state-enter">
         {/* Icon */}
         <div className="w-16 h-16 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-5 empty-state-icon-float">

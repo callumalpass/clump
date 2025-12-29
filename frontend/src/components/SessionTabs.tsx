@@ -1,5 +1,6 @@
-import { useRef, useState, useLayoutEffect, useCallback, useEffect, useMemo } from 'react';
+import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import type { SessionSummary, Process } from '../types';
+import { useTabIndicator } from '../hooks/useTabIndicator';
 import { ElapsedTimer } from './ElapsedTimer';
 import { formatRelativeTime } from '../utils/time';
 import { focusRing } from '../utils/styles';
@@ -87,11 +88,14 @@ export function SessionTabs({
   needsAttention,
   newSessionDisabled,
 }: SessionTabsProps) {
-  // Refs for animated tab indicator and scroll container
+  // Ref for wrapper element
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const tabRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
+
+  // Animated tab indicator with resize watching for dynamic tabs
+  const { containerRef, tabRefs, indicatorStyle } = useTabIndicator<HTMLDivElement>(
+    activeSessionId,
+    { watchResize: true }
+  );
 
   // Track scroll overflow for fade indicators
   const { canScrollLeft, canScrollRight } = useScrollOverflow(containerRef);
@@ -104,44 +108,6 @@ export function SessionTabs({
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }, []);
-
-  // Update the sliding tab indicator position when active tab changes
-  useLayoutEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const updateIndicator = () => {
-      const activeTabElement = activeSessionId ? tabRefs.current.get(activeSessionId) : null;
-      if (activeTabElement) {
-        const containerRect = container.getBoundingClientRect();
-        const tabRect = activeTabElement.getBoundingClientRect();
-        setIndicatorStyle({
-          left: tabRect.left - containerRect.left,
-          width: tabRect.width,
-        });
-      } else {
-        // No active tab - hide indicator
-        setIndicatorStyle({ left: 0, width: 0 });
-      }
-    };
-
-    // Initial update - use rAF to ensure DOM has settled
-    const rafId = requestAnimationFrame(updateIndicator);
-
-    // Watch for size changes on all tab elements
-    const resizeObserver = new ResizeObserver(updateIndicator);
-    tabRefs.current.forEach((el) => resizeObserver.observe(el));
-    resizeObserver.observe(container);
-
-    // Also update on window resize
-    window.addEventListener('resize', updateIndicator);
-
-    return () => {
-      cancelAnimationFrame(rafId);
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', updateIndicator);
-    };
-  }, [activeSessionId, sessions]); // Re-run when sessions change too (for dynamic tabs)
 
   return (
     <div ref={wrapperRef} className="relative bg-gray-850 border-b border-gray-750">

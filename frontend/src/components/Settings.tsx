@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useClaudeSettings } from '../hooks/useApi';
 import { useTheme } from '../hooks/useTheme';
+import { useTabIndicator } from '../hooks/useTabIndicator';
 import type { PermissionMode, OutputFormat, CommandMetadata } from '../types';
 import { CommandEditor } from './CommandEditor';
 import { AlertMessage } from './AlertMessage';
@@ -24,10 +25,11 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
   const [customTool, setCustomTool] = useState('');
   const [activeTab, setActiveTab] = useState<'github' | 'permissions' | 'execution' | 'commands' | 'advanced'>('github');
 
-  // Refs for animated tab indicator (similar to SessionTabs)
-  const tabContainerRef = useRef<HTMLDivElement>(null);
-  const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
-  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
+  // Animated tab indicator
+  const { containerRef: tabContainerRef, tabRefs, indicatorStyle } = useTabIndicator<HTMLDivElement>(
+    activeTab,
+    { enabled: isOpen }
+  );
 
   // GitHub token state
   const [tokenStatus, setTokenStatus] = useState<TokenStatus>({ configured: false, masked_token: null });
@@ -36,25 +38,6 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
   const [newToken, setNewToken] = useState('');
   const [tokenError, setTokenError] = useState('');
   const [tokenSaving, setTokenSaving] = useState(false);
-
-  // Update sliding tab indicator position when active tab changes
-  useLayoutEffect(() => {
-    if (!isOpen) return;
-    const updateIndicator = () => {
-      const container = tabContainerRef.current;
-      const activeTabElement = tabRefs.current.get(activeTab);
-      if (container && activeTabElement) {
-        const containerRect = container.getBoundingClientRect();
-        const tabRect = activeTabElement.getBoundingClientRect();
-        setIndicatorStyle({
-          left: tabRect.left - containerRect.left,
-          width: tabRect.width,
-        });
-      }
-    };
-    // Small delay to ensure tabs are rendered
-    requestAnimationFrame(updateIndicator);
-  }, [activeTab, isOpen]);
 
   // Fetch token status when modal opens
   useEffect(() => {
@@ -249,26 +232,37 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                     <div className="h-4 w-48 rounded-stoody bg-gray-800 skeleton-shimmer" style={{ animationDelay: '100ms' }} />
                   </div>
                 ) : tokenStatus.configured && !isEditingToken ? (
-                  <div className="bg-mint-400/10 rounded-stoody p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4 text-mint-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                        <span className="text-sm text-gray-300">
-                          Token configured: <code className="text-mint-400">{tokenStatus.masked_token}</code>
-                        </span>
+                  <div className="bg-mint-400/10 rounded-stoody p-4 border border-mint-400/20">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-mint-400/20 flex items-center justify-center">
+                          <svg className="w-4 h-4 text-mint-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium text-gray-200">Token configured</span>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-mint-400/20 text-mint-400">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                              </svg>
+                              5,000 req/hour
+                            </span>
+                          </div>
+                          <code className="text-xs text-mint-400/80 mt-1 block truncate">{tokenStatus.masked_token}</code>
+                        </div>
                       </div>
-                      <div className="flex gap-3">
+                      <div className="flex gap-2 flex-shrink-0">
                         <button
                           onClick={() => setIsEditingToken(true)}
-                          className="text-sm text-gray-400 hover:text-pink-400 focus:outline-none focus:text-pink-400 transition-colors"
+                          className="px-3 py-1.5 text-xs text-gray-400 hover:text-pink-400 hover:bg-gray-800/50 rounded-stoody-sm focus:outline-none focus:text-pink-400 transition-colors"
                         >
                           Change
                         </button>
                         <button
                           onClick={handleRemoveToken}
-                          className="text-sm text-gray-400 hover:text-danger-400 focus:outline-none focus:text-danger-400 transition-colors"
+                          className="px-3 py-1.5 text-xs text-gray-400 hover:text-danger-400 hover:bg-danger-500/10 rounded-stoody-sm focus:outline-none focus:text-danger-400 transition-colors"
                         >
                           Remove
                         </button>
@@ -278,14 +272,24 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                 ) : (
                   <div className="space-y-4">
                     {!tokenStatus.configured && !isEditingToken && (
-                      <div className="bg-warning-500/10 rounded-stoody p-4">
+                      <div className="bg-warning-500/10 rounded-stoody p-4 border border-warning-500/20">
                         <div className="flex items-start gap-3">
-                          <svg className="w-4 h-4 text-warning-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                          </svg>
-                          <div className="flex-1">
-                            <p className="text-sm text-warning-400">No token configured</p>
-                            <p className="text-xs text-gray-400 mt-1">Limited to 60 API requests per hour</p>
+                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-warning-500/20 flex items-center justify-center">
+                            <svg className="w-4 h-4 text-warning-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium text-warning-400">No token configured</span>
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-warning-500/20 text-warning-500">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                60 req/hour
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-400 mt-1.5">Add a token to unlock 5,000 requests per hour</p>
                           </div>
                         </div>
                       </div>
@@ -389,6 +393,9 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                 </div>
               </div>
 
+              {/* Section divider */}
+              <div className="border-t border-gray-750/50" />
+
               {/* Allowed Tools */}
               <div>
                 <label className="block text-sm font-medium mb-2">Allowed Tools</label>
@@ -462,6 +469,9 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                 </div>
               </div>
 
+              {/* Section divider */}
+              <div className="border-t border-gray-750/50" />
+
               {/* Model */}
               <div>
                 <label className="block text-sm font-medium mb-2">Model</label>
@@ -485,6 +495,9 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                   ))}
                 </div>
               </div>
+
+              {/* Section divider */}
+              <div className="border-t border-gray-750/50" />
 
               {/* Output Format */}
               <div>
@@ -599,6 +612,9 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                 </div>
               </div>
 
+              {/* Section divider */}
+              <div className="border-t border-gray-750/50" />
+
               {/* MCP GitHub */}
               <div className="bg-gray-800 rounded-stoody p-4">
                 <label className="flex items-center gap-4 cursor-pointer">
@@ -618,7 +634,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                 </label>
               </div>
 
-              {/* Reset */}
+              {/* Reset - has its own divider styling with pt-5 border-t */}
               <div className="pt-5 border-t border-gray-750">
                 <button
                   onClick={handleReset}

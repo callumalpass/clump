@@ -123,7 +123,7 @@ describe('Settings', () => {
 
       // Wait for async token status fetch to complete
       await waitFor(() => {
-        expect(screen.getByText(/Token configured:/)).toBeInTheDocument();
+        expect(screen.getByText(/Token configured/)).toBeInTheDocument();
       });
     });
 
@@ -138,7 +138,7 @@ describe('Settings', () => {
 
       // Wait for async token status fetch to complete
       await waitFor(() => {
-        expect(screen.getByText(/Token configured:/)).toBeInTheDocument();
+        expect(screen.getByText(/Token configured/)).toBeInTheDocument();
       });
     });
   });
@@ -150,7 +150,7 @@ describe('Settings', () => {
 
       // Wait for token status to be fetched
       await waitFor(() => {
-        expect(screen.getByText(/Token configured:/)).toBeInTheDocument();
+        expect(screen.getByText(/Token configured/)).toBeInTheDocument();
       });
 
       // Get the footer close button (there are two close buttons - header X and footer)
@@ -197,7 +197,7 @@ describe('Settings', () => {
 
       // Wait for async token status fetch to complete
       await waitFor(() => {
-        expect(screen.getByText(/Token configured:/)).toBeInTheDocument();
+        expect(screen.getByText(/Token configured/)).toBeInTheDocument();
       });
     });
 
@@ -253,7 +253,7 @@ describe('Settings', () => {
 
       // Wait for the state to update
       await waitFor(() => {
-        expect(screen.getByText(/Token configured:/)).toBeInTheDocument();
+        expect(screen.getByText(/Token configured/)).toBeInTheDocument();
       });
 
       // Skeleton elements should be gone
@@ -269,7 +269,7 @@ describe('Settings', () => {
       render(<Settings {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Token configured:/)).toBeInTheDocument();
+        expect(screen.getByText(/Token configured/)).toBeInTheDocument();
         expect(screen.getByText('ghp_****xxxx')).toBeInTheDocument();
       });
     });
@@ -960,6 +960,50 @@ describe('Settings', () => {
       const permissionsTab = screen.getByRole('button', { name: 'permissions' });
       expect(permissionsTab).toHaveClass('text-white');
       expect(githubTab).not.toHaveClass('text-white');
+    });
+  });
+
+  describe('Section Dividers', () => {
+    it('renders section dividers in permissions tab', async () => {
+      const { container } = render(<Settings {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'permissions' }));
+
+      // Should have a divider between Permission Mode and Allowed Tools sections
+      const dividers = container.querySelectorAll('.border-t.border-gray-750\\/50');
+      expect(dividers.length).toBeGreaterThan(0);
+    });
+
+    it('renders section dividers in execution tab', async () => {
+      const { container } = render(<Settings {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'execution' }));
+
+      // Should have dividers between Max Turns, Model, and Output Format sections
+      const dividers = container.querySelectorAll('.border-t.border-gray-750\\/50');
+      expect(dividers.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('renders section dividers in advanced tab', async () => {
+      const { container } = render(<Settings {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'advanced' }));
+
+      // Should have dividers between Theme, MCP GitHub, and Reset sections
+      const dividers = container.querySelectorAll('.border-t');
+      expect(dividers.length).toBeGreaterThan(0);
     });
   });
 });
