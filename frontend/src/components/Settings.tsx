@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { useClaudeSettings } from '../hooks/useApi';
-import { useTheme, type Theme } from '../hooks/useTheme';
+import { useTheme } from '../hooks/useTheme';
 import type { PermissionMode, OutputFormat, CommandMetadata } from '../types';
 import { CommandEditor } from './CommandEditor';
 import { AlertMessage } from './AlertMessage';

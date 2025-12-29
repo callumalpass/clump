@@ -100,9 +100,12 @@
 [data-theme="light"] .bg-gray-600 { background-color: #b2bec3 !important; }
 [data-theme="light"] .bg-gray-500 { background-color: #636e72 !important; }
 [data-theme="light"] .bg-gray-200 { background-color: #f4f4f0 !important; }
+[data-theme="light"] .bg-gray-800\/80 { background-color: rgba(255, 255, 255, 0.8) !important; }
 [data-theme="light"] .bg-gray-800\/50 { background-color: rgba(255, 255, 255, 0.5) !important; }
 [data-theme="light"] .bg-gray-800\/40 { background-color: rgba(255, 255, 255, 0.4) !important; }
+[data-theme="light"] .bg-gray-800\/30 { background-color: rgba(255, 255, 255, 0.3) !important; }
 [data-theme="light"] .bg-gray-750\/50 { background-color: rgba(234, 234, 229, 0.5) !important; }
+[data-theme="light"] .bg-gray-700\/50 { background-color: rgba(223, 230, 233, 0.5) !important; }
 [data-theme="light"] .bg-gray-700\/30 { background-color: rgba(223, 230, 233, 0.3) !important; }
 [data-theme="light"] .bg-gray-600\/50 { background-color: rgba(178, 190, 195, 0.5) !important; }
 
@@ -171,7 +174,10 @@
 [data-theme="light"] .text-purple-300 { color: #a29bfe !important; }
 [data-theme="light"] .bg-purple-500 { background-color: #6c5ce7 !important; }
 [data-theme="light"] .bg-purple-900 { background-color: rgba(108, 92, 231, 0.15) !important; }
+[data-theme="light"] .bg-purple-900\/50 { background-color: rgba(108, 92, 231, 0.1) !important; }
+[data-theme="light"] .bg-purple-900\/20 { background-color: rgba(108, 92, 231, 0.08) !important; }
 [data-theme="light"] .bg-purple-500\/20 { background-color: rgba(108, 92, 231, 0.2) !important; }
+[data-theme="light"] .hover\:bg-purple-900\/20:hover { background-color: rgba(108, 92, 231, 0.12) !important; }
 
 /* Accent colors - Blue */
 [data-theme="light"] .text-blue-400 { color: #0984e3 !important; }
@@ -180,6 +186,7 @@
 [data-theme="light"] .bg-blue-600 { background-color: #0873c4 !important; }
 [data-theme="light"] .bg-blue-700 { background-color: #0763a5 !important; }
 [data-theme="light"] .bg-blue-900 { background-color: rgba(9, 132, 227, 0.15) !important; }
+[data-theme="light"] .bg-blue-900\/50 { background-color: rgba(9, 132, 227, 0.1) !important; }
 [data-theme="light"] .bg-blue-500\/20 { background-color: rgba(9, 132, 227, 0.2) !important; }
 
 /* Accent colors - Red */
