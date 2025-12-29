@@ -1,6 +1,8 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import type { CommandMetadata } from '../types';
 import { focusRingInset } from '../utils/styles';
+import { useClickOutside } from '../hooks/useClickOutside';
 
 // Minimal issue info needed for starting a session
 export interface SessionableIssue {
@@ -21,6 +23,8 @@ export function StartSessionButton({ issue, commands, onStart, size = 'md', clas
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedCommand, setSelectedCommand] = useState<CommandMetadata | null>(null);
   const [focusedIndex, setFocusedIndex] = useState(-1);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
 
@@ -32,16 +36,23 @@ export function StartSessionButton({ issue, commands, onStart, size = 'md', clas
   }, [commands, selectedCommand]);
 
   // Close dropdown when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowDropdown(false);
-        setFocusedIndex(-1);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+  const clickOutsideRefs = useMemo(() => [dropdownRef, triggerRef], []);
+  const handleClickOutside = useCallback(() => {
+    setShowDropdown(false);
+    setFocusedIndex(-1);
   }, []);
+  useClickOutside(clickOutsideRefs, handleClickOutside);
+
+  // Calculate dropdown position when opening
+  useEffect(() => {
+    if (showDropdown && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + 8,
+        left: rect.right - 256, // 256px = w-64
+      });
+    }
+  }, [showDropdown]);
 
   // Reset focused index when dropdown closes
   useEffect(() => {
@@ -126,10 +137,13 @@ export function StartSessionButton({ issue, commands, onStart, size = 'md', clas
   }
 
   return (
-    <div className={`relative inline-flex ${className}`} ref={dropdownRef}>
+    <div className={`relative inline-flex ${className}`}>
       {/* Main button */}
       <button
-        onClick={handleMainClick}
+        onClick={(e) => {
+          e.stopPropagation();
+          handleMainClick();
+        }}
         className={`px-3 ${sizeClasses} bg-blurple-500 hover:bg-blurple-600 hover:text-pink-400 active:scale-95 text-white rounded-l-stoody font-medium border-r border-blurple-400/30 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-400 focus-visible:z-10 shadow-stoody-sm`}
       >
         {selectedCommand?.shortName || 'Start'}
@@ -137,6 +151,7 @@ export function StartSessionButton({ issue, commands, onStart, size = 'md', clas
 
       {/* Dropdown trigger */}
       <button
+        ref={triggerRef}
         onClick={(e) => {
           e.stopPropagation();
           setShowDropdown(!showDropdown);
@@ -151,51 +166,56 @@ export function StartSessionButton({ issue, commands, onStart, size = 'md', clas
         </svg>
       </button>
 
-      {/* Dropdown menu */}
-      {showDropdown && (
-      <div
-        className="absolute right-0 top-full mt-2 w-64 bg-gray-800 rounded-stoody shadow-stoody-lg z-20 dropdown-menu-enter overflow-hidden"
-        role="listbox"
-        aria-label="Select session command"
-        aria-activedescendant={focusedIndex >= 0 ? `command-option-${commands[focusedIndex]?.id}` : undefined}
-        onKeyDown={handleKeyDown}
-      >
-        {commands.map((command, index) => (
-            <button
-              key={command.id}
-              id={`command-option-${command.id}`}
-              ref={(el) => {
-                if (el) itemRefs.current.set(index, el);
-              }}
-              role="option"
-              aria-selected={selectedCommand?.id === command.id}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleCommandSelect(command);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
+      {/* Dropdown menu - rendered via portal to escape overflow containers */}
+      {showDropdown && createPortal(
+        <div
+          ref={dropdownRef}
+          className="fixed w-64 bg-gray-800 rounded-stoody shadow-stoody-lg z-50 dropdown-menu-enter overflow-hidden"
+          style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
+          role="listbox"
+          aria-label="Select session command"
+          aria-activedescendant={focusedIndex >= 0 ? `command-option-${commands[focusedIndex]?.id}` : undefined}
+          onKeyDown={handleKeyDown}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          {commands.map((command, index) => (
+              <button
+                key={command.id}
+                id={`command-option-${command.id}`}
+                ref={(el) => {
+                  if (el) itemRefs.current.set(index, el);
+                }}
+                role="option"
+                aria-selected={selectedCommand?.id === command.id}
+                onClick={(e) => {
+                  e.stopPropagation();
                   handleCommandSelect(command);
-                }
-              }}
-              className={`dropdown-item-enter w-full px-4 py-3 text-left hover:bg-gray-750 focus:bg-gray-750 transition-colors ${focusRingInset} ${
-                selectedCommand?.id === command.id ? 'bg-gray-750' : ''
-              }`}
-              style={{ '--item-index': index } as React.CSSProperties}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-white">{command.name}</span>
-                {selectedCommand?.id === command.id && (
-                  <svg className="w-4 h-4 text-blurple-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                )}
-              </div>
-              <p className="text-xs text-gray-400 mt-1">{command.description}</p>
-            </button>
-        ))}
-      </div>
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleCommandSelect(command);
+                  }
+                }}
+                className={`dropdown-item-enter w-full px-4 py-3 text-left hover:bg-gray-750 focus:bg-gray-750 transition-colors ${focusRingInset} ${
+                  selectedCommand?.id === command.id ? 'bg-gray-750' : ''
+                }`}
+                style={{ '--item-index': index } as React.CSSProperties}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-white">{command.name}</span>
+                  {selectedCommand?.id === command.id && (
+                    <svg className="w-4 h-4 text-blurple-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">{command.description}</p>
+              </button>
+          ))}
+        </div>,
+        document.body
       )}
     </div>
   );

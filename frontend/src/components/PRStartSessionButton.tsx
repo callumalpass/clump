@@ -1,6 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import type { PR, CommandMetadata } from '../types';
 import { focusRingInset } from '../utils/styles';
+import { useClickOutside } from '../hooks/useClickOutside';
 
 interface PRStartSessionButtonProps {
   pr: PR;
@@ -13,7 +15,11 @@ interface PRStartSessionButtonProps {
 export function PRStartSessionButton({ pr, commands, onStart, size = 'md', className = '' }: PRStartSessionButtonProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedCommand, setSelectedCommand] = useState<CommandMetadata | null>(null);
+  const [focusedIndex, setFocusedIndex] = useState(-1);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
 
   // Set default selected command when commands load
   useEffect(() => {
@@ -23,15 +29,70 @@ export function PRStartSessionButton({ pr, commands, onStart, size = 'md', class
   }, [commands, selectedCommand]);
 
   // Close dropdown when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowDropdown(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+  const clickOutsideRefs = useMemo(() => [dropdownRef, triggerRef], []);
+  const handleClickOutside = useCallback(() => {
+    setShowDropdown(false);
+    setFocusedIndex(-1);
   }, []);
+  useClickOutside(clickOutsideRefs, handleClickOutside);
+
+  // Calculate dropdown position when opening
+  useEffect(() => {
+    if (showDropdown && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + 8,
+        left: rect.right - 256, // 256px = w-64
+      });
+    }
+  }, [showDropdown]);
+
+  // Reset focused index when dropdown closes, set to selected when opening
+  useEffect(() => {
+    if (!showDropdown) {
+      setFocusedIndex(-1);
+    } else {
+      // Focus the currently selected command when dropdown opens
+      const selectedIndex = commands.findIndex(cmd => cmd.id === selectedCommand?.id);
+      setFocusedIndex(selectedIndex >= 0 ? selectedIndex : 0);
+    }
+  }, [showDropdown, commands, selectedCommand?.id]);
+
+  // Focus the item when focusedIndex changes
+  useEffect(() => {
+    if (showDropdown && focusedIndex >= 0) {
+      const element = itemRefs.current.get(focusedIndex);
+      element?.focus();
+    }
+  }, [focusedIndex, showDropdown]);
+
+  // Handle keyboard navigation
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (!showDropdown) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setFocusedIndex(prev => (prev + 1) % commands.length);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setFocusedIndex(prev => (prev - 1 + commands.length) % commands.length);
+        break;
+      case 'Escape':
+        e.preventDefault();
+        setShowDropdown(false);
+        break;
+      case 'Home':
+        e.preventDefault();
+        setFocusedIndex(0);
+        break;
+      case 'End':
+        e.preventDefault();
+        setFocusedIndex(commands.length - 1);
+        break;
+    }
+  }, [showDropdown, commands.length]);
 
   const handleMainClick = () => {
     if (selectedCommand) {
@@ -69,7 +130,7 @@ export function PRStartSessionButton({ pr, commands, onStart, size = 'md', class
   }
 
   return (
-    <div className={`relative inline-flex ${className}`} ref={dropdownRef}>
+    <div className={`relative inline-flex ${className}`}>
       {/* Main button */}
       <button
         onClick={(e) => {
@@ -83,6 +144,7 @@ export function PRStartSessionButton({ pr, commands, onStart, size = 'md', class
 
       {/* Dropdown trigger */}
       <button
+        ref={triggerRef}
         onClick={(e) => {
           e.stopPropagation();
           setShowDropdown(!showDropdown);
@@ -97,36 +159,56 @@ export function PRStartSessionButton({ pr, commands, onStart, size = 'md', class
         </svg>
       </button>
 
-      {/* Dropdown menu */}
-      {showDropdown && (
-      <div
-        className="absolute right-0 top-full mt-2 w-64 bg-gray-800 rounded-stoody shadow-stoody-lg z-20 dropdown-menu-enter overflow-hidden"
-        role="listbox"
-        aria-label="Select PR session command"
-      >
-        {commands.map((command) => (
-            <button
-              key={command.id}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleCommandSelect(command);
-              }}
-              className={`w-full px-4 py-3 text-left hover:bg-gray-750 focus:bg-gray-750 transition-colors ${focusRingInset} ${
-                selectedCommand?.id === command.id ? 'bg-gray-750' : ''
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-white">{command.name}</span>
-                {selectedCommand?.id === command.id && (
-                  <svg className="w-4 h-4 text-blurple-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                )}
-              </div>
-              <p className="text-xs text-gray-400 mt-1">{command.description}</p>
-            </button>
-        ))}
-      </div>
+      {/* Dropdown menu - rendered via portal to escape overflow containers */}
+      {showDropdown && createPortal(
+        <div
+          ref={dropdownRef}
+          className="fixed w-64 bg-gray-800 rounded-stoody shadow-stoody-lg z-50 dropdown-menu-enter overflow-hidden"
+          style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
+          role="listbox"
+          aria-label="Select PR session command"
+          aria-activedescendant={focusedIndex >= 0 ? `pr-command-option-${commands[focusedIndex]?.id}` : undefined}
+          onKeyDown={handleKeyDown}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          {commands.map((command, index) => (
+              <button
+                key={command.id}
+                id={`pr-command-option-${command.id}`}
+                ref={(el) => {
+                  if (el) itemRefs.current.set(index, el);
+                }}
+                role="option"
+                aria-selected={selectedCommand?.id === command.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCommandSelect(command);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleCommandSelect(command);
+                  }
+                }}
+                className={`dropdown-item-enter w-full px-4 py-3 text-left hover:bg-gray-750 focus:bg-gray-750 transition-colors ${focusRingInset} ${
+                  selectedCommand?.id === command.id ? 'bg-gray-750' : ''
+                }`}
+                style={{ '--item-index': index } as React.CSSProperties}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-white">{command.name}</span>
+                  {selectedCommand?.id === command.id && (
+                    <svg className="w-4 h-4 text-blurple-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">{command.description}</p>
+              </button>
+          ))}
+        </div>,
+        document.body
       )}
     </div>
   );

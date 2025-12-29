@@ -419,6 +419,249 @@ describe('PRStartSessionButton', () => {
       expect(mainButton).toHaveClass('focus:outline-none');
       expect(mainButton).toHaveClass('focus-visible:ring-2');
     });
+
+    it('has role="option" on dropdown items', () => {
+      render(
+        <PRStartSessionButton
+          pr={mockPR}
+          commands={mockCommands}
+          onStart={mockOnStart}
+        />
+      );
+
+      const dropdownTrigger = screen.getByRole('button', { name: 'Select PR session type' });
+      fireEvent.click(dropdownTrigger);
+
+      const options = screen.getAllByRole('option');
+      expect(options).toHaveLength(3);
+    });
+
+    it('has aria-selected on dropdown items', () => {
+      render(
+        <PRStartSessionButton
+          pr={mockPR}
+          commands={mockCommands}
+          onStart={mockOnStart}
+        />
+      );
+
+      const dropdownTrigger = screen.getByRole('button', { name: 'Select PR session type' });
+      fireEvent.click(dropdownTrigger);
+
+      const options = screen.getAllByRole('option');
+      expect(options[0]).toHaveAttribute('aria-selected', 'true');
+      expect(options[1]).toHaveAttribute('aria-selected', 'false');
+      expect(options[2]).toHaveAttribute('aria-selected', 'false');
+    });
+  });
+
+  describe('Keyboard Navigation', () => {
+    it('navigates down with ArrowDown key', async () => {
+      render(
+        <PRStartSessionButton
+          pr={mockPR}
+          commands={mockCommands}
+          onStart={mockOnStart}
+        />
+      );
+
+      const dropdownTrigger = screen.getByRole('button', { name: 'Select PR session type' });
+      fireEvent.click(dropdownTrigger);
+
+      const options = screen.getAllByRole('option');
+      // First option should be focused initially
+      await waitFor(() => {
+        expect(document.activeElement).toBe(options[0]);
+      });
+
+      // Press ArrowDown
+      fireEvent.keyDown(options[0], { key: 'ArrowDown' });
+
+      await waitFor(() => {
+        expect(document.activeElement).toBe(options[1]);
+      });
+    });
+
+    it('navigates up with ArrowUp key', async () => {
+      render(
+        <PRStartSessionButton
+          pr={mockPR}
+          commands={mockCommands}
+          onStart={mockOnStart}
+        />
+      );
+
+      const dropdownTrigger = screen.getByRole('button', { name: 'Select PR session type' });
+      fireEvent.click(dropdownTrigger);
+
+      const options = screen.getAllByRole('option');
+      // First option should be focused initially
+      await waitFor(() => {
+        expect(document.activeElement).toBe(options[0]);
+      });
+
+      // Press ArrowUp (should wrap to last item)
+      fireEvent.keyDown(options[0], { key: 'ArrowUp' });
+
+      await waitFor(() => {
+        expect(document.activeElement).toBe(options[2]);
+      });
+    });
+
+    it('closes dropdown with Escape key', async () => {
+      render(
+        <PRStartSessionButton
+          pr={mockPR}
+          commands={mockCommands}
+          onStart={mockOnStart}
+        />
+      );
+
+      const dropdownTrigger = screen.getByRole('button', { name: 'Select PR session type' });
+      fireEvent.click(dropdownTrigger);
+
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
+
+      const options = screen.getAllByRole('option');
+      fireEvent.keyDown(options[0], { key: 'Escape' });
+
+      await waitFor(() => {
+        expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      });
+    });
+
+    it('jumps to first item with Home key', async () => {
+      render(
+        <PRStartSessionButton
+          pr={mockPR}
+          commands={mockCommands}
+          onStart={mockOnStart}
+        />
+      );
+
+      const dropdownTrigger = screen.getByRole('button', { name: 'Select PR session type' });
+      fireEvent.click(dropdownTrigger);
+
+      const options = screen.getAllByRole('option');
+      // Navigate to last item first
+      fireEvent.keyDown(options[0], { key: 'End' });
+
+      await waitFor(() => {
+        expect(document.activeElement).toBe(options[2]);
+      });
+
+      // Press Home to jump to first
+      fireEvent.keyDown(options[2], { key: 'Home' });
+
+      await waitFor(() => {
+        expect(document.activeElement).toBe(options[0]);
+      });
+    });
+
+    it('jumps to last item with End key', async () => {
+      render(
+        <PRStartSessionButton
+          pr={mockPR}
+          commands={mockCommands}
+          onStart={mockOnStart}
+        />
+      );
+
+      const dropdownTrigger = screen.getByRole('button', { name: 'Select PR session type' });
+      fireEvent.click(dropdownTrigger);
+
+      const options = screen.getAllByRole('option');
+      await waitFor(() => {
+        expect(document.activeElement).toBe(options[0]);
+      });
+
+      // Press End to jump to last
+      fireEvent.keyDown(options[0], { key: 'End' });
+
+      await waitFor(() => {
+        expect(document.activeElement).toBe(options[2]);
+      });
+    });
+
+    it('selects command with Enter key', async () => {
+      render(
+        <PRStartSessionButton
+          pr={mockPR}
+          commands={mockCommands}
+          onStart={mockOnStart}
+        />
+      );
+
+      const dropdownTrigger = screen.getByRole('button', { name: 'Select PR session type' });
+      fireEvent.click(dropdownTrigger);
+
+      const options = screen.getAllByRole('option');
+      // Navigate to second option
+      fireEvent.keyDown(options[0], { key: 'ArrowDown' });
+
+      await waitFor(() => {
+        expect(document.activeElement).toBe(options[1]);
+      });
+
+      // Press Enter to select
+      fireEvent.keyDown(options[1], { key: 'Enter' });
+
+      expect(mockOnStart).toHaveBeenCalledWith(mockPR, mockCommands[1]);
+    });
+
+    it('selects command with Space key', async () => {
+      render(
+        <PRStartSessionButton
+          pr={mockPR}
+          commands={mockCommands}
+          onStart={mockOnStart}
+        />
+      );
+
+      const dropdownTrigger = screen.getByRole('button', { name: 'Select PR session type' });
+      fireEvent.click(dropdownTrigger);
+
+      const options = screen.getAllByRole('option');
+      // Navigate to third option
+      fireEvent.keyDown(options[0], { key: 'End' });
+
+      await waitFor(() => {
+        expect(document.activeElement).toBe(options[2]);
+      });
+
+      // Press Space to select
+      fireEvent.keyDown(options[2], { key: ' ' });
+
+      expect(mockOnStart).toHaveBeenCalledWith(mockPR, mockCommands[2]);
+    });
+
+    it('wraps around when navigating past last item', async () => {
+      render(
+        <PRStartSessionButton
+          pr={mockPR}
+          commands={mockCommands}
+          onStart={mockOnStart}
+        />
+      );
+
+      const dropdownTrigger = screen.getByRole('button', { name: 'Select PR session type' });
+      fireEvent.click(dropdownTrigger);
+
+      const options = screen.getAllByRole('option');
+      // Navigate to last item
+      fireEvent.keyDown(options[0], { key: 'End' });
+
+      await waitFor(() => {
+        expect(document.activeElement).toBe(options[2]);
+      });
+
+      // Press ArrowDown (should wrap to first)
+      fireEvent.keyDown(options[2], { key: 'ArrowDown' });
+
+      await waitFor(() => {
+        expect(document.activeElement).toBe(options[0]);
+      });
+    });
   });
 
   describe('Toggle Dropdown', () => {
