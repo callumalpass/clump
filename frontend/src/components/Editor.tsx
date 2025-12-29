@@ -4,66 +4,89 @@ import { EditorView, keymap, placeholder as cmPlaceholder } from '@codemirror/vi
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { vim, Vim, getCM } from '@replit/codemirror-vim';
+import { useTheme } from '../hooks/useTheme';
 
 // Local storage key for vim mode preference
 const VIM_MODE_KEY = 'editor-vim-mode';
 
-// Dark theme matching the app UI
-const darkTheme = EditorView.theme({
-  '&': {
-    backgroundColor: '#0d1117',
-    color: '#e6edf3',
-    fontSize: '14px',
-  },
-  '.cm-scroller': {
-    backgroundColor: '#0d1117',
-  },
-  '.cm-content': {
-    backgroundColor: '#0d1117',
-    caretColor: '#58a6ff',
-    fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-  },
-  '.cm-cursor': {
-    borderLeftColor: '#58a6ff',
-  },
-  '&.cm-focused .cm-cursor': {
-    borderLeftColor: '#58a6ff',
-  },
-  '.cm-selectionBackground, ::selection': {
-    backgroundColor: '#264f78',
-  },
-  '&.cm-focused .cm-selectionBackground': {
-    backgroundColor: '#264f78',
-  },
-  '.cm-gutters': {
-    backgroundColor: '#0d1117',
-    color: '#6e7681',
-    border: 'none',
-  },
-  '.cm-activeLineGutter': {
-    backgroundColor: '#0d1117',
-  },
-  '.cm-activeLine': {
-    backgroundColor: '#0d1117',
-  },
-  '.cm-line': {
-    padding: '0 4px',
-  },
-  // Vim cursor styles
-  '.cm-fat-cursor': {
-    backgroundColor: '#58a6ff !important',
-    color: '#0d1117 !important',
-  },
-  '&:not(.cm-focused) .cm-fat-cursor': {
-    backgroundColor: '#58a6ff80 !important',
-    outline: '1px solid #58a6ff',
-  },
-  // Placeholder styling
-  '.cm-placeholder': {
-    color: '#6e7681',
-    fontStyle: 'italic',
-  },
-}, { dark: true });
+// Dark theme colors
+const darkColors = {
+  bg: '#0d1117',
+  text: '#e6edf3',
+  caret: '#58a6ff',
+  selection: '#264f78',
+  gutterText: '#6e7681',
+  placeholder: '#6e7681',
+};
+
+// Light theme colors
+const lightColors = {
+  bg: '#fdfbf7',
+  text: '#2d3436',
+  caret: '#6c5ce7',
+  selection: 'rgba(108, 92, 231, 0.2)',
+  gutterText: '#b2bec3',
+  placeholder: '#b2bec3',
+};
+
+// Create theme based on colors
+function createEditorTheme(colors: typeof darkColors, isDark: boolean) {
+  return EditorView.theme({
+    '&': {
+      backgroundColor: colors.bg,
+      color: colors.text,
+      fontSize: '14px',
+    },
+    '.cm-scroller': {
+      backgroundColor: colors.bg,
+    },
+    '.cm-content': {
+      backgroundColor: colors.bg,
+      caretColor: colors.caret,
+      fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+    },
+    '.cm-cursor': {
+      borderLeftColor: colors.caret,
+    },
+    '&.cm-focused .cm-cursor': {
+      borderLeftColor: colors.caret,
+    },
+    '.cm-selectionBackground, ::selection': {
+      backgroundColor: colors.selection,
+    },
+    '&.cm-focused .cm-selectionBackground': {
+      backgroundColor: colors.selection,
+    },
+    '.cm-gutters': {
+      backgroundColor: colors.bg,
+      color: colors.gutterText,
+      border: 'none',
+    },
+    '.cm-activeLineGutter': {
+      backgroundColor: colors.bg,
+    },
+    '.cm-activeLine': {
+      backgroundColor: colors.bg,
+    },
+    '.cm-line': {
+      padding: '0 4px',
+    },
+    // Vim cursor styles
+    '.cm-fat-cursor': {
+      backgroundColor: `${colors.caret} !important`,
+      color: `${colors.bg} !important`,
+    },
+    '&:not(.cm-focused) .cm-fat-cursor': {
+      backgroundColor: `${colors.caret}80 !important`,
+      outline: `1px solid ${colors.caret}`,
+    },
+    // Placeholder styling
+    '.cm-placeholder': {
+      color: colors.placeholder,
+      fontStyle: 'italic',
+    },
+  }, { dark: isDark });
+}
 
 interface EditorProps {
   value: string;
@@ -94,6 +117,7 @@ export function Editor({
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   const onSubmitRef = useRef(onSubmit);
+  const { isDark } = useTheme();
 
   // Use controlled vim mode if provided, otherwise use localStorage
   const [internalVimMode, setInternalVimMode] = useState(() => {
@@ -133,7 +157,7 @@ export function Editor({
     onVimModeChange?.(newValue);
   }, [vimEnabled, controlledVimMode, onVimModeChange]);
 
-  // Create/recreate editor when vim mode changes
+  // Create/recreate editor when vim mode or theme changes
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -142,6 +166,9 @@ export function Editor({
       viewRef.current.destroy();
       viewRef.current = null;
     }
+
+    // Create theme based on current mode
+    const editorTheme = createEditorTheme(isDark ? darkColors : lightColors, isDark);
 
     const extensions = [
       // High priority submit keybindings (must come before vim)
@@ -169,7 +196,7 @@ export function Editor({
         ...historyKeymap,
       ]),
       markdown(),
-      Prec.highest(darkTheme),
+      Prec.highest(editorTheme),
       EditorView.lineWrapping,
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
@@ -228,6 +255,10 @@ export function Editor({
         onSubmitRef.current?.();
       });
 
+      if (autoFocus) {
+        view.focus();
+      }
+
       return () => {
         view.dom.removeEventListener('keyup', updateVimMode);
         clearInterval(interval);
@@ -242,7 +273,7 @@ export function Editor({
     return () => {
       view.destroy();
     };
-  }, [vimEnabled, disabled, placeholder, autoFocus]);
+  }, [vimEnabled, disabled, placeholder, autoFocus, isDark]);
 
   // Sync external value changes
   useEffect(() => {
@@ -265,27 +296,31 @@ export function Editor({
     <div className="relative">
       <div
         ref={containerRef}
-        className={`bg-[#0d1117] border border-gray-600 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent ${
+        className={`border rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blurple-500 focus-within:border-transparent ${
           disabled ? 'opacity-50 cursor-not-allowed' : ''
         }`}
         style={{
           minHeight,
           maxHeight,
           overflowY: 'auto',
+          backgroundColor: isDark ? darkColors.bg : lightColors.bg,
+          borderColor: isDark ? '#464f5b' : '#dfe6e9',
         }}
       />
 
       {/* Status bar */}
-      <div className="flex items-center justify-between mt-1 text-xs text-gray-500">
+      <div className="flex items-center justify-between mt-1 text-xs" style={{ color: isDark ? '#6e7681' : '#b2bec3' }}>
         <div className="flex items-center gap-2">
           {/* Vim mode toggle */}
           <button
             type="button"
             onClick={toggleVimMode}
-            className={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+            className={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 ${
               vimEnabled
-                ? 'bg-green-900/50 text-green-400 hover:bg-green-900/70'
-                : 'bg-gray-800 text-gray-500 hover:bg-gray-700 hover:text-gray-400'
+                ? 'bg-mint-500/20 text-mint-400 hover:bg-mint-500/30'
+                : isDark
+                  ? 'bg-gray-800 text-gray-500 hover:bg-gray-750 hover:text-gray-400'
+                  : 'bg-gray-200/50 text-gray-500 hover:bg-gray-200 hover:text-gray-600'
             }`}
             title={vimEnabled ? 'Vim mode enabled (click to disable)' : 'Click to enable Vim mode'}
           >
@@ -299,10 +334,12 @@ export function Editor({
           {vimEnabled && (
             <span className={`px-1.5 py-0.5 rounded font-mono text-xs ${
               vimModeIndicator === 'INSERT'
-                ? 'bg-blue-900/50 text-blue-400'
+                ? 'bg-sky-500/20 text-sky-400'
                 : vimModeIndicator === 'VISUAL'
-                ? 'bg-purple-900/50 text-purple-400'
-                : 'bg-gray-800 text-gray-400'
+                ? 'bg-blurple-500/20 text-blurple-400'
+                : isDark
+                  ? 'bg-gray-800 text-gray-400'
+                  : 'bg-gray-200/50 text-gray-500'
             }`}>
               -- {vimModeIndicator} --
             </span>
@@ -311,7 +348,7 @@ export function Editor({
 
         {/* Submit hint */}
         {onSubmit && (
-          <span className="text-gray-600">
+          <span style={{ color: isDark ? '#6e7681' : '#b2bec3' }}>
             {vimEnabled ? 'Ctrl+Enter or :submit' : 'Ctrl+Enter'} to submit
           </span>
         )}

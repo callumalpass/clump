@@ -387,5 +387,29 @@ describe('Editor', () => {
 
       expect(mockView.focus).toHaveBeenCalled();
     });
+
+    it('focuses editor when autoFocus is true and vim is enabled', () => {
+      localStorageMock.getItem.mockReturnValue('true');
+
+      render(<Editor {...defaultProps} autoFocus={true} />);
+
+      expect(mockView.focus).toHaveBeenCalled();
+    });
+
+    it('does not focus editor when autoFocus is false', () => {
+      localStorageMock.getItem.mockReturnValue(null);
+
+      render(<Editor {...defaultProps} autoFocus={false} />);
+
+      expect(mockView.focus).not.toHaveBeenCalled();
+    });
+
+    it('does not focus editor when autoFocus is not provided', () => {
+      localStorageMock.getItem.mockReturnValue(null);
+
+      render(<Editor {...defaultProps} />);
+
+      expect(mockView.focus).not.toHaveBeenCalled();
+    });
   });
 });
