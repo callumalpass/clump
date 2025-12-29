@@ -54,10 +54,12 @@ export function SessionTabs({
 
   // Update the sliding tab indicator position when active tab changes
   useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
     const updateIndicator = () => {
-      const container = containerRef.current;
       const activeTabElement = activeSessionId ? tabRefs.current.get(activeSessionId) : null;
-      if (container && activeTabElement) {
+      if (activeTabElement) {
         const containerRect = container.getBoundingClientRect();
         const tabRect = activeTabElement.getBoundingClientRect();
         setIndicatorStyle({
@@ -69,10 +71,23 @@ export function SessionTabs({
         setIndicatorStyle({ left: 0, width: 0 });
       }
     };
-    updateIndicator();
+
+    // Initial update - use rAF to ensure DOM has settled
+    const rafId = requestAnimationFrame(updateIndicator);
+
+    // Watch for size changes on all tab elements
+    const resizeObserver = new ResizeObserver(updateIndicator);
+    tabRefs.current.forEach((el) => resizeObserver.observe(el));
+    resizeObserver.observe(container);
+
     // Also update on window resize
     window.addEventListener('resize', updateIndicator);
-    return () => window.removeEventListener('resize', updateIndicator);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateIndicator);
+    };
   }, [activeSessionId, sessions]); // Re-run when sessions change too (for dynamic tabs)
 
   return (
