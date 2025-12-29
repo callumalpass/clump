@@ -44,8 +44,8 @@ const PRListItem = memo(function PRListItem({
     <div
       role="button"
       tabIndex={0}
-      className={`group p-4 mx-2 my-2 cursor-pointer rounded-stoody-lg transition-colors duration-150 list-item-enter list-item-hover focus-visible:ring-2 focus-visible:ring-blurple-400 focus-visible:ring-inset ${
-        isSelected ? 'list-item-selected' : ''
+      className={`group p-4 mx-2 my-2 cursor-pointer rounded-stoody-lg bg-gray-800 session-card-light hover:bg-gray-750 transition-colors duration-150 list-item-enter focus-visible:ring-2 focus-visible:ring-blurple-400 focus-visible:ring-inset ${
+        isSelected ? 'ring-2 ring-inset ring-blurple-500/50 bg-blurple-500/10' : ''
       }`}
       style={{ '--item-index': Math.min(index, 15) } as React.CSSProperties}
       onClick={onSelect}

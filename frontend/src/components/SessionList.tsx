@@ -29,6 +29,7 @@ interface SessionListItemProps {
   isSelected?: boolean;
   onToggleSelect?: (e: React.MouseEvent) => void;
   selectionMode?: boolean;
+  isViewing?: boolean;
 }
 
 const SessionListItem = memo(function SessionListItem({
@@ -42,6 +43,7 @@ const SessionListItem = memo(function SessionListItem({
   isSelected = false,
   onToggleSelect,
   selectionMode = false,
+  isViewing = false,
 }: SessionListItemProps) {
   // Format repo path for display - show last 2-3 segments
   const formatRepoPath = (s: SessionSummary) => {
@@ -51,15 +53,18 @@ const SessionListItem = memo(function SessionListItem({
   };
 
   // Determine status styling - Stoody card style, clean look
+  // isSelected = bulk selection checkbox, isViewing = session tab is open/active
   const statusClasses = isSelected
     ? 'bg-blurple-500/10'
+    : isViewing
+    ? 'ring-2 ring-inset ring-blurple-500/50 bg-blurple-500/10'
     : '';
 
   return (
     <div
       role="button"
       tabIndex={0}
-      className={`group p-4 mx-2 my-2 cursor-pointer rounded-stoody-lg bg-gray-800 hover:bg-gray-750 transition-colors duration-150 list-item-enter shadow-stoody-sm focus-visible:ring-2 focus-visible:ring-blurple-400 focus-visible:ring-inset ${statusClasses}`}
+      className={`group p-4 mx-2 my-2 cursor-pointer rounded-stoody-lg bg-gray-800 session-card-light hover:bg-gray-750 transition-colors duration-150 list-item-enter focus-visible:ring-2 focus-visible:ring-blurple-400 focus-visible:ring-inset ${statusClasses}`}
       style={{ '--item-index': Math.min(index, 15) } as React.CSSProperties}
       onClick={onSelect}
       onKeyDown={(e) => {
@@ -250,6 +255,7 @@ interface SessionListProps {
   page: number;
   totalPages: number;
   onPageChange: (page: number) => void;
+  activeSessionId?: string | null;
 }
 
 const CATEGORY_FILTERS: { value: SessionFilter; label: string }[] = [
@@ -297,6 +303,7 @@ export function SessionList({
   page,
   totalPages,
   onPageChange,
+  activeSessionId,
 }: SessionListProps) {
   // Selection state for bulk operations
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -686,6 +693,7 @@ export function SessionList({
               isSelected={selectedIds.has(session.session_id)}
               onToggleSelect={hasBulkOperations ? (e) => handleToggleSelect(e, session) : undefined}
               selectionMode={hasBulkOperations}
+              isViewing={activeSessionId === session.session_id}
             />
           ))}
         </div>

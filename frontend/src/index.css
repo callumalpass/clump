@@ -375,6 +375,56 @@
   filter: none;
 }
 
+/* Session cards in sidebar - add subtle border for visual separation in light theme */
+[data-theme="light"] .session-card-light {
+  border: 1px solid #dfe6e9;
+  background-color: #ffffff;
+}
+
+[data-theme="light"] .session-card-light:hover {
+  border-color: #b2bec3;
+  background-color: #f4f4f0;
+}
+
+/* Improve Stop button styling in light theme - less harsh red */
+[data-theme="light"] .btn-stop-light {
+  background-color: rgba(214, 48, 49, 0.12);
+  color: #c0292a;
+  border: 1px solid rgba(214, 48, 49, 0.2);
+}
+
+[data-theme="light"] .btn-stop-light:hover {
+  background-color: #d63031;
+  color: #ffffff;
+  border-color: #d63031;
+}
+
+/* Continue button in light theme - better contrast */
+[data-theme="light"] .btn-continue-light {
+  background-color: rgba(108, 92, 231, 0.12);
+  color: #5849be;
+  border: 1px solid rgba(108, 92, 231, 0.2);
+}
+
+[data-theme="light"] .btn-continue-light:hover {
+  background-color: #6c5ce7;
+  color: #ffffff;
+  border-color: #6c5ce7;
+}
+
+/* Active session badge in light theme - warmer orange */
+[data-theme="light"] .active-session-badge-light {
+  background-color: rgba(243, 156, 18, 0.15);
+  color: #d68910;
+}
+
+/* Filter pill buttons - better active state contrast in light theme */
+[data-theme="light"] .filter-pill-active {
+  background-color: #6c5ce7 !important;
+  color: #ffffff !important;
+  border-color: #6c5ce7 !important;
+}
+
 /* Terminal light theme colors */
 [data-theme="light"] .terminal-light {
   background-color: #f4f4f0 !important;
