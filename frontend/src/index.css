@@ -676,6 +676,16 @@ a:hover {
   animation: empty-state-float 3s ease-in-out infinite;
 }
 
+/* Subtle dot pattern background for empty state areas */
+.empty-state-pattern {
+  background-image: radial-gradient(circle at 1px 1px, rgba(162, 155, 254, 0.08) 1px, transparent 0);
+  background-size: 24px 24px;
+}
+
+[data-theme="light"] .empty-state-pattern {
+  background-image: radial-gradient(circle at 1px 1px, rgba(108, 92, 231, 0.08) 1px, transparent 0);
+}
+
 /* Typewriter text animation */
 .typewriter-text {
   display: inline;
@@ -956,6 +966,20 @@ textarea::placeholder {
 .toggle-btn:active:not(:disabled) {
   transform: scale(0.97);
   box-shadow: 0 0 0 1px rgba(162, 155, 254, 0.5);
+}
+
+/* Active filter pill glow - makes selected state more visible */
+.filter-pill-active {
+  box-shadow: 0 0 12px rgba(162, 155, 254, 0.4), 0 0 4px rgba(162, 155, 254, 0.3);
+}
+
+[data-theme="light"] .filter-pill-active {
+  box-shadow: 0 2px 8px rgba(108, 92, 231, 0.35), 0 0 0 1px rgba(108, 92, 231, 0.2);
+}
+
+/* Active toggle button glow within connected button groups */
+.toggle-btn-active {
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
 }
 
 /* Icon button hover effect - subtle scale and glow */
@@ -1598,6 +1622,39 @@ button:disabled .kbd-hint {
   animation: plus-wiggle 400ms ease-out forwards;
 }
 
+/* Page number edit mode transition - playful flip animation */
+@keyframes page-number-flip-out {
+  0% {
+    transform: rotateX(0deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: rotateX(90deg) scale(0.9);
+    opacity: 0;
+  }
+}
+
+@keyframes page-number-flip-in {
+  0% {
+    transform: rotateX(-90deg) scale(0.9);
+    opacity: 0;
+  }
+  100% {
+    transform: rotateX(0deg) scale(1);
+    opacity: 1;
+  }
+}
+
+.page-number-flip-in {
+  animation: page-number-flip-in 200ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  transform-origin: center center;
+}
+
+.page-number-flip-out {
+  animation: page-number-flip-out 150ms ease-in forwards;
+  transform-origin: center center;
+}
+
 /* Copy button container transition */
 .copy-button {
   transition: color 150ms ease, transform 100ms ease;
@@ -1639,8 +1696,17 @@ button:disabled .kbd-hint {
   .copy-success-icon,
   .input-shake,
   .typewriter-cursor,
-  .checkbox-bounce {
+  .checkbox-bounce,
+  .page-number-flip-in,
+  .page-number-flip-out {
     animation: none;
+  }
+
+  /* Ensure page number edit mode is visible immediately */
+  .page-number-flip-in,
+  .page-number-flip-out {
+    opacity: 1;
+    transform: none;
   }
 
   /* Disable checkbox checkmark draw animation */

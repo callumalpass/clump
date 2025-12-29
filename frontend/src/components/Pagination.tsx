@@ -1,4 +1,4 @@
-import { memo, useState, useRef, useEffect, useCallback } from 'react';
+import { memo, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { focusRing } from '../utils/styles';
 
 interface PaginationProps {
@@ -26,7 +26,14 @@ export const Pagination = memo(function Pagination({
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState(String(page));
   const [isShaking, setIsShaking] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Check for reduced motion preference
+  const prefersReducedMotion = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }, []);
 
   // Focus input when entering edit mode
   useEffect(() => {
@@ -111,7 +118,12 @@ export const Pagination = memo(function Pagination({
 
         {/* Clickable page indicator with inline edit */}
         {isEditing ? (
-          <div className={`flex items-center gap-0.5 min-w-[48px] justify-center ${isShaking ? 'input-shake' : ''}`}>
+          <div
+            className={`flex items-center gap-0.5 min-w-[48px] justify-center ${isShaking ? 'input-shake' : ''} ${
+              isAnimating && !prefersReducedMotion ? 'page-number-flip-in' : ''
+            }`}
+            onAnimationEnd={() => setIsAnimating(false)}
+          >
             <input
               ref={inputRef}
               type="text"
@@ -131,7 +143,12 @@ export const Pagination = memo(function Pagination({
           </div>
         ) : (
           <button
-            onClick={() => safeTotal > 1 && setIsEditing(true)}
+            onClick={() => {
+              if (safeTotal > 1) {
+                setIsAnimating(true);
+                setIsEditing(true);
+              }
+            }}
             disabled={safeTotal <= 1}
             className={`px-2 py-0.5 text-xs text-gray-300 tabular-nums min-w-[48px] text-center rounded transition-colors ${
               safeTotal > 1
