@@ -17,6 +17,23 @@ Clump embeds Claude Code terminals in a web UI alongside GitHub data. It fetches
 - Schedule recurring analyses with cron expressions
 - Track token usage and estimated costs
 
+## Screenshots
+
+### Issues View
+Browse and analyze GitHub issues with full comment threads. Each issue shows related sessions and quick-action buttons.
+
+![Issues View](docs/images/issues-view.png)
+
+### Pull Requests
+Review PRs with diff stats, branch info, and comments. Start code review sessions directly from the UI.
+
+![PRs View](docs/images/prs-view.png)
+
+### Session History
+Search and filter past Claude Code sessions. View transcripts, costs, and linked issues/PRs.
+
+![History View](docs/images/history-view.png)
+
 ## Requirements
 
 - Python 3.11+

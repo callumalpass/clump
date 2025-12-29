@@ -73,7 +73,7 @@ export async function mockAllApis(
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        items: filteredIssues,
+        issues: filteredIssues,
         total: filteredIssues.length,
         page: 1,
         per_page: 30,
@@ -96,7 +96,7 @@ export async function mockAllApis(
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        items: filteredPRs,
+        prs: filteredPRs,
         total: filteredPRs.length,
         page: 1,
         per_page: 30,
@@ -104,12 +104,19 @@ export async function mockAllApis(
     });
   });
 
-  // Mock sessions endpoint - /api/sessions
-  await page.route('**/api/sessions', async (route) => {
+  // Mock sessions endpoint - /api/sessions (handles both with and without query params)
+  const handleSessionsRoute = async (route: import('@playwright/test').Route) => {
     if (route.request().method() === 'GET') {
+      // Filter sessions by repo_path if provided
+      const url = new URL(route.request().url());
+      const repoPath = url.searchParams.get('repo_path');
+      const filteredSessions = repoPath
+        ? sessions.filter(s => s.repo_path === repoPath)
+        : sessions;
+
       const response: SessionListResponse = {
-        sessions,
-        total: sessions.length,
+        sessions: filteredSessions,
+        total: filteredSessions.length,
       };
       await route.fulfill({
         status: 200,
@@ -119,7 +126,9 @@ export async function mockAllApis(
     } else {
       await route.continue();
     }
-  });
+  };
+  await page.route('**/api/sessions?*', handleSessionsRoute);
+  await page.route('**/api/sessions', handleSessionsRoute);
 
   // Mock session counts - /api/sessions/counts
   await page.route('**/api/sessions/counts*', async (route) => {
