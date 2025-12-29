@@ -11,6 +11,11 @@ from github.Repository import Repository
 
 from app.config import settings
 
+# Valid sort fields for each entity type
+ISSUE_SORT_FIELDS = frozenset({"created", "updated", "comments"})
+PR_SORT_FIELDS = frozenset({"created", "updated"})
+VALID_SORT_ORDERS = frozenset({"asc", "desc"})
+
 
 @dataclass
 class IssueComment:
@@ -81,6 +86,32 @@ class GitHubClient:
             self._repo_cache[key] = self._github.get_repo(key)
         return self._repo_cache[key]
 
+    @staticmethod
+    def _validate_sort_params(
+        sort: str,
+        order: str,
+        valid_sorts: frozenset[str],
+        default_sort: str = "created",
+        default_order: str = "desc",
+    ) -> tuple[str, str]:
+        """Validate and normalize sort parameters.
+
+        Args:
+            sort: The requested sort field
+            order: The requested sort order ("asc" or "desc")
+            valid_sorts: Set of valid sort field names
+            default_sort: Fallback sort field if invalid
+            default_order: Fallback order if invalid
+
+        Returns:
+            Tuple of (validated_sort, validated_order)
+        """
+        if sort not in valid_sorts:
+            sort = default_sort
+        if order not in VALID_SORT_ORDERS:
+            order = default_order
+        return sort, order
+
     def list_issues(
         self,
         owner: str,
@@ -128,14 +159,7 @@ class GitHubClient:
         if search_query:
             query = f"{search_query} {query}"
 
-        # Validate sort field
-        valid_sorts = {"created", "updated", "comments"}
-        if sort not in valid_sorts:
-            sort = "created"
-
-        # Validate order
-        if order not in {"asc", "desc"}:
-            order = "desc"
+        sort, order = self._validate_sort_params(sort, order, ISSUE_SORT_FIELDS)
 
         results = self._github.search_issues(query, sort=sort, order=order)
 
@@ -224,14 +248,7 @@ class GitHubClient:
         if search_query:
             query = f"{search_query} {query}"
 
-        # Validate sort field
-        valid_sorts = {"created", "updated"}
-        if sort not in valid_sorts:
-            sort = "created"
-
-        # Validate order
-        if order not in {"asc", "desc"}:
-            order = "desc"
+        sort, order = self._validate_sort_params(sort, order, PR_SORT_FIELDS)
 
         results = self._github.search_issues(query, sort=sort, order=order)
 
