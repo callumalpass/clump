@@ -7,10 +7,11 @@ Per-repo data is stored in ~/.clump/projects/{hash}/data.db.
 
 import asyncio
 import re
+import time
 from pathlib import Path
 
 from contextlib import contextmanager
-from typing import Generator
+from typing import Generator, Any
 
 from fastapi import APIRouter, HTTPException, Query
 from github import (
@@ -33,6 +34,34 @@ from app.database import clear_engine_cache
 from app.services.github_client import github_client, IssueData, PRData
 
 router = APIRouter()
+
+# ==========================================
+# GitHub API Response Cache
+# ==========================================
+# Simple TTL cache to avoid hammering GitHub API on rapid repo switching
+# Cache entries: {cache_key: (response_data, timestamp)}
+_github_cache: dict[str, tuple[Any, float]] = {}
+GITHUB_CACHE_TTL = 30  # seconds
+
+
+def _get_cached_response(cache_key: str) -> Any | None:
+    """Get cached response if still valid."""
+    if cache_key in _github_cache:
+        data, timestamp = _github_cache[cache_key]
+        if time.time() - timestamp < GITHUB_CACHE_TTL:
+            return data
+        # Expired - remove from cache
+        del _github_cache[cache_key]
+    return None
+
+
+def _cache_response(cache_key: str, data: Any) -> None:
+    """Cache a response with current timestamp."""
+    _github_cache[cache_key] = (data, time.time())
+    # Simple cleanup: remove oldest entries if cache gets too large
+    if len(_github_cache) > 100:
+        oldest_key = min(_github_cache, key=lambda k: _github_cache[k][1])
+        del _github_cache[oldest_key]
 
 
 @contextmanager
@@ -282,6 +311,14 @@ async def list_issues(
         order: Sort order - "asc" or "desc"
     """
     repo = get_repo_or_404(repo_id)
+
+    # Check cache first
+    labels_key = ",".join(sorted(labels)) if labels else ""
+    cache_key = f"issues:{repo_id}:{state}:{search or ''}:{labels_key}:{sort}:{order}:{page}:{per_page}"
+    cached = _get_cached_response(cache_key)
+    if cached is not None:
+        return cached
+
     issues, total = github_client.list_issues(
         repo["owner"],
         repo["name"],
@@ -293,12 +330,14 @@ async def list_issues(
         page=page,
         per_page=per_page,
     )
-    return IssueListResponse(
+    response = IssueListResponse(
         issues=[_issue_to_response(i) for i in issues],
         total=total,
         page=page,
         per_page=per_page,
     )
+    _cache_response(cache_key, response)
+    return response
 
 
 @router.get("/repos/{repo_id}/issues/{issue_number}", response_model=IssueDetailResponse)
@@ -434,6 +473,13 @@ async def list_prs(
         order: Sort order - "asc" or "desc"
     """
     repo = get_repo_or_404(repo_id)
+
+    # Check cache first
+    cache_key = f"prs:{repo_id}:{state}:{search or ''}:{sort}:{order}:{page}:{per_page}"
+    cached = _get_cached_response(cache_key)
+    if cached is not None:
+        return cached
+
     prs, total = github_client.list_prs(
         repo["owner"],
         repo["name"],
@@ -444,12 +490,14 @@ async def list_prs(
         page=page,
         per_page=per_page,
     )
-    return PRListResponse(
+    response = PRListResponse(
         prs=[_pr_to_response(p) for p in prs],
         total=total,
         page=page,
         per_page=per_page,
     )
+    _cache_response(cache_key, response)
+    return response
 
 
 @router.get("/repos/{repo_id}/prs/{pr_number}", response_model=PRDetailResponse)

@@ -1982,3 +1982,360 @@ class TestKillSession:
 
             # Should only kill the matching process
             mock_pm.kill.assert_called_once_with("proc-match")
+
+
+class TestListSessionsFastPathPendingFiltering:
+    """Tests for the fast path optimization's pending session filtering.
+
+    The fast path is used when:
+    - sort=updated (default)
+    - no search filter
+    - no model filter
+
+    Pending sessions must be filtered by starred, has_entities, and is_active
+    filters to match the slow path behavior.
+    """
+
+    @pytest.fixture(autouse=True)
+    def clear_session_cache(self):
+        """Clear the session cache before each test to avoid cross-test pollution."""
+        from app.routers.sessions import _session_cache
+        _session_cache.clear()
+        yield
+        _session_cache.clear()
+
+    @staticmethod
+    def _make_pending_session(
+        session_id: str,
+        starred: bool = False,
+        entities: list = None,
+    ):
+        """Helper to create a proper SessionSummaryResponse for pending sessions."""
+        from app.schemas import SessionSummaryResponse, EntityLinkResponse
+        return SessionSummaryResponse(
+            session_id=session_id,
+            encoded_path="-home-user-projects-myapp",
+            repo_path="/home/user/projects/myapp",
+            starred=starred,
+            entities=[EntityLinkResponse(kind="issue", number=e) for e in (entities or [])],
+            is_active=True,
+            modified_at="2024-01-15T10:30:00Z",
+            file_size=0,
+        )
+
+    def test_fast_path_filters_pending_by_starred_true(self, client):
+        """Test that pending sessions are filtered when starred=true."""
+        # Create a discovered session that's starred
+        starred_session = DiscoveredSession(
+            session_id="starred-session",
+            encoded_path="-home-user-projects-myapp",
+            transcript_path=Path("/test/starred.jsonl"),
+            modified_at=datetime(2024, 1, 15, 10, 30, 0),
+            file_size=1024,
+            metadata=SessionMetadata(
+                session_id="starred-session",
+                starred=True,
+                entities=[],
+                tags=[],
+            ),
+        )
+
+        with patch("app.routers.sessions.discover_sessions", return_value=[starred_session]), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
+             patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
+             patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            # Return a pending session that is NOT starred
+            mock_pending.return_value = [self._make_pending_session("pending-unstarred", starred=False)]
+            mock_pending_headless.return_value = []
+            mock_scan.return_value = {"title": "Test", "model": None, "start_time": None, "end_time": None, "message_count": 0}
+
+            # Request only starred sessions - fast path should filter out unstarred pending
+            response = client.get("/sessions?starred=true")
+
+            assert response.status_code == 200
+            data = response.json()
+            # Only the starred discovered session should be returned
+            # The unstarred pending session should be filtered out
+            assert data["total"] == 1
+            session_ids = [s["session_id"] for s in data["sessions"]]
+            assert "starred-session" in session_ids
+            assert "pending-unstarred" not in session_ids
+
+    def test_fast_path_filters_pending_by_starred_false(self, client):
+        """Test that pending sessions are filtered when starred=false."""
+        # Create a discovered session that's NOT starred
+        unstarred_session = DiscoveredSession(
+            session_id="unstarred-session",
+            encoded_path="-home-user-projects-myapp",
+            transcript_path=Path("/test/unstarred.jsonl"),
+            modified_at=datetime(2024, 1, 15, 10, 30, 0),
+            file_size=1024,
+            metadata=SessionMetadata(
+                session_id="unstarred-session",
+                starred=False,
+                entities=[],
+                tags=[],
+            ),
+        )
+
+        with patch("app.routers.sessions.discover_sessions", return_value=[unstarred_session]), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
+             patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
+             patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            # Return a pending session that IS starred
+            mock_pending.return_value = [self._make_pending_session("pending-starred", starred=True)]
+            mock_pending_headless.return_value = []
+            mock_scan.return_value = {"title": "Test", "model": None, "start_time": None, "end_time": None, "message_count": 0}
+
+            # Request only unstarred sessions - fast path should filter out starred pending
+            response = client.get("/sessions?starred=false")
+
+            assert response.status_code == 200
+            data = response.json()
+            # Only the unstarred discovered session should be returned
+            assert data["total"] == 1
+            session_ids = [s["session_id"] for s in data["sessions"]]
+            assert "unstarred-session" in session_ids
+            assert "pending-starred" not in session_ids
+
+    def test_fast_path_filters_pending_by_has_entities_true(self, client):
+        """Test that pending sessions are filtered when has_entities=true."""
+        # Create a discovered session that has entities
+        session_with_entities = DiscoveredSession(
+            session_id="session-with-entities",
+            encoded_path="-home-user-projects-myapp",
+            transcript_path=Path("/test/with_entities.jsonl"),
+            modified_at=datetime(2024, 1, 15, 10, 30, 0),
+            file_size=1024,
+            metadata=SessionMetadata(
+                session_id="session-with-entities",
+                starred=False,
+                entities=[EntityLink(kind="issue", number=42)],
+                tags=[],
+            ),
+        )
+
+        with patch("app.routers.sessions.discover_sessions", return_value=[session_with_entities]), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
+             patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
+             patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            # Return a pending session with NO entities
+            mock_pending.return_value = [self._make_pending_session("pending-no-entities", entities=[])]
+            mock_pending_headless.return_value = []
+            mock_scan.return_value = {"title": "Test", "model": None, "start_time": None, "end_time": None, "message_count": 0}
+
+            # Request only sessions with entities
+            response = client.get("/sessions?has_entities=true")
+
+            assert response.status_code == 200
+            data = response.json()
+            # Only the session with entities should be returned
+            assert data["total"] == 1
+            session_ids = [s["session_id"] for s in data["sessions"]]
+            assert "session-with-entities" in session_ids
+            assert "pending-no-entities" not in session_ids
+
+    def test_fast_path_filters_pending_by_has_entities_false(self, client):
+        """Test that pending sessions are filtered when has_entities=false."""
+        # Create a discovered session without entities
+        session_without_entities = DiscoveredSession(
+            session_id="session-without-entities",
+            encoded_path="-home-user-projects-myapp",
+            transcript_path=Path("/test/without_entities.jsonl"),
+            modified_at=datetime(2024, 1, 15, 10, 30, 0),
+            file_size=1024,
+            metadata=SessionMetadata(
+                session_id="session-without-entities",
+                starred=False,
+                entities=[],
+                tags=[],
+            ),
+        )
+
+        with patch("app.routers.sessions.discover_sessions", return_value=[session_without_entities]), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
+             patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
+             patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            # Return a pending session WITH entities
+            mock_pending.return_value = [self._make_pending_session("pending-with-entities", entities=[42])]
+            mock_pending_headless.return_value = []
+            mock_scan.return_value = {"title": "Test", "model": None, "start_time": None, "end_time": None, "message_count": 0}
+
+            # Request only sessions without entities
+            response = client.get("/sessions?has_entities=false")
+
+            assert response.status_code == 200
+            data = response.json()
+            # Only the session without entities should be returned
+            assert data["total"] == 1
+            session_ids = [s["session_id"] for s in data["sessions"]]
+            assert "session-without-entities" in session_ids
+            assert "pending-with-entities" not in session_ids
+
+    def test_fast_path_excludes_pending_when_is_active_false(self, client):
+        """Test that pending sessions are excluded when is_active=false."""
+        # Create a discovered session (inactive)
+        inactive_session = DiscoveredSession(
+            session_id="inactive-session",
+            encoded_path="-home-user-projects-myapp",
+            transcript_path=Path("/test/inactive.jsonl"),
+            modified_at=datetime(2024, 1, 15, 10, 30, 0),
+            file_size=1024,
+            metadata=None,
+        )
+
+        with patch("app.routers.sessions.discover_sessions", return_value=[inactive_session]), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
+             patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
+             patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            # Pending sessions are always active - but _get_pending_sessions won't be called
+            # because is_active=False should skip pending sessions entirely
+            mock_pending.return_value = [self._make_pending_session("pending-active")]
+            mock_pending_headless.return_value = []
+            mock_scan.return_value = {"title": "Test", "model": None, "start_time": None, "end_time": None, "message_count": 0}
+
+            # Request only inactive sessions - pending should be excluded entirely
+            response = client.get("/sessions?is_active=false")
+
+            assert response.status_code == 200
+            data = response.json()
+            # Only the inactive discovered session should be returned
+            # All pending sessions should be excluded
+            assert data["total"] == 1
+            session_ids = [s["session_id"] for s in data["sessions"]]
+            assert "inactive-session" in session_ids
+            assert "pending-active" not in session_ids
+
+    def test_fast_path_includes_pending_when_is_active_true(self, client):
+        """Test that pending sessions are included when is_active=true."""
+        # Create an active discovered session
+        mock_process = MagicMock()
+        mock_process.claude_session_id = "active-session"
+
+        active_session = DiscoveredSession(
+            session_id="active-session",
+            encoded_path="-home-user-projects-myapp",
+            transcript_path=Path("/test/active.jsonl"),
+            modified_at=datetime(2024, 1, 15, 10, 30, 0),
+            file_size=1024,
+            metadata=None,
+        )
+
+        with patch("app.routers.sessions.discover_sessions", return_value=[active_session]), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
+             patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
+             patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
+            mock_pm.list_processes = AsyncMock(return_value=[mock_process])
+            # Pending session
+            mock_pending.return_value = [self._make_pending_session("pending-session")]
+            mock_pending_headless.return_value = []
+            mock_scan.return_value = {"title": "Test", "model": None, "start_time": None, "end_time": None, "message_count": 0}
+
+            # Request only active sessions - pending should be included
+            response = client.get("/sessions?is_active=true")
+
+            assert response.status_code == 200
+            data = response.json()
+            # Both active and pending should be returned
+            assert data["total"] == 2
+
+    def test_fast_path_total_count_matches_filtered_pending(self, client):
+        """Test that total count correctly reflects filtered pending sessions."""
+        # Create multiple discovered sessions
+        sessions = [
+            DiscoveredSession(
+                session_id=f"session-{i}",
+                encoded_path="-home-user-projects-myapp",
+                transcript_path=Path(f"/test/session-{i}.jsonl"),
+                modified_at=datetime(2024, 1, 15, 10, 30, i),
+                file_size=1024,
+                metadata=SessionMetadata(
+                    session_id=f"session-{i}",
+                    starred=(i % 2 == 0),  # Half are starred
+                    entities=[],
+                    tags=[],
+                ),
+            )
+            for i in range(4)
+        ]
+
+        with patch("app.routers.sessions.discover_sessions", return_value=sessions), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
+             patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
+             patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            # Return 2 pending sessions: 1 starred, 1 not starred
+            mock_pending.return_value = [
+                self._make_pending_session("pending-starred", starred=True),
+                self._make_pending_session("pending-unstarred", starred=False),
+            ]
+            mock_pending_headless.return_value = []
+            mock_scan.return_value = {"title": "Test", "model": None, "start_time": None, "end_time": None, "message_count": 0}
+
+            # Request only starred sessions
+            response = client.get("/sessions?starred=true")
+
+            assert response.status_code == 200
+            data = response.json()
+            # Should be: 2 starred discovered + 1 starred pending = 3 total
+            assert data["total"] == 3
+
+    def test_fast_path_combined_filters_on_pending(self, client):
+        """Test that multiple filters are applied to pending sessions."""
+        # Create a session that's starred and has entities
+        session = DiscoveredSession(
+            session_id="starred-with-entities",
+            encoded_path="-home-user-projects-myapp",
+            transcript_path=Path("/test/session.jsonl"),
+            modified_at=datetime(2024, 1, 15, 10, 30, 0),
+            file_size=1024,
+            metadata=SessionMetadata(
+                session_id="starred-with-entities",
+                starred=True,
+                entities=[EntityLink(kind="issue", number=1)],
+                tags=[],
+            ),
+        )
+
+        with patch("app.routers.sessions.discover_sessions", return_value=[session]), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
+             patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
+             patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            # Return pending sessions with various combinations
+            mock_pending.return_value = [
+                # Starred but no entities - should be filtered out by has_entities
+                self._make_pending_session("pending-starred-no-entities", starred=True, entities=[]),
+                # Not starred but has entities - should be filtered out by starred
+                self._make_pending_session("pending-unstarred-with-entities", starred=False, entities=[42]),
+                # Starred and has entities - should pass both filters
+                self._make_pending_session("pending-starred-with-entities", starred=True, entities=[42]),
+            ]
+            mock_pending_headless.return_value = []
+            mock_scan.return_value = {"title": "Test", "model": None, "start_time": None, "end_time": None, "message_count": 0}
+
+            # Request starred sessions with entities
+            response = client.get("/sessions?starred=true&has_entities=true")
+
+            assert response.status_code == 200
+            data = response.json()
+            # Should be: 1 discovered + 1 pending that matches both filters = 2
+            assert data["total"] == 2
+            session_ids = [s["session_id"] for s in data["sessions"]]
+            assert "starred-with-entities" in session_ids
+            assert "pending-starred-with-entities" in session_ids
+            assert "pending-starred-no-entities" not in session_ids
+            assert "pending-unstarred-with-entities" not in session_ids

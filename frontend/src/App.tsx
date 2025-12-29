@@ -505,10 +505,9 @@ export default function App() {
     if (repoActuallyChanged || !selectedRepo?.id) {
       setActiveProcessId(null);
       setExpandedSessionId(null);
-      // Clear pending context refs and session cache
+      // Clear pending context refs (session cache is NOT cleared - getCachedSession validates repo_path)
       pendingIssueContextRef.current = null;
       pendingPRContextRef.current = null;
-      cachedSessionsRef.current.clear();
       // Cancel any pending debounced refresh to prevent stale context
       if (refreshSessionsTimeoutRef.current) {
         clearTimeout(refreshSessionsTimeoutRef.current);

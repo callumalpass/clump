@@ -619,8 +619,8 @@ export function useActiveSessions(repoPath?: string) {
       // Sort by modified_at descending to get most recent first
       params.set('sort', 'updated');
       params.set('order', 'desc');
-      // Get enough sessions to show active + recent ones
-      params.set('limit', '50');
+      // Get enough sessions to show active + recent ones (reduced from 50 for perf)
+      params.set('limit', '20');
       params.set('offset', '0');
 
       const data = await fetchJson<SessionListResponse>(

@@ -792,8 +792,130 @@ async def list_sessions(
     # Track which sessions we've discovered (have JSONL files)
     discovered_session_ids = {s.session_id for s in sessions}
 
-    # Convert to summaries in parallel using thread pool
-    # This speeds up the I/O-bound transcript scanning when cache misses occur
+    # OPTIMIZATION: For sort=updated with no content-dependent filters,
+    # we can paginate BEFORE scanning file contents (huge perf win for large session counts)
+    # Content-dependent: search (needs title), model filter (needs model from transcript)
+    # Content-independent: starred, has_entities, is_active, date_from/date_to (use file mtime)
+    needs_content_scan_for_filter = search is not None or model is not None
+    needs_content_scan_for_sort = sort in (SessionSortField.CREATED, SessionSortField.MESSAGES)
+    can_use_fast_path = not needs_content_scan_for_filter and not needs_content_scan_for_sort
+
+    if can_use_fast_path:
+        # FAST PATH: Filter and paginate DiscoveredSession objects first, then scan only the page
+        # Sessions are already sorted by modified_at (desc) from discover_sessions()
+        if order == SortOrder.ASC:
+            sessions = list(reversed(sessions))
+
+        # Apply metadata-based filters before pagination
+        filtered_sessions: list[DiscoveredSession] = []
+        for s in sessions:
+            # Check starred filter (from metadata)
+            if starred is not None:
+                s_starred = s.metadata.starred if s.metadata else False
+                if s_starred != starred:
+                    continue
+
+            # Check has_entities filter (from metadata)
+            if has_entities is not None:
+                entity_count = len(s.metadata.entities) if s.metadata else 0
+                if has_entities and entity_count == 0:
+                    continue
+                if not has_entities and entity_count > 0:
+                    continue
+
+            # Check is_active filter
+            if is_active is not None:
+                s_is_active = s.session_id in active_session_ids
+                if s_is_active != is_active:
+                    continue
+
+            # Check date filters (use file mtime)
+            if date_from:
+                try:
+                    from_date = datetime.fromisoformat(date_from).replace(
+                        hour=0, minute=0, second=0, microsecond=0
+                    )
+                    if s.modified_at.replace(tzinfo=None) < from_date:
+                        continue
+                except ValueError:
+                    pass
+
+            if date_to:
+                try:
+                    to_date = datetime.fromisoformat(date_to).replace(
+                        hour=23, minute=59, second=59, microsecond=999999
+                    )
+                    if s.modified_at.replace(tzinfo=None) > to_date:
+                        continue
+                except ValueError:
+                    pass
+
+            filtered_sessions.append(s)
+
+        # Calculate total before pagination
+        total = len(filtered_sessions)
+
+        # Add pending sessions (they'll be prepended to the list)
+        # Only include pending sessions if they pass the filters
+        all_pending: list[SessionSummaryResponse] = []
+        if is_active is None or is_active is True:
+            # Pending sessions are always active, so only include if is_active filter allows
+            pending = _get_pending_sessions(active_session_ids, discovered_session_ids, repo_path)
+            pending_headless = _get_pending_headless_sessions(discovered_session_ids, repo_path)
+            all_pending = pending + pending_headless
+
+            # Apply starred filter to pending sessions
+            if starred is not None:
+                all_pending = [p for p in all_pending if p.starred == starred]
+
+            # Apply has_entities filter to pending sessions
+            if has_entities is not None:
+                if has_entities:
+                    all_pending = [p for p in all_pending if len(p.entities) > 0]
+                else:
+                    all_pending = [p for p in all_pending if len(p.entities) == 0]
+
+        pending_count = len(all_pending)
+
+        # Adjust pagination to account for pending sessions at the start
+        if offset < pending_count:
+            # Some or all pending sessions are on this page
+            pending_on_page = all_pending[offset:offset + limit]
+            remaining_limit = limit - len(pending_on_page)
+            if remaining_limit > 0:
+                page_sessions = filtered_sessions[:remaining_limit]
+            else:
+                page_sessions = []
+        else:
+            # All pending sessions are on earlier pages
+            adjusted_offset = offset - pending_count
+            page_sessions = filtered_sessions[adjusted_offset:adjusted_offset + limit]
+            pending_on_page = []
+
+        # Only scan the paginated subset (fast!)
+        loop = asyncio.get_event_loop()
+        if len(page_sessions) > 1:
+            conversion_tasks = [
+                loop.run_in_executor(
+                    _summary_thread_pool,
+                    partial(_session_to_summary, s, active_session_ids)
+                )
+                for s in page_sessions
+            ]
+            page_summaries = list(await asyncio.gather(*conversion_tasks))
+        elif page_sessions:
+            page_summaries = [_session_to_summary(page_sessions[0], active_session_ids)]
+        else:
+            page_summaries = []
+
+        # Combine pending sessions with scanned page
+        summaries = list(pending_on_page) + page_summaries
+        total += pending_count
+
+        # Return early - we've already done filtering and pagination
+        return SessionListResponse(sessions=summaries, total=total)
+
+    # SLOW PATH: Need to scan all sessions for content-dependent filters/sorts
     loop = asyncio.get_event_loop()
     if len(sessions) > 1:
         # Use thread pool for parallel conversion when there are multiple sessions
