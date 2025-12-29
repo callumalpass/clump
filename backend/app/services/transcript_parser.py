@@ -11,6 +11,8 @@ import re
 from pathlib import Path
 from dataclasses import dataclass, field
 
+from app.storage import encode_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -103,8 +105,8 @@ def find_transcript_file(session_id: str, working_dir: str) -> Path | None:
 
     # The project directory name is the path with slashes replaced by dashes
     # e.g., /home/user/projects/myapp -> -home-user-projects-myapp
-    encoded_path = working_dir.replace("/", "-")
-    project_dir = claude_projects_dir / encoded_path
+    encoded = encode_path(working_dir)
+    project_dir = claude_projects_dir / encoded
 
     if not project_dir.exists():
         # Try finding it by searching all project dirs
