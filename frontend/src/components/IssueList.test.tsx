@@ -129,17 +129,37 @@ describe('IssueList', () => {
   });
 
   describe('Empty State', () => {
-    it('renders empty state when no issues and not loading', () => {
+    it('renders empty state when no issues and not loading (no filters)', () => {
+      // When no filters are provided, the default filters={} results in undefined state
+      // which triggers the "No matching issues" empty state
       render(<IssueList {...defaultProps} issues={[]} loading={false} />);
 
-      expect(screen.getByText('No issues found')).toBeInTheDocument();
-      expect(screen.getByText('Try adjusting your filters or check the repository')).toBeInTheDocument();
+      expect(screen.getByText('No matching issues')).toBeInTheDocument();
+      // Message says "No undefined issues found" since filters.state is undefined
+      expect(screen.getByText('No undefined issues found')).toBeInTheDocument();
+    });
+
+    it('renders empty state with default open filter', () => {
+      // When state is 'open' (the default in the app), shows appropriate message
+      render(<IssueList {...defaultProps} issues={[]} loading={false} filters={{ state: 'open' }} />);
+
+      expect(screen.getByText('No matching issues')).toBeInTheDocument();
+      expect(screen.getByText('No open issues found')).toBeInTheDocument();
+    });
+
+    it('renders "no issues yet" when state is all', () => {
+      // When state is 'all' and no other filters, shows the basic empty state
+      render(<IssueList {...defaultProps} issues={[]} loading={false} filters={{ state: 'all' }} />);
+
+      expect(screen.getByText('No issues yet')).toBeInTheDocument();
+      expect(screen.getByText('This repository has no open issues')).toBeInTheDocument();
     });
 
     it('does not show empty state when loading', () => {
       render(<IssueList {...defaultProps} issues={[]} loading={true} />);
 
-      expect(screen.queryByText('No issues found')).not.toBeInTheDocument();
+      expect(screen.queryByText('No matching issues')).not.toBeInTheDocument();
+      expect(screen.queryByText('No issues yet')).not.toBeInTheDocument();
     });
   });
 

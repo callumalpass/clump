@@ -167,8 +167,8 @@ describe('SessionList', () => {
     it('renders empty state when no sessions and not loading', () => {
       render(<SessionList {...defaultProps} sessions={[]} loading={false} filters={{ category: 'all' }} />);
 
-      expect(screen.getByText('No Claude sessions found')).toBeInTheDocument();
-      expect(screen.getByText('Sessions from Claude Code will appear here')).toBeInTheDocument();
+      expect(screen.getByText('No sessions yet')).toBeInTheDocument();
+      expect(screen.getByText('Start a session from an issue or PR')).toBeInTheDocument();
     });
 
     it('shows filter-specific empty message for active filter', () => {
@@ -176,7 +176,7 @@ describe('SessionList', () => {
 
       // When category filter is active (not 'all'), shows "no matching" message
       expect(screen.getByText('No matching sessions')).toBeInTheDocument();
-      expect(screen.getByText('Try adjusting your filters')).toBeInTheDocument();
+      expect(screen.getByText('No sessions match the selected filters')).toBeInTheDocument();
     });
 
     it('shows filter-specific empty message for starred filter', () => {
@@ -189,7 +189,7 @@ describe('SessionList', () => {
     it('does not show empty state when loading', () => {
       render(<SessionList {...defaultProps} sessions={[]} loading={true} />);
 
-      expect(screen.queryByText('No Claude sessions found')).not.toBeInTheDocument();
+      expect(screen.queryByText('No sessions yet')).not.toBeInTheDocument();
     });
   });
 
