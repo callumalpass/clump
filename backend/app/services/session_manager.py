@@ -39,6 +39,7 @@ INITIAL_PTY_COLS = 120
 CLAUDE_INIT_POLL_INTERVAL_SECS = 0.05  # Polling interval when waiting for Claude to be ready
 CLAUDE_INIT_MAX_WAIT_SECS = 10.0  # Maximum time to wait for Claude to initialize
 CLAUDE_INIT_FALLBACK_SECS = 0.5  # Fallback delay if detection fails quickly
+CLAUDE_UI_RENDER_DELAY_SECS = 0.1  # Extra delay after ready pattern detected to ensure UI is rendered
 PROMPT_ENTER_DELAY_SECS = 0.1  # Delay between typing prompt and pressing Enter
 READ_LOOP_POLL_INTERVAL_SECS = 0.01  # Polling interval for read loop to prevent busy waiting
 SIGTERM_SIGKILL_DELAY_SECS = 0.1  # Grace period between SIGTERM and SIGKILL
@@ -361,7 +362,7 @@ class ProcessManager:
                             elapsed, process.id, pattern
                         )
                         # Small additional delay to ensure UI is fully rendered
-                        await asyncio.sleep(0.1)
+                        await asyncio.sleep(CLAUDE_UI_RENDER_DELAY_SECS)
                         return
 
             # If transcript hasn't changed and we've waited a bit, use fallback
