@@ -14,8 +14,6 @@ interface IssueDetailProps {
   onStartSession: (command: CommandMetadata) => void;
   sessions?: SessionSummary[];
   processes?: Process[];
-  expandedSessionId?: string | null;
-  onToggleSession?: (sessionId: string | null) => void;
   onSelectSession?: (session: SessionSummary) => void;
   onContinueSession?: (session: SessionSummary) => void;
   tags?: Tag[];
@@ -32,8 +30,6 @@ export function IssueDetail({
   onStartSession,
   sessions = [],
   processes = [],
-  expandedSessionId: _expandedSessionId,
-  onToggleSession: _onToggleSession,
   onSelectSession,
   onContinueSession,
   tags = [],

@@ -159,8 +159,6 @@ describe('IssueDetail', () => {
     onStartSession: vi.fn(),
     sessions: [],
     processes: [],
-    expandedSessionId: null,
-    onToggleSession: vi.fn(),
     onSelectSession: vi.fn(),
     onContinueSession: vi.fn(),
     tags: [],

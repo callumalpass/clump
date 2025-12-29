@@ -19,6 +19,11 @@ Clump embeds Claude Code terminals in a web UI alongside GitHub data. It fetches
 
 ## Screenshots
 
+### Welcome Screen
+Get started by selecting a repository from the dropdown. The welcome screen shows available repos and quick actions.
+
+![Welcome](docs/images/welcome.png)
+
 ### Issues View
 Browse and analyze GitHub issues with full comment threads. Each issue shows related sessions and quick-action buttons.
 
@@ -29,10 +34,30 @@ Review PRs with diff stats, branch info, and comments. Start code review session
 
 ![PRs View](docs/images/prs-view.png)
 
+### Active Sessions
+Running sessions appear in the sidebar. Click to view the terminal output and interact with Claude Code.
+
+![Active Sessions](docs/images/active-sessions.png)
+
 ### Session History
-Search and filter past Claude Code sessions. View transcripts, costs, and linked issues/PRs.
+Search and filter past Claude Code sessions. View transcripts with tool usage, costs, and linked issues/PRs.
 
 ![History View](docs/images/history-view.png)
+
+### Schedules
+Set up recurring analyses with cron expressions. Track last run status and next scheduled execution.
+
+![Schedules](docs/images/schedules.png)
+
+### Settings
+Configure Claude Code behavior: permission mode, allowed tools, model selection, and more.
+
+![Settings](docs/images/settings.png)
+
+### Command Palette
+Quick access to all actions with `Ctrl+K`. Jump to issues, PRs, sessions, or run commands.
+
+![Command Palette](docs/images/command-palette.png)
 
 ## Requirements
 

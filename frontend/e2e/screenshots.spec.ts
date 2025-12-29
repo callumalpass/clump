@@ -1,12 +1,14 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import { mockAllApis, mockIssueDetail, mockPRDetail, mockSessionDetail } from './fixtures/api-mocks';
-import { mockRepos, mockIssues, mockPRs, mockSessions, mockCommands, mockSessionCounts } from './fixtures/test-data';
+import { mockRepos, mockIssues, mockPRs, mockSessions, mockCommands, mockSessionCounts, mockSettings } from './fixtures/test-data';
 
 /**
  * Screenshot generation for README and documentation.
  * Run with: npx playwright test screenshots.spec.ts
- * Screenshots are saved to: frontend/screenshots/
+ * Screenshots are saved to: docs/images/
  */
+
+const SCREENSHOT_DIR = '../docs/images';
 
 test.describe('Screenshots for README', () => {
   test.beforeEach(async ({ page }) => {
@@ -14,19 +16,18 @@ test.describe('Screenshots for README', () => {
     await page.setViewportSize({ width: 1400, height: 900 });
   });
 
-  async function selectRepo(page: import('@playwright/test').Page, repoName: string = 'acme/webapp') {
-    // Click the repo selector dropdown button
+  async function selectRepo(page: Page, repoName: string = 'acme/webapp') {
     const repoSelector = page.getByRole('button', { name: /select repository/i });
     await repoSelector.click();
-
-    // Wait for dropdown to open and click the repo
     await page.getByText(repoName).click();
-
-    // Wait for repo to be selected (button text changes to show repo name)
     await expect(page.locator('button', { hasText: repoName }).first()).toBeVisible({ timeout: 10000 });
   }
 
-  test('capture main interface with issues', async ({ page }) => {
+  async function waitForAnimations(page: Page) {
+    await page.waitForTimeout(300);
+  }
+
+  test('01 - welcome screen', async ({ page }) => {
     await mockAllApis(page, {
       repos: mockRepos,
       issues: mockIssues,
@@ -34,9 +35,31 @@ test.describe('Screenshots for README', () => {
       sessions: mockSessions,
       commands: mockCommands,
       sessionCounts: mockSessionCounts,
+      settings: mockSettings,
     });
 
-    // Mock issue detail for the selected issue (repoId = 1 for acme/webapp)
+    await page.goto('/');
+    await expect(page.locator('h1:has-text("Clump")')).toBeVisible();
+    await expect(page.getByText('Welcome to Clump')).toBeVisible();
+    await waitForAnimations(page);
+
+    await page.screenshot({
+      path: `${SCREENSHOT_DIR}/welcome.png`,
+      animations: 'disabled',
+    });
+  });
+
+  test('02 - issues view', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      commands: mockCommands,
+      sessionCounts: mockSessionCounts,
+      settings: mockSettings,
+    });
+
     await mockIssueDetail(page, 1, {
       ...mockIssues[0]!,
       comments: [
@@ -56,33 +79,20 @@ test.describe('Screenshots for README', () => {
     });
 
     await page.goto('/');
-
-    // Wait for app to fully load
     await expect(page.locator('h1:has-text("Clump")')).toBeVisible();
-
-    // Select the repo using dropdown
     await selectRepo(page);
-
-    // Wait for issues to load - use the first mock issue title
     await expect(page.getByText('Add dark mode support')).toBeVisible({ timeout: 10000 });
-
-    // Click on the first issue to show detail
     await page.getByText('Add dark mode support').click();
-
-    // Wait for issue detail panel to appear
     await expect(page.getByText('requested a dark mode')).toBeVisible({ timeout: 5000 });
+    await waitForAnimations(page);
 
-    // Small delay for animations to complete
-    await page.waitForTimeout(300);
-
-    // Take screenshot
     await page.screenshot({
-      path: 'screenshots/issues-view.png',
+      path: `${SCREENSHOT_DIR}/issues-view.png`,
       animations: 'disabled',
     });
   });
 
-  test('capture PR review interface', async ({ page }) => {
+  test('03 - PR review interface', async ({ page }) => {
     await mockAllApis(page, {
       repos: mockRepos,
       issues: mockIssues,
@@ -90,9 +100,9 @@ test.describe('Screenshots for README', () => {
       sessions: mockSessions,
       commands: mockCommands,
       sessionCounts: mockSessionCounts,
+      settings: mockSettings,
     });
 
-    // Mock PR detail
     await mockPRDetail(page, 1, {
       ...mockPRs[0]!,
       comments: [
@@ -107,31 +117,20 @@ test.describe('Screenshots for README', () => {
 
     await page.goto('/');
     await expect(page.locator('h1:has-text("Clump")')).toBeVisible();
-
-    // Select repo
     await selectRepo(page);
-
-    // Switch to PRs tab
     await page.getByRole('tab', { name: /PRs/i }).click();
-
-    // Wait for PRs to load
     await expect(page.getByText('implement user authentication')).toBeVisible({ timeout: 10000 });
-
-    // Click on the first PR
     await page.getByText('implement user authentication').click();
-
-    // Wait for detail
     await expect(page.getByText('OAuth2 authentication')).toBeVisible({ timeout: 5000 });
-
-    await page.waitForTimeout(300);
+    await waitForAnimations(page);
 
     await page.screenshot({
-      path: 'screenshots/prs-view.png',
+      path: `${SCREENSHOT_DIR}/prs-view.png`,
       animations: 'disabled',
     });
   });
 
-  test('capture session history', async ({ page }) => {
+  test('04 - active sessions', async ({ page }) => {
     await mockAllApis(page, {
       repos: mockRepos,
       issues: mockIssues,
@@ -139,61 +138,186 @@ test.describe('Screenshots for README', () => {
       sessions: mockSessions,
       commands: mockCommands,
       sessionCounts: mockSessionCounts,
+      settings: mockSettings,
     });
 
-    await page.goto('/');
-    await expect(page.locator('h1:has-text("Clump")')).toBeVisible();
-
-    // Select repo
-    await selectRepo(page);
-
-    // Switch to History tab
-    await page.getByRole('tab', { name: /History/i }).click();
-
-    // Wait for sessions to load
-    await expect(page.getByText('Implement dark mode')).toBeVisible({ timeout: 10000 });
-
-    // Wait for layout to stabilize
-    await page.waitForTimeout(300);
-
-    await page.screenshot({
-      path: 'screenshots/history-view.png',
-      animations: 'disabled',
-    });
-  });
-
-  test('capture active session view', async ({ page }) => {
-    // Use the existing mockSessions which has an active session (mockSessions[1] has is_active: true)
-    await mockAllApis(page, {
-      repos: mockRepos,
-      issues: mockIssues,
-      prs: mockPRs,
-      sessions: mockSessions,
-      commands: mockCommands,
-      sessionCounts: mockSessionCounts,
-    });
-
-    // Mock issue detail since clicking an active session shows issue context
-    await mockIssueDetail(page, 1, {
-      ...mockIssues[0]!,
+    await mockPRDetail(page, 1, {
+      ...mockPRs[0]!,
       comments: [],
     });
 
     await page.goto('/');
     await expect(page.locator('h1:has-text("Clump")')).toBeVisible();
-
-    // Select repo
     await selectRepo(page);
 
-    // The active session should appear in the compact sessions list at the top
-    // Wait for the active session to appear
+    // The active session should appear in the compact sessions list
     await expect(page.getByText('Review authentication PR').first()).toBeVisible({ timeout: 10000 });
 
-    // Wait for layout to stabilize
-    await page.waitForTimeout(300);
+    // Click the active session to show it
+    await page.getByText('Review authentication PR').first().click();
+    await waitForAnimations(page);
 
     await page.screenshot({
-      path: 'screenshots/session-view.png',
+      path: `${SCREENSHOT_DIR}/active-sessions.png`,
+      animations: 'disabled',
+    });
+  });
+
+  test('05 - session history', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      commands: mockCommands,
+      sessionCounts: mockSessionCounts,
+      settings: mockSettings,
+    });
+
+    await mockSessionDetail(page, mockSessions[0].session_id, {
+      ...mockSessions[0],
+      messages: [
+        {
+          uuid: 'msg-1',
+          role: 'user',
+          content: 'Please implement dark mode for this application.',
+          timestamp: '2024-01-17T10:00:00Z',
+          tool_uses: [],
+        },
+        {
+          uuid: 'msg-2',
+          role: 'assistant',
+          content: 'I\'ll help you implement dark mode. Let me start by analyzing the current theming setup and identifying the key components that need to support theme switching.',
+          timestamp: '2024-01-17T10:00:30Z',
+          tool_uses: [
+            { name: 'Read', input: { file_path: 'src/App.tsx' } },
+            { name: 'Glob', input: { pattern: '**/*.css' } },
+          ],
+          model: 'claude-sonnet-4-20250514',
+        },
+      ],
+    });
+
+    await page.goto('/');
+    await expect(page.locator('h1:has-text("Clump")')).toBeVisible();
+    await selectRepo(page);
+    await page.getByRole('tab', { name: /History/i }).click();
+    await expect(page.getByText('Implement dark mode')).toBeVisible({ timeout: 10000 });
+
+    // Click on the session to show transcript
+    await page.getByText('Implement dark mode').click();
+    await waitForAnimations(page);
+    await page.waitForTimeout(500); // Extra wait for transcript to load
+
+    await page.screenshot({
+      path: `${SCREENSHOT_DIR}/history-view.png`,
+      animations: 'disabled',
+    });
+  });
+
+  test('06 - schedules', async ({ page }) => {
+    // Mock schedules with data
+    await page.route('**/api/schedules*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 1,
+            name: 'Daily issue triage',
+            repo_id: 1,
+            schedule_type: 'cron',
+            cron_expression: '0 9 * * 1-5',
+            command_type: 'issues',
+            prompt_template: 'Review and triage new issues',
+            enabled: true,
+            last_run: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
+            last_run_status: 'completed',
+            next_run: new Date(Date.now() + 16 * 60 * 60 * 1000).toISOString(),
+            run_count: 12,
+          },
+          {
+            id: 2,
+            name: 'Weekly PR review',
+            repo_id: 1,
+            schedule_type: 'cron',
+            cron_expression: '0 10 * * 1',
+            command_type: 'prs',
+            prompt_template: 'Review all open PRs',
+            enabled: true,
+            last_run: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+            last_run_status: 'completed',
+            next_run: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(),
+            run_count: 5,
+          },
+        ]),
+      });
+    });
+
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      commands: mockCommands,
+      sessionCounts: mockSessionCounts,
+      settings: mockSettings,
+    });
+
+    await page.goto('/');
+    await expect(page.locator('h1:has-text("Clump")')).toBeVisible();
+    await selectRepo(page);
+    await page.getByRole('tab', { name: /Schedules/i }).click();
+    await waitForAnimations(page);
+    await page.waitForTimeout(500);
+
+    await page.screenshot({
+      path: `${SCREENSHOT_DIR}/schedules.png`,
+      animations: 'disabled',
+    });
+  });
+
+  test('07 - settings modal', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      commands: mockCommands,
+      sessionCounts: mockSessionCounts,
+      settings: mockSettings,
+    });
+
+    await page.goto('/');
+    await expect(page.locator('h1:has-text("Clump")')).toBeVisible();
+    await page.locator('button[title="Settings"]').click();
+    await waitForAnimations(page);
+
+    await page.screenshot({
+      path: `${SCREENSHOT_DIR}/settings.png`,
+      animations: 'disabled',
+    });
+  });
+
+  test('08 - command palette', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      commands: mockCommands,
+      sessionCounts: mockSessionCounts,
+      settings: mockSettings,
+    });
+
+    await page.goto('/');
+    await expect(page.locator('h1:has-text("Clump")')).toBeVisible();
+    await selectRepo(page);
+    await page.keyboard.press('Control+k');
+    await waitForAnimations(page);
+
+    await page.screenshot({
+      path: `${SCREENSHOT_DIR}/command-palette.png`,
       animations: 'disabled',
     });
   });

@@ -83,13 +83,11 @@ export interface MainContentAreaProps {
   activeProcessId: string | null;
   viewingSessionId: string | null;
   sessionViewModes: Record<string, ViewMode>;
-  expandedSessionId: string | null;
 
   // Issue actions
   onStartIssueSession: (issue: Issue, command: CommandMetadata) => void;
   onSelectSession: (session: SessionSummary) => void;
   onContinueSession: (session: SessionSummary, prompt?: string) => Promise<void>;
-  onToggleExpandedSession: (sessionId: string | null) => void;
   onAddTagToIssue: (issueNumber: number, tagId: number) => void;
   onRemoveTagFromIssue: (issueNumber: number, tagId: number) => void;
   onCreateTag: (name: string, color?: string) => Promise<Tag | undefined>;
@@ -429,11 +427,9 @@ export function MainContentArea(props: MainContentAreaProps) {
     activeProcessId,
     viewingSessionId,
     sessionViewModes,
-    expandedSessionId,
     onStartIssueSession,
     onSelectSession,
     onContinueSession,
-    onToggleExpandedSession,
     onAddTagToIssue,
     onRemoveTagFromIssue,
     onCreateTag,
@@ -529,8 +525,6 @@ export function MainContentArea(props: MainContentAreaProps) {
         }}
         sessions={sessions}
         processes={processes}
-        expandedSessionId={expandedSessionId}
-        onToggleSession={onToggleExpandedSession}
         onSelectSession={onSelectSession}
         onContinueSession={onContinueSession}
         tags={tags}
