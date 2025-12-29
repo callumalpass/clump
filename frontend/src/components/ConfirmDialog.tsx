@@ -98,7 +98,7 @@ export function ConfirmDialog({
       />
 
       {/* Dialog */}
-      <div className="relative bg-[#161b22] border border-gray-750 rounded-lg shadow-xl max-w-md w-full mx-4 modal-content-enter">
+      <div className="relative bg-gray-900 border border-gray-750 rounded-stoody-lg shadow-stoody-lg max-w-md w-full mx-4 modal-content-enter">
         <div className="p-6">
           {/* Icon and Title */}
           <div className="flex items-start gap-4">
