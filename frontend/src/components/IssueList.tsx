@@ -34,6 +34,8 @@ const IssueListItem = memo(function IssueListItem({
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       className={`p-3 cursor-pointer border-l-2 transition-all duration-150 ease-out list-item-hover list-item-enter ${
         isSelected
           ? 'bg-gray-800/80 border-blue-500 list-item-selected'
@@ -41,6 +43,13 @@ const IssueListItem = memo(function IssueListItem({
       }`}
       style={{ '--item-index': Math.min(index, 15) } as React.CSSProperties}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      aria-pressed={isSelected}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">

@@ -60,9 +60,17 @@ const SessionListItem = memo(function SessionListItem({
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       className={`group p-3 cursor-pointer border-l-2 hover:bg-gray-800/60 transition-all duration-150 ease-out list-item-hover list-item-enter ${statusClasses}`}
       style={{ '--item-index': Math.min(index, 15) } as React.CSSProperties}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
     >
       <div className="flex items-center gap-2 mb-1">
         {/* Selection checkbox */}
