@@ -19,7 +19,8 @@ function useScrollOverflow(ref: React.RefObject<HTMLElement | null>) {
       canScrollLeft: scrollLeft > threshold,
       canScrollRight: scrollLeft + clientWidth < scrollWidth - threshold,
     });
-  }, [ref]);
+    // ref is a stable RefObject - its identity never changes, only ref.current does
+  }, []);
 
   useEffect(() => {
     const el = ref.current;
@@ -37,7 +38,8 @@ function useScrollOverflow(ref: React.RefObject<HTMLElement | null>) {
       el.removeEventListener('scroll', checkOverflow);
       resizeObserver.disconnect();
     };
-  }, [ref, checkOverflow]);
+    // checkOverflow has stable identity (empty deps), ref is a stable RefObject
+  }, [checkOverflow]);
 
   return overflow;
 }
