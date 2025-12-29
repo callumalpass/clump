@@ -51,11 +51,37 @@ def _get_session_factory(local_path: str) -> async_sessionmaker[AsyncSession]:
     return _session_factories[local_path]
 
 
+def _run_migrations(conn) -> None:
+    """
+    Run schema migrations for existing databases.
+
+    These are idempotent - they check if columns exist before adding.
+    Called synchronously within run_sync().
+    """
+    from sqlalchemy import text
+
+    # Migration: Add only_new column to scheduled_jobs
+    try:
+        conn.execute(text(
+            "ALTER TABLE scheduled_jobs ADD COLUMN only_new INTEGER DEFAULT 0"
+        ))
+    except Exception:
+        pass  # Column already exists
+
+    # Migration: Add scheduled_job_id column to sessions
+    try:
+        conn.execute(text(
+            "ALTER TABLE sessions ADD COLUMN scheduled_job_id INTEGER"
+        ))
+    except Exception:
+        pass  # Column already exists
+
+
 async def init_repo_db(local_path: str) -> None:
     """
     Initialize the database for a specific repo.
 
-    Creates all tables if they don't exist.
+    Creates all tables if they don't exist, then runs migrations.
     Caches initialization status to avoid repeated schema checks.
     """
     if local_path in _initialized_dbs:
@@ -64,6 +90,8 @@ async def init_repo_db(local_path: str) -> None:
     engine = _get_engine(local_path)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Run migrations for any new columns
+        await conn.run_sync(_run_migrations)
 
     _initialized_dbs.add(local_path)
 

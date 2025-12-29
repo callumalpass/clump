@@ -346,6 +346,7 @@ export interface ScheduledJob {
   command_id: string | null;
   custom_prompt: string | null;
   max_items: number;
+  only_new: boolean;
   permission_mode: string | null;
   allowed_tools: string[] | null;
   max_turns: number | null;
@@ -387,6 +388,7 @@ export interface ScheduledJobCreate {
   command_id?: string;
   custom_prompt?: string;
   max_items?: number;
+  only_new?: boolean;
   permission_mode?: string;
   allowed_tools?: string[];
   max_turns?: number;
@@ -403,6 +405,7 @@ export interface ScheduledJobUpdate {
   command_id?: string | null;  // null to clear, undefined to leave unchanged
   custom_prompt?: string;
   max_items?: number;
+  only_new?: boolean;
   permission_mode?: string;
   allowed_tools?: string[];
   max_turns?: number;

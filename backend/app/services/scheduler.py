@@ -16,7 +16,7 @@ import pytz
 from sqlalchemy import select
 
 from app.database import get_repo_db
-from app.models import ScheduledJob, ScheduledJobRun, ScheduledJobStatus, JobRunStatus, Session, SessionStatus
+from app.models import ScheduledJob, ScheduledJobRun, ScheduledJobStatus, JobRunStatus, Session, SessionStatus, SessionEntity
 from app.storage import load_repos, get_repo_by_id, encode_path, SessionMetadata, EntityLink, save_session_metadata
 from app.services.headless_analyzer import headless_analyzer
 from app.services.github_client import GitHubClient
@@ -315,12 +315,34 @@ class SchedulerService:
 
         logger.info(f"Job {job.id} completed: {run.status}")
 
+    async def _get_processed_entities(self, job: ScheduledJob, repo: dict, entity_kind: str) -> set[int]:
+        """Get entity numbers that have already been processed by this job."""
+        async with get_repo_db(repo["local_path"]) as db:
+            # Find all sessions created by this job, then get their entities
+            result = await db.execute(
+                select(SessionEntity.entity_number)
+                .join(Session, SessionEntity.session_id == Session.id)
+                .where(
+                    Session.scheduled_job_id == job.id,
+                    SessionEntity.entity_kind == entity_kind,
+                )
+            )
+            return set(result.scalars().all())
+
     async def _get_target_items(self, job: ScheduledJob, repo: dict) -> list:
         """Get items to process based on job configuration."""
         if job.target_type == "issues":
-            return await self._get_issues(job, repo)
+            items = await self._get_issues(job, repo)
+            if job.only_new:
+                processed = await self._get_processed_entities(job, repo, "issue")
+                items = [i for i in items if i["number"] not in processed]
+            return items
         elif job.target_type == "prs":
-            return await self._get_prs(job, repo)
+            items = await self._get_prs(job, repo)
+            if job.only_new:
+                processed = await self._get_processed_entities(job, repo, "pr")
+                items = [i for i in items if i["number"] not in processed]
+            return items
         elif job.target_type == "codebase":
             return [{"type": "codebase"}]
         elif job.target_type == "custom":
@@ -447,8 +469,21 @@ class SchedulerService:
                 prompt=prompt,
                 status=SessionStatus.RUNNING.value,
                 claude_session_id=session_id,
+                scheduled_job_id=job.id,  # Link session to the schedule that created it
             )
             db.add(session)
+            await db.commit()
+            await db.refresh(session)
+
+            # Create SessionEntity records to track which entities this session processed
+            for entity in entities:
+                session_entity = SessionEntity(
+                    session_id=session.id,
+                    repo_id=repo["id"],
+                    entity_kind=entity.kind,
+                    entity_number=entity.number,
+                )
+                db.add(session_entity)
             await db.commit()
 
         # Save session metadata sidecar BEFORE running so it shows in session list

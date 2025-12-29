@@ -7,7 +7,7 @@ These models are for the per-repo data stored in ~/.clump/projects/{hash}/data.d
 
 from datetime import datetime, timezone
 from enum import Enum
-from sqlalchemy import String, Text, DateTime, ForeignKey, Integer
+from sqlalchemy import String, Text, DateTime, ForeignKey, Integer, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -44,20 +44,27 @@ class Session(Base):
     __tablename__ = "sessions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    repo_id: Mapped[int] = mapped_column(Integer)  # References repos.json entry
+    repo_id: Mapped[int] = mapped_column(Integer, index=True)  # References repos.json entry
     kind: Mapped[str] = mapped_column(String(50))
     title: Mapped[str] = mapped_column(String(500))
     prompt: Mapped[str] = mapped_column(Text)
     transcript: Mapped[str] = mapped_column(Text, default="")
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(String(50), default=SessionStatus.RUNNING.value)
+    status: Mapped[str] = mapped_column(String(50), default=SessionStatus.RUNNING.value, index=True)
     process_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    claude_session_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    claude_session_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    scheduled_job_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # ID of schedule that created this
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     actions: Mapped[list["Action"]] = relationship(back_populates="session", cascade="all, delete-orphan")
     entities: Mapped[list["SessionEntity"]] = relationship(back_populates="session", cascade="all, delete-orphan")
+
+    # Composite indexes for common query patterns
+    __table_args__ = (
+        Index('idx_session_repo_status', 'repo_id', 'status'),
+        Index('idx_session_repo_created', 'repo_id', 'created_at'),
+    )
 
 
 class Action(Base):
@@ -92,12 +99,17 @@ class IssueTag(Base):
     __tablename__ = "issue_tags"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id", ondelete="CASCADE"))
-    repo_id: Mapped[int] = mapped_column(Integer)  # References repos.json entry
-    issue_number: Mapped[int] = mapped_column(Integer)
+    tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id", ondelete="CASCADE"), index=True)
+    repo_id: Mapped[int] = mapped_column(Integer, index=True)  # References repos.json entry
+    issue_number: Mapped[int] = mapped_column(Integer, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     tag: Mapped["Tag"] = relationship(back_populates="issue_tags")
+
+    # Composite index for common query pattern: get tags for a specific issue in a repo
+    __table_args__ = (
+        Index('idx_issue_tag_repo_issue', 'repo_id', 'issue_number'),
+    )
 
 
 class SessionEntity(Base):
@@ -140,12 +152,12 @@ class ScheduledJob(Base):
     __tablename__ = "scheduled_jobs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    repo_id: Mapped[int] = mapped_column(Integer)  # References repos.json entry
+    repo_id: Mapped[int] = mapped_column(Integer, index=True)  # References repos.json entry
 
     # Job configuration
     name: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(String(50), default=ScheduledJobStatus.ACTIVE.value)
+    status: Mapped[str] = mapped_column(String(50), default=ScheduledJobStatus.ACTIVE.value, index=True)
 
     # Schedule (cron format)
     cron_expression: Mapped[str] = mapped_column(String(100))  # e.g., "0 9 * * 1-5"
@@ -157,6 +169,7 @@ class ScheduledJob(Base):
     command_id: Mapped[str | None] = mapped_column(String(100), nullable=True)  # e.g., "issue/root-cause"
     custom_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)  # For custom target_type
     max_items: Mapped[int] = mapped_column(Integer, default=10)  # Max items per run
+    only_new: Mapped[bool] = mapped_column(Integer, default=False)  # Only process items not seen before
 
     # Claude configuration
     permission_mode: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -166,7 +179,7 @@ class ScheduledJob(Base):
 
     # Execution tracking
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    next_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     last_run_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     run_count: Mapped[int] = mapped_column(Integer, default=0)
 
@@ -175,6 +188,11 @@ class ScheduledJob(Base):
 
     # Relationship to runs
     runs: Mapped[list["ScheduledJobRun"]] = relationship(back_populates="job", cascade="all, delete-orphan")
+
+    # Composite index for finding active jobs for a repo
+    __table_args__ = (
+        Index('idx_scheduled_job_repo_status', 'repo_id', 'status'),
+    )
 
 
 class ScheduledJobRun(Base):

@@ -70,6 +70,7 @@ export function ScheduleDetail({
       command_id: schedule.command_id || undefined,
       custom_prompt: schedule.custom_prompt || undefined,
       max_items: schedule.max_items,
+      only_new: schedule.only_new,
       permission_mode: schedule.permission_mode || undefined,
       max_turns: schedule.max_turns || undefined,
       model: schedule.model || undefined,
@@ -352,6 +353,19 @@ export function ScheduleDetail({
                   className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-gray-200"
                 />
               </div>
+              {(editForm.target_type === 'issues' || editForm.target_type === 'prs') && (
+                <div className="flex items-center">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editForm.only_new ?? false}
+                      onChange={(e) => setEditForm({ ...editForm, only_new: e.target.checked })}
+                      className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-gray-300 text-sm">Only new items</span>
+                  </label>
+                </div>
+              )}
               <div>
                 <label className="block text-gray-500 mb-1">Max Items</label>
                 <input
@@ -455,6 +469,12 @@ export function ScheduleDetail({
                 <div>
                   <span className="text-gray-500">Filter:</span>
                   <span className="ml-2 text-gray-200 font-mono text-xs">{schedule.filter_query}</span>
+                </div>
+              )}
+              {(schedule.target_type === 'issues' || schedule.target_type === 'prs') && (
+                <div>
+                  <span className="text-gray-500">Only New:</span>
+                  <span className="ml-2 text-gray-200">{schedule.only_new ? 'Yes' : 'No'}</span>
                 </div>
               )}
               {schedule.command_id && (

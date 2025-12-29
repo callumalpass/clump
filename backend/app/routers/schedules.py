@@ -48,6 +48,7 @@ class ScheduledJobCreate(BaseModel):
     command_id: Optional[str] = None
     custom_prompt: Optional[str] = None
     max_items: int = 10
+    only_new: bool = False  # Only process items not seen before
     permission_mode: Optional[str] = None
     allowed_tools: Optional[list[str]] = None
     max_turns: Optional[int] = None
@@ -91,6 +92,7 @@ class ScheduledJobUpdate(BaseModel):
     command_id: Optional[str] = None
     custom_prompt: Optional[str] = None
     max_items: Optional[int] = None
+    only_new: Optional[bool] = None  # Only process items not seen before
     permission_mode: Optional[str] = None
     allowed_tools: Optional[list[str]] = None
     max_turns: Optional[int] = None
@@ -132,6 +134,7 @@ class ScheduledJobResponse(BaseModel):
     command_id: Optional[str]
     custom_prompt: Optional[str]
     max_items: int
+    only_new: bool
     permission_mode: Optional[str]
     allowed_tools: Optional[list[str]]
     max_turns: Optional[int]
@@ -185,6 +188,7 @@ def job_to_response(job: ScheduledJob) -> ScheduledJobResponse:
         command_id=job.command_id,
         custom_prompt=job.custom_prompt,
         max_items=job.max_items,
+        only_new=job.only_new,
         permission_mode=job.permission_mode,
         allowed_tools=safe_json_loads(job.allowed_tools),
         max_turns=job.max_turns,
@@ -269,6 +273,7 @@ async def create_scheduled_job(repo_id: int, data: ScheduledJobCreate) -> Schedu
             command_id=data.command_id,
             custom_prompt=data.custom_prompt,
             max_items=data.max_items,
+            only_new=data.only_new,
             permission_mode=data.permission_mode,
             allowed_tools=safe_json_dumps(data.allowed_tools),
             max_turns=data.max_turns,
