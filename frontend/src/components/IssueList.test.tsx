@@ -1,7 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { IssueList } from './IssueList';
-import type { Issue, SessionSummary, Tag, IssueTagsMap, CommandMetadata } from '../types';
+import type { Issue, IssueTagsMap, CommandMetadata } from '../types';
+import {
+  createMockIssue,
+  createMockSession,
+  createMockTag,
+  createMockCommand,
+} from '../test/fixtures';
 
 // Mock IssueFilters component
 vi.mock('./IssueFilters', () => ({
@@ -30,67 +36,7 @@ vi.mock('./StartSessionButton', () => ({
       Start
     </button>
   ),
-}));
-
-function createMockIssue(overrides: Partial<Issue> = {}): Issue {
-  return {
-    number: 1,
-    title: 'Test Issue',
-    body: 'Issue body',
-    state: 'open',
-    labels: [],
-    author: 'testuser',
-    created_at: '2024-01-15T10:00:00Z',
-    updated_at: '2024-01-15T10:00:00Z',
-    comments_count: 0,
-    url: 'https://github.com/test/repo/issues/1',
-    ...overrides,
-  };
-}
-
-function createMockSession(overrides: Partial<SessionSummary> = {}): SessionSummary {
-  return {
-    session_id: 'session-1',
-    encoded_path: '-home-user-projects-test',
-    repo_path: '/home/user/projects/test',
-    title: 'Test Session',
-    model: 'claude-3-opus',
-    start_time: '2024-01-15T10:30:00Z',
-    end_time: null,
-    message_count: 5,
-    modified_at: '2024-01-15T10:35:00Z',
-    file_size: 1024,
-    entities: [],
-    tags: [],
-    starred: false,
-    is_active: false,
-    ...overrides,
-  };
-}
-
-function createMockTag(overrides: Partial<Tag> = {}): Tag {
-  return {
-    id: 1,
-    repo_id: 1,
-    name: 'bug',
-    color: '#ff0000',
-    created_at: '2024-01-01T00:00:00Z',
-    ...overrides,
-  };
-}
-
-function createMockCommand(overrides: Partial<CommandMetadata> = {}): CommandMetadata {
-  return {
-    id: 'cmd-1',
-    name: 'Fix Issue',
-    shortName: 'Fix',
-    description: 'Fix this issue',
-    category: 'issue',
-    template: 'Fix issue #{{number}}',
-    source: 'builtin',
-    ...overrides,
-  };
-}
+}))
 
 describe('IssueList', () => {
   const defaultProps = {
