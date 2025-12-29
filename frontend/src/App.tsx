@@ -1398,14 +1398,14 @@ export default function App() {
   return (
     <div className="h-screen flex flex-col bg-gray-900 text-white">
       {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-gray-750 bg-gray-850">
+      <header className="flex items-center justify-between px-6 py-4 border-b border-gray-750 bg-gray-800">
         <h1
           className="text-2xl text-white drop-shadow-[0_0_10px_rgba(251,191,36,0.4)] hover:drop-shadow-[0_0_15px_rgba(251,191,36,0.6)] transition-all cursor-default"
           style={{ fontFamily: "'Playfair Display', serif" }}
         >
           Clump
         </h1>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-5">
           <span className="text-sm text-gray-400">
             {processes.length} active process{processes.length !== 1 ? 'es' : ''}
           </span>
@@ -1431,12 +1431,12 @@ export default function App() {
             className="hidden sm:flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300 transition-all active:scale-95 focus:outline-none focus:text-gray-300"
             title="Keyboard shortcuts (?)"
           >
-            <kbd className="px-1.5 py-0.5 bg-gray-800 border border-gray-750 rounded-stoody-sm text-gray-400">?</kbd>
+            <kbd className="px-2 py-1 bg-gray-850 border border-gray-750 rounded-stoody-sm text-gray-400 shadow-stoody-sm">?</kbd>
             <span>Help</span>
           </button>
           <button
             onClick={() => setSettingsOpen(true)}
-            className="p-1.5 hover:bg-gray-750 rounded-stoody-sm text-gray-400 hover:text-white transition-all active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-400"
+            className="p-2.5 hover:bg-gray-750 rounded-stoody text-gray-400 hover:text-white transition-all active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-400"
             title="Settings"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1491,17 +1491,19 @@ export default function App() {
           {/* Split sidebar with Sessions at top, Tabs below */}
           <Group orientation="vertical" className="flex-1 min-h-0">
             {/* Top: Always-visible sessions (uses separate API call for active/recent) */}
-            <Panel defaultSize="30%" minSize="80px" maxSize="60%">
-              <CompactSessionList
-                sessions={activeSessions}
-                onSelectSession={handleSelectSession}
-                onContinueSession={handleContinueSession}
-                onKillSession={handleKillSession}
-                onViewAll={() => setActiveTab('history')}
-              />
-            </Panel>
+            {selectedRepo && (
+              <Panel defaultSize="30%" minSize="80px" maxSize="60%">
+                <CompactSessionList
+                  sessions={activeSessions}
+                  onSelectSession={handleSelectSession}
+                  onContinueSession={handleContinueSession}
+                  onKillSession={handleKillSession}
+                  onViewAll={() => setActiveTab('history')}
+                />
+              </Panel>
+            )}
 
-            <ResizeHandle orientation="horizontal" />
+            {selectedRepo && <ResizeHandle orientation="horizontal" />}
 
             {/* Bottom: Tabs for Issues/PRs/History/Schedules */}
             <Panel minSize="200px" className="flex flex-col">
@@ -1667,7 +1669,7 @@ export default function App() {
                     }}
                   />
                 )}
-                {activeTab === 'history' && (
+                {activeTab === 'history' && selectedRepo && (
                   <SessionList
                     sessions={sessions}
                     processes={processes}
@@ -1720,7 +1722,7 @@ export default function App() {
                     refreshRef={scheduleListRefreshRef}
                   />
                 )}
-                {!selectedRepo && activeTab !== 'history' && (
+                {!selectedRepo && (
                   <div className="p-4 text-gray-400">Select a repository to view {activeTab}</div>
                 )}
               </div>
