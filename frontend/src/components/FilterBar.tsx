@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, useLayoutEffect, ReactNode } from 'react';
+import { useState, useEffect, useRef, ReactNode } from 'react';
 import { focusRing, focusRingInset } from '../utils/styles';
 import { pluralize } from '../utils/text';
+import { useTabIndicator } from '../hooks/useTabIndicator';
 
 // Shared filter bar styling constants - Compact design
 export const filterBarStyles = {
@@ -19,7 +20,7 @@ export const filterBarStyles = {
     `toggle-btn px-3 py-1.5 text-xs rounded-stoody transition-transform active:scale-95 ${focusRing} ${
       isActive
         ? 'bg-blurple-500 text-white shadow-stoody-sm filter-pill-active'
-        : 'text-gray-400 hover:text-pink-400 hover:bg-gray-750'
+        : 'text-gray-400 hover:text-pink-400 hover:bg-gray-750 filter-pill-inactive'
     }`,
   // Select dropdown - compact
   select: `bg-gray-800 border border-gray-750 rounded-stoody px-2.5 py-1.5 text-xs transition-colors duration-150 shadow-stoody-sm ${focusRing} focus:border-blurple-400 focus:bg-gray-850/50`,
@@ -105,28 +106,7 @@ interface StateToggleProps {
 
 export function StateToggle({ value, onChange }: StateToggleProps) {
   const states: ('open' | 'closed' | 'all')[] = ['open', 'closed', 'all'];
-  const containerRef = useRef<HTMLDivElement>(null);
-  const buttonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
-  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
-
-  // Update the sliding indicator position when active state changes
-  useLayoutEffect(() => {
-    const updateIndicator = () => {
-      const container = containerRef.current;
-      const activeButton = buttonRefs.current.get(value);
-      if (container && activeButton) {
-        const containerRect = container.getBoundingClientRect();
-        const buttonRect = activeButton.getBoundingClientRect();
-        setIndicatorStyle({
-          left: buttonRect.left - containerRect.left,
-          width: buttonRect.width,
-        });
-      }
-    };
-    updateIndicator();
-    window.addEventListener('resize', updateIndicator);
-    return () => window.removeEventListener('resize', updateIndicator);
-  }, [value]);
+  const { containerRef, tabRefs, indicatorStyle } = useTabIndicator<HTMLDivElement>(value);
 
   return (
     <div ref={containerRef} className={filterBarStyles.toggleGroup} role="group" aria-label="Filter by state">
@@ -141,7 +121,7 @@ export function StateToggle({ value, onChange }: StateToggleProps) {
       {states.map((state) => (
         <button
           key={state}
-          ref={(el) => { if (el) buttonRefs.current.set(state, el); }}
+          ref={(el) => { if (el) tabRefs.current.set(state, el); }}
           onClick={() => onChange(state)}
           className={filterBarStyles.toggleButton(value === state)}
           aria-pressed={value === state}
@@ -167,28 +147,7 @@ export function SessionStatusToggle({ value, onChange }: SessionStatusToggleProp
     { value: 'analyzed', label: 'Analyzed' },
     { value: 'unanalyzed', label: 'New' },
   ];
-  const containerRef = useRef<HTMLDivElement>(null);
-  const buttonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
-  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
-
-  // Update the sliding indicator position when active status changes
-  useLayoutEffect(() => {
-    const updateIndicator = () => {
-      const container = containerRef.current;
-      const activeButton = buttonRefs.current.get(value);
-      if (container && activeButton) {
-        const containerRect = container.getBoundingClientRect();
-        const buttonRect = activeButton.getBoundingClientRect();
-        setIndicatorStyle({
-          left: buttonRect.left - containerRect.left,
-          width: buttonRect.width,
-        });
-      }
-    };
-    updateIndicator();
-    window.addEventListener('resize', updateIndicator);
-    return () => window.removeEventListener('resize', updateIndicator);
-  }, [value]);
+  const { containerRef, tabRefs, indicatorStyle } = useTabIndicator<HTMLDivElement>(value);
 
   return (
     <div ref={containerRef} className={filterBarStyles.toggleGroup} role="group" aria-label="Filter by session status">
@@ -203,7 +162,7 @@ export function SessionStatusToggle({ value, onChange }: SessionStatusToggleProp
       {statuses.map((status) => (
         <button
           key={status.value}
-          ref={(el) => { if (el) buttonRefs.current.set(status.value, el); }}
+          ref={(el) => { if (el) tabRefs.current.set(status.value, el); }}
           onClick={() => onChange(status.value)}
           className={filterBarStyles.toggleButton(value === status.value)}
           aria-pressed={value === status.value}
@@ -380,16 +339,54 @@ interface FilterGroupProps {
 }
 
 export function FilterGroup({ children, label, className = '', scrollable = false }: FilterGroupProps) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [showLeftFade, setShowLeftFade] = useState(false);
+  const [showRightFade, setShowRightFade] = useState(false);
+
+  // Check scroll position to show/hide fade indicators
+  useEffect(() => {
+    if (!scrollable) return;
+
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const updateFades = () => {
+      const { scrollLeft, scrollWidth, clientWidth } = container;
+      setShowLeftFade(scrollLeft > 2);
+      setShowRightFade(scrollLeft < scrollWidth - clientWidth - 2);
+    };
+
+    updateFades();
+    container.addEventListener('scroll', updateFades);
+    window.addEventListener('resize', updateFades);
+
+    return () => {
+      container.removeEventListener('scroll', updateFades);
+      window.removeEventListener('resize', updateFades);
+    };
+  }, [scrollable, children]);
+
   return (
-    <div className={`flex items-center gap-0.5 px-1 py-0.5 rounded-stoody-sm bg-gray-800/50 filter-group-light ${scrollable ? 'overflow-x-auto scrollbar-none' : ''} ${className}`}>
+    <div className={`relative flex items-center gap-0.5 px-1 py-0.5 rounded-stoody-sm bg-gray-800/50 filter-group-light ${className}`}>
       {label && (
         <span className="text-[9px] font-medium text-gray-500 uppercase tracking-wide mr-0.5 shrink-0">
           {label}
         </span>
       )}
-      <div className={`flex items-center gap-0.5 ${scrollable ? 'flex-nowrap' : ''}`}>
+      {/* Left fade indicator */}
+      {scrollable && showLeftFade && (
+        <div className="absolute left-0 top-0 bottom-0 w-4 bg-gradient-to-r from-gray-800/80 to-transparent pointer-events-none z-10 rounded-l-stoody-sm filter-group-fade-left" />
+      )}
+      <div
+        ref={scrollContainerRef}
+        className={`flex items-center gap-0.5 ${scrollable ? 'overflow-x-auto scrollbar-none flex-nowrap' : ''}`}
+      >
         {children}
       </div>
+      {/* Right fade indicator */}
+      {scrollable && showRightFade && (
+        <div className="absolute right-0 top-0 bottom-0 w-4 bg-gradient-to-l from-gray-800/80 to-transparent pointer-events-none z-10 rounded-r-stoody-sm filter-group-fade-right" />
+      )}
     </div>
   );
 }

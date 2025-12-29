@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Terminal } from './Terminal';
 import { ConversationView } from './ConversationView';
 import { Editor } from './Editor';
@@ -8,6 +8,7 @@ import type { SessionSummary, SessionDetail, EntityLink, Issue, PR, ParsedTransc
 import { fetchSessionDetail, addEntityToSession, removeEntityFromSession } from '../hooks/useApi';
 import { useProcessWebSocket } from '../hooks/useProcessWebSocket';
 import { useTheme } from '../hooks/useTheme';
+import { useTabIndicator } from '../hooks/useTabIndicator';
 import { formatDuration } from '../utils/time';
 import { focusRing } from '../utils/styles';
 
@@ -190,28 +191,7 @@ function ViewModeToggle({ value, onChange }: ViewModeToggleProps) {
     },
   ];
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const buttonRefs = useRef<Map<ViewMode, HTMLButtonElement>>(new Map());
-  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
-
-  // Update the sliding indicator position when view mode changes
-  useLayoutEffect(() => {
-    const updateIndicator = () => {
-      const container = containerRef.current;
-      const activeButton = buttonRefs.current.get(value);
-      if (container && activeButton) {
-        const containerRect = container.getBoundingClientRect();
-        const buttonRect = activeButton.getBoundingClientRect();
-        setIndicatorStyle({
-          left: buttonRect.left - containerRect.left,
-          width: buttonRect.width,
-        });
-      }
-    };
-    updateIndicator();
-    window.addEventListener('resize', updateIndicator);
-    return () => window.removeEventListener('resize', updateIndicator);
-  }, [value]);
+  const { containerRef, tabRefs, indicatorStyle } = useTabIndicator<HTMLDivElement>(value);
 
   return (
     <div
@@ -231,7 +211,7 @@ function ViewModeToggle({ value, onChange }: ViewModeToggleProps) {
       {modes.map((mode) => (
         <button
           key={mode.value}
-          ref={(el) => { if (el) buttonRefs.current.set(mode.value, el); }}
+          ref={(el) => { if (el) tabRefs.current.set(mode.value, el); }}
           onClick={() => onChange(mode.value)}
           className={`toggle-btn relative z-10 flex items-center gap-1.5 px-2.5 py-1 text-xs transition-all duration-150 ${focusRing} focus:z-10 ${
             value === mode.value
@@ -431,7 +411,7 @@ export function SessionView({
     setOptimisticMessages(prev =>
       prev.filter(opt => !recentUserMessages.includes(opt.content.trim()))
     );
-  }, [detail?.messages]);
+  }, [detail?.messages, optimisticMessages]);
 
   // Handle adding entity
   const handleAddEntity = useCallback(async (kind: string, number: number) => {
