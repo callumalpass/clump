@@ -144,7 +144,8 @@ export function CommandPalette({ isOpen, onClose, commands }: CommandPaletteProp
       setQuery('');
       setSelectedIndex(0);
       // Small delay to ensure modal is rendered
-      setTimeout(() => inputRef.current?.focus(), 10);
+      const timeoutId = setTimeout(() => inputRef.current?.focus(), 10);
+      return () => clearTimeout(timeoutId);
     }
   }, [isOpen]);
 
