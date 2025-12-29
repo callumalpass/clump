@@ -52,6 +52,269 @@
   --stoody-shadow-lg: 0 8px 24px rgba(0,0,0,0.2);
 }
 
+/* Light Theme Override - Warm Paper (matches comp_sci_degree) */
+[data-theme="light"] {
+  /* Colors - Light Theme (Paper & Clay) */
+  --stoody-bg-deep: #fdfbf7;       /* Warm paper white */
+  --stoody-bg-surface: #ffffff;    /* Pure white cards */
+  --stoody-bg-elevated: #f4f4f0;   /* Light clay */
+  --stoody-bg-overlay: #eaeae5;
+
+  /* Text */
+  --stoody-text-primary: #2d3436;  /* Soft charcoal */
+  --stoody-text-secondary: #636e72;
+  --stoody-text-muted: #b2bec3;
+
+  /* Accents - darker for contrast on light bg */
+  --stoody-blurple: #6c5ce7;
+  --stoody-blurple-hover: #5849be;
+  --stoody-mint: #00b894;
+  --stoody-mint-hover: #00a884;
+  --stoody-pink: #e84393;
+  --stoody-coral: #e17055;
+  --stoody-sky: #0984e3;
+
+  /* Borders */
+  --stoody-border: #dfe6e9;
+  --stoody-border-muted: #f4f4f0;
+  --stoody-border-emphasis: #b2bec3;
+
+  /* Shadows - FLAT (none) */
+  --stoody-shadow-sm: none;
+  --stoody-shadow-md: none;
+  --stoody-shadow-lg: none;
+}
+
+/* Light theme - Override Tailwind utility classes */
+[data-theme="light"] body {
+  background-color: #fdfbf7;
+  color: #2d3436;
+}
+
+/* Background colors */
+[data-theme="light"] .bg-gray-900 { background-color: #fdfbf7 !important; }
+[data-theme="light"] .bg-gray-850 { background-color: #f4f4f0 !important; }
+[data-theme="light"] .bg-gray-800 { background-color: #ffffff !important; }
+[data-theme="light"] .bg-gray-750 { background-color: #eaeae5 !important; }
+[data-theme="light"] .bg-gray-700 { background-color: #dfe6e9 !important; }
+[data-theme="light"] .bg-gray-800\/50 { background-color: rgba(255, 255, 255, 0.5) !important; }
+[data-theme="light"] .bg-gray-800\/40 { background-color: rgba(255, 255, 255, 0.4) !important; }
+[data-theme="light"] .bg-gray-750\/50 { background-color: rgba(234, 234, 229, 0.5) !important; }
+[data-theme="light"] .bg-gray-700\/30 { background-color: rgba(223, 230, 233, 0.3) !important; }
+
+/* Sidebar with green tint gradient */
+[data-theme="light"] .light-sidebar-tint {
+  background: linear-gradient(180deg, rgba(34, 197, 94, 0.12), rgba(34, 197, 94, 0.04)), #ffffff !important;
+}
+
+/* Text colors */
+[data-theme="light"] .text-white { color: #2d3436 !important; }
+[data-theme="light"] .text-gray-100 { color: #2d3436 !important; }
+[data-theme="light"] .text-gray-200 { color: #2d3436 !important; }
+[data-theme="light"] .text-gray-300 { color: #636e72 !important; }
+[data-theme="light"] .text-gray-400 { color: #636e72 !important; }
+[data-theme="light"] .text-gray-500 { color: #b2bec3 !important; }
+[data-theme="light"] .text-gray-600 { color: #b2bec3 !important; }
+
+/* Border colors */
+[data-theme="light"] .border-gray-750 { border-color: #dfe6e9 !important; }
+[data-theme="light"] .border-gray-700 { border-color: #b2bec3 !important; }
+[data-theme="light"] .border-gray-800 { border-color: #f4f4f0 !important; }
+
+/* Hover states */
+[data-theme="light"] .hover\:bg-gray-750:hover { background-color: #eaeae5 !important; }
+[data-theme="light"] .hover\:bg-gray-800:hover { background-color: #f4f4f0 !important; }
+[data-theme="light"] .hover\:bg-gray-800\/50:hover { background-color: rgba(244, 244, 240, 0.5) !important; }
+[data-theme="light"] .hover\:bg-gray-850:hover { background-color: #eaeae5 !important; }
+[data-theme="light"] .hover\:text-white:hover { color: #2d3436 !important; }
+[data-theme="light"] .hover\:text-gray-200:hover { color: #2d3436 !important; }
+[data-theme="light"] .hover\:text-gray-300:hover { color: #636e72 !important; }
+[data-theme="light"] .hover\:border-gray-700:hover { border-color: #b2bec3 !important; }
+
+/* Group hover states */
+[data-theme="light"] .group:hover .group-hover\:text-white { color: #2d3436 !important; }
+[data-theme="light"] .group:hover .group-hover\:bg-gray-750 { background-color: #eaeae5 !important; }
+
+/* Focus states */
+[data-theme="light"] .focus\:border-gray-600:focus { border-color: #b2bec3 !important; }
+
+/* Scrollbar for light theme */
+[data-theme="light"] * {
+  scrollbar-color: #b2bec3 #f4f4f0;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-track {
+  background: #f4f4f0;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background-color: #dfe6e9;
+  border: 2px solid #f4f4f0;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background-color: #b2bec3;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-corner {
+  background: #f4f4f0;
+}
+
+/* Skeleton shimmer for light theme */
+[data-theme="light"] .skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    #eaeae5 0%,
+    #f4f4f0 50%,
+    #eaeae5 100%
+  );
+}
+
+/* Kbd hint for light theme - flat */
+[data-theme="light"] .kbd-hint {
+  color: #636e72;
+  background: #f4f4f0;
+  border: 1px solid #dfe6e9;
+  box-shadow: none;
+}
+
+[data-theme="light"] button:hover:not(:disabled) .kbd-hint {
+  color: #2d3436;
+  border-color: #b2bec3;
+}
+
+/* List item hover for light theme - flat */
+[data-theme="light"] .list-item-hover:hover {
+  box-shadow: none;
+  background-color: #f4f4f0;
+}
+
+[data-theme="light"] .list-item-hover:focus-visible {
+  outline: 2px solid rgba(108, 92, 231, 0.5);
+  background-color: #f4f4f0;
+}
+
+[data-theme="light"] .list-item-hover:active {
+  background-color: #eaeae5;
+}
+
+/* List item selected - flat */
+[data-theme="light"] .list-item-selected {
+  box-shadow: none;
+  background-color: #f4f4f0;
+}
+
+/* Disable hover glow effects in light theme */
+[data-theme="light"] .list-item-glow-active:hover,
+[data-theme="light"] .list-item-glow-recent:hover,
+[data-theme="light"] .list-item-glow-done:hover {
+  box-shadow: none;
+  background-color: #f4f4f0;
+}
+
+/* Message bubbles for light theme */
+[data-theme="light"] .message-assistant:hover {
+  background-color: #f4f4f0;
+}
+
+[data-theme="light"] .message-user:hover {
+  background-color: rgba(108, 92, 231, 0.1);
+}
+
+/* Select dropdown for light theme */
+[data-theme="light"] select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23636e72'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+}
+
+[data-theme="light"] select:hover:not(:focus):not(:disabled) {
+  border-color: #b2bec3;
+  background-color: #f4f4f0;
+}
+
+/* Input focus for light theme - flat */
+[data-theme="light"] input:focus,
+[data-theme="light"] select:focus,
+[data-theme="light"] textarea:focus {
+  box-shadow: none;
+  border-color: #6c5ce7 !important;
+}
+
+/* Placeholder text for light theme */
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder {
+  color: #b2bec3;
+}
+
+/* Resize handle for light theme */
+[data-theme="light"] .resize-handle:hover {
+  background-color: rgba(108, 92, 231, 0.05);
+}
+
+[data-theme="light"] .resize-handle:active {
+  background-color: rgba(108, 92, 231, 0.1);
+}
+
+/* Session tab overflow fades for light theme */
+[data-theme="light"] .from-gray-850 {
+  --tw-gradient-from: #ffffff !important;
+}
+
+[data-theme="light"] .bg-gradient-to-r.from-gray-850 {
+  background-image: linear-gradient(to right, #ffffff, transparent) !important;
+}
+
+[data-theme="light"] .bg-gradient-to-l.from-gray-850 {
+  background-image: linear-gradient(to left, #ffffff, transparent) !important;
+}
+
+/* Button shadows - flat in light theme */
+[data-theme="light"] .btn-primary:hover:not(:disabled),
+[data-theme="light"] .btn-secondary:hover:not(:disabled),
+[data-theme="light"] .btn-danger:hover:not(:disabled) {
+  box-shadow: none;
+}
+
+/* Stat card - flat */
+[data-theme="light"] .stat-card:hover {
+  box-shadow: none;
+}
+
+/* Tool card - flat */
+[data-theme="light"] .tool-card-hover:hover {
+  box-shadow: none;
+}
+
+/* Active badge glow - disabled in light theme */
+[data-theme="light"] .active-badge-glow {
+  animation: none;
+  box-shadow: none;
+}
+
+[data-theme="light"] .recent-badge-glow,
+[data-theme="light"] .done-badge-glow {
+  box-shadow: none;
+}
+
+/* Star button - no glow in light theme */
+[data-theme="light"] .star-button-starred {
+  filter: none;
+}
+
+/* Terminal light theme colors */
+[data-theme="light"] .terminal-light {
+  background-color: #f4f4f0 !important;
+}
+
+[data-theme="light"] .terminal-light .xterm-viewport {
+  background-color: #f4f4f0 !important;
+}
+
+/* Terminal header for light theme */
+[data-theme="light"] .terminal-header-light {
+  background-color: #eaeae5 !important;
+  border-color: #dfe6e9 !important;
+}
+
 body {
   margin: 0;
   background-color: var(--stoody-bg-deep);

@@ -1,8 +1,46 @@
-import { useRef, useState, useLayoutEffect } from 'react';
+import { useRef, useState, useLayoutEffect, useCallback, useEffect } from 'react';
 import type { SessionSummary, Process } from '../types';
 import { ElapsedTimer } from './ElapsedTimer';
 import { formatRelativeTime } from '../utils/time';
 import { focusRing } from '../utils/styles';
+
+/** Custom hook to detect scroll overflow state */
+function useScrollOverflow(ref: React.RefObject<HTMLElement | null>) {
+  const [overflow, setOverflow] = useState({ canScrollLeft: false, canScrollRight: false });
+
+  const checkOverflow = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    // Small threshold to account for sub-pixel rounding
+    const threshold = 2;
+    setOverflow({
+      canScrollLeft: scrollLeft > threshold,
+      canScrollRight: scrollLeft + clientWidth < scrollWidth - threshold,
+    });
+  }, [ref]);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    // Check initially and on scroll
+    checkOverflow();
+    el.addEventListener('scroll', checkOverflow, { passive: true });
+
+    // Also check on resize
+    const resizeObserver = new ResizeObserver(checkOverflow);
+    resizeObserver.observe(el);
+
+    return () => {
+      el.removeEventListener('scroll', checkOverflow);
+      resizeObserver.disconnect();
+    };
+  }, [ref, checkOverflow]);
+
+  return overflow;
+}
 
 /** Maximum length of a tab title before truncation */
 const MAX_TAB_TITLE_LENGTH = 30;
@@ -47,10 +85,14 @@ export function SessionTabs({
   needsAttention,
   newSessionDisabled,
 }: SessionTabsProps) {
-  // Refs for animated tab indicator
+  // Refs for animated tab indicator and scroll container
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
+
+  // Track scroll overflow for fade indicators
+  const { canScrollLeft, canScrollRight } = useScrollOverflow(containerRef);
 
   // Update the sliding tab indicator position when active tab changes
   useLayoutEffect(() => {
@@ -91,7 +133,22 @@ export function SessionTabs({
   }, [activeSessionId, sessions]); // Re-run when sessions change too (for dynamic tabs)
 
   return (
-    <div ref={containerRef} className="relative flex items-center gap-2 bg-gray-850 border-b border-gray-750 px-3 py-2 overflow-x-auto">
+    <div ref={wrapperRef} className="relative bg-gray-850 border-b border-gray-750">
+      {/* Left overflow fade indicator */}
+      <div
+        className={`absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-gray-850 to-transparent pointer-events-none z-10 transition-opacity duration-150 ${
+          canScrollLeft ? 'opacity-100' : 'opacity-0'
+        }`}
+        aria-hidden="true"
+      />
+      {/* Right overflow fade indicator */}
+      <div
+        className={`absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-gray-850 to-transparent pointer-events-none z-10 transition-opacity duration-150 ${
+          canScrollRight ? 'opacity-100' : 'opacity-0'
+        }`}
+        aria-hidden="true"
+      />
+      <div ref={containerRef} className="relative flex items-center gap-2 px-3 py-2 overflow-x-auto scrollbar-none">
       {sessions.map((session) => {
         const tabName = getTabName(session);
         // Check if this session is running (either via process or headless)
@@ -235,6 +292,7 @@ export function SessionTabs({
           }}
         />
       )}
+      </div>
     </div>
   );
 }
