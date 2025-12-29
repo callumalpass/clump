@@ -196,6 +196,55 @@ describe('Settings', () => {
       expect(skeletonElements.length).toBeGreaterThan(0);
     });
 
+    it('shows two skeleton elements with proper structure during loading', async () => {
+      global.fetch = vi.fn().mockImplementation(() => new Promise(() => {}));
+
+      render(<Settings {...defaultProps} />);
+
+      const skeletonElements = document.querySelectorAll('.skeleton-shimmer');
+      // Should have exactly 2 skeleton elements: one for the main box, one for the text line
+      expect(skeletonElements.length).toBe(2);
+
+      // First skeleton should be taller (h-12 = 48px box)
+      const firstSkeleton = skeletonElements[0];
+      expect(firstSkeleton).toHaveClass('h-12');
+
+      // Second skeleton should be smaller text line (h-4 with fixed width)
+      const secondSkeleton = skeletonElements[1];
+      expect(secondSkeleton).toHaveClass('h-4');
+      expect(secondSkeleton).toHaveClass('w-48');
+    });
+
+    it('hides skeleton elements after token status loads', async () => {
+      let resolveToken: (value: unknown) => void;
+      const tokenPromise = new Promise(resolve => {
+        resolveToken = resolve;
+      });
+
+      global.fetch = vi.fn().mockImplementation(() => tokenPromise);
+
+      render(<Settings {...defaultProps} />);
+
+      // Initially should have skeleton elements
+      expect(document.querySelectorAll('.skeleton-shimmer').length).toBeGreaterThan(0);
+
+      // Resolve the token fetch
+      await act(async () => {
+        resolveToken!({
+          ok: true,
+          json: () => Promise.resolve({ configured: true, masked_token: 'ghp_****xxxx' }),
+        });
+      });
+
+      // Wait for the state to update
+      await waitFor(() => {
+        expect(screen.getByText(/Token configured:/)).toBeInTheDocument();
+      });
+
+      // Skeleton elements should be gone
+      expect(document.querySelectorAll('.skeleton-shimmer').length).toBe(0);
+    });
+
     it('shows token configured status when token exists', async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,

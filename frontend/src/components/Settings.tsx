@@ -242,7 +242,10 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                 </p>
 
                 {tokenLoading ? (
-                  <div className="text-gray-400 text-sm">Loading...</div>
+                  <div className="space-y-3">
+                    <div className="h-12 rounded bg-gray-700/50 skeleton-shimmer" />
+                    <div className="h-4 w-48 rounded bg-gray-700/50 skeleton-shimmer" style={{ animationDelay: '100ms' }} />
+                  </div>
                 ) : tokenStatus.configured && !isEditingToken ? (
                   <div className="bg-green-900/30 border border-green-700 rounded p-3">
                     <div className="flex items-center justify-between">

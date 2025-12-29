@@ -630,3 +630,360 @@ test.describe('UI Exploration - Empty State Variants', () => {
     await screenshot(page, '30-pr-simplified-empty-state');
   });
 });
+
+test.describe('UI Exploration - Settings Modal', () => {
+  test('settings modal shows skeleton loading for token status', async ({ page }) => {
+    // Mock settings API to be slow
+    await page.route('**/api/settings/github-token', async (route) => {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ configured: true, masked_token: 'ghp_****xxxx' }),
+      });
+    });
+
+    await mockAllApis(page, {
+      repos: mockRepos,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+    });
+
+    await page.goto('/');
+    await waitForAnimations(page);
+
+    // Open settings
+    await page.locator('button[title="Settings"]').click();
+    await waitForAnimations(page);
+
+    // Should show skeleton shimmer elements
+    const skeletons = await page.locator('.skeleton-shimmer').count();
+    expect(skeletons).toBeGreaterThan(0);
+
+    await screenshot(page, '31-settings-token-loading');
+  });
+});
+
+test.describe('UI Exploration - Session Error Recovery', () => {
+  test('session error state shows retry button', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+
+    // Mock session detail to fail
+    await page.route('**/api/sessions/*', async (route) => {
+      if (route.request().url().includes('/api/sessions/') && !route.request().url().includes('/api/sessions?')) {
+        await route.fulfill({
+          status: 404,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'Session not found' }),
+        });
+      } else {
+        await route.continue();
+      }
+    });
+
+    await page.goto('/');
+
+    // Go to History tab
+    await page.getByRole('tab', { name: /History/i }).click();
+    await waitForAnimations(page);
+
+    // Click on a session
+    const sessionItem = page.locator('[class*="list-item"]').first();
+    if (await sessionItem.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await sessionItem.click();
+      await waitForAnimations(page);
+      await page.waitForTimeout(500); // Wait for error to appear
+
+      // Should show retry button
+      const retryButton = page.getByRole('button', { name: /try again/i });
+      await expect(retryButton).toBeVisible();
+
+      await screenshot(page, '32-session-error-retry');
+    }
+  });
+});
+
+test.describe('UI Exploration - Mobile Viewport', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+  });
+
+  test('mobile viewport (375px) - initial state', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+    await waitForAnimations(page);
+    await screenshot(page, '33-mobile-initial');
+  });
+
+  test('mobile viewport (375px) - with repo selected', async ({ page }) => {
+    // Use default viewport for repo selection, then resize
+    await page.goto('/');
+    await selectRepo(page);
+
+    // Resize to mobile to capture the state
+    await page.setViewportSize({ width: 375, height: 667 });
+    await waitForAnimations(page);
+    await screenshot(page, '34-mobile-repo-selected');
+  });
+});
+
+test.describe('UI Exploration - Keyboard Navigation', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+  });
+
+  test('tab navigation with arrow keys', async ({ page }) => {
+    await page.goto('/');
+    await selectRepo(page);
+
+    // Focus the Issues tab
+    await page.getByRole('tab', { name: /Issues/i }).focus();
+    await waitForAnimations(page);
+
+    // Press ArrowRight to move to PRs tab
+    await page.keyboard.press('ArrowRight');
+    await waitForAnimations(page);
+
+    // PRs tab should now be focused and selected
+    await expect(page.getByRole('tab', { name: /PRs/i })).toBeFocused();
+    await screenshot(page, '35-keyboard-tab-navigation');
+  });
+
+  test('focus visible state on list items', async ({ page }) => {
+    await page.goto('/');
+    await selectRepo(page);
+
+    // Tab to focus a list item
+    const issueItem = page.locator('[class*="list-item"]').first();
+    await issueItem.focus();
+    await waitForAnimations(page);
+
+    await screenshot(page, '36-focus-visible-list-item');
+  });
+});
+
+test.describe('UI Exploration - Settings Tabs', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+    });
+  });
+
+  test('permissions tab', async ({ page }) => {
+    await page.goto('/');
+    await waitForAnimations(page);
+
+    // Open settings
+    await page.locator('button[title="Settings"]').click();
+    await waitForAnimations(page);
+
+    // Click Permissions tab
+    await page.getByRole('button', { name: /permissions/i }).click();
+    await waitForAnimations(page);
+
+    await screenshot(page, '37-settings-permissions');
+  });
+
+  test('execution tab', async ({ page }) => {
+    await page.goto('/');
+    await waitForAnimations(page);
+
+    // Open settings
+    await page.locator('button[title="Settings"]').click();
+    await waitForAnimations(page);
+
+    // Click Execution tab
+    await page.getByRole('button', { name: /execution/i }).click();
+    await waitForAnimations(page);
+
+    await screenshot(page, '38-settings-execution');
+  });
+
+  test('advanced tab', async ({ page }) => {
+    await page.goto('/');
+    await waitForAnimations(page);
+
+    // Open settings
+    await page.locator('button[title="Settings"]').click();
+    await waitForAnimations(page);
+
+    // Click Advanced tab
+    await page.getByRole('button', { name: /advanced/i }).click();
+    await waitForAnimations(page);
+
+    await screenshot(page, '39-settings-advanced');
+  });
+});
+
+test.describe('UI Exploration - Filter Interactions', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+  });
+
+  test('issue state filter - all states', async ({ page }) => {
+    await page.goto('/');
+    await selectRepo(page);
+
+    // Click the All filter button
+    const allButton = page.getByRole('button', { name: /^all$/i });
+    if (await allButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await allButton.click();
+      await waitForAnimations(page);
+    }
+
+    await screenshot(page, '40-issues-all-filter');
+  });
+
+  test('session model filter - sonnet', async ({ page }) => {
+    await page.goto('/');
+
+    await page.getByRole('tab', { name: /History/i }).click();
+    await waitForAnimations(page);
+
+    // Click Sonnet filter button if visible
+    const sonnetButton = page.getByRole('button', { name: /sonnet/i });
+    if (await sonnetButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await sonnetButton.click();
+      await waitForAnimations(page);
+    }
+
+    await screenshot(page, '41-sessions-sonnet-filter');
+  });
+
+  test('session time filter - today', async ({ page }) => {
+    await page.goto('/');
+
+    await page.getByRole('tab', { name: /History/i }).click();
+    await waitForAnimations(page);
+
+    // Click Today filter button if visible
+    const todayButton = page.getByRole('button', { name: /today/i });
+    if (await todayButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await todayButton.click();
+      await waitForAnimations(page);
+    }
+
+    await screenshot(page, '42-sessions-today-filter');
+  });
+});
+
+test.describe('UI Exploration - Schedule States', () => {
+  test.beforeEach(async ({ page }) => {
+    // Mock schedules with data
+    await page.route('**/api/schedules*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 1,
+            name: 'daily issue triage',
+            repo_id: 1,
+            schedule_type: 'cron',
+            cron_expression: '0 9 * * 1-5',
+            command_type: 'issues',
+            prompt_template: 'Triage new issues',
+            enabled: true,
+            last_run: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
+            last_run_status: 'completed',
+            next_run: new Date(Date.now() + 16 * 60 * 60 * 1000).toISOString(),
+            run_count: 1,
+          },
+        ]),
+      });
+    });
+
+    await mockAllApis(page, {
+      repos: mockRepos,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+  });
+
+  test('schedules with existing schedule', async ({ page }) => {
+    await page.goto('/');
+    await selectRepo(page);
+
+    // Click Schedules tab
+    await page.getByRole('tab', { name: /Schedules/i }).click();
+    await waitForAnimations(page);
+
+    await screenshot(page, '43-schedules-with-data');
+  });
+});
+
+test.describe('UI Exploration - Search Focused', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+  });
+
+  test('search input focus glow', async ({ page }) => {
+    await page.goto('/');
+    await selectRepo(page);
+
+    // Focus the search input
+    const searchInput = page.getByPlaceholder(/search issues/i);
+    await searchInput.focus();
+    await waitForAnimations(page);
+
+    await screenshot(page, '44-search-focus-glow');
+  });
+
+  test('search with text entered', async ({ page }) => {
+    await page.goto('/');
+    await selectRepo(page);
+
+    // Type into search
+    const searchInput = page.getByPlaceholder(/search issues/i);
+    await searchInput.fill('dark mode');
+    await waitForAnimations(page);
+
+    await screenshot(page, '45-search-with-text');
+  });
+});
