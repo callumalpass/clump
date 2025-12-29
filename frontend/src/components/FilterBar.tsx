@@ -57,17 +57,17 @@ export function SearchInput({ value, onChange, placeholder = 'Search...', deboun
   }, [value]);
 
   return (
-    <div className="relative flex-1 min-w-0">
+    <div className="relative flex-1 min-w-0 group">
       <input
         type="text"
         placeholder={placeholder}
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
-        className={`w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-1 text-xs pl-7 transition-colors duration-150 ${focusRing} focus:border-blue-500 focus:bg-gray-700/50 placeholder:text-gray-500`}
+        className={`peer w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-1 text-xs pl-7 transition-colors duration-150 ${focusRing} focus:border-blue-500 focus:bg-gray-700/50 placeholder:text-gray-500`}
         aria-label={placeholder.replace('...', '')}
       />
       <svg
-        className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none"
+        className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none transition-colors duration-150 peer-focus:text-blue-400"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
