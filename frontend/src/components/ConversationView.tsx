@@ -217,11 +217,11 @@ function SessionStats({ transcript }: { transcript: ParsedTranscript }) {
   const toolCounts = useMemo(() => countToolUsage(transcript.messages), [transcript.messages]);
 
   return (
-    <div className="bg-gray-850 border-b border-gray-750 px-3 py-2">
-      <div className="flex items-center justify-between flex-wrap gap-2">
+    <div className="bg-gray-800 border-b border-gray-750 px-4 py-3">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-4 text-xs">
           {/* Model badge - color-coded by model type */}
-          <span className={`px-2 py-0.5 rounded-full ${getModelBadgeStyle(transcript.model)}`}>
+          <span className={`px-2.5 py-1 rounded-stoody ${getModelBadgeStyle(transcript.model)}`}>
             {getModelDisplayName(transcript.model)}
           </span>
 
@@ -342,7 +342,7 @@ function EditToolDisplay({ tool }: ToolDisplayProps) {
   const diffLines = useMemo(() => computeLineDiff(oldStr, newStr), [oldStr, newStr]);
 
   return (
-    <div className="mt-2 text-xs border border-emerald-800/50 rounded-lg bg-gray-800/80 overflow-hidden tool-card-hover">
+    <div className="mt-2 text-xs rounded-stoody bg-gray-800 overflow-hidden tool-card-hover shadow-stoody-sm">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-2.5 py-2 hover:bg-emerald-900/20 text-left transition-all duration-150 group/tool"
@@ -583,7 +583,7 @@ function ReadToolDisplay({ tool }: ToolDisplayProps) {
   const lineCount = tool.result ? countLines(tool.result) : 0;
 
   return (
-    <div className="mt-2 text-xs border border-blue-800/50 rounded-lg bg-gray-800/80 overflow-hidden tool-card-hover">
+    <div className="mt-2 text-xs rounded-stoody bg-gray-800 overflow-hidden tool-card-hover shadow-stoody-sm">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-gray-750 text-left transition-colors"
@@ -715,7 +715,7 @@ function BashToolDisplay({ tool }: ToolDisplayProps) {
   const isMultiLine = command.includes('\n');
 
   return (
-    <div className="mt-2 text-xs border border-amber-800/50 rounded-lg bg-gray-800/80 overflow-hidden tool-card-hover">
+    <div className="mt-2 text-xs rounded-stoody bg-gray-800 overflow-hidden tool-card-hover shadow-stoody-sm">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-gray-750 text-left transition-colors"
@@ -773,7 +773,7 @@ function WriteToolDisplay({ tool }: ToolDisplayProps) {
   const lineCount = countLines(content);
 
   return (
-    <div className="mt-2 text-xs border border-cyan-800/50 rounded-lg bg-gray-800/80 overflow-hidden tool-card-hover">
+    <div className="mt-2 text-xs rounded-stoody bg-gray-800 overflow-hidden tool-card-hover shadow-stoody-sm">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-gray-750 text-left transition-colors"
@@ -829,7 +829,7 @@ function GrepToolDisplay({ tool }: ToolDisplayProps) {
   const glob = input.glob;
 
   return (
-    <div className="mt-2 text-xs border border-orange-800/50 rounded-lg bg-gray-800/80 overflow-hidden tool-card-hover">
+    <div className="mt-2 text-xs rounded-stoody bg-gray-800 overflow-hidden tool-card-hover shadow-stoody-sm">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-gray-750 text-left transition-colors"
@@ -899,7 +899,7 @@ function GlobToolDisplay({ tool }: ToolDisplayProps) {
   const path = input.path;
 
   return (
-    <div className="mt-2 text-xs border border-violet-800/50 rounded-lg bg-gray-800/80 overflow-hidden tool-card-hover">
+    <div className="mt-2 text-xs rounded-stoody bg-gray-800 overflow-hidden tool-card-hover shadow-stoody-sm">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-gray-750 text-left transition-colors"
@@ -950,7 +950,7 @@ function TaskToolDisplay({ tool, parentSessionId }: ToolDisplayProps) {
   const prompt = input.prompt || '';
 
   return (
-    <div className="mt-2 text-xs border border-purple-800/50 rounded-lg bg-gray-800/80 overflow-hidden tool-card-hover">
+    <div className="mt-2 text-xs rounded-stoody bg-gray-800 overflow-hidden tool-card-hover shadow-stoody-sm">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-gray-750 text-left transition-colors"
@@ -1034,7 +1034,7 @@ function GenericToolDisplay({ tool, parentSessionId }: ToolDisplayProps) {
   const hasMore = JSON.stringify(tool.input).length > 100;
 
   return (
-    <div className="mt-2 text-xs border border-gray-600 rounded-lg bg-gray-800/80 tool-card-hover">
+    <div className="mt-2 text-xs rounded-stoody bg-gray-800 overflow-hidden tool-card-hover shadow-stoody-sm">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-2 py-1 hover:bg-gray-750 text-left transition-colors"

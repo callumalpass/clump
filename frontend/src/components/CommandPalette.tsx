@@ -69,7 +69,7 @@ function highlightMatches(text: string, query: string): React.ReactNode {
     return (
       <>
         {text.slice(0, exactIndex)}
-        <span className="text-blue-400 font-medium">{text.slice(exactIndex, exactIndex + query.length)}</span>
+        <span className="text-blurple-400 font-medium">{text.slice(exactIndex, exactIndex + query.length)}</span>
         {text.slice(exactIndex + query.length)}
       </>
     );
@@ -81,7 +81,7 @@ function highlightMatches(text: string, query: string): React.ReactNode {
 
   for (let i = 0; i < text.length; i++) {
     if (queryIndex < queryLower.length && textLower[i] === queryLower[queryIndex]) {
-      result.push(<span key={i} className="text-blue-400 font-medium">{text[i]}</span>);
+      result.push(<span key={i} className="text-blurple-400 font-medium">{text[i]}</span>);
       queryIndex++;
     } else {
       result.push(text[i]);
@@ -226,9 +226,9 @@ export function CommandPalette({ isOpen, onClose, commands }: CommandPaletteProp
       />
 
       {/* Palette */}
-      <div className="relative bg-[#161b22] border border-gray-700 rounded-lg shadow-2xl w-full max-w-lg mx-4 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+      <div className="relative bg-[#161b22] border border-gray-750 rounded-lg shadow-2xl w-full max-w-lg mx-4 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
         {/* Search input */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-700">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-750">
           <svg className="w-5 h-5 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
@@ -284,13 +284,13 @@ export function CommandPalette({ isOpen, onClose, commands }: CommandPaletteProp
                   onMouseEnter={() => setSelectedIndex(item.index!)}
                   className={`w-full flex items-center gap-3 px-4 py-2 text-left transition-all duration-150 border-l-2 ${
                     isSelected
-                      ? 'bg-blue-600/20 text-white border-blue-500 pl-[14px]'
+                      ? 'bg-blurple-500/20 text-white border-blue-500 pl-[14px]'
                       : 'text-gray-300 hover:bg-gray-800 border-transparent'
                   }`}
                 >
                   {/* Icon */}
                   {cmd.icon && (
-                    <span className={`shrink-0 ${isSelected ? 'text-blue-400' : 'text-gray-500'}`}>
+                    <span className={`shrink-0 ${isSelected ? 'text-blurple-400' : 'text-gray-500'}`}>
                       {cmd.icon}
                     </span>
                   )}
@@ -325,7 +325,7 @@ export function CommandPalette({ isOpen, onClose, commands }: CommandPaletteProp
         </div>
 
         {/* Footer hint */}
-        <div className="flex items-center justify-between px-4 py-2 border-t border-gray-700 text-xs text-gray-500">
+        <div className="flex items-center justify-between px-4 py-2 border-t border-gray-750 text-xs text-gray-500">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
               <KeyboardKey>↑</KeyboardKey>

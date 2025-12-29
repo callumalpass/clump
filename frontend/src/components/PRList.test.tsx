@@ -237,9 +237,8 @@ describe('PRList', () => {
 
       render(<PRList {...defaultProps} prs={prs} selectedPR={1} />);
 
-      const selectedItem = screen.getByText('PR 1').closest('.p-3');
-      expect(selectedItem).toHaveClass('border-blurple-400');
-      expect(selectedItem).toHaveClass('list-item-selected');
+      const selectedItem = screen.getByText('PR 1').closest('.p-4');
+      expect(selectedItem).toHaveClass('bg-blurple-500/10');
     });
 
     it('does not highlight unselected PRs', () => {
@@ -250,9 +249,8 @@ describe('PRList', () => {
 
       render(<PRList {...defaultProps} prs={prs} selectedPR={1} />);
 
-      const unselectedItem = screen.getByText('PR 2').closest('.p-3');
-      expect(unselectedItem).toHaveClass('border-transparent');
-      expect(unselectedItem).not.toHaveClass('list-item-selected');
+      const unselectedItem = screen.getByText('PR 2').closest('.p-4');
+      expect(unselectedItem).not.toHaveClass('bg-blurple-500/10');
     });
   });
 
@@ -269,7 +267,7 @@ describe('PRList', () => {
 
       render(<PRList {...defaultProps} prs={prs} sessions={sessions} />);
 
-      const runningIndicator = document.querySelector('.bg-yellow-500.animate-pulse');
+      const runningIndicator = document.querySelector('.bg-warning-500.animate-pulse');
       expect(runningIndicator).toBeInTheDocument();
     });
 
@@ -285,7 +283,7 @@ describe('PRList', () => {
 
       render(<PRList {...defaultProps} prs={prs} sessions={sessions} />);
 
-      const completedIndicator = document.querySelector('.bg-green-500:not(.animate-pulse)');
+      const completedIndicator = document.querySelector('.bg-mint-400:not(.animate-pulse)');
       expect(completedIndicator).toBeInTheDocument();
     });
 
@@ -537,13 +535,13 @@ describe('PRList', () => {
 
       render(<PRList {...defaultProps} prs={prs} sessions={sessions} />);
 
-      // Should show running indicator (yellow pulse) even though one session is completed
-      const runningIndicator = document.querySelector('.bg-yellow-500.animate-pulse');
+      // Should show running indicator (warning-500 pulse) even though one session is completed
+      const runningIndicator = document.querySelector('.bg-warning-500.animate-pulse');
       expect(runningIndicator).toBeInTheDocument();
 
-      // Should not show completed indicator (green without pulse) as standalone
-      // The green indicator shows only when there are NO active sessions
-      const completedIndicators = document.querySelectorAll('.w-2.h-2.rounded-full.bg-green-500:not(.animate-pulse)');
+      // Should not show completed indicator (mint without pulse) as standalone
+      // The mint indicator shows only when there are NO active sessions
+      const completedIndicators = document.querySelectorAll('.w-2.h-2.rounded-full.bg-mint-400:not(.animate-pulse)');
       expect(completedIndicators).toHaveLength(0);
     });
   });

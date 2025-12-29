@@ -91,7 +91,7 @@ export function SessionTabs({
   }, [activeSessionId, sessions]); // Re-run when sessions change too (for dynamic tabs)
 
   return (
-    <div ref={containerRef} className="relative flex items-center gap-1 bg-[#161b22] border-b border-gray-700 px-2 overflow-x-auto">
+    <div ref={containerRef} className="relative flex items-center gap-2 bg-gray-850 border-b border-gray-750 px-3 py-2 overflow-x-auto">
       {sessions.map((session) => {
         const tabName = getTabName(session);
         // Check if this session is running (either via process or headless)
@@ -112,12 +112,12 @@ export function SessionTabs({
             }}
             role="tab"
             tabIndex={0}
-            className={`session-tab session-tab-enter group flex items-center gap-1.5 px-3 py-2 cursor-pointer ${focusRing} ${
+            className={`session-tab session-tab-enter group flex items-center gap-2 px-4 py-2.5 cursor-pointer rounded-stoody-lg transition-all duration-150 ${focusRing} ${
               isActiveTab
-                ? 'text-white'
+                ? 'text-white bg-gray-800'
                 : sessionNeedsAttention
-                  ? 'text-orange-200 bg-orange-900/40 hover:bg-orange-900/60'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                  ? 'text-warning-300 bg-warning-500/10 hover:bg-warning-500/15'
+                  : 'text-gray-400 bg-gray-800 hover:text-pink-400 hover:bg-gray-850'
             }`}
             onClick={() => onSelectSession(session.session_id)}
             onKeyDown={(e) => {
@@ -131,12 +131,12 @@ export function SessionTabs({
           >
             {/* Status indicator */}
             <span
-              className={`w-2 h-2 rounded-full shrink-0 ${
+              className={`w-2.5 h-2.5 rounded-full shrink-0 ${
                 sessionNeedsAttention
-                  ? 'bg-orange-500 animate-pulse'
+                  ? 'bg-warning-500 animate-pulse'
                   : isRunning
-                    ? 'bg-yellow-500 animate-pulse'
-                    : 'bg-green-500'
+                    ? 'bg-warning-500 animate-pulse'
+                    : 'bg-mint-400'
               }`}
               title={
                 sessionNeedsAttention
@@ -155,14 +155,14 @@ export function SessionTabs({
             />
             {/* Entity badges - show linked issues/PRs */}
             {session.entities && session.entities.length > 0 && (
-              <span className="flex items-center gap-0.5 shrink-0">
+              <span className="flex items-center gap-1 shrink-0">
                 {session.entities.slice(0, 2).map((entity, idx) => (
                   <span
                     key={`${entity.kind}-${entity.number}-${idx}`}
-                    className={`text-xs px-1 py-0.5 rounded font-medium ${
+                    className={`text-xs px-1.5 py-0.5 rounded-stoody-sm font-medium ${
                       entity.kind === 'issue'
-                        ? 'bg-green-500/20 text-green-400'
-                        : 'bg-purple-500/20 text-purple-400'
+                        ? 'bg-mint-400/20 text-mint-400'
+                        : 'bg-blurple-400/20 text-blurple-400'
                     }`}
                   >
                     {entity.kind === 'pr' ? 'PR' : ''}#{entity.number}
@@ -178,7 +178,7 @@ export function SessionTabs({
             </span>
             {/* Show elapsed time for running sessions, relative time for completed */}
             {isRunning && (activeProcess?.created_at || session.start_time) ? (
-              <ElapsedTimer startTime={activeProcess?.created_at || session.start_time!} className="text-xs text-yellow-400 tabular-nums" />
+              <ElapsedTimer startTime={activeProcess?.created_at || session.start_time!} className="text-xs text-warning-500 tabular-nums font-medium" />
             ) : !isRunning && session.modified_at && (
               <span
                 className="text-xs text-gray-500 tabular-nums"
@@ -193,11 +193,11 @@ export function SessionTabs({
                 e.stopPropagation();
                 onCloseSession(session.session_id);
               }}
-              className={`session-tab-close ml-1 p-1 rounded-full opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-400 hover:bg-red-500/15 active:bg-red-500/25 transition-all duration-150 ${focusRing} focus-visible:opacity-100`}
+              className={`session-tab-close ml-1 p-1.5 rounded-stoody-sm opacity-0 group-hover:opacity-100 text-gray-400 hover:text-danger-400 hover:bg-danger-500/15 active:bg-danger-500/25 transition-all duration-150 ${focusRing} focus-visible:opacity-100`}
               title="Close tab"
               aria-label={`Close ${session.title || 'session'}`}
             >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -207,10 +207,10 @@ export function SessionTabs({
       <button
         onClick={onNewSession}
         disabled={newSessionDisabled}
-        className={`group/new px-2 py-2 rounded-md transition-all active:scale-95 disabled:active:scale-100 ${focusRing} ${
+        className={`group/new p-2.5 rounded-stoody-lg transition-all active:scale-95 disabled:active:scale-100 ${focusRing} ${
           newSessionDisabled
             ? 'text-gray-600 cursor-not-allowed'
-            : 'text-gray-400 hover:text-white hover:bg-gray-700/60'
+            : 'text-gray-400 hover:text-pink-400 hover:bg-gray-800'
         }`}
         title={newSessionDisabled ? "Select a repository first" : "New session (Ctrl+N)"}
         aria-label="Create new session"
@@ -228,7 +228,7 @@ export function SessionTabs({
       {/* Sliding indicator - only show when width is calculated */}
       {indicatorStyle.width > 0 && (
         <div
-          className="absolute bottom-0 left-0 h-0.5 bg-blue-500 transition-all duration-200 ease-out"
+          className="absolute bottom-0 left-0 h-0.5 bg-blurple-400 transition-all duration-200 ease-out"
           style={{
             transform: `translateX(${indicatorStyle.left}px)`,
             width: indicatorStyle.width,

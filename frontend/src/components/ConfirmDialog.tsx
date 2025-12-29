@@ -75,7 +75,7 @@ export function ConfirmDialog({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       ),
-      confirmButton: 'btn-primary bg-blue-600 hover:bg-blue-500 text-white',
+      confirmButton: 'btn-primary bg-blurple-500 hover:bg-blue-500 text-white',
       iconBg: 'bg-blue-500/10',
     },
   };
@@ -98,7 +98,7 @@ export function ConfirmDialog({
       />
 
       {/* Dialog */}
-      <div className="relative bg-[#161b22] border border-gray-700 rounded-lg shadow-xl max-w-md w-full mx-4 modal-content-enter">
+      <div className="relative bg-[#161b22] border border-gray-750 rounded-lg shadow-xl max-w-md w-full mx-4 modal-content-enter">
         <div className="p-6">
           {/* Icon and Title */}
           <div className="flex items-start gap-4">

@@ -614,7 +614,8 @@ describe('FilterGroup', () => {
       </FilterGroup>
     );
 
-    const group = screen.getByText('Content').parentElement;
+    // The content is wrapped in an inner div, so we need to go up two levels to find the outer container
+    const group = screen.getByText('Content').parentElement?.parentElement;
     expect(group).toHaveClass('custom-class');
   });
 });

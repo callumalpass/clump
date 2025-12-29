@@ -1397,15 +1397,17 @@ export default function App() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-900 text-white">
-      {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-gray-750 bg-gray-800">
+      {/* Header - Stoody generous sizing with personality */}
+      <header className="flex items-center justify-between px-8 py-5 border-b border-gray-750 bg-gray-800">
         <h1
-          className="text-2xl text-white drop-shadow-[0_0_10px_rgba(251,191,36,0.4)] hover:drop-shadow-[0_0_15px_rgba(251,191,36,0.6)] transition-all cursor-default"
-          style={{ fontFamily: "'Playfair Display', serif" }}
+          className="group text-2xl font-semibold cursor-default transition-all duration-200"
+          style={{ fontFamily: "'Fredoka', 'Quicksand', sans-serif" }}
         >
-          Clump
+          <span className="text-blurple-400 group-hover:text-pink-400 transition-colors duration-200">C</span>
+          <span className="text-white">lump</span>
+          <span className="ml-1.5 inline-block w-2 h-2 rounded-full bg-mint-400 group-hover:bg-pink-400 group-hover:scale-125 transition-all duration-200" />
         </h1>
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-6">
           <span className="text-sm text-gray-400">
             {processes.length} active process{processes.length !== 1 ? 'es' : ''}
           </span>

@@ -156,7 +156,7 @@ export function RepoSelector({
   const selectedCounts = selectedRepo ? sessionCounts?.get(selectedRepo.id) : undefined;
 
   return (
-    <div className="p-2 border-b border-gray-700">
+    <div className="p-2 border-b border-gray-750">
       <div className="flex items-center gap-2">
         {/* Custom dropdown */}
         <div className="relative flex-1">
@@ -231,15 +231,15 @@ export function RepoSelector({
                         onMouseEnter={() => setHighlightedIndex(index)}
                         className={`group/repo w-full px-3 py-2 text-sm text-left flex items-center justify-between transition-colors cursor-pointer ${
                           isHighlighted
-                            ? 'bg-blue-600/30 text-white'
+                            ? 'bg-blurple-500/30 text-white'
                             : isSelected
                             ? 'bg-gray-700 text-white'
-                            : 'text-gray-200 hover:bg-gray-700'
+                            : 'text-gray-200 hover:bg-gray-750'
                         }`}
                       >
                         <span className="flex items-center gap-2 min-w-0">
                           {isSelected && (
-                            <svg className="w-4 h-4 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4 text-blurple-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                             </svg>
                           )}
@@ -308,7 +308,7 @@ export function RepoSelector({
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
+            className="w-full inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm bg-blurple-500 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
           >
             {isLoading && (
               <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

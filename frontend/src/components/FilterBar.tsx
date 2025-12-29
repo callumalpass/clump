@@ -1,33 +1,33 @@
 import { useState, useEffect, useRef, useLayoutEffect, ReactNode } from 'react';
 import { focusRing, focusRingInset } from '../utils/styles';
 
-// Shared filter bar styling constants
+// Shared filter bar styling constants - Compact design
 export const filterBarStyles = {
-  container: 'flex flex-col gap-2 p-2 border-b border-gray-700 bg-gray-800/30',
+  container: 'flex flex-col gap-2 px-3 py-2 border-b border-gray-750 bg-gray-800/40',
   row: 'flex items-center gap-2',
-  // Toggle button group (connected buttons)
-  toggleGroup: 'relative flex rounded-md overflow-hidden border border-gray-600 bg-gray-800',
+  // Toggle button group (connected buttons) - compact padding
+  toggleGroup: 'relative flex rounded-stoody overflow-hidden border border-gray-750 bg-gray-800 shadow-stoody-sm',
   toggleButton: (isActive: boolean) =>
-    `toggle-btn relative z-10 px-2.5 py-1 text-xs transition-colors duration-150 active:scale-95 ${focusRing} focus:z-10 ${
+    `toggle-btn relative z-10 px-3 py-1.5 text-xs transition-all duration-150 active:scale-95 ${focusRing} focus:z-10 ${
       isActive
-        ? 'text-white'
-        : 'text-gray-300 hover:text-white'
+        ? 'text-white font-medium'
+        : 'text-gray-400 hover:text-pink-400'
     }`,
-  // Standalone pill buttons (for category filters)
+  // Standalone pill buttons (for category filters) - compact padding
   pillButton: (isActive: boolean) =>
-    `toggle-btn px-2.5 py-1 text-xs rounded-md transition-transform active:scale-95 ${focusRing} ${
+    `toggle-btn px-3 py-1.5 text-xs rounded-stoody transition-transform active:scale-95 ${focusRing} ${
       isActive
-        ? 'bg-blue-600 text-white'
-        : 'text-gray-400 hover:text-white hover:bg-gray-700'
+        ? 'bg-blurple-500 text-white shadow-stoody-sm'
+        : 'text-gray-400 hover:text-pink-400 hover:bg-gray-750'
     }`,
-  // Select dropdown
-  select: `bg-gray-800 border border-gray-600 rounded-md px-2 py-1 text-xs transition-colors duration-150 ${focusRing} focus:border-blue-500 focus:bg-gray-700/50`,
-  // Icon button
-  iconButton: `icon-btn p-1 bg-gray-800 border border-gray-600 rounded-md hover:bg-gray-700 hover:border-gray-500 ${focusRing}`,
+  // Select dropdown - compact
+  select: `bg-gray-800 border border-gray-750 rounded-stoody px-2.5 py-1.5 text-xs transition-colors duration-150 shadow-stoody-sm ${focusRing} focus:border-blurple-400 focus:bg-gray-850/50`,
+  // Icon button - compact
+  iconButton: `icon-btn p-2 bg-gray-800 border border-gray-750 rounded-stoody hover:bg-gray-750 hover:border-gray-700 shadow-stoody-sm ${focusRing}`,
   // Counts and metadata
   count: 'text-xs text-gray-500',
   // Clear filters
-  clearButton: `text-xs text-gray-400 hover:text-white transition-transform active:scale-95 ${focusRing}`,
+  clearButton: `text-xs text-gray-400 hover:text-pink-400 transition-transform active:scale-95 ${focusRing}`,
 };
 
 // Search input component
@@ -57,17 +57,17 @@ export function SearchInput({ value, onChange, placeholder = 'Search...', deboun
   }, [value]);
 
   return (
-    <div className="relative flex-1 min-w-0 group">
+    <div className="relative flex-1 min-w-0 group search-input-container">
       <input
         type="text"
         placeholder={placeholder}
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
-        className={`peer w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-1 text-xs pl-7 transition-colors duration-150 ${focusRing} focus:border-blue-500 focus:bg-gray-700/50 placeholder:text-gray-500`}
+        className={`peer w-full bg-gray-800 border border-gray-750 rounded-stoody px-3 py-1.5 text-xs pl-8 transition-all duration-200 shadow-stoody-sm ${focusRing} focus:border-blurple-400 focus:bg-gray-850/50 focus:shadow-[0_0_0_3px_rgba(162,155,254,0.15)] placeholder:text-gray-500`}
         aria-label={placeholder.replace('...', '')}
       />
       <svg
-        className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none transition-colors duration-150 peer-focus:text-blue-400"
+        className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none transition-all duration-200 peer-focus:text-blurple-400 peer-focus:scale-110"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -81,7 +81,7 @@ export function SearchInput({ value, onChange, placeholder = 'Search...', deboun
           setInputValue('');
           onChange('');
         }}
-        className={`absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-sm text-gray-500 hover:text-white hover:bg-gray-700 transition-all duration-150 ${focusRing} ${
+        className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-stoody-sm text-gray-500 hover:text-pink-400 hover:bg-gray-750 transition-all duration-150 ${focusRing} ${
           inputValue ? 'opacity-100 scale-100' : 'opacity-0 scale-75 pointer-events-none'
         }`}
         aria-label="Clear search"
@@ -131,7 +131,7 @@ export function StateToggle({ value, onChange }: StateToggleProps) {
     <div ref={containerRef} className={filterBarStyles.toggleGroup} role="group" aria-label="Filter by state">
       {/* Sliding background indicator */}
       <div
-        className="toggle-indicator absolute top-0 bottom-0 bg-blue-600 rounded-[3px]"
+        className="toggle-indicator absolute top-0 bottom-0 bg-blurple-500 rounded-[3px]"
         style={{
           transform: `translateX(${indicatorStyle.left}px)`,
           width: indicatorStyle.width,
@@ -193,7 +193,7 @@ export function SessionStatusToggle({ value, onChange }: SessionStatusToggleProp
     <div ref={containerRef} className={filterBarStyles.toggleGroup} role="group" aria-label="Filter by session status">
       {/* Sliding background indicator */}
       <div
-        className="toggle-indicator absolute top-0 bottom-0 bg-blue-600 rounded-[3px]"
+        className="toggle-indicator absolute top-0 bottom-0 bg-blurple-500 rounded-[3px]"
         style={{
           transform: `translateX(${indicatorStyle.left}px)`,
           width: indicatorStyle.width,
@@ -251,11 +251,11 @@ export function SortControl({ sortValue, orderValue, options, onSortChange, onOr
         aria-label={orderValue === 'asc' ? 'Sort order: oldest first. Click to sort newest first' : 'Sort order: newest first. Click to sort oldest first'}
       >
         {orderValue === 'asc' ? (
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
           </svg>
         ) : (
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         )}
@@ -306,16 +306,16 @@ export function LabelSelect({ selectedLabels, availableLabels, onChange }: Label
           <button
             key={label}
             onClick={() => toggleLabel(label)}
-            className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-600 text-white transition-transform active:scale-95 ${focusRing}`}
+            className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blurple-500 text-white transition-transform active:scale-95 ${focusRing}`}
           >
             {label}
-            <span className="hover:text-blue-200">×</span>
+            <span className="hover:text-blurple-300">×</span>
           </button>
         ))}
         {unselectedLabels.length > 0 && (
           <button
             onClick={() => setShowDropdown(!showDropdown)}
-            className={`px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 hover:bg-gray-600 transition-transform active:scale-95 ${focusRing}`}
+            className={`px-2 py-0.5 text-xs rounded-full bg-gray-750 text-gray-300 hover:bg-gray-700 transition-transform active:scale-95 ${focusRing}`}
           >
             + Add
           </button>
@@ -329,7 +329,7 @@ export function LabelSelect({ selectedLabels, availableLabels, onChange }: Label
             className="fixed inset-0 z-10 bg-black/20 modal-backdrop-enter"
             onClick={() => setShowDropdown(false)}
           />
-          <div className="absolute top-full left-0 mt-1.5 w-48 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-20 max-h-48 overflow-auto dropdown-menu-enter py-1">
+          <div className="absolute top-full left-0 mt-1.5 w-48 bg-gray-800 border border-gray-750 rounded-stoody shadow-xl z-20 max-h-48 overflow-auto dropdown-menu-enter py-1">
             {unselectedLabels.map((label, index) => (
               <button
                 key={label}
@@ -337,7 +337,7 @@ export function LabelSelect({ selectedLabels, availableLabels, onChange }: Label
                   toggleLabel(label);
                   setShowDropdown(false);
                 }}
-                className={`dropdown-item-enter w-full px-3 py-1.5 text-left text-xs text-gray-300 hover:bg-gray-700 hover:text-white truncate transition-colors duration-100 ${focusRingInset} focus:bg-gray-700 focus:text-white`}
+                className={`dropdown-item-enter w-full px-3 py-1.5 text-left text-xs text-gray-300 hover:bg-gray-750 hover:text-white truncate transition-colors duration-100 ${focusRingInset} focus:bg-gray-750 focus:text-white`}
                 style={{ '--item-index': index } as React.CSSProperties}
               >
                 {label}
@@ -374,17 +374,21 @@ interface FilterGroupProps {
   children: ReactNode;
   label?: string;
   className?: string;
+  /** Allow horizontal scrolling on mobile instead of wrapping */
+  scrollable?: boolean;
 }
 
-export function FilterGroup({ children, label, className = '' }: FilterGroupProps) {
+export function FilterGroup({ children, label, className = '', scrollable = false }: FilterGroupProps) {
   return (
-    <div className={`flex items-center gap-1 px-2 py-1 rounded-md bg-gray-800/50 ${className}`}>
+    <div className={`flex items-center gap-1 px-2 py-1 rounded-stoody-sm bg-gray-800/50 ${scrollable ? 'overflow-x-auto scrollbar-none' : ''} ${className}`}>
       {label && (
-        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide mr-1">
+        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide mr-1 shrink-0">
           {label}
         </span>
       )}
-      {children}
+      <div className={`flex items-center gap-1 ${scrollable ? 'flex-nowrap' : ''}`}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -412,7 +416,7 @@ export function RefreshButton({ onClick, loading }: RefreshButtonProps) {
     <button
       onClick={onClick}
       disabled={loading}
-      className={`icon-btn p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed ${focusRing}`}
+      className={`icon-btn p-1 rounded-stoody-sm hover:bg-gray-750 text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed ${focusRing}`}
       title={loading ? 'Refreshing...' : 'Refresh'}
       aria-label={loading ? 'Refreshing data' : 'Refresh data'}
     >
@@ -440,7 +444,7 @@ export function ActiveFiltersIndicator({ onClick, filterCount }: ActiveFiltersIn
   return (
     <button
       onClick={onClick}
-      className={`filter-indicator-enter inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-md bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 hover:text-blue-300 border border-blue-500/30 transition-all active:scale-95 ${focusRing}`}
+      className={`filter-indicator-enter inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-stoody-sm bg-blurple-500/20 text-blurple-400 hover:bg-blurple-500/30 hover:text-blurple-300 border border-blurple-500/30 transition-all active:scale-95 ${focusRing}`}
       title="Clear all active filters"
       aria-label={`Clear ${filterCount} active filter${filterCount !== 1 ? 's' : ''}`}
     >

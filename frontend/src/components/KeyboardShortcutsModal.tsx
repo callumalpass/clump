@@ -85,9 +85,9 @@ export function KeyboardShortcutsModal({ isOpen, onClose }: KeyboardShortcutsMod
       />
 
       {/* Modal */}
-      <div className="relative bg-[#161b22] border border-gray-700 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-hidden modal-content-enter">
+      <div className="relative bg-[#161b22] border border-gray-750 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-hidden modal-content-enter">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-750">
           <h2 className="text-lg font-semibold text-white">Keyboard Shortcuts</h2>
           <button
             onClick={onClose}
@@ -131,7 +131,7 @@ export function KeyboardShortcutsModal({ isOpen, onClose }: KeyboardShortcutsMod
           </div>
 
           {/* Footer hint */}
-          <div className="mt-6 pt-4 border-t border-gray-700">
+          <div className="mt-6 pt-4 border-t border-gray-750">
             <p className="text-xs text-gray-500 text-center">
               Press <KeyboardKey>Esc</KeyboardKey> or <KeyboardKey>?</KeyboardKey> to close
             </p>

@@ -26,11 +26,11 @@ import { Separator } from 'react-resizable-panels';
 function ResizeHandle() {
   return (
     <Separator className="group relative flex items-center justify-center w-2 cursor-col-resize transition-all resize-handle">
-      <div className="w-px h-full bg-gray-700 group-hover:bg-blue-500 group-active:bg-blue-400 transition-colors" />
+      <div className="w-px h-full bg-gray-750 group-hover:bg-blurple-400 group-active:bg-blurple-300 transition-colors" />
       <div className="absolute inset-y-0 flex flex-col items-center justify-center gap-1 opacity-30 group-hover:opacity-100 transition-opacity pointer-events-none resize-handle-dots">
-        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blue-400 transition-colors" />
-        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blue-400 transition-colors" />
-        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blue-400 transition-colors" />
+        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blurple-400 transition-colors" />
+        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blurple-400 transition-colors" />
+        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blurple-400 transition-colors" />
       </div>
     </Separator>
   );
@@ -149,10 +149,10 @@ function ContextPanelHeader({ isCollapsed, isIssue, onExpand, onCollapse }: Cont
 
   if (isCollapsed) {
     return (
-      <div className="flex items-center p-2 border-b border-gray-700 bg-gray-800/50 shrink-0 flex-col gap-2">
+      <div className="flex items-center p-2 border-b border-gray-750 bg-gray-800/50 shrink-0 flex-col gap-2">
         <button
           onClick={onExpand}
-          className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="p-1 hover:bg-gray-750 rounded text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-400"
           title="Expand panel"
           aria-label={`Expand ${label.toLowerCase()} context panel`}
         >
@@ -187,11 +187,11 @@ function ContextPanelHeader({ isCollapsed, isIssue, onExpand, onCollapse }: Cont
   }
 
   return (
-    <div className="flex items-center p-2 border-b border-gray-700 bg-gray-800/50 shrink-0 justify-between">
+    <div className="flex items-center p-2 border-b border-gray-750 bg-gray-800/50 shrink-0 justify-between">
       <span className="text-sm font-medium text-gray-300">{label} Context</span>
       <button
         onClick={onCollapse}
-        className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        className="p-1 hover:bg-gray-750 rounded text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-400"
         title="Collapse panel"
         aria-label={`Collapse ${label.toLowerCase()} context panel`}
       >
@@ -218,10 +218,10 @@ function QuickNavItem({ shortcut, label, active = false, onClick }: { shortcut: 
     <button
       onClick={onClick}
       disabled={active}
-      className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900 ${
+      className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900 ${
         active
-          ? 'bg-blue-600/20 text-blue-400 cursor-default'
-          : 'bg-gray-700/30 text-gray-400 hover:bg-gray-700/50 hover:text-gray-200 active:scale-[0.98]'
+          ? 'bg-blurple-500/20 text-blurple-400 cursor-default'
+          : 'bg-gray-700/30 text-gray-400 hover:bg-gray-750/50 hover:text-gray-200 active:scale-[0.98]'
       }`}
       aria-current={active ? 'page' : undefined}
     >
@@ -231,13 +231,68 @@ function QuickNavItem({ shortcut, label, active = false, onClick }: { shortcut: 
   );
 }
 
+// Welcome state shown when no repo is selected
+function WelcomeState() {
+  return (
+    <div className="flex-1 flex items-center justify-center p-8">
+      <div className="text-center p-8 rounded-xl bg-gray-800/40 border border-gray-750/50 max-w-md empty-state-enter">
+        {/* Logo/Icon */}
+        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blurple-500/20 to-mint-500/20 flex items-center justify-center mx-auto mb-6 empty-state-icon-float">
+          <svg className="w-10 h-10 text-blurple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        </div>
+
+        {/* Welcome message */}
+        <h2 className="text-xl font-semibold text-gray-200 mb-2">Welcome to Clump</h2>
+        <p className="text-gray-400 text-sm mb-6">
+          Manage Claude Code sessions for your GitHub repositories
+        </p>
+
+        {/* Getting started steps */}
+        <div className="text-left space-y-3 mb-6">
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-gray-800/50 border border-gray-750/30">
+            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blurple-500/20 text-blurple-400 flex items-center justify-center text-xs font-medium">1</div>
+            <div>
+              <p className="text-sm text-gray-300 font-medium">Select a repository</p>
+              <p className="text-xs text-gray-500">Use the dropdown in the sidebar to choose a repo</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-gray-800/50 border border-gray-750/30">
+            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blurple-500/20 text-blurple-400 flex items-center justify-center text-xs font-medium">2</div>
+            <div>
+              <p className="text-sm text-gray-300 font-medium">Pick an issue or PR</p>
+              <p className="text-xs text-gray-500">Browse issues to start a Claude session</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-gray-800/50 border border-gray-750/30">
+            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blurple-500/20 text-blurple-400 flex items-center justify-center text-xs font-medium">3</div>
+            <div>
+              <p className="text-sm text-gray-300 font-medium">Start analyzing</p>
+              <p className="text-xs text-gray-500">Let Claude help you understand and work on the code</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Keyboard hint */}
+        <div className="pt-4 border-t border-gray-750/50 flex items-center justify-center gap-4 text-xs text-gray-500">
+          <span className="flex items-center gap-1.5">
+            <KeyHint>?</KeyHint>
+            <span>Keyboard shortcuts</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Context-aware empty state content based on active tab
 const emptyStateContent: Record<Tab, { title: string; description: string; emptyTitle: string; emptyDescription: string; icon: React.ReactNode }> = {
   issues: {
     title: 'Select an issue to view details',
     description: 'or start a session to work on it',
     emptyTitle: 'No issues to display',
-    emptyDescription: 'Try adjusting your filters in the sidebar',
+    emptyDescription: 'Check your filters or switch to a different state',
     icon: (
       <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="10" strokeWidth={1.5} />
@@ -249,7 +304,7 @@ const emptyStateContent: Record<Tab, { title: string; description: string; empty
     title: 'Select a pull request to view details',
     description: 'or start a session to review it',
     emptyTitle: 'No pull requests to display',
-    emptyDescription: 'Try adjusting your filters in the sidebar',
+    emptyDescription: 'Check your filters or switch to a different state',
     icon: (
       <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h7" />
@@ -259,8 +314,8 @@ const emptyStateContent: Record<Tab, { title: string; description: string; empty
   history: {
     title: 'Select a session to view details',
     description: 'browse past sessions and their transcripts',
-    emptyTitle: 'No sessions to display',
-    emptyDescription: 'Try adjusting your filters in the sidebar',
+    emptyTitle: 'No sessions yet',
+    emptyDescription: 'Start a session from an issue or PR to get started',
     icon: (
       <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -270,8 +325,8 @@ const emptyStateContent: Record<Tab, { title: string; description: string; empty
   schedules: {
     title: 'Select a schedule to view details',
     description: 'manage automated sessions',
-    emptyTitle: 'No schedules to display',
-    emptyDescription: 'Create a schedule to automate your workflows',
+    emptyTitle: 'No schedules yet',
+    emptyDescription: 'Create a schedule to automate recurring tasks',
     icon: (
       <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -310,7 +365,7 @@ function EmptyState({ activeTab, listEmpty, onTabChange }: EmptyStateProps) {
   // Full empty state for when the list is truly empty
   return (
     <div className="flex-1 flex items-center justify-center p-8">
-      <div className="text-center p-8 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-lg empty-state-enter">
+      <div className="text-center p-8 rounded-xl bg-gray-800/40 border border-gray-750/50 max-w-lg empty-state-enter">
         {/* Icon */}
         <div className="w-16 h-16 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-5 empty-state-icon-float">
           {content.icon}
@@ -329,7 +384,7 @@ function EmptyState({ activeTab, listEmpty, onTabChange }: EmptyStateProps) {
         </div>
 
         {/* Command palette hint */}
-        <div className="pt-4 border-t border-gray-700/50 flex items-center justify-center gap-4 text-xs text-gray-500">
+        <div className="pt-4 border-t border-gray-750/50 flex items-center justify-center gap-4 text-xs text-gray-500">
           <span className="flex items-center gap-1.5">
             <KeyHint>⌘K</KeyHint>
             <span>Command palette</span>
@@ -540,7 +595,7 @@ export function MainContentArea(props: MainContentAreaProps) {
           maxSize="60%"
           collapsible
           collapsedSize="40px"
-          className="flex flex-col border-r border-gray-700 min-h-0"
+          className="flex flex-col border-r border-gray-750 min-h-0"
         >
           <ContextPanelHeader
             isCollapsed={issuePanelCollapsed}
@@ -569,7 +624,7 @@ export function MainContentArea(props: MainContentAreaProps) {
           maxSize="60%"
           collapsible
           collapsedSize="40px"
-          className="flex flex-col border-r border-gray-700 min-h-0"
+          className="flex flex-col border-r border-gray-750 min-h-0"
         >
           <ContextPanelHeader
             isCollapsed={issuePanelCollapsed}
@@ -595,7 +650,7 @@ export function MainContentArea(props: MainContentAreaProps) {
           defaultSize="40%"
           minSize="250px"
           maxSize="60%"
-          className="border-r border-gray-700 overflow-auto"
+          className="border-r border-gray-750 overflow-auto"
         >
           {renderScheduleDetail()}
         </Panel>
@@ -608,21 +663,21 @@ export function MainContentArea(props: MainContentAreaProps) {
 
     // Issue detail only (no sessions)
     'issue-only': () => (
-      <div className="flex-1 border-r border-gray-700 overflow-auto">
+      <div className="flex-1 border-r border-gray-750 overflow-auto">
         {selectedIssue && renderIssueDetail(selectedIssue)}
       </div>
     ),
 
     // PR detail only (no sessions)
     'pr-only': () => (
-      <div className="flex-1 border-r border-gray-700 overflow-auto">
+      <div className="flex-1 border-r border-gray-750 overflow-auto">
         {selectedPRData && renderPRDetail(selectedPRData)}
       </div>
     ),
 
     // Schedule detail only (no sessions)
     'schedule-only': () => (
-      <div className="flex-1 border-r border-gray-700 overflow-auto">
+      <div className="flex-1 border-r border-gray-750 overflow-auto">
         {renderScheduleDetail()}
       </div>
     ),
@@ -634,7 +689,7 @@ export function MainContentArea(props: MainContentAreaProps) {
 
     // Issue creation form
     'issue-create': () => (
-      <div className="flex-1 border-r border-gray-700 overflow-auto">
+      <div className="flex-1 border-r border-gray-750 overflow-auto">
         {selectedRepo && (
           <IssueCreateView
             repoId={selectedRepo.id}
@@ -655,6 +710,15 @@ export function MainContentArea(props: MainContentAreaProps) {
   // =============================================================================
   // Render
   // =============================================================================
+
+  // Show welcome state when no repo is selected
+  if (!selectedRepo) {
+    return (
+      <div className="flex-1 flex min-h-0">
+        <WelcomeState />
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex min-h-0">

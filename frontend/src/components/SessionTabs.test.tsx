@@ -184,8 +184,8 @@ describe('SessionTabs', () => {
       />
     );
 
-    // Should show the pulsing indicator (yellow background)
-    const statusDot = document.querySelector('.bg-yellow-500.animate-pulse');
+    // Should show the pulsing indicator (warning-500 background)
+    const statusDot = document.querySelector('.bg-warning-500.animate-pulse');
     expect(statusDot).toBeInTheDocument();
   });
 
@@ -200,8 +200,8 @@ describe('SessionTabs', () => {
 
     render(<SessionTabs {...defaultProps} sessions={sessions} />);
 
-    // Should show the green indicator (completed)
-    const statusDot = document.querySelector('.bg-green-500');
+    // Should show the mint indicator (completed)
+    const statusDot = document.querySelector('.bg-mint-400');
     expect(statusDot).toBeInTheDocument();
   });
 

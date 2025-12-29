@@ -111,7 +111,7 @@ export function EmptyState({
 
   return (
     <div className={`flex items-center justify-center flex-1 p-4 ${className}`}>
-      <div className={`text-center rounded-xl bg-gray-800/40 border border-gray-700/50 empty-state-enter ${classes.container}`}>
+      <div className={`text-center rounded-xl bg-gray-800/40 border border-gray-750/50 empty-state-enter ${classes.container}`}>
         {/* Icon */}
         <div
           className={`rounded-full bg-gray-700/50 flex items-center justify-center mx-auto ${classes.iconWrapper} ${
@@ -156,7 +156,7 @@ interface EmptyStateActionProps {
 export function EmptyStateAction({ onClick, children, variant = 'secondary' }: EmptyStateActionProps) {
   const baseClasses = 'px-3 py-1.5 text-xs rounded transition-all active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900';
   const variantClasses = variant === 'primary'
-    ? 'bg-blue-600 hover:bg-blue-700 text-white focus-visible:ring-blue-500'
+    ? 'bg-blurple-500 hover:bg-blue-700 text-white focus-visible:ring-blue-500'
     : 'bg-gray-700 hover:bg-gray-600 text-gray-200 focus-visible:ring-gray-500';
 
   return (

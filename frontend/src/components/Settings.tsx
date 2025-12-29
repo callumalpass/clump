@@ -175,13 +175,13 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative bg-[#161b22] border border-gray-700 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col mx-4 modal-content-enter">
+      <div className="relative bg-[#161b22] border border-gray-750 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col mx-4 modal-content-enter">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-750">
           <h2 className="text-lg font-semibold">Settings</h2>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
+            className="p-1 hover:bg-gray-750 rounded text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
             aria-label="Close"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -191,7 +191,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
         </div>
 
         {/* Tabs with sliding indicator */}
-        <div ref={tabContainerRef} className="relative flex border-b border-gray-700">
+        <div ref={tabContainerRef} className="relative flex border-b border-gray-750">
           {(['github', 'permissions', 'execution', 'commands', 'advanced'] as const).map((tab) => (
             <button
               key={tab}
@@ -300,7 +300,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                           href="https://github.com/settings/tokens/new?description=Claude%20Code%20Hub&scopes=repo,read:org"
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-block mt-3 text-blue-400 hover:text-blue-300 text-xs"
+                          className="inline-block mt-3 text-blurple-400 hover:text-blue-300 text-xs"
                         >
                           Create new token on GitHub
                         </a>
@@ -323,7 +323,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                         <button
                           type="submit"
                           disabled={tokenSaving}
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
+                          className="px-4 py-2 bg-blurple-500 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
                         >
                           {tokenSaving ? 'Saving...' : 'Save Token'}
                         </button>
@@ -417,7 +417,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                   <button
                     onClick={handleAddTool}
                     disabled={saving || !customTool.trim()}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
+                    className="px-3 py-1.5 bg-blurple-500 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
                   >
                     Add
                   </button>
@@ -556,7 +556,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
               </div>
 
               {/* Reset */}
-              <div className="pt-4 border-t border-gray-700">
+              <div className="pt-4 border-t border-gray-750">
                 <button
                   onClick={handleReset}
                   disabled={saving}
@@ -573,7 +573,7 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-700 bg-[#0d1117]">
+        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-750 bg-[#0d1117]">
           <div className="text-xs text-gray-400">
             {saving ? 'Saving...' : 'Changes are saved automatically'}
           </div>

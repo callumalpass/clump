@@ -1,5 +1,10 @@
 import type { Repo, Issue, PR, SessionSummary, ClaudeCodeSettings } from '../../src/types';
 
+// Helper to generate realistic relative dates for test data
+function relativeDateIso(minutesAgo: number): string {
+  return new Date(Date.now() - minutesAgo * 60 * 1000).toISOString();
+}
+
 export const mockRepos: Repo[] = [
   {
     id: 1,
@@ -91,6 +96,7 @@ export const mockPRs: PR[] = [
   },
 ];
 
+// Use relative dates so test screenshots always show realistic times
 export const mockSessions: SessionSummary[] = [
   {
     session_id: 'abc12345-1234-5678-abcd-123456789abc',
@@ -99,11 +105,11 @@ export const mockSessions: SessionSummary[] = [
     repo_name: 'acme/webapp',
     title: 'Implement dark mode feature',
     model: 'claude-sonnet-4-20250514',
-    start_time: '2024-01-17T10:00:00Z',
-    end_time: '2024-01-17T10:30:00Z',
-    duration_seconds: 1800,
+    start_time: relativeDateIso(120), // Started 2 hours ago
+    end_time: relativeDateIso(90), // Ended 1.5 hours ago
+    duration_seconds: 1800, // 30 minutes
     message_count: 24,
-    modified_at: '2024-01-17T10:30:00Z',
+    modified_at: relativeDateIso(90),
     file_size: 45000,
     entities: [{ kind: 'issue', number: 42 }],
     tags: ['feature'],
@@ -117,11 +123,11 @@ export const mockSessions: SessionSummary[] = [
     repo_name: 'acme/webapp',
     title: 'Review authentication PR',
     model: 'claude-sonnet-4-20250514',
-    start_time: '2024-01-17T14:00:00Z',
+    start_time: relativeDateIso(15), // Started 15 minutes ago (still running)
     end_time: null,
     duration_seconds: null,
     message_count: 8,
-    modified_at: '2024-01-17T14:15:00Z',
+    modified_at: relativeDateIso(2), // Last activity 2 minutes ago
     file_size: 12000,
     entities: [{ kind: 'pr', number: 123 }],
     tags: [],
@@ -135,11 +141,11 @@ export const mockSessions: SessionSummary[] = [
     repo_name: 'acme/webapp',
     title: 'General code exploration',
     model: 'claude-haiku-4-20250514',
-    start_time: '2024-01-16T09:00:00Z',
-    end_time: '2024-01-16T09:15:00Z',
-    duration_seconds: 900,
+    start_time: relativeDateIso(60 * 24), // Started yesterday
+    end_time: relativeDateIso(60 * 24 - 15), // Ended 15 minutes later
+    duration_seconds: 900, // 15 minutes
     message_count: 6,
-    modified_at: '2024-01-16T09:15:00Z',
+    modified_at: relativeDateIso(60 * 24 - 15),
     file_size: 8000,
     entities: [],
     tags: [],

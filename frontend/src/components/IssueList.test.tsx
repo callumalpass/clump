@@ -217,8 +217,8 @@ describe('IssueList', () => {
 
       render(<IssueList {...defaultProps} issues={issues} total={2} selectedIssue={1} />);
 
-      const selectedItem = screen.getByText('Issue 1').closest('.p-3');
-      expect(selectedItem).toHaveClass('border-blurple-400');
+      const selectedItem = screen.getByText('Issue 1').closest('.p-4');
+      expect(selectedItem).toHaveClass('bg-blurple-500/10');
     });
   });
 
@@ -235,7 +235,7 @@ describe('IssueList', () => {
 
       render(<IssueList {...defaultProps} issues={issues} total={1} sessions={sessions} />);
 
-      const runningIndicator = document.querySelector('.bg-yellow-500.animate-pulse');
+      const runningIndicator = document.querySelector('.bg-warning-500.animate-pulse');
       expect(runningIndicator).toBeInTheDocument();
     });
 
@@ -251,7 +251,7 @@ describe('IssueList', () => {
 
       render(<IssueList {...defaultProps} issues={issues} total={1} sessions={sessions} />);
 
-      const completedIndicator = document.querySelector('.bg-green-500');
+      const completedIndicator = document.querySelector('.bg-mint-400');
       expect(completedIndicator).toBeInTheDocument();
     });
 

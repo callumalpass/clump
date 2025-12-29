@@ -50,20 +50,16 @@ const SessionListItem = memo(function SessionListItem({
     return segments.slice(-2).join('/');
   };
 
-  // Determine status for both border and glow styling
+  // Determine status styling - Stoody card style, clean look
   const statusClasses = isSelected
-    ? 'bg-blue-900/30 border-blue-500 list-item-glow-recent'
-    : session.is_active
-    ? 'border-yellow-500/70 hover:border-yellow-400 list-item-glow-active'
-    : isRecentlyModified(session.modified_at)
-    ? 'border-blue-500/60 hover:border-blue-400 list-item-glow-recent'
-    : 'border-green-500/30 hover:border-green-500/60 list-item-glow-done';
+    ? 'bg-blurple-500/10'
+    : '';
 
   return (
     <div
       role="button"
       tabIndex={0}
-      className={`group p-3 cursor-pointer border-l-2 hover:bg-gray-800/60 transition-all duration-150 ease-out list-item-hover list-item-enter ${statusClasses}`}
+      className={`group p-4 mx-2 my-2 cursor-pointer rounded-stoody-lg bg-gray-800 hover:bg-gray-850 transition-all duration-150 ease-out list-item-enter shadow-stoody-sm ${statusClasses}`}
       style={{ '--item-index': Math.min(index, 15) } as React.CSSProperties}
       onClick={onSelect}
       onKeyDown={(e) => {
@@ -96,35 +92,35 @@ const SessionListItem = memo(function SessionListItem({
         {/* Status indicator with text label for accessibility */}
         {session.is_active ? (
           <span
-            className="status-badge status-badge-enter inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-yellow-500/20 text-yellow-400 flex-shrink-0 active-badge-glow"
+            className="status-badge status-badge-enter inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-stoody-lg bg-warning-500/20 text-warning-500 flex-shrink-0"
             title="Session is actively running"
             aria-label="Active session"
           >
-            <span className="status-dot w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
+            <span className="status-dot w-2 h-2 rounded-full bg-warning-500 animate-pulse" />
             Active
           </span>
         ) : isRecentlyModified(session.modified_at) ? (
           <span
-            className="status-badge status-badge-enter inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-blue-500/20 text-blue-400 flex-shrink-0 recent-badge-glow"
+            className="status-badge status-badge-enter inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-stoody-lg bg-blurple-400/20 text-blurple-400 flex-shrink-0"
             title="Session updated in the last 10 minutes"
             aria-label="Recently updated session"
           >
-            <span className="status-dot w-1.5 h-1.5 rounded-full bg-blue-500" />
+            <span className="status-dot w-2 h-2 rounded-full bg-blurple-400" />
             Recent
           </span>
         ) : (
           <span
-            className="status-badge status-badge-enter inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-500/20 text-green-400 flex-shrink-0 done-badge-glow"
+            className="status-badge status-badge-enter inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-stoody-lg bg-mint-400/20 text-mint-400 flex-shrink-0"
             title="Session completed"
             aria-label="Completed session"
           >
-            <span className="status-dot w-1.5 h-1.5 rounded-full bg-green-500" />
+            <span className="status-dot w-2 h-2 rounded-full bg-mint-400" />
             Done
           </span>
         )}
 
         {/* Title */}
-        <span className="text-sm font-medium text-white truncate flex-1" title={session.title || 'Untitled session'}>
+        <span className="text-sm font-medium text-white truncate flex-1 group-hover:text-pink-400 transition-colors" title={session.title || 'Untitled session'}>
           {session.title || 'Untitled session'}
         </span>
 
@@ -149,10 +145,10 @@ const SessionListItem = memo(function SessionListItem({
         {showContinueButton && !session.is_active && onContinue && (
           <button
             onClick={onContinue}
-            className="flex-shrink-0 px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-700 active:scale-95 rounded flex items-center gap-1 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
+            className="flex-shrink-0 px-3 py-1.5 text-xs bg-blurple-500/20 text-blurple-400 hover:bg-blurple-500 hover:text-white active:scale-95 rounded-stoody flex items-center gap-1.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900"
             title="Continue this conversation"
           >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
             </svg>
             Continue
@@ -160,9 +156,9 @@ const SessionListItem = memo(function SessionListItem({
         )}
       </div>
 
-      <div className="list-item-metadata flex items-center gap-2 text-xs text-gray-400">
+      <div className="list-item-metadata flex items-center gap-3 text-xs text-gray-400 mt-2">
         {/* Repo path */}
-        <span className="px-1.5 py-0.5 bg-gray-700 hover:bg-gray-600 rounded truncate max-w-[120px] transition-colors" title={session.repo_path}>
+        <span className="px-2 py-1 bg-gray-750 hover:bg-gray-700 rounded-stoody truncate max-w-[140px] transition-colors" title={session.repo_path}>
           {formatRepoPath(session)}
         </span>
 
@@ -170,10 +166,10 @@ const SessionListItem = memo(function SessionListItem({
         {session.entities?.map((entity, idx) => (
           <span
             key={idx}
-            className={`px-1 py-0.5 rounded ${
+            className={`px-2 py-1 rounded-stoody ${
               entity.kind === 'issue'
-                ? 'bg-green-900/30 text-green-400'
-                : 'bg-purple-900/30 text-purple-400'
+                ? 'bg-mint-400/15 text-mint-400'
+                : 'bg-blurple-400/15 text-blurple-400'
             }`}
             title={entity.kind === 'issue' ? `Issue #${entity.number}` : `PR #${entity.number}`}
           >
@@ -484,7 +480,7 @@ export function SessionList({
             <button
               onClick={() => handleBulkStar(false)}
               disabled={bulkActionLoading}
-              className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded flex items-center gap-1 transition-colors"
+              className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-750 disabled:opacity-50 disabled:cursor-not-allowed rounded flex items-center gap-1 transition-colors"
               title="Unstar selected"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -536,14 +532,14 @@ export function SessionList({
           />
         </div>
       </div>
-      <FilterBarRow className="flex-wrap gap-2">
-        {/* Status filter group */}
-        <FilterGroup label="Status">
+      <FilterBarRow className="flex-wrap gap-2 overflow-x-auto scrollbar-none sm:overflow-visible">
+        {/* Status filter group - scrollable on mobile due to many options */}
+        <FilterGroup label="Status" scrollable className="shrink-0">
           {CATEGORY_FILTERS.map((f) => (
             <button
               key={f.value}
               onClick={() => setCategory(f.value)}
-              className={filterBarStyles.pillButton(filters.category === f.value)}
+              className={`${filterBarStyles.pillButton(filters.category === f.value)} shrink-0`}
             >
               {f.label}
             </button>
@@ -551,27 +547,27 @@ export function SessionList({
         </FilterGroup>
 
         {/* Model filter group */}
-        <FilterGroup label="Model">
+        <FilterGroup label="Model" scrollable className="shrink-0">
           {MODEL_FILTERS.map((f) => (
             <button
               key={f.value}
               onClick={() => setModel(f.value)}
               className={`${filterBarStyles.pillButton((filters.model || 'all') === f.value)} ${
                 (filters.model || 'all') === f.value ? f.color : ''
-              }`}
+              } shrink-0`}
             >
               {f.label}
             </button>
           ))}
         </FilterGroup>
 
-        {/* Date range filter group */}
-        <FilterGroup label="When">
+        {/* Date range filter group - scrollable on mobile due to many options */}
+        <FilterGroup label="When" scrollable className="shrink-0">
           {DATE_RANGE_FILTERS.map((f) => (
             <button
               key={f.value}
               onClick={() => setDateRange(f.value)}
-              className={filterBarStyles.pillButton((filters.dateRange || 'all') === f.value)}
+              className={`${filterBarStyles.pillButton((filters.dateRange || 'all') === f.value)} shrink-0`}
             >
               {f.label}
             </button>
@@ -619,7 +615,7 @@ export function SessionList({
           ))}
         </div>
         {/* Pagination skeleton */}
-        <div className="shrink-0 border-t border-gray-700 p-2 flex items-center justify-between text-sm">
+        <div className="shrink-0 border-t border-gray-750 p-2 flex items-center justify-between text-sm">
           <div className="h-4 w-20 rounded skeleton-shimmer" />
           <PaginationSkeleton />
         </div>
@@ -633,7 +629,7 @@ export function SessionList({
       <div className="flex flex-col flex-1 min-h-0">
         {filterBar}
         <div className="flex-1 flex flex-col items-center justify-center p-8">
-          <div className="text-center p-6 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-xs empty-state-enter">
+          <div className="text-center p-6 rounded-xl bg-gray-800/40 border border-gray-750/50 max-w-xs empty-state-enter">
             <div className="w-14 h-14 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4 empty-state-icon-float">
               {hasFilters ? (
                 <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -693,7 +689,7 @@ export function SessionList({
         </div>
 
         {/* Pagination - always visible to prevent layout shift */}
-        <div className="shrink-0 border-t border-gray-700 p-2 flex items-center justify-between text-sm">
+        <div className="shrink-0 border-t border-gray-750 p-2 flex items-center justify-between text-sm">
           <span className="text-gray-400">
             {total} sessions
           </span>

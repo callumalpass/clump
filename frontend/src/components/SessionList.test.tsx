@@ -359,7 +359,7 @@ describe('SessionList', () => {
       expect(screen.getByText('#2')).toBeInTheDocument();
     });
 
-    it('uses green color for issue entities', () => {
+    it('uses mint color for issue entities', () => {
       const sessions = [
         createMockSession({
           entities: [{ kind: 'issue', number: 42 }],
@@ -369,10 +369,10 @@ describe('SessionList', () => {
       render(<SessionList {...defaultProps} sessions={sessions} total={1} />);
 
       const entitySpan = screen.getByText('#42');
-      expect(entitySpan).toHaveClass('bg-green-900/30', 'text-green-400');
+      expect(entitySpan).toHaveClass('bg-mint-400/15', 'text-mint-400');
     });
 
-    it('uses purple color for PR entities', () => {
+    it('uses blurple color for PR entities', () => {
       const sessions = [
         createMockSession({
           entities: [{ kind: 'pr', number: 42 }],
@@ -382,7 +382,7 @@ describe('SessionList', () => {
       render(<SessionList {...defaultProps} sessions={sessions} total={1} />);
 
       const entitySpan = screen.getByText('#42');
-      expect(entitySpan).toHaveClass('bg-purple-900/30', 'text-purple-400');
+      expect(entitySpan).toHaveClass('bg-blurple-400/15', 'text-blurple-400');
     });
   });
 

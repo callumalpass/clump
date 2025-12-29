@@ -1,12 +1,75 @@
+/* Import fonts for Stoody design - must be first */
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* Stoody Design System - CSS Variables */
+:root {
+  /* Colors - Cozy Dark Theme */
+  --stoody-bg-deep: #2d3436;
+  --stoody-bg-surface: #353b48;
+  --stoody-bg-elevated: #2f3640;
+  --stoody-bg-overlay: #3d4655;
+
+  /* Text */
+  --stoody-text-primary: #dfe6e9;
+  --stoody-text-secondary: #b2bec3;
+  --stoody-text-muted: #636e72;
+
+  /* Accents */
+  --stoody-blurple: #a29bfe;
+  --stoody-blurple-hover: #6c5ce7;
+  --stoody-mint: #55efc4;
+  --stoody-mint-hover: #00b894;
+  --stoody-pink: #ff69b4;  /* The exciting hover color! */
+  --stoody-coral: #fab1a0;
+  --stoody-sky: #74b9ff;
+
+  /* Borders */
+  --stoody-border: #464f5b;
+  --stoody-border-muted: #3d4655;
+  --stoody-border-emphasis: #576574;
+
+  /* Spacing - Generous */
+  --stoody-space-xs: 6px;
+  --stoody-space-sm: 12px;
+  --stoody-space-md: 20px;
+  --stoody-space-lg: 32px;
+  --stoody-space-xl: 48px;
+
+  /* Border Radius - Rounded */
+  --stoody-radius-sm: 8px;
+  --stoody-radius-md: 16px;
+  --stoody-radius-lg: 24px;
+  --stoody-radius-full: 9999px;
+
+  /* Shadows - Soft */
+  --stoody-shadow-sm: 0 2px 4px rgba(0,0,0,0.1);
+  --stoody-shadow-md: 0 4px 12px rgba(0,0,0,0.15);
+  --stoody-shadow-lg: 0 8px 24px rgba(0,0,0,0.2);
+}
+
 body {
   margin: 0;
-  background-color: #0d1117;
-  color: #e6edf3;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+  background-color: var(--stoody-bg-deep);
+  color: var(--stoody-text-primary);
+  font-family: 'Nunito', 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 500;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Links turn hot pink on hover - the Stoody way! */
+a {
+  transition: color 150ms ease;
+}
+
+a:hover {
+  color: var(--stoody-pink) !important;
 }
 
 .xterm {
@@ -43,18 +106,18 @@ body {
 .skeleton-shimmer {
   background: linear-gradient(
     90deg,
-    #374151 0%,
-    #4b5563 50%,
-    #374151 100%
+    #353b48 0%,
+    #3d4655 50%,
+    #353b48 100%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
 }
 
-/* Custom scrollbar styling for dark theme */
+/* Custom scrollbar styling for Stoody dark theme */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #484f58 #0d1117;
+  scrollbar-color: #464f5b #2d3436;
 }
 
 /* WebKit browsers (Chrome, Safari, Edge) */
@@ -64,28 +127,28 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #161b22;
-  border-radius: 5px;
+  background: #2f3640;
+  border-radius: 8px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: #484f58;
-  border-radius: 5px;
-  border: 2px solid #161b22;
+  background-color: #464f5b;
+  border-radius: 8px;
+  border: 2px solid #2f3640;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: #6e7681;
-  box-shadow: 0 0 8px rgba(59, 130, 246, 0.25);
+  background-color: #576574;
+  box-shadow: 0 0 8px rgba(162, 155, 254, 0.25);
 }
 
 ::-webkit-scrollbar-thumb:active {
-  background-color: #8b949e;
-  box-shadow: 0 0 10px rgba(59, 130, 246, 0.35);
+  background-color: #636e72;
+  box-shadow: 0 0 10px rgba(162, 155, 254, 0.35);
 }
 
 ::-webkit-scrollbar-corner {
-  background: #161b22;
+  background: #2f3640;
 }
 
 /* Modal entrance animations */
@@ -194,16 +257,16 @@ body {
 
 /* Focus-visible state for keyboard navigation - shows clear focus ring */
 .list-item-hover:focus-visible {
-  outline: 2px solid rgba(59, 130, 246, 0.7);
+  outline: 2px solid rgba(162, 155, 254, 0.7);
   outline-offset: -2px;
-  background-color: rgba(55, 65, 81, 0.5);
+  background-color: rgba(61, 70, 85, 0.5);
   z-index: 1;
 }
 
 .list-item-hover:hover {
   transform: translateX(3px);
   box-shadow:
-    -4px 0 16px rgba(59, 130, 246, 0.15),
+    -4px 0 16px rgba(162, 155, 254, 0.15),
     0 4px 12px rgba(0, 0, 0, 0.2),
     0 2px 4px rgba(0, 0, 0, 0.1);
 }
@@ -212,15 +275,15 @@ body {
 .list-item-hover:active {
   transform: translateX(2px) scale(0.995);
   box-shadow:
-    -2px 0 8px rgba(59, 130, 246, 0.1),
+    -2px 0 8px rgba(162, 155, 254, 0.1),
     0 2px 6px rgba(0, 0, 0, 0.15),
     0 1px 2px rgba(0, 0, 0, 0.08);
-  background-color: rgba(55, 65, 81, 0.5);
+  background-color: rgba(61, 70, 85, 0.5);
 }
 
 /* Selected list item enhanced state */
 .list-item-selected {
-  box-shadow: -3px 0 16px rgba(59, 130, 246, 0.25), 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: -3px 0 16px rgba(162, 155, 254, 0.25), 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 /* List item metadata row - subtle reveal on parent hover */
@@ -241,21 +304,21 @@ body {
 /* Status-colored hover glow variants for list items */
 .list-item-glow-active:hover {
   box-shadow:
-    -4px 0 16px rgba(234, 179, 8, 0.2),
+    -4px 0 16px rgba(253, 203, 110, 0.2),
     0 4px 12px rgba(0, 0, 0, 0.2),
     0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .list-item-glow-recent:hover {
   box-shadow:
-    -4px 0 16px rgba(59, 130, 246, 0.2),
+    -4px 0 16px rgba(162, 155, 254, 0.2),
     0 4px 12px rgba(0, 0, 0, 0.2),
     0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .list-item-glow-done:hover {
   box-shadow:
-    -4px 0 16px rgba(34, 197, 94, 0.15),
+    -4px 0 16px rgba(85, 239, 196, 0.15),
     0 4px 12px rgba(0, 0, 0, 0.2),
     0 2px 4px rgba(0, 0, 0, 0.1);
 }
@@ -273,8 +336,8 @@ select {
 }
 
 select:hover:not(:focus):not(:disabled) {
-  border-color: #4b5563;
-  background-color: #1f2937;
+  border-color: #576574;
+  background-color: #353b48;
 }
 
 select:disabled,
@@ -298,14 +361,14 @@ button:disabled:hover {
 input:focus,
 select:focus,
 textarea:focus {
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
-  border-color: #3b82f6 !important; /* blue-500 - ensure border changes on focus */
+  box-shadow: 0 0 0 3px rgba(162, 155, 254, 0.2);
+  border-color: #a29bfe !important; /* blurple-400 - ensure border changes on focus */
 }
 
 /* Placeholder text styling for better hierarchy - improved contrast for accessibility */
 input::placeholder,
 textarea::placeholder {
-  color: #9ca3af; /* gray-400 for better contrast on dark backgrounds */
+  color: #b2bec3; /* Stoody muted text for better contrast */
   opacity: 1;
 }
 
@@ -378,12 +441,12 @@ textarea::placeholder {
 }
 
 .toggle-btn:hover:not(:disabled) {
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 0 0 1px rgba(162, 155, 254, 0.3);
 }
 
 .toggle-btn:active:not(:disabled) {
   transform: scale(0.97);
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 0 1px rgba(162, 155, 254, 0.5);
 }
 
 /* Icon button hover effect - subtle scale and glow */
@@ -391,17 +454,20 @@ textarea::placeholder {
   transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1),
               background-color 150ms ease,
               border-color 150ms ease,
-              box-shadow 150ms ease;
+              box-shadow 150ms ease,
+              color 150ms ease;
 }
 
 .icon-btn:hover:not(:disabled) {
   transform: scale(1.05);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  color: #ff69b4; /* Hot pink on hover */
 }
 
 .icon-btn:active:not(:disabled) {
   transform: scale(0.95);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  color: inherit;
 }
 
 /* Toggle group sliding indicator */
@@ -411,18 +477,20 @@ textarea::placeholder {
 
 /* Primary button states - hover elevation and press depth */
 .btn-primary {
-  transition: background-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+  transition: background-color 150ms ease, transform 150ms ease, box-shadow 150ms ease, color 150ms ease;
 }
 
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3), 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(255, 105, 180, 0.3), 0 2px 4px rgba(0, 0, 0, 0.1);
+  color: #ff69b4; /* Hot pink text on hover - Stoody signature! */
 }
 
 .btn-primary:active:not(:disabled) {
   transform: translateY(0);
-  background-color: #1d4ed8; /* blue-700 */
+  background-color: #5849be; /* blurple-600 */
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+  color: inherit;
 }
 
 /* Danger button states - hover elevation and press depth */
@@ -443,18 +511,20 @@ textarea::placeholder {
 
 /* Secondary/ghost button states - hover elevation and press depth */
 .btn-secondary {
-  transition: background-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+  transition: background-color 150ms ease, transform 150ms ease, box-shadow 150ms ease, color 150ms ease;
 }
 
 .btn-secondary:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
+  color: #ff69b4; /* Hot pink text on hover */
 }
 
 .btn-secondary:active:not(:disabled) {
   transform: translateY(0);
-  background-color: #374151; /* gray-700 */
+  background-color: #3d4655; /* Stoody gray-750 */
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.15);
+  color: inherit;
 }
 
 /* Keyboard shortcut hint styling - refined keycap appearance */
@@ -465,13 +535,13 @@ textarea::placeholder {
   min-width: 1.25rem;
   padding: 0.125rem 0.375rem;
   font-size: 0.625rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, Monaco, monospace;
   font-weight: 500;
   line-height: 1;
-  color: #9ca3af;
-  background: linear-gradient(180deg, #374151 0%, #1f2937 100%);
-  border: 1px solid #4b5563;
-  border-radius: 0.25rem;
+  color: #b2bec3;
+  background: linear-gradient(180deg, #3d4655 0%, #2f3640 100%);
+  border: 1px solid #576574;
+  border-radius: 8px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   transition: opacity 150ms ease, transform 150ms ease, color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
 }
@@ -495,8 +565,8 @@ textarea::placeholder {
 
 /* Brighten keyboard hint on button hover */
 button:hover:not(:disabled) .kbd-hint {
-  color: #e5e7eb;
-  border-color: #6b7280;
+  color: #dfe6e9;
+  border-color: #636e72;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
@@ -507,9 +577,9 @@ button:active:not(:disabled) .kbd-hint {
 
 /* Dim keyboard hint in disabled buttons for clearer visual feedback */
 button:disabled .kbd-hint {
-  color: #6b7280;
-  border-color: #374151;
-  background: #1f2937;
+  color: #636e72;
+  border-color: #464f5b;
+  background: #2f3640;
   box-shadow: none;
 }
 
@@ -535,22 +605,22 @@ button:disabled .kbd-hint {
 
 /* Assistant message left border accent */
 .message-assistant {
-  border-left: 2px solid rgba(34, 197, 94, 0.4);
+  border-left: 2px solid rgba(85, 239, 196, 0.4);
   transition: border-color 150ms ease;
 }
 
 .message-assistant:hover {
-  border-color: rgba(34, 197, 94, 0.6);
+  border-color: rgba(85, 239, 196, 0.6);
 }
 
 /* User message right border accent */
 .message-user {
-  border-right: 2px solid rgba(59, 130, 246, 0.4);
+  border-right: 2px solid rgba(162, 155, 254, 0.4);
   transition: border-color 150ms ease;
 }
 
 .message-user:hover {
-  border-color: rgba(59, 130, 246, 0.6);
+  border-color: rgba(162, 155, 254, 0.6);
 }
 
 /* Tool card hover effects - subtle lift and glow for tool displays in conversation */
@@ -591,7 +661,7 @@ button:disabled .kbd-hint {
 }
 
 .token-bar-segment:hover {
-  box-shadow: 0 0 6px var(--segment-color, rgba(59, 130, 246, 0.4));
+  box-shadow: 0 0 6px var(--segment-color, rgba(162, 155, 254, 0.4));
   filter: brightness(1.2);
   z-index: 1;
 }
@@ -603,7 +673,7 @@ button:disabled .kbd-hint {
 
 /* Token legend item number brightens on hover */
 .token-legend-item:hover > span:last-child {
-  color: #9ca3af; /* gray-400 */
+  color: #b2bec3; /* Stoody secondary text */
 }
 
 /* Dropdown menu entrance animation */
@@ -675,10 +745,10 @@ button:disabled .kbd-hint {
 /* Active status badge glow effect - subtle pulsing glow for active sessions */
 @keyframes active-badge-glow {
   0%, 100% {
-    box-shadow: 0 0 4px rgba(234, 179, 8, 0.3), 0 0 8px rgba(234, 179, 8, 0.1);
+    box-shadow: 0 0 4px rgba(253, 203, 110, 0.3), 0 0 8px rgba(253, 203, 110, 0.1);
   }
   50% {
-    box-shadow: 0 0 8px rgba(234, 179, 8, 0.5), 0 0 16px rgba(234, 179, 8, 0.2);
+    box-shadow: 0 0 8px rgba(253, 203, 110, 0.5), 0 0 16px rgba(253, 203, 110, 0.2);
   }
 }
 
@@ -688,12 +758,12 @@ button:disabled .kbd-hint {
 
 /* Recent status badge glow effect - subtle static glow for recently updated items */
 .recent-badge-glow {
-  box-shadow: 0 0 4px rgba(59, 130, 246, 0.25), 0 0 8px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 4px rgba(162, 155, 254, 0.25), 0 0 8px rgba(162, 155, 254, 0.1);
 }
 
 /* Done/completed status badge glow effect - very subtle static glow */
 .done-badge-glow {
-  box-shadow: 0 0 3px rgba(34, 197, 94, 0.2), 0 0 6px rgba(34, 197, 94, 0.08);
+  box-shadow: 0 0 3px rgba(85, 239, 196, 0.2), 0 0 6px rgba(85, 239, 196, 0.08);
 }
 
 /* Status badge entrance animation - subtle scale-in with spring effect */
@@ -816,11 +886,11 @@ button:disabled .kbd-hint {
 }
 
 .resize-handle:hover {
-  background-color: rgba(59, 130, 246, 0.05);
+  background-color: rgba(162, 155, 254, 0.05);
 }
 
 .resize-handle:active {
-  background-color: rgba(59, 130, 246, 0.1);
+  background-color: rgba(162, 155, 254, 0.1);
 }
 
 /* Resize handle dots glow effect on hover */
@@ -829,7 +899,7 @@ button:disabled .kbd-hint {
 }
 
 .resize-handle:hover .resize-handle-dots {
-  filter: drop-shadow(0 0 3px rgba(96, 165, 250, 0.5));
+  filter: drop-shadow(0 0 3px rgba(162, 155, 254, 0.5));
 }
 
 /* Responsive nav tabs - hide labels when container is narrow */
@@ -850,6 +920,70 @@ button:disabled .kbd-hint {
 /* Hide kbd hints when container is under 380px */
 @container (max-width: 380px) {
   .nav-tab .kbd-hint {
+    display: none;
+  }
+}
+
+/* Utility class to hide scrollbars while maintaining scrollability */
+.scrollbar-none {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari, Opera */
+}
+
+/* Mobile-specific adjustments */
+@media (max-width: 640px) {
+  /* Reduce padding on mobile */
+  .empty-state-enter {
+    padding: 1rem;
+  }
+
+  /* Stack filter bar elements vertically on mobile */
+  .filter-bar-mobile-stack {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  /* Smaller text and padding for mobile filter buttons */
+  .toggle-btn {
+    padding: 0.375rem 0.5rem;
+    font-size: 0.6875rem;
+  }
+
+  /* More compact stat cards */
+  .stat-card {
+    padding: 0.75rem;
+  }
+
+  /* Smaller modal padding */
+  .modal-content-enter {
+    padding: 1rem;
+  }
+
+  /* Compact list items on mobile */
+  .list-item-hover {
+    padding: 0.5rem;
+  }
+
+  /* Smaller kbd hints */
+  .kbd-hint {
+    padding: 0 0.25rem;
+    font-size: 0.5rem;
+    min-width: 1rem;
+  }
+
+  /* Filter groups scroll horizontally on mobile */
+  .filter-group-mobile {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .filter-group-mobile::-webkit-scrollbar {
     display: none;
   }
 }
@@ -904,7 +1038,7 @@ button:disabled .kbd-hint {
 
 /* Success state color transition */
 .copy-button-success {
-  color: #4ade80; /* green-400 */
+  color: #55efc4; /* mint-400 */
 }
 
 /* Respect user's motion preferences for accessibility */
@@ -964,7 +1098,7 @@ button:disabled .kbd-hint {
 
   /* Keep static glow for active badge when motion is reduced */
   .active-badge-glow {
-    box-shadow: 0 0 6px rgba(234, 179, 8, 0.4);
+    box-shadow: 0 0 6px rgba(253, 203, 110, 0.4);
   }
 
   /* Ensure list items are visible immediately */
