@@ -782,6 +782,50 @@ a:hover {
   animation: empty-state-wiggle 600ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
+/* Fun tooltip that appears on empty state hover */
+.empty-state-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  padding: 4px 10px;
+  background: rgba(162, 155, 254, 0.95);
+  color: #1a1a2e;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 8px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease, transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 12px rgba(162, 155, 254, 0.3);
+}
+
+.empty-state-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(162, 155, 254, 0.95);
+}
+
+.empty-state-icon-float:hover .empty-state-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+[data-theme="light"] .empty-state-tooltip {
+  background: rgba(108, 92, 231, 0.95);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(108, 92, 231, 0.3);
+}
+
+[data-theme="light"] .empty-state-tooltip::after {
+  border-top-color: rgba(108, 92, 231, 0.95);
+}
+
 /* Subtle dot pattern background for empty state areas */
 .empty-state-pattern {
   background-image: radial-gradient(circle at 1px 1px, rgba(162, 155, 254, 0.08) 1px, transparent 0);
@@ -1081,6 +1125,56 @@ textarea::placeholder {
 
 [data-theme="light"] .filter-pill-active {
   box-shadow: 0 2px 8px rgba(108, 92, 231, 0.35), 0 0 0 1px rgba(108, 92, 231, 0.2);
+}
+
+/* "Nope" shake animation for clicking already-selected items */
+@keyframes nope-shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translateX(-2px);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translateX(2px);
+  }
+}
+
+.nope-shake {
+  animation: nope-shake 400ms ease-out;
+}
+
+/* Subtle pulse for already-selected feedback */
+@keyframes already-selected-pulse {
+  0% {
+    box-shadow: 0 0 12px rgba(162, 155, 254, 0.4), 0 0 4px rgba(162, 155, 254, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(162, 155, 254, 0.6), 0 0 8px rgba(162, 155, 254, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 12px rgba(162, 155, 254, 0.4), 0 0 4px rgba(162, 155, 254, 0.3);
+  }
+}
+
+.filter-pill-pulse {
+  animation: already-selected-pulse 300ms ease-out;
+}
+
+[data-theme="light"] .filter-pill-pulse {
+  animation: already-selected-pulse-light 300ms ease-out;
+}
+
+@keyframes already-selected-pulse-light {
+  0% {
+    box-shadow: 0 2px 8px rgba(108, 92, 231, 0.35), 0 0 0 1px rgba(108, 92, 231, 0.2);
+  }
+  50% {
+    box-shadow: 0 4px 16px rgba(108, 92, 231, 0.5), 0 0 0 2px rgba(108, 92, 231, 0.3);
+  }
+  100% {
+    box-shadow: 0 2px 8px rgba(108, 92, 231, 0.35), 0 0 0 1px rgba(108, 92, 231, 0.2);
+  }
 }
 
 /* Active toggle button glow within connected button groups */
@@ -1983,7 +2077,9 @@ button:disabled .kbd-hint {
   .page-number-flip-in,
   .page-number-flip-out,
   .option-check-icon,
-  .refresh-success-icon {
+  .refresh-success-icon,
+  .nope-shake,
+  .filter-pill-pulse {
     animation: none;
   }
 
