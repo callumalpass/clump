@@ -289,10 +289,25 @@ interface EmptyStateProps {
 function EmptyState({ activeTab, listEmpty, onTabChange }: EmptyStateProps) {
   const content = emptyStateContent[activeTab];
 
-  // If the list is empty, show a different message that acknowledges the empty state
-  const title = listEmpty ? content.emptyTitle : content.title;
-  const description = listEmpty ? content.emptyDescription : content.description;
+  // If the list has items, show a minimal "select an item" prompt
+  // If the list is empty, show the full empty state with navigation shortcuts
+  if (!listEmpty) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="text-center empty-state-enter">
+          {/* Subtle icon */}
+          <div className="w-12 h-12 rounded-full bg-gray-800/60 flex items-center justify-center mx-auto mb-3 empty-state-icon-float">
+            {content.icon}
+          </div>
+          {/* Simple prompt */}
+          <p className="text-gray-400 text-sm">{content.title}</p>
+          <p className="text-gray-500 text-xs mt-1">{content.description}</p>
+        </div>
+      </div>
+    );
+  }
 
+  // Full empty state for when the list is truly empty
   return (
     <div className="flex-1 flex items-center justify-center p-8">
       <div className="text-center p-8 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-lg empty-state-enter">
@@ -302,8 +317,8 @@ function EmptyState({ activeTab, listEmpty, onTabChange }: EmptyStateProps) {
         </div>
 
         {/* Main message */}
-        <h3 className="text-gray-200 font-semibold text-lg mb-2">{title}</h3>
-        <p className="text-gray-400 text-sm mb-6">{description}</p>
+        <h3 className="text-gray-200 font-semibold text-lg mb-2">{content.emptyTitle}</h3>
+        <p className="text-gray-400 text-sm mb-6">{content.emptyDescription}</p>
 
         {/* Quick navigation grid - clickable buttons to switch tabs */}
         <div className="grid grid-cols-2 gap-2 mb-5">

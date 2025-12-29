@@ -559,3 +559,74 @@ test.describe('UI Exploration - Loading States', () => {
     await screenshot(page, '27-loading-issues');
   });
 });
+
+test.describe('UI Exploration - Empty State Variants', () => {
+  test('simplified empty state - when list has items (no selection)', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+
+    await page.goto('/');
+    await selectRepo(page);
+
+    // Verify the simplified empty state is shown (no large card with shortcuts)
+    await expect(page.getByText('Select an issue to view details')).toBeVisible();
+    // The full card with shortcuts should NOT be visible
+    await expect(page.getByText('Command palette')).not.toBeVisible();
+
+    await screenshot(page, '28-simplified-empty-state');
+  });
+
+  test('full empty state - when list is empty', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: [], // Empty issues
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+
+    await page.goto('/');
+    await selectRepo(page);
+
+    // Verify the full empty state is shown (with keyboard shortcuts)
+    await expect(page.getByText('No issues to display')).toBeVisible();
+    await expect(page.getByText('Command palette')).toBeVisible();
+    await expect(page.getByText('All shortcuts')).toBeVisible();
+
+    await screenshot(page, '29-full-empty-state');
+  });
+
+  test('center pane updates when switching tabs', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+
+    await page.goto('/');
+    await selectRepo(page);
+
+    // Issues tab - shows issue-specific message
+    await expect(page.getByText('Select an issue to view details')).toBeVisible();
+
+    // Switch to PRs tab
+    await page.getByRole('tab', { name: /PRs/i }).click();
+    await waitForAnimations(page);
+    await expect(page.getByText('Select a pull request to view details')).toBeVisible();
+
+    await screenshot(page, '30-pr-simplified-empty-state');
+  });
+});

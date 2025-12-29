@@ -1163,7 +1163,28 @@ export function SessionView({
                 </svg>
               </div>
               <p className="text-gray-300 font-medium mb-1">Failed to load session</p>
-              <p className="text-gray-400 text-sm">{error}</p>
+              <p className="text-gray-400 text-sm mb-4">{error}</p>
+              <button
+                onClick={() => {
+                  setError(null);
+                  setLoading(true);
+                  fetchSessionDetail(session.session_id)
+                    .then((data) => {
+                      setDetail(data);
+                      setLoading(false);
+                    })
+                    .catch((err) => {
+                      setError(err.message || 'Failed to load session');
+                      setLoading(false);
+                    });
+                }}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded-lg transition-colors flex items-center gap-2 mx-auto btn-secondary"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Try again
+              </button>
             </div>
           </div>
         )}
