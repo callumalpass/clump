@@ -1,4 +1,5 @@
 import { useState, useEffect, memo, type MutableRefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { useSchedules, describeCron, formatRelativeTime, CRON_PRESETS } from '../hooks/useSchedules';
 import type { ScheduledJob, ScheduledJobCreate, ScheduledJobTargetType, CommandsResponse } from '../types';
 
@@ -371,6 +372,7 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
     command_id: commands.issue[0]?.id || '',
     custom_prompt: '',
     max_items: 10,
+    only_new: false,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -405,6 +407,7 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
         command_id: form.target_type !== 'custom' ? form.command_id : undefined,
         custom_prompt: form.target_type === 'custom' ? form.custom_prompt : undefined,
         max_items: form.max_items,
+        only_new: form.only_new,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create schedule');
@@ -420,7 +423,7 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
     ? commands.pr
     : [];
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop-enter">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-[#161b22] border border-gray-700 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col mx-4 modal-content-enter">
@@ -531,6 +534,24 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
               />
               <p className="text-xs text-gray-500 mt-1">
                 GitHub-style filter: state:open, label:bug, -label:wontfix
+              </p>
+            </div>
+          )}
+
+          {/* Only New (for issues/prs) */}
+          {(form.target_type === 'issues' || form.target_type === 'prs') && (
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.only_new}
+                  onChange={(e) => setForm((f) => ({ ...f, only_new: e.target.checked }))}
+                  className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-900"
+                />
+                <span className="text-sm font-medium">Only new items</span>
+              </label>
+              <p className="text-xs text-gray-500">
+                Skip items already processed by this schedule
               </p>
             </div>
           )}
@@ -660,6 +681,7 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
