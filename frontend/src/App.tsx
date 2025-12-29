@@ -91,8 +91,9 @@ const ICON_ACTIVE_PULSE = (
   <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
 );
 
-// Storage key for persisting active tab
+// Storage keys for persisting UI state
 const ACTIVE_TAB_STORAGE_KEY = 'clump:activeTab';
+const REPO_SESSION_TABS_KEY = 'clump:repoSessionTabs';
 
 // Valid tab values for validation
 const VALID_TABS: Tab[] = ['issues', 'prs', 'history', 'schedules'];
@@ -225,14 +226,13 @@ export default function App() {
 
     // Debounce the localStorage write by 500ms
     saveTabsTimeoutRef.current = setTimeout(() => {
-      const STORAGE_KEY = 'clump:repoSessionTabs';
       try {
-        const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        const stored = JSON.parse(localStorage.getItem(REPO_SESSION_TABS_KEY) || '{}');
         stored[selectedRepo.id] = {
           openSessionIds,
           activeTabSessionId,
         };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+        localStorage.setItem(REPO_SESSION_TABS_KEY, JSON.stringify(stored));
       } catch (e) {
         console.error('Failed to save session tabs:', e);
       }
@@ -460,8 +460,6 @@ export default function App() {
 
   // Restore session tabs when repo changes
   useEffect(() => {
-    const STORAGE_KEY = 'clump:repoSessionTabs';
-
     // Check if repo actually changed BEFORE updating refs (fixes cache clear bug)
     const previousRepoId = tabsRepoIdRef.current;
     const repoActuallyChanged = previousRepoId !== null && previousRepoId !== selectedRepo?.id;
@@ -493,7 +491,7 @@ export default function App() {
     // Restore tabs for new repo (or clear if none saved)
     if (selectedRepo?.id) {
       try {
-        const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        const stored = JSON.parse(localStorage.getItem(REPO_SESSION_TABS_KEY) || '{}');
         const repoTabs = stored[selectedRepo.id];
         if (repoTabs) {
           setOpenSessionIds(repoTabs.openSessionIds || []);
