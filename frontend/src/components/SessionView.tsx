@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import { Terminal } from './Terminal';
 import { ConversationView } from './ConversationView';
 import { Editor } from './Editor';
@@ -8,6 +8,7 @@ import type { SessionSummary, SessionDetail, EntityLink, Issue, PR, ParsedTransc
 import { fetchSessionDetail, addEntityToSession, removeEntityFromSession } from '../hooks/useApi';
 import { useProcessWebSocket } from '../hooks/useProcessWebSocket';
 import { formatDuration } from '../utils/time';
+import { focusRing } from '../utils/styles';
 
 // =============================================================================
 // Constants
@@ -156,6 +157,95 @@ function formatTranscriptAsText(detail: SessionDetail): string {
 }
 
 export type ViewMode = 'transcript' | 'terminal';
+
+// =============================================================================
+// ViewModeToggle Component - Transcript/Terminal toggle with sliding indicator
+// =============================================================================
+
+interface ViewModeToggleProps {
+  value: ViewMode;
+  onChange: (mode: ViewMode) => void;
+}
+
+function ViewModeToggle({ value, onChange }: ViewModeToggleProps) {
+  const modes: { value: ViewMode; label: string; icon: React.ReactNode }[] = [
+    {
+      value: 'transcript',
+      label: 'Transcript',
+      icon: (
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+      ),
+    },
+    {
+      value: 'terminal',
+      label: 'Terminal',
+      icon: (
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      ),
+    },
+  ];
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRefs = useRef<Map<ViewMode, HTMLButtonElement>>(new Map());
+  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
+
+  // Update the sliding indicator position when view mode changes
+  useLayoutEffect(() => {
+    const updateIndicator = () => {
+      const container = containerRef.current;
+      const activeButton = buttonRefs.current.get(value);
+      if (container && activeButton) {
+        const containerRect = container.getBoundingClientRect();
+        const buttonRect = activeButton.getBoundingClientRect();
+        setIndicatorStyle({
+          left: buttonRect.left - containerRect.left,
+          width: buttonRect.width,
+        });
+      }
+    };
+    updateIndicator();
+    window.addEventListener('resize', updateIndicator);
+    return () => window.removeEventListener('resize', updateIndicator);
+  }, [value]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative flex rounded-lg overflow-hidden border border-gray-750 bg-gray-900 shadow-stoody-sm"
+      role="group"
+      aria-label="View mode"
+    >
+      {/* Sliding background indicator */}
+      <div
+        className="toggle-indicator absolute top-0 bottom-0 bg-gray-700 rounded-[4px]"
+        style={{
+          transform: `translateX(${indicatorStyle.left}px)`,
+          width: indicatorStyle.width,
+        }}
+      />
+      {modes.map((mode) => (
+        <button
+          key={mode.value}
+          ref={(el) => { if (el) buttonRefs.current.set(mode.value, el); }}
+          onClick={() => onChange(mode.value)}
+          className={`toggle-btn relative z-10 flex items-center gap-1.5 px-2.5 py-1 text-xs transition-all duration-150 ${focusRing} focus:z-10 ${
+            value === mode.value
+              ? 'text-white font-medium'
+              : 'text-gray-400 hover:text-pink-400'
+          }`}
+          aria-pressed={value === mode.value}
+        >
+          {mode.icon}
+          {mode.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 interface SessionViewProps {
   /** The session summary (from list) */
@@ -755,24 +845,10 @@ export function SessionView({
         <div className="flex items-center gap-2 shrink-0">
           {/* View toggle (only show for active sessions with processId) */}
           {hasTerminal && (
-            <div className="flex items-center bg-gray-900 rounded-lg p-0.5 mr-1">
-              <button
-                onClick={() => setViewMode('transcript')}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                  !showTerminalView ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                Transcript
-              </button>
-              <button
-                onClick={() => setViewMode('terminal')}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                  showTerminalView ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                Terminal
-              </button>
-            </div>
+            <ViewModeToggle
+              value={showTerminalView ? 'terminal' : 'transcript'}
+              onChange={setViewMode}
+            />
           )}
 
           {/* Live indicator for active sessions */}
