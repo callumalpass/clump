@@ -1481,6 +1481,7 @@ export default function App() {
                   onContinueSession={handleContinueSession}
                   onKillSession={handleKillSession}
                   onViewAll={() => setActiveTab('history')}
+                  activeSessionId={activeTabSessionId}
                 />
               </Panel>
             )}
@@ -1669,6 +1670,7 @@ export default function App() {
                     page={sessionsPage}
                     totalPages={sessionsTotalPages}
                     onPageChange={goToSessionsPage}
+                    activeSessionId={activeTabSessionId}
                   />
                 )}
                 {activeTab === 'prs' && selectedRepo && (
@@ -1707,7 +1709,15 @@ export default function App() {
                   />
                 )}
                 {!selectedRepo && (
-                  <div className="p-4 text-gray-400">Select a repository to view {activeTab}</div>
+                  <div className="flex-1 flex flex-col items-center justify-center p-6 empty-state-enter">
+                    <div className="w-14 h-14 rounded-full bg-gray-800 flex items-center justify-center mb-4 empty-state-icon-float">
+                      <svg className="w-7 h-7 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                      </svg>
+                    </div>
+                    <p className="text-sm text-gray-400 font-medium mb-1 text-center">No repository selected</p>
+                    <p className="text-xs text-gray-500 text-center">Pick one from the dropdown above</p>
+                  </div>
                 )}
               </div>
             </Panel>
