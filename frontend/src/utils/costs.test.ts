@@ -153,6 +153,32 @@ describe('formatCost', () => {
   it('handles zero cost', () => {
     expect(formatCost(0)).toBe('<$0.01');
   });
+
+  it('handles negative costs defensively', () => {
+    // Negative costs shouldn't occur but should be handled gracefully
+    expect(formatCost(-1)).toBe('<$0.01');
+    expect(formatCost(-0.50)).toBe('<$0.01');
+    expect(formatCost(-0.001)).toBe('<$0.01');
+  });
+
+  it('handles boundary values correctly', () => {
+    // At exactly $0.01, should show with 4 decimal places
+    expect(formatCost(0.01)).toBe('$0.010');
+    // Just under $1, should show with 3 decimal places
+    expect(formatCost(0.999)).toBe('$0.999');
+    // At exactly $1, should show with 2 decimal places
+    expect(formatCost(1)).toBe('$1.00');
+  });
+
+  it('handles floating point precision edge cases', () => {
+    // These values can have floating point issues
+    expect(formatCost(0.1 + 0.2)).toBe('$0.300');
+    // Note: 1.005 actually rounds to 1.00 due to floating point representation
+    // (1.005 is stored as ~1.00499999... internally)
+    expect(formatCost(1.005)).toBe('$1.00');
+    // Use 1.006 to test rounding up works
+    expect(formatCost(1.006)).toBe('$1.01');
+  });
 });
 
 describe('formatTokenCount', () => {
