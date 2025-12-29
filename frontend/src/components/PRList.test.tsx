@@ -238,7 +238,7 @@ describe('PRList', () => {
       render(<PRList {...defaultProps} prs={prs} selectedPR={1} />);
 
       const selectedItem = screen.getByText('PR 1').closest('.p-4');
-      expect(selectedItem).toHaveClass('bg-blurple-500/10');
+      expect(selectedItem).toHaveClass('list-item-selected');
     });
 
     it('does not highlight unselected PRs', () => {
@@ -250,7 +250,7 @@ describe('PRList', () => {
       render(<PRList {...defaultProps} prs={prs} selectedPR={1} />);
 
       const unselectedItem = screen.getByText('PR 2').closest('.p-4');
-      expect(unselectedItem).not.toHaveClass('bg-blurple-500/10');
+      expect(unselectedItem).not.toHaveClass('list-item-selected');
     });
   });
 

@@ -218,7 +218,7 @@ describe('IssueList', () => {
       render(<IssueList {...defaultProps} issues={issues} total={2} selectedIssue={1} />);
 
       const selectedItem = screen.getByText('Issue 1').closest('.p-4');
-      expect(selectedItem).toHaveClass('bg-blurple-500/10');
+      expect(selectedItem).toHaveClass('list-item-selected');
     });
   });
 

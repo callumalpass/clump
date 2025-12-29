@@ -85,6 +85,17 @@ vi.mock('@replit/codemirror-vim', () => ({
   }),
 }));
 
+// Mock useTheme hook to avoid localStorage access conflicts in tests
+vi.mock('../hooks/useTheme', () => ({
+  useTheme: () => ({
+    theme: 'dark',
+    resolvedTheme: 'dark',
+    setTheme: vi.fn(),
+    isDark: true,
+    isLight: false,
+  }),
+}));
+
 // Import component after mocks are set up
 import { Editor } from './Editor';
 
@@ -163,7 +174,7 @@ describe('Editor', () => {
       render(<Editor {...defaultProps} />);
 
       const vimButton = screen.getByRole('button', { name: /vim/i });
-      expect(vimButton).toHaveClass('text-green-400');
+      expect(vimButton).toHaveClass('text-mint-400');
     });
 
     it('toggles vim mode when button is clicked', () => {
@@ -192,7 +203,7 @@ describe('Editor', () => {
       render(<Editor {...defaultProps} vimMode={true} />);
 
       const vimButton = screen.getByRole('button', { name: /vim/i });
-      expect(vimButton).toHaveClass('text-green-400');
+      expect(vimButton).toHaveClass('text-mint-400');
     });
 
     it('calls onVimModeChange when vim mode toggles', () => {
@@ -336,7 +347,8 @@ describe('Editor', () => {
     it('applies border styles to container', () => {
       const { container } = render(<Editor {...defaultProps} />);
 
-      const editorContainer = container.querySelector('.border-gray-600');
+      // The component applies border via inline style (borderColor) rather than a class
+      const editorContainer = container.querySelector('.border');
       expect(editorContainer).toBeInTheDocument();
     });
 
