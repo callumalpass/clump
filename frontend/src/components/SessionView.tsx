@@ -1216,6 +1216,7 @@ export function SessionView({
 
         {!loading && !error && transcriptForView && (
           <ConversationView
+            key={`transcript-${resolvedTheme}`}
             transcript={transcriptForView}
             sessionId={session.session_id}
             searchQuery={searchQuery}

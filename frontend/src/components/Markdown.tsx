@@ -45,13 +45,13 @@ export function Markdown({ children, className = '' }: MarkdownProps) {
             );
           }
           return (
-            <code className={`block bg-gray-900 p-3 rounded-lg overflow-x-auto text-sm ${className}`}>
+            <code className={`block bg-gray-700 p-3 rounded-lg overflow-x-auto text-sm ${className}`}>
               {children}
             </code>
           );
         },
         pre: ({ children }) => (
-          <pre className="bg-gray-900 rounded-lg overflow-x-auto my-2">
+          <pre className="bg-gray-700 rounded-lg overflow-x-auto my-2">
             {children}
           </pre>
         ),
