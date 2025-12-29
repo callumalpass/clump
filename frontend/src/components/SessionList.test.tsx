@@ -157,8 +157,8 @@ describe('SessionList', () => {
     it('shows 4 skeleton items when loading', () => {
       const { container } = render(<SessionList {...defaultProps} loading={true} />);
 
-      // Each skeleton item has a container div with p-3 class
-      const skeletonItems = container.querySelectorAll('.divide-y > div');
+      // Each skeleton item has a container div with skeleton-item-enter class
+      const skeletonItems = container.querySelectorAll('.skeleton-item-enter');
       expect(skeletonItems).toHaveLength(4);
     });
   });

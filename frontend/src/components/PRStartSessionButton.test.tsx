@@ -212,9 +212,9 @@ describe('PRStartSessionButton', () => {
       const dropdownTrigger = screen.getByRole('button', { name: 'Select PR session type' });
       fireEvent.click(dropdownTrigger);
 
-      // First command should be selected and have bg-gray-700
+      // First command should be selected and have bg-gray-750
       const firstCommandButton = screen.getByText('Review PR').closest('button');
-      expect(firstCommandButton).toHaveClass('bg-gray-700');
+      expect(firstCommandButton).toHaveClass('bg-gray-750');
 
       // First command should have checkmark
       const checkmark = firstCommandButton?.querySelector('svg');

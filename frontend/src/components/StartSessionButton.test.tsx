@@ -49,7 +49,7 @@ describe('StartSessionButton', () => {
       render(<StartSessionButton {...defaultProps} commands={[]} />);
 
       const button = screen.getByRole('button');
-      expect(button).toHaveClass('bg-gray-600', 'cursor-not-allowed');
+      expect(button).toHaveClass('bg-gray-750', 'cursor-not-allowed');
     });
   });
 
@@ -187,11 +187,11 @@ describe('StartSessionButton', () => {
       const dropdownButton = screen.getByLabelText('Select session type');
       fireEvent.click(dropdownButton);
 
-      // First command should have bg-gray-700 (selected style)
+      // First command should have bg-gray-750 (selected style)
       // Use role="option" which is the actual role in the component
       await waitFor(() => {
         const commandOptions = screen.getAllByRole('option');
-        expect(commandOptions[0]).toHaveClass('bg-gray-700');
+        expect(commandOptions[0]).toHaveClass('bg-gray-750');
       });
     });
 

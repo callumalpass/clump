@@ -423,7 +423,6 @@ function EditToolDisplay({ tool }: ToolDisplayProps) {
                   }
 
                   // Simple line (unchanged, removed, or added)
-                  const line = diff.type === 'unchanged' ? diff.line : diff.line;
                   return (
                     <div
                       key={idx}
@@ -444,7 +443,7 @@ function EditToolDisplay({ tool }: ToolDisplayProps) {
                       }`}>
                         {diff.type === 'removed' ? '-' : diff.type === 'added' ? '+' : ' '}
                       </span>
-                      {line || ' '}
+                      {diff.line || ' '}
                     </div>
                   );
                 })
