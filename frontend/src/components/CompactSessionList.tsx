@@ -14,6 +14,7 @@ interface CompactSessionListProps {
   sessions: SessionSummary[];
   onSelectSession: (session: SessionSummary) => void;
   onContinueSession?: (session: SessionSummary) => void;
+  onKillSession?: (session: SessionSummary) => void;
   onViewAll?: () => void;
   maxItems?: number;
 }
@@ -22,6 +23,7 @@ export function CompactSessionList({
   sessions,
   onSelectSession,
   onContinueSession,
+  onKillSession,
   onViewAll,
   maxItems = 5,
 }: CompactSessionListProps) {
@@ -36,6 +38,11 @@ export function CompactSessionList({
   const handleContinue = (e: React.MouseEvent, session: SessionSummary) => {
     e.stopPropagation();
     onContinueSession?.(session);
+  };
+
+  const handleKill = (e: React.MouseEvent, session: SessionSummary) => {
+    e.stopPropagation();
+    onKillSession?.(session);
   };
 
   if (prominentSessions.length === 0) {
@@ -131,13 +138,30 @@ export function CompactSessionList({
               </span>
             )}
 
-            {/* Continue button for non-active - subtly visible, fully visible on hover */}
+            {/* Stop button for active sessions */}
+            {session.is_active && onKillSession && (
+              <button
+                onClick={(e) => handleKill(e, session)}
+                className="flex-shrink-0 px-1.5 py-0.5 text-[10px] text-red-300 bg-red-900/50 hover:bg-red-600 hover:text-white active:scale-95 rounded flex items-center gap-1 transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-red-400"
+                title="Stop this session"
+              >
+                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Stop
+              </button>
+            )}
+
+            {/* Continue button for non-active */}
             {!session.is_active && onContinueSession && (
               <button
                 onClick={(e) => handleContinue(e, session)}
-                className="flex-shrink-0 opacity-40 group-hover:opacity-100 px-1.5 py-0.5 text-[10px] bg-blue-600 hover:bg-blue-700 active:scale-95 rounded transition-all focus:outline-none focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-blue-400"
+                className="flex-shrink-0 px-1.5 py-0.5 text-[10px] text-blue-300 bg-blue-900/50 hover:bg-blue-600 hover:text-white active:scale-95 rounded flex items-center gap-1 transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-400"
                 title="Continue this session"
               >
+                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
                 Continue
               </button>
             )}
