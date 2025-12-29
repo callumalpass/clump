@@ -715,6 +715,38 @@ test.describe('UI Exploration - Settings Modal', () => {
 
     await screenshot(page, '31-settings-token-loading');
   });
+
+  test('settings modal shows no token configured warning', async ({ page }) => {
+    // Mock token status as not configured
+    await page.route('**/api/settings/github-token', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ configured: false, masked_token: null }),
+      });
+    });
+
+    await mockAllApis(page, {
+      repos: mockRepos,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+    });
+
+    await page.goto('/');
+    await waitForAnimations(page);
+
+    // Open settings
+    await page.locator('button[title="Settings"]').click();
+    await waitForAnimations(page);
+
+    // Should show warning state with rate limit badge
+    await expect(page.getByText('No token configured')).toBeVisible();
+    await expect(page.getByText('60 req/hour')).toBeVisible();
+    await expect(page.getByText('Add a token to unlock 5,000 requests per hour')).toBeVisible();
+
+    await screenshot(page, '31b-settings-no-token-warning');
+  });
 });
 
 test.describe('UI Exploration - Session Error Recovery', () => {
@@ -1535,5 +1567,304 @@ test.describe('UI Exploration - Light Theme Extended', () => {
     await waitForAnimations(page);
 
     await screenshot(page, '65-light-theme-settings');
+  });
+});
+
+test.describe('UI Exploration - Selection Indicators', () => {
+  test('execution tab shows model selection with checkmark', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+
+    await page.goto('/');
+    await waitForAnimations(page);
+
+    // Open settings and go to execution tab
+    await page.locator('button[title="Settings"]').click();
+    await waitForAnimations(page);
+    await page.getByRole('button', { name: /execution/i }).click();
+    await waitForAnimations(page);
+
+    // Verify Sonnet shows as selected with checkmark (model in mock is claude-sonnet-4-...)
+    const sonnetButton = page.getByRole('button', { name: /sonnet/i });
+    await expect(sonnetButton).toHaveClass(/bg-blurple-500\/10/);
+
+    // Capture screenshot showing the selection indicator
+    await screenshot(page, '67-model-selection-checkmark');
+  });
+
+  test('output format shows selection indicator', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+
+    await page.goto('/');
+    await waitForAnimations(page);
+
+    // Open settings and go to execution tab
+    await page.locator('button[title="Settings"]').click();
+    await waitForAnimations(page);
+    await page.getByRole('button', { name: /execution/i }).click();
+    await waitForAnimations(page);
+
+    // Verify Text shows as selected (default output format)
+    const textButton = page.getByRole('button', { name: /^text$/i });
+    await expect(textButton).toHaveClass(/bg-blurple-500\/10/);
+
+    await screenshot(page, '68-output-format-selection');
+  });
+
+  test('theme selection shows checkmark on selected theme', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+
+    await page.goto('/');
+    await waitForAnimations(page);
+
+    // Open settings and go to advanced tab
+    await page.locator('button[title="Settings"]').click();
+    await waitForAnimations(page);
+    await page.getByRole('button', { name: /advanced/i }).click();
+    await waitForAnimations(page);
+
+    // Default is dark mode - should show selected
+    const darkButton = page.getByRole('button', { name: /dark/i });
+    await expect(darkButton).toHaveClass(/bg-blurple-500\/10/);
+
+    await screenshot(page, '69-theme-selection-dark');
+
+    // Switch to light and verify selection updates
+    await page.getByRole('button', { name: /light/i }).click();
+    await waitForAnimations(page);
+
+    const lightButton = page.getByRole('button', { name: /light/i });
+    await expect(lightButton).toHaveClass(/bg-blurple-500\/10/);
+
+    await screenshot(page, '70-theme-selection-light');
+  });
+});
+
+test.describe('UI Exploration - Dropdown Menus', () => {
+  test('sort dropdown shows options', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+
+    await page.goto('/');
+    await waitForAnimations(page);
+    await selectRepo(page);
+    await waitForAnimations(page);
+
+    // Sort dropdown is a select element
+    const sortSelect = page.locator('select[aria-label="Sort by"]');
+    await expect(sortSelect).toBeVisible();
+
+    // Show the dropdown value
+    await screenshot(page, '71-sort-dropdown');
+  });
+
+  test('command dropdown shows action options', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+
+    await page.goto('/');
+    await waitForAnimations(page);
+    await selectRepo(page);
+    await waitForAnimations(page);
+
+    // Find and click the dropdown button on an issue row
+    const issueRow = page.locator('[data-testid="issue-item"]').first();
+    const dropdownButton = issueRow.locator('button[aria-haspopup="listbox"]');
+
+    if (await dropdownButton.isVisible()) {
+      await dropdownButton.click();
+      await waitForAnimations(page);
+      await screenshot(page, '72-command-dropdown-open');
+    }
+  });
+});
+
+test.describe('UI Exploration - Input Focus States', () => {
+  test('settings token input focus glow', async ({ page }) => {
+    // Override token status to show unconfigured state with input
+    await page.route('**/api/settings/github-token', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ configured: false, masked_token: null }),
+      });
+    });
+
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+
+    await page.goto('/');
+    await waitForAnimations(page);
+
+    // Open settings (GitHub tab by default)
+    await page.locator('button[title="Settings"]').click();
+    await waitForAnimations(page);
+
+    // Focus the token input - should be visible when token is not configured
+    const tokenInput = page.locator('input[type="password"]');
+    await expect(tokenInput).toBeVisible({ timeout: 5000 });
+    await tokenInput.focus();
+    await waitForAnimations(page);
+
+    await screenshot(page, '73-token-input-focused');
+  });
+
+  test('tool input focus state in permissions tab', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+
+    await page.goto('/');
+    await waitForAnimations(page);
+
+    // Open settings and go to permissions tab
+    await page.locator('button[title="Settings"]').click();
+    await waitForAnimations(page);
+    await page.getByRole('button', { name: /permissions/i }).click();
+    await waitForAnimations(page);
+
+    // Focus the tool input
+    const toolInput = page.locator('input[placeholder*="Add tool"]');
+    await toolInput.focus();
+    await waitForAnimations(page);
+
+    await screenshot(page, '74-tool-input-focused');
+  });
+});
+
+test.describe('UI Exploration - Empty State Tooltips', () => {
+  test('empty state icon shows tooltip on hover', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+
+    await page.goto('/');
+    await selectRepo(page);
+    await waitForAnimations(page);
+
+    // Find the main content area empty state icon specifically (center pane)
+    // Use the tooltip text to identify the correct icon
+    const emptyStateIcon = page.locator('.empty-state-icon-float').filter({ hasText: /pick one/ });
+    await emptyStateIcon.hover({ force: true }); // Force hover due to animation
+    await waitForAnimations(page);
+
+    // The tooltip should appear
+    await expect(page.locator('.empty-state-tooltip:visible')).toBeVisible();
+
+    await screenshot(page, '75-empty-state-tooltip');
+  });
+
+  test('welcome state shows fun tooltip on hover', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+
+    await page.goto('/');
+    await waitForAnimations(page);
+
+    // The welcome state should be visible (no repo selected)
+    await expect(page.getByText('Welcome to Clump')).toBeVisible();
+
+    // Find the welcome icon using the tooltip text to ensure we get the right one
+    const welcomeIcon = page.locator('.empty-state-icon-float').filter({ hasText: /let's gooo/ });
+    await welcomeIcon.hover({ force: true }); // Force hover due to animation
+    await waitForAnimations(page);
+
+    // Check for tooltip visibility
+    const tooltip = page.locator('.empty-state-tooltip:visible');
+    await expect(tooltip).toBeVisible();
+
+    await screenshot(page, '76-welcome-tooltip');
+  });
+
+  test('filtered empty state shows picky tooltip', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: [], // Empty issues to trigger empty state
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+
+    await page.goto('/');
+    await selectRepo(page);
+    await waitForAnimations(page);
+
+    // The center pane empty state should be visible
+    await expect(page.getByText('No issues to display')).toBeVisible();
+
+    // Hover on the center pane icon (filter one uses "so peaceful!" text)
+    const emptyIcon = page.locator('.empty-state-icon-float').filter({ hasText: /peaceful/ });
+    await emptyIcon.hover({ force: true }); // Force hover due to animation
+    await waitForAnimations(page);
+
+    // Check tooltip with "so peaceful!" text is visible
+    await expect(page.getByText('so peaceful!')).toBeVisible();
+
+    await screenshot(page, '77-empty-issues-tooltip');
   });
 });
