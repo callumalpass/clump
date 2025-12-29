@@ -135,29 +135,29 @@ export function TokenUsageBar({
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px]">
-        <span className="flex items-center gap-1.5 text-gray-400">
-          <span className="w-2 h-2 rounded-sm bg-blue-500 ring-1 ring-blue-400/30 shrink-0" />
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px]">
+        <span className="token-legend-item flex items-center gap-1.5 text-gray-400 rounded px-1.5 py-0.5 -mx-1.5 transition-all duration-150 hover:text-gray-200 hover:bg-blue-500/15 cursor-default">
+          <span className="w-2 h-2 rounded-sm bg-blue-500 ring-1 ring-blue-400/30 shrink-0 transition-transform duration-150 group-hover:scale-110" />
           <span className="font-medium">Input</span>
-          <span className="text-gray-600 tabular-nums">{formatTokenCount(inputTokens)}</span>
+          <span className="text-gray-500 group-hover:text-gray-400 tabular-nums transition-colors duration-150">{formatTokenCount(inputTokens)}</span>
         </span>
-        <span className="flex items-center gap-1.5 text-gray-400">
-          <span className="w-2 h-2 rounded-sm bg-purple-500 ring-1 ring-purple-400/30 shrink-0" />
+        <span className="token-legend-item flex items-center gap-1.5 text-gray-400 rounded px-1.5 py-0.5 -mx-1.5 transition-all duration-150 hover:text-gray-200 hover:bg-purple-500/15 cursor-default">
+          <span className="w-2 h-2 rounded-sm bg-purple-500 ring-1 ring-purple-400/30 shrink-0 transition-transform duration-150" />
           <span className="font-medium">Output</span>
-          <span className="text-gray-600 tabular-nums">{formatTokenCount(outputTokens)}</span>
+          <span className="text-gray-500 tabular-nums transition-colors duration-150">{formatTokenCount(outputTokens)}</span>
         </span>
         {cacheReadTokens > 0 && (
-          <span className="flex items-center gap-1.5 text-gray-400">
-            <span className="w-2 h-2 rounded-sm bg-emerald-500 ring-1 ring-emerald-400/30 shrink-0" />
+          <span className="token-legend-item flex items-center gap-1.5 text-gray-400 rounded px-1.5 py-0.5 -mx-1.5 transition-all duration-150 hover:text-gray-200 hover:bg-emerald-500/15 cursor-default">
+            <span className="w-2 h-2 rounded-sm bg-emerald-500 ring-1 ring-emerald-400/30 shrink-0 transition-transform duration-150" />
             <span className="font-medium">Cache</span>
-            <span className="text-gray-600 tabular-nums">{formatTokenCount(cacheReadTokens)}</span>
+            <span className="text-gray-500 tabular-nums transition-colors duration-150">{formatTokenCount(cacheReadTokens)}</span>
           </span>
         )}
         {cacheCreationTokens > 0 && (
-          <span className="flex items-center gap-1.5 text-gray-400">
-            <span className="w-2 h-2 rounded-sm bg-amber-500 ring-1 ring-amber-400/30 shrink-0" />
+          <span className="token-legend-item flex items-center gap-1.5 text-gray-400 rounded px-1.5 py-0.5 -mx-1.5 transition-all duration-150 hover:text-gray-200 hover:bg-amber-500/15 cursor-default">
+            <span className="w-2 h-2 rounded-sm bg-amber-500 ring-1 ring-amber-400/30 shrink-0 transition-transform duration-150" />
             <span className="font-medium">Write</span>
-            <span className="text-gray-600 tabular-nums">{formatTokenCount(cacheCreationTokens)}</span>
+            <span className="text-gray-500 tabular-nums transition-colors duration-150">{formatTokenCount(cacheCreationTokens)}</span>
           </span>
         )}
       </div>
