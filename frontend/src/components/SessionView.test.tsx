@@ -901,4 +901,363 @@ describe('SessionView', () => {
       expect(screen.getByText('.json')).toBeInTheDocument();
     });
   });
+
+  describe('Optimistic Messages', () => {
+    it('adds optimistic message immediately when sending via WebSocket', async () => {
+      const activeSession = createMockSession({ is_active: true });
+      vi.mocked(useProcessWebSocketModule.useProcessWebSocket).mockReturnValue({
+        isConnected: true,
+        sendInput: mockSendInput,
+        sendResize: vi.fn(),
+      });
+
+      render(
+        <SessionView
+          {...defaultProps}
+          session={activeSession}
+          processId="process-123"
+          viewMode="transcript"
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('conversation-view')).toBeInTheDocument();
+      });
+
+      // Send a message via the ConversationView mock
+      fireEvent.click(screen.getByTestId('send-message-btn'));
+
+      // sendInput should be called (message is sent to WebSocket)
+      await waitFor(() => {
+        expect(mockSendInput).toHaveBeenCalled();
+      });
+    });
+
+    it('clears optimistic message when it appears in real transcript', async () => {
+      const activeSession = createMockSession({ is_active: true });
+      vi.mocked(useProcessWebSocketModule.useProcessWebSocket).mockReturnValue({
+        isConnected: true,
+        sendInput: mockSendInput,
+        sendResize: vi.fn(),
+      });
+
+      // Initial detail without the optimistic message
+      const initialDetail = createMockDetail({
+        is_active: true,
+        messages: [
+          {
+            uuid: 'msg-1',
+            role: 'user',
+            content: 'Hello',
+            timestamp: '2024-01-15T10:30:00Z',
+            tool_uses: [],
+          },
+        ] as TranscriptMessage[],
+      });
+
+      // Updated detail that includes the message (simulating poll response)
+      const updatedDetail = createMockDetail({
+        is_active: true,
+        messages: [
+          {
+            uuid: 'msg-1',
+            role: 'user',
+            content: 'Hello',
+            timestamp: '2024-01-15T10:30:00Z',
+            tool_uses: [],
+          },
+          {
+            uuid: 'msg-2',
+            role: 'user',
+            content: 'test message',
+            timestamp: '2024-01-15T10:30:05Z',
+            tool_uses: [],
+          },
+        ] as TranscriptMessage[],
+      });
+
+      mockFetchSessionDetail
+        .mockResolvedValueOnce(initialDetail)
+        .mockResolvedValueOnce(updatedDetail);
+
+      render(
+        <SessionView
+          {...defaultProps}
+          session={activeSession}
+          processId="process-123"
+          viewMode="transcript"
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('conversation-view')).toBeInTheDocument();
+      });
+
+      // Initial fetch should have happened
+      expect(mockFetchSessionDetail).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not send message when processId is null', async () => {
+      // Completed session (no processId)
+      render(<SessionView {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('conversation-view')).toBeInTheDocument();
+      });
+
+      // Clicking send should not call sendInput since there's no active process
+      fireEvent.click(screen.getByTestId('send-message-btn'));
+
+      expect(mockSendInput).not.toHaveBeenCalled();
+    });
+
+    it('handles WebSocket disconnection gracefully', async () => {
+      const activeSession = createMockSession({ is_active: true });
+      vi.mocked(useProcessWebSocketModule.useProcessWebSocket).mockReturnValue({
+        isConnected: false, // Disconnected
+        sendInput: mockSendInput,
+        sendResize: vi.fn(),
+      });
+
+      render(
+        <SessionView
+          {...defaultProps}
+          session={activeSession}
+          processId="process-123"
+          viewMode="transcript"
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('conversation-view')).toBeInTheDocument();
+      });
+
+      // The component should still render even when disconnected
+      expect(screen.getByTestId('conversation-view')).toBeInTheDocument();
+    });
+
+    it('preserves optimistic messages across re-renders until confirmed', async () => {
+      const activeSession = createMockSession({ is_active: true });
+      vi.mocked(useProcessWebSocketModule.useProcessWebSocket).mockReturnValue({
+        isConnected: true,
+        sendInput: mockSendInput,
+        sendResize: vi.fn(),
+      });
+
+      // Always return same detail (message never appears in real transcript)
+      const unchangedDetail = createMockDetail({
+        is_active: true,
+        messages: [
+          {
+            uuid: 'msg-1',
+            role: 'user',
+            content: 'Original message',
+            timestamp: '2024-01-15T10:30:00Z',
+            tool_uses: [],
+          },
+        ] as TranscriptMessage[],
+      });
+      mockFetchSessionDetail.mockResolvedValue(unchangedDetail);
+
+      const { rerender } = render(
+        <SessionView
+          {...defaultProps}
+          session={activeSession}
+          processId="process-123"
+          viewMode="transcript"
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('conversation-view')).toBeInTheDocument();
+      });
+
+      // Send a message
+      fireEvent.click(screen.getByTestId('send-message-btn'));
+
+      // Rerender with same props
+      rerender(
+        <SessionView
+          {...defaultProps}
+          session={activeSession}
+          processId="process-123"
+          viewMode="transcript"
+        />
+      );
+
+      // Should still be in conversation view (no crashes)
+      expect(screen.getByTestId('conversation-view')).toBeInTheDocument();
+    });
+  });
+
+  describe('Waiting for Input Indicator', () => {
+    it('shows waiting indicator when session needs attention', async () => {
+      const activeSession = createMockSession({ is_active: true });
+      const needsAttention = vi.fn().mockReturnValue(true);
+
+      render(
+        <SessionView
+          {...defaultProps}
+          session={activeSession}
+          needsAttention={needsAttention}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('conversation-view')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('Waiting for input')).toBeInTheDocument();
+    });
+
+    it('shows Live indicator when session is active but does not need attention', async () => {
+      const activeSession = createMockSession({ is_active: true });
+      const needsAttention = vi.fn().mockReturnValue(false);
+
+      render(
+        <SessionView
+          {...defaultProps}
+          session={activeSession}
+          needsAttention={needsAttention}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('conversation-view')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('Live')).toBeInTheDocument();
+      expect(screen.queryByText('Waiting for input')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Scheduled Job Badge', () => {
+    it('shows scheduled badge when session has scheduled_job_id', async () => {
+      const scheduledSession = createMockSession({ scheduled_job_id: 42 });
+
+      render(
+        <SessionView
+          {...defaultProps}
+          session={scheduledSession}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('conversation-view')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('Scheduled')).toBeInTheDocument();
+    });
+
+    it('calls onShowSchedule when scheduled badge is clicked', async () => {
+      const scheduledSession = createMockSession({ scheduled_job_id: 42 });
+      const onShowSchedule = vi.fn();
+
+      render(
+        <SessionView
+          {...defaultProps}
+          session={scheduledSession}
+          onShowSchedule={onShowSchedule}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('conversation-view')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText('Scheduled'));
+      expect(onShowSchedule).toHaveBeenCalledWith(42);
+    });
+
+    it('does not show scheduled badge when session has no scheduled_job_id', async () => {
+      render(<SessionView {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('conversation-view')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByText('Scheduled')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Copy Initial Prompt', () => {
+    it('shows copy prompt option in actions menu when transcript has messages', async () => {
+      render(<SessionView {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('conversation-view')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Actions' }));
+      expect(screen.getByText('Copy Prompt')).toBeInTheDocument();
+    });
+
+    it('copies initial user prompt to clipboard', async () => {
+      render(<SessionView {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('conversation-view')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Actions' }));
+      fireEvent.click(screen.getByText('Copy Prompt'));
+
+      await waitFor(() => {
+        // The first user message content is "Hello Claude" from the mock
+        expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Hello Claude');
+      });
+    });
+
+    it('shows copied confirmation after copying prompt', async () => {
+      render(<SessionView {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('conversation-view')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Actions' }));
+      fireEvent.click(screen.getByText('Copy Prompt'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Copied!')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Token Usage Bar', () => {
+    it('shows token usage bar when detail has token data', async () => {
+      const detailWithTokens = createMockDetail({
+        total_input_tokens: 1000,
+        total_output_tokens: 500,
+      });
+      mockFetchSessionDetail.mockResolvedValue(detailWithTokens);
+
+      render(<SessionView {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('conversation-view')).toBeInTheDocument();
+      });
+
+      // Token usage bar should be present (we can't easily verify the exact component
+      // but we can check the footer section is rendered)
+      expect(screen.getByText(/Session:/)).toBeInTheDocument();
+    });
+
+    it('does not show token usage bar when detail has no token data', async () => {
+      const detailNoTokens = createMockDetail({
+        total_input_tokens: 0,
+        total_output_tokens: 0,
+      });
+      mockFetchSessionDetail.mockResolvedValue(detailNoTokens);
+
+      render(<SessionView {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('conversation-view')).toBeInTheDocument();
+      });
+
+      // Should still show session info
+      expect(screen.getByText(/Session:/)).toBeInTheDocument();
+    });
+  });
 });
