@@ -1064,25 +1064,30 @@ describe('SessionList', () => {
   });
 
   describe('Model Filters', () => {
-    it('renders all model filter buttons', () => {
+    it('renders model filter dropdown with all options', () => {
       render(<SessionList {...defaultProps} />);
 
-      expect(screen.getByRole('button', { name: 'All Models' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Sonnet' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Opus' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Haiku' })).toBeInTheDocument();
+      const modelSelect = screen.getByRole('combobox', { name: 'Filter by model' });
+      expect(modelSelect).toBeInTheDocument();
+
+      // Check all options are present
+      expect(screen.getByRole('option', { name: 'All Models' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Sonnet' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Opus' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Haiku' })).toBeInTheDocument();
     });
 
     it('calls onFiltersChange with model filter', () => {
       const onFiltersChange = vi.fn();
       render(<SessionList {...defaultProps} onFiltersChange={onFiltersChange} />);
 
-      fireEvent.click(screen.getByRole('button', { name: 'Opus' }));
+      const modelSelect = screen.getByRole('combobox', { name: 'Filter by model' });
+      fireEvent.change(modelSelect, { target: { value: 'opus' } });
 
       expect(onFiltersChange).toHaveBeenCalledWith({ category: 'all', model: 'opus' });
     });
 
-    it('clears model filter when All Models clicked', () => {
+    it('clears model filter when All Models selected', () => {
       const onFiltersChange = vi.fn();
       render(
         <SessionList
@@ -1092,33 +1097,39 @@ describe('SessionList', () => {
         />
       );
 
-      fireEvent.click(screen.getByRole('button', { name: 'All Models' }));
+      const modelSelect = screen.getByRole('combobox', { name: 'Filter by model' });
+      fireEvent.change(modelSelect, { target: { value: 'all' } });
 
       expect(onFiltersChange).toHaveBeenCalledWith({ category: 'all', model: undefined });
     });
   });
 
   describe('Date Range Filters', () => {
-    it('renders all date range filter buttons', () => {
+    it('renders date range filter dropdown with all options', () => {
       render(<SessionList {...defaultProps} />);
 
-      expect(screen.getByRole('button', { name: 'All Time' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Today' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Yesterday' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'This Week' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'This Month' })).toBeInTheDocument();
+      const dateSelect = screen.getByRole('combobox', { name: 'Filter by date' });
+      expect(dateSelect).toBeInTheDocument();
+
+      // Check all options are present
+      expect(screen.getByRole('option', { name: 'All Time' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Today' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Yesterday' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'This Week' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'This Month' })).toBeInTheDocument();
     });
 
     it('calls onFiltersChange with date range filter', () => {
       const onFiltersChange = vi.fn();
       render(<SessionList {...defaultProps} onFiltersChange={onFiltersChange} />);
 
-      fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+      const dateSelect = screen.getByRole('combobox', { name: 'Filter by date' });
+      fireEvent.change(dateSelect, { target: { value: 'today' } });
 
       expect(onFiltersChange).toHaveBeenCalledWith({ category: 'all', dateRange: 'today' });
     });
 
-    it('clears date range filter when All Time clicked', () => {
+    it('clears date range filter when All Time selected', () => {
       const onFiltersChange = vi.fn();
       render(
         <SessionList
@@ -1128,7 +1139,8 @@ describe('SessionList', () => {
         />
       );
 
-      fireEvent.click(screen.getByRole('button', { name: 'All Time' }));
+      const dateSelect = screen.getByRole('combobox', { name: 'Filter by date' });
+      fireEvent.change(dateSelect, { target: { value: 'all' } });
 
       expect(onFiltersChange).toHaveBeenCalledWith({ category: 'all', dateRange: undefined });
     });
@@ -1139,8 +1151,8 @@ describe('SessionList', () => {
       const onFiltersChange = vi.fn();
       render(<SessionList {...defaultProps} onFiltersChange={onFiltersChange} />);
 
-      // Find the sort select - it should be a combobox with options
-      const sortSelect = document.querySelector('select') as HTMLSelectElement;
+      // Find the sort select by its aria-label
+      const sortSelect = screen.getByRole('combobox', { name: 'Sort by' });
       expect(sortSelect).toBeInTheDocument();
       fireEvent.change(sortSelect, { target: { value: 'updated' } });
 

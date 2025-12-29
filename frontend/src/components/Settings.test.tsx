@@ -408,7 +408,8 @@ describe('Settings', () => {
       fireEvent.click(screen.getByRole('button', { name: 'permissions' }));
 
       const acceptEditsButton = screen.getByRole('button', { name: /Accept Edits/i });
-      expect(acceptEditsButton).toHaveClass('border-blue-500');
+      // The selected permission mode button uses bg-blurple-500/10 styling (Stoody theme)
+      expect(acceptEditsButton).toHaveClass('bg-blurple-500/10');
     });
 
     it('updates permission mode when clicked', async () => {
