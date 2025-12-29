@@ -446,6 +446,16 @@
   font-weight: 600;
 }
 
+/* Toggle button inactive text - better visibility in light theme */
+[data-theme="light"] .toggle-btn:not(.toggle-btn-active) {
+  color: #6b7280 !important;
+}
+
+[data-theme="light"] .toggle-btn:not(.toggle-btn-active):hover {
+  color: #374151 !important;
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
 /* Session status badges in light theme - improve visibility */
 [data-theme="light"] .status-badge-active {
   background-color: rgba(243, 156, 18, 0.18) !important;
@@ -503,6 +513,28 @@
   background-color: rgba(45, 52, 54, 0.5);
 }
 
+/* Settings modal option buttons in light theme - improve unselected state visibility */
+[data-theme="light"] .bg-gray-800.border-transparent {
+  background-color: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+  color: #475569;
+}
+
+[data-theme="light"] .bg-gray-800.border-transparent:hover {
+  background-color: #e2e8f0 !important;
+  border-color: #cbd5e1 !important;
+  color: #1e293b;
+}
+
+/* Settings modal selected option in light theme */
+[data-theme="light"] .bg-blurple-500\/10 {
+  background-color: rgba(108, 92, 231, 0.12) !important;
+}
+
+[data-theme="light"] .border-blurple-400 {
+  border-color: #6c5ce7 !important;
+}
+
 /* Terminal light theme colors */
 [data-theme="light"] .terminal-light {
   background-color: #f4f4f0 !important;
@@ -527,6 +559,16 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Theme transition animation - smooth fade when switching themes */
+html.theme-transitioning,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition: background-color 300ms ease-out,
+              border-color 300ms ease-out,
+              color 200ms ease-out !important;
 }
 
 /* Links turn hot pink on hover - the Stoody way! */

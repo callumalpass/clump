@@ -25,10 +25,27 @@ function getStoredTheme(): Theme {
 }
 
 /**
- * Apply the theme to the document.
+ * Check if user prefers reduced motion.
  */
-function applyTheme(theme: Theme) {
+function prefersReducedMotion(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+/**
+ * Apply the theme to the document with optional transition animation.
+ */
+function applyTheme(theme: Theme, animate = false) {
   const resolvedTheme = theme === 'system' ? getSystemTheme() : theme;
+
+  // Add transition class for smooth theme switching (respects reduced motion)
+  if (animate && !prefersReducedMotion()) {
+    document.documentElement.classList.add('theme-transitioning');
+    // Remove the class after the transition completes
+    setTimeout(() => {
+      document.documentElement.classList.remove('theme-transitioning');
+    }, 300);
+  }
 
   if (resolvedTheme === 'light') {
     document.documentElement.setAttribute('data-theme', 'light');
@@ -86,6 +103,8 @@ export function useTheme() {
 
   const setTheme = useCallback((newTheme: Theme) => {
     localStorage.setItem(STORAGE_KEY, newTheme);
+    // Animate the transition when user explicitly changes theme
+    applyTheme(newTheme, true);
     setThemeState(newTheme);
   }, []);
 
