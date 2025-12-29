@@ -192,17 +192,19 @@ const SessionListItem = memo(function SessionListItem({
         )}
       </div>
 
-      <div className="list-item-metadata flex items-center gap-3 text-xs text-gray-400 mt-2">
-        {/* Repo path */}
-        <span className="px-2 py-1 bg-gray-750 hover:bg-gray-700 rounded-stoody truncate max-w-[140px] transition-colors" title={session.repo_path}>
-          {formatRepoPath(session)}
-        </span>
+      <div className="list-item-metadata flex items-center gap-2 text-xs mt-2 flex-wrap">
+        {/* Model - color-coded badge for quick identification (most important) */}
+        {session.model && (
+          <span className={`px-2 py-0.5 rounded-stoody font-medium ${getModelTextColor(session.model)} bg-gray-750/80`}>
+            {getModelShortName(session.model)}
+          </span>
+        )}
 
         {/* Entity badges - informational only */}
         {session.entities?.map((entity, idx) => (
           <span
             key={idx}
-            className={`px-2 py-1 rounded-stoody ${
+            className={`px-2 py-0.5 rounded-stoody font-medium ${
               entity.kind === 'issue'
                 ? 'bg-mint-400/15 text-mint-400'
                 : 'bg-blurple-400/15 text-blurple-400'
@@ -213,38 +215,40 @@ const SessionListItem = memo(function SessionListItem({
           </span>
         ))}
 
-        {/* Model - color-coded for quick identification */}
-        {session.model && (
-          <span className={getModelTextColor(session.model)}>
-            {getModelShortName(session.model)}
-          </span>
-        )}
+        {/* Separator dot */}
+        <span className="text-gray-600 hidden sm:inline">·</span>
 
-        {/* Message count */}
-        <span className="text-gray-500">
-          {session.message_count} msg{session.message_count !== 1 ? 's' : ''}
+        {/* Message count with icon */}
+        <span className="text-gray-500 flex items-center gap-1">
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+          {session.message_count}
         </span>
 
         {/* Duration for active sessions, duration + relative time for completed */}
         {session.is_active && session.start_time ? (
-          <span className="text-yellow-500" title="Time elapsed">
+          <span className="text-yellow-500 flex items-center gap-1" title="Time elapsed">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
             <ElapsedTimer startTime={session.start_time} />
           </span>
         ) : (
           <>
             {/* Show session duration if available */}
             {session.duration_seconds != null && (
-              <span
-                className="text-gray-400"
-                title="Session duration"
-              >
+              <span className="text-gray-400 flex items-center gap-1" title="Session duration">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
                 {formatDuration(session.duration_seconds)}
               </span>
             )}
             {/* Show relative time */}
             {session.modified_at && (
               <span
-                className="text-gray-500"
+                className="text-gray-500 ml-auto"
                 title={new Date(session.modified_at).toLocaleString()}
               >
                 {formatRelativeTime(session.modified_at)}
@@ -252,6 +256,11 @@ const SessionListItem = memo(function SessionListItem({
             )}
           </>
         )}
+
+        {/* Repo path - pushed to end, truncated */}
+        <span className="px-2 py-0.5 bg-gray-750/50 rounded-stoody truncate max-w-[120px] text-gray-500 hidden sm:inline" title={session.repo_path}>
+          {formatRepoPath(session)}
+        </span>
       </div>
     </div>
   );
@@ -670,7 +679,10 @@ export function SessionList({
         {filterBar}
         <div className="flex-1 flex flex-col items-center justify-center p-8">
           <div className="text-center p-6 rounded-xl bg-gray-800/40 border border-gray-750/50 max-w-xs empty-state-enter">
-            <div className="w-14 h-14 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4 empty-state-icon-float">
+            <div className="relative w-14 h-14 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4 empty-state-icon-float cursor-pointer">
+              <span className="empty-state-tooltip">
+                {hasFilters ? 'too picky!' : 'spark something!'}
+              </span>
               {hasFilters ? (
                 <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
