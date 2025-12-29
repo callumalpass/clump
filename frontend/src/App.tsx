@@ -99,6 +99,18 @@ const REPO_SESSION_TABS_KEY = 'clump:repoSessionTabs';
 const VALID_TABS: Tab[] = ['issues', 'prs', 'history', 'schedules'];
 
 /**
+ * Converts a session category filter to an isActive boolean value.
+ * - 'active' → true (show only running sessions)
+ * - 'completed' → false (show only finished sessions)
+ * - other categories → undefined (no filtering by active state)
+ */
+function getIsActiveFilter(category: string): boolean | undefined {
+  if (category === 'active') return true;
+  if (category === 'completed') return false;
+  return undefined;
+}
+
+/**
  * Load the active tab from localStorage, with validation.
  * Returns 'issues' as default if stored value is invalid or missing.
  */
@@ -266,8 +278,7 @@ export default function App() {
     search: sessionListFilters.search || undefined,
     starred: sessionListFilters.category === 'starred' ? true : undefined,
     hasEntities: sessionListFilters.category === 'with-entities' ? true : undefined,
-    isActive: sessionListFilters.category === 'active' ? true :
-              sessionListFilters.category === 'completed' ? false : undefined,
+    isActive: getIsActiveFilter(sessionListFilters.category),
     model: sessionListFilters.model,
     sort: sessionListFilters.sort,
     order: sessionListFilters.order,
