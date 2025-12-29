@@ -44,7 +44,7 @@ const PRListItem = memo(function PRListItem({
     <div
       role="button"
       tabIndex={0}
-      className={`group p-4 mx-2 my-2 cursor-pointer rounded-stoody-lg bg-gray-800 session-card-light hover:bg-gray-750 transition-colors duration-150 list-item-enter focus-visible:ring-2 focus-visible:ring-blurple-400 focus-visible:ring-inset ${
+      className={`group p-4 mx-2 my-2 cursor-pointer rounded-stoody-lg bg-gray-800 session-card-light hover:bg-gray-750 transition-colors duration-150 list-item-enter list-item-hover focus-visible:ring-2 focus-visible:ring-blurple-400 focus-visible:ring-inset ${
         isSelected ? 'ring-2 ring-inset ring-blurple-500/50 bg-blurple-500/10' : ''
       }`}
       style={{ '--item-index': Math.min(index, 15) } as React.CSSProperties}
@@ -60,6 +60,10 @@ const PRListItem = memo(function PRListItem({
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
+            {/* Hover arrow indicator */}
+            <svg className="w-3.5 h-3.5 text-blurple-400 list-item-hover-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
             <span className="text-gray-400 text-sm">#{pr.number}</span>
             <h3 className="text-sm font-medium text-white truncate group-hover:text-pink-400 transition-colors" title={pr.title}>
               {pr.title}

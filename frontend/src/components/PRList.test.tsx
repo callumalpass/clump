@@ -295,7 +295,8 @@ describe('PRList', () => {
       render(<PRList {...defaultProps} prs={prs} selectedPR={1} />);
 
       const selectedItem = screen.getByText('PR 1').closest('.p-4');
-      expect(selectedItem).toHaveClass('list-item-selected');
+      // Selection is indicated by ring and background color classes
+      expect(selectedItem).toHaveClass('ring-2', 'bg-blurple-500/10');
     });
 
     it('does not highlight unselected PRs', () => {
@@ -307,7 +308,8 @@ describe('PRList', () => {
       render(<PRList {...defaultProps} prs={prs} selectedPR={1} />);
 
       const unselectedItem = screen.getByText('PR 2').closest('.p-4');
-      expect(unselectedItem).not.toHaveClass('list-item-selected');
+      // Unselected items should not have the selection ring
+      expect(unselectedItem).not.toHaveClass('ring-inset');
     });
   });
 

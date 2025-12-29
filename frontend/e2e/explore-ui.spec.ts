@@ -1380,3 +1380,63 @@ test.describe('UI Exploration - Star Toggle Animation', () => {
     await screenshot(page, '59-starred-session-icon');
   });
 });
+
+test.describe('UI Exploration - Hover Arrow Animation', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+    });
+  });
+
+  test('issue list item shows hover arrow on hover', async ({ page }) => {
+    await page.goto('/');
+    await selectRepo(page);
+
+    // Find and hover over an issue item
+    const issueItem = page.locator('[class*="list-item-hover"]').first();
+    await issueItem.hover();
+    await waitForAnimations(page);
+
+    // The hover arrow should now be visible (opacity > 0)
+    const hoverArrow = issueItem.locator('.list-item-hover-arrow');
+    await expect(hoverArrow).toBeVisible();
+
+    await screenshot(page, '60-issue-hover-arrow');
+  });
+
+  test('session list item shows hover arrow on hover', async ({ page }) => {
+    await page.goto('/');
+    await selectRepo(page);
+
+    // Go to History tab
+    await page.getByRole('tab', { name: /History/i }).click();
+    await waitForAnimations(page);
+
+    // Find and hover over a session item
+    const sessionItem = page.locator('[class*="list-item-hover"]').first();
+    await sessionItem.hover();
+    await waitForAnimations(page);
+
+    await screenshot(page, '61-session-hover-arrow');
+  });
+
+  test('pr list item shows hover arrow on hover', async ({ page }) => {
+    await page.goto('/');
+    await selectRepo(page);
+
+    // Go to PRs tab
+    await page.getByRole('tab', { name: /PRs/i }).click();
+    await waitForAnimations(page);
+
+    // Find and hover over a PR item
+    const prItem = page.locator('[class*="list-item-hover"]').first();
+    await prItem.hover();
+    await waitForAnimations(page);
+
+    await screenshot(page, '62-pr-hover-arrow');
+  });
+});

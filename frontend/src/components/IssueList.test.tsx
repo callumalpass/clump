@@ -218,7 +218,8 @@ describe('IssueList', () => {
       render(<IssueList {...defaultProps} issues={issues} total={2} selectedIssue={1} />);
 
       const selectedItem = screen.getByText('Issue 1').closest('.p-4');
-      expect(selectedItem).toHaveClass('list-item-selected');
+      // Selection is indicated by ring and background color classes
+      expect(selectedItem).toHaveClass('ring-2', 'bg-blurple-500/10');
     });
   });
 
