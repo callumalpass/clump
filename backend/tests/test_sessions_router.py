@@ -2339,3 +2339,143 @@ class TestListSessionsFastPathPendingFiltering:
             assert "pending-starred-with-entities" in session_ids
             assert "pending-starred-no-entities" not in session_ids
             assert "pending-unstarred-with-entities" not in session_ids
+
+
+class TestTranscriptScanCache:
+    """Tests for the transcript scan cache (_transcript_scan_cache).
+
+    Note: We import the module rather than individual names to ensure we're
+    testing the actual global state, as Python imports create separate bindings.
+    """
+
+    @pytest.fixture(autouse=True)
+    def clear_cache(self):
+        """Clear the transcript cache before and after each test."""
+        import app.routers.sessions as sessions_module
+        sessions_module._transcript_scan_cache.clear()
+        yield
+        sessions_module._transcript_scan_cache.clear()
+
+    def test_cache_stores_scan_results(self, tmp_path):
+        """Test that scan results are cached."""
+        import app.routers.sessions as sessions_module
+
+        # Create a test transcript file
+        transcript = tmp_path / "test.jsonl"
+        transcript.write_text('{"type": "user", "message": {"content": "Hello"}, "timestamp": "2024-01-15T10:00:00Z"}\n')
+
+        # First scan
+        result1 = sessions_module._quick_scan_transcript(transcript)
+        assert len(sessions_module._transcript_scan_cache) == 1
+        assert str(transcript) in sessions_module._transcript_scan_cache
+
+        # Second scan should return cached result
+        result2 = sessions_module._quick_scan_transcript(transcript)
+        assert result1 == result2
+        assert len(sessions_module._transcript_scan_cache) == 1
+
+    def test_cache_invalidates_on_mtime_change(self, tmp_path):
+        """Test that cache is invalidated when file mtime changes."""
+        import app.routers.sessions as sessions_module
+        import time
+
+        # Create a test transcript file
+        transcript = tmp_path / "test.jsonl"
+        transcript.write_text('{"type": "user", "message": {"content": "Hello"}, "timestamp": "2024-01-15T10:00:00Z"}\n')
+
+        # First scan
+        result1 = sessions_module._quick_scan_transcript(transcript)
+        assert result1["message_count"] == 1
+
+        # Wait a tiny bit and modify the file
+        time.sleep(0.01)
+        transcript.write_text(
+            '{"type": "user", "message": {"content": "Hello"}, "timestamp": "2024-01-15T10:00:00Z"}\n'
+            '{"type": "assistant", "message": {"content": "Hi"}, "timestamp": "2024-01-15T10:00:01Z"}\n'
+        )
+
+        # Second scan should detect the change
+        result2 = sessions_module._quick_scan_transcript(transcript)
+        assert result2["message_count"] == 2
+
+    def test_cache_cleanup_keeps_max_entries(self, tmp_path):
+        """Test that cache cleanup keeps MAX_ENTRIES when exceeded."""
+        import app.routers.sessions as sessions_module
+
+        MAX_ENTRIES = sessions_module.TRANSCRIPT_CACHE_MAX_ENTRIES
+
+        # Create many test transcript files (more than the cache limit)
+        num_files = MAX_ENTRIES + 10
+        for i in range(num_files):
+            transcript = tmp_path / f"test_{i}.jsonl"
+            transcript.write_text(f'{{"type": "user", "message": {{"content": "Hello {i}"}}, "timestamp": "2024-01-15T10:00:0{i % 10}Z"}}\n')
+            sessions_module._quick_scan_transcript(transcript)
+
+        # Cache should have been cleaned up to MAX_ENTRIES
+        assert len(sessions_module._transcript_scan_cache) <= MAX_ENTRIES
+
+    def test_cache_cleanup_preserves_recent_entries(self, tmp_path):
+        """Test that cache cleanup preserves entries with recent mtimes."""
+        import app.routers.sessions as sessions_module
+        import time
+
+        MAX_ENTRIES = sessions_module.TRANSCRIPT_CACHE_MAX_ENTRIES
+
+        # Create old files first
+        old_files = []
+        for i in range(MAX_ENTRIES):
+            transcript = tmp_path / f"old_{i}.jsonl"
+            transcript.write_text(f'{{"type": "user", "message": {{"content": "Old {i}"}}}}\n')
+            old_files.append(transcript)
+            sessions_module._quick_scan_transcript(transcript)
+
+        # Sleep to ensure new files have newer mtimes
+        time.sleep(0.05)
+
+        # Create new files that will trigger cleanup
+        new_files = []
+        for i in range(15):
+            transcript = tmp_path / f"new_{i}.jsonl"
+            transcript.write_text(f'{{"type": "user", "message": {{"content": "New {i}"}}}}\n')
+            new_files.append(transcript)
+            sessions_module._quick_scan_transcript(transcript)
+
+        # Cache should be at or below max
+        assert len(sessions_module._transcript_scan_cache) <= MAX_ENTRIES
+
+        # All new files should be in cache (they have newer mtimes)
+        for f in new_files:
+            assert str(f) in sessions_module._transcript_scan_cache
+
+    def test_cache_handles_nonexistent_file(self, tmp_path):
+        """Test that cache handles nonexistent files gracefully."""
+        import app.routers.sessions as sessions_module
+
+        nonexistent = tmp_path / "nonexistent.jsonl"
+        result = sessions_module._quick_scan_transcript(nonexistent)
+
+        # Should return defaults
+        assert result["title"] is None
+        assert result["model"] is None
+        assert result["message_count"] == 0
+
+        # Should not be cached (file doesn't exist)
+        assert str(nonexistent) not in sessions_module._transcript_scan_cache
+
+    def test_cache_multiple_files_independent(self, tmp_path):
+        """Test that different files have independent cache entries."""
+        import app.routers.sessions as sessions_module
+
+        # Create two different files
+        file1 = tmp_path / "file1.jsonl"
+        file1.write_text('{"type": "summary", "summary": "Summary One"}\n')
+
+        file2 = tmp_path / "file2.jsonl"
+        file2.write_text('{"type": "summary", "summary": "Summary Two"}\n')
+
+        result1 = sessions_module._quick_scan_transcript(file1)
+        result2 = sessions_module._quick_scan_transcript(file2)
+
+        assert result1["title"] == "Summary One"
+        assert result2["title"] == "Summary Two"
+        assert len(sessions_module._transcript_scan_cache) == 2

@@ -530,8 +530,9 @@ def _quick_scan_transcript(transcript_path: Path) -> QuickScanResult:
     Quickly scan a transcript file for summary info without full parsing.
 
     Uses mtime-based caching to avoid re-parsing files that haven't changed.
+    When cache exceeds TRANSCRIPT_CACHE_MAX_ENTRIES, older entries are pruned.
     """
-    global _transcript_scan_cache
+    global _transcript_scan_cache  # Needed for cache cleanup reassignment
 
     cache_key = str(transcript_path)
 
@@ -562,14 +563,14 @@ def _quick_scan_transcript(transcript_path: Path) -> QuickScanResult:
 
     # Clean up old cache entries if too many
     if len(_transcript_scan_cache) > TRANSCRIPT_CACHE_MAX_ENTRIES:
-        # Remove oldest half of entries (simple LRU-ish cleanup)
+        # Remove oldest entries, keeping up to max entries
         # Sort by mtime and keep the most recently modified
         sorted_entries = sorted(
             _transcript_scan_cache.items(),
             key=lambda x: x[1][1],  # Sort by cached mtime
             reverse=True
         )
-        _transcript_scan_cache = dict(sorted_entries[:TRANSCRIPT_CACHE_MAX_ENTRIES // 2])
+        _transcript_scan_cache = dict(sorted_entries[:TRANSCRIPT_CACHE_MAX_ENTRIES])
 
     return result
 
