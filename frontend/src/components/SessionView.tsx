@@ -603,106 +603,11 @@ export function SessionView({
 
   const title = detail?.metadata?.title || session.title || 'Untitled session';
 
-  // If viewing terminal mode for an active session, render Terminal component
-  if (isActiveProcess && processId && viewMode === 'terminal') {
-    return (
-      <div className="h-full flex flex-col bg-[#0d1117] rounded-lg border border-gray-700 overflow-hidden">
-        {/* Header with toggle */}
-        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-gray-800/50 border-b border-gray-700">
-          {/* Left: Connection status, session ID, related entity */}
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            {/* Connection status badge */}
-            <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${
-              isConnected
-                ? 'bg-green-500/20 text-green-400'
-                : 'bg-red-500/20 text-red-400'
-            }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${
-                isConnected
-                  ? 'bg-green-400'
-                  : 'bg-red-400 animate-pulse'
-              }`} />
-              {isConnected ? 'Connected' : 'Disconnected'}
-            </div>
-            <span className="text-sm text-gray-500">|</span>
-            <span className="text-sm text-gray-400 shrink-0">{processId.slice(0, 8)}</span>
-            {entities.length > 0 && (
-              <>
-                <span className="text-sm text-gray-500">|</span>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {entities.map((entity, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => entity.kind === 'issue' ? onShowIssue?.(entity.number) : onShowPR?.(entity.number)}
-                      className={`text-xs px-1.5 py-0.5 rounded transition-colors ${
-                        entity.kind === 'issue'
-                          ? 'bg-green-900/30 text-green-400 hover:bg-green-900/50'
-                          : 'bg-purple-900/30 text-purple-400 hover:bg-purple-900/50'
-                      }`}
-                    >
-                      #{entity.number}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-            {session.scheduled_job_id && (
-              <>
-                <span className="text-sm text-gray-500">|</span>
-                <button
-                  onClick={() => onShowSchedule?.(session.scheduled_job_id!)}
-                  className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs rounded bg-indigo-900/30 text-indigo-400 hover:bg-indigo-900/50 transition-colors"
-                  title="View schedule"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span>Scheduled</span>
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* Right: Controls */}
-          <div className="flex items-center gap-2 shrink-0">
-            {/* View toggle */}
-            <div className="flex items-center bg-gray-900 rounded-lg p-0.5">
-              <button
-                onClick={() => setViewMode('transcript')}
-                className="px-2.5 py-1 text-xs font-medium rounded-md transition-colors text-gray-400 hover:text-white"
-              >
-                Transcript
-              </button>
-              <button
-                onClick={() => setViewMode('terminal')}
-                className="px-2.5 py-1 text-xs font-medium rounded-md transition-colors bg-gray-700 text-white"
-              >
-                Terminal
-              </button>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              title="Close"
-              aria-label="Close session"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-        {/* Terminal (without its own header) */}
-        <div className="flex-1 min-h-0">
-          <Terminal
-            processId={processId}
-            showHeader={false}
-            onConnectionChange={setIsConnected}
-          />
-        </div>
-      </div>
-    );
-  }
+  // For active sessions with terminal, we render BOTH terminal and transcript views
+  // but hide the inactive one. This keeps the Terminal mounted so its xterm buffer
+  // is preserved when switching between views.
+  const showTerminalView = isActiveProcess && processId && viewMode === 'terminal';
+  const hasTerminal = isActiveProcess && !!processId;
 
   // Build a ParsedTranscript-compatible object for ConversationView
   // Include optimistic messages (user messages that haven't been confirmed by poll yet)
@@ -731,91 +636,139 @@ export function SessionView({
 
   // Transcript view (default, or only option for completed sessions)
   return (
-    <div className="h-full flex flex-col bg-[#0d1117] rounded-lg border border-gray-700 overflow-hidden">
+    <div className="h-full flex flex-col bg-[#0d1117] rounded-lg border border-gray-750 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3 px-4 py-2 bg-gray-800/50 border-b border-gray-700">
-        {/* Left: Title + Entity chips */}
+      <div className="flex items-center justify-between gap-3 px-4 py-2 bg-gray-800/50 border-b border-gray-750">
+        {/* Left: Title/Status + Entity chips */}
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          {!isActiveProcess && (
-            <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-          )}
-          {isEditingTitle ? (
-            <input
-              type="text"
-              value={editedTitle}
-              onChange={(e) => setEditedTitle(e.target.value)}
-              onKeyDown={handleTitleKeyDown}
-              onBlur={handleTitleSave}
-              className="text-sm font-medium text-white bg-gray-700 border border-gray-600 rounded px-2 py-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 min-w-0 flex-1"
-              autoFocus
-            />
+          {/* Terminal view: show connection status and process ID */}
+          {showTerminalView ? (
+            <>
+              <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${
+                isConnected
+                  ? 'bg-green-500/20 text-green-400'
+                  : 'bg-red-500/20 text-red-400'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  isConnected
+                    ? 'bg-green-400'
+                    : 'bg-red-400 animate-pulse'
+                }`} />
+                {isConnected ? 'Connected' : 'Disconnected'}
+              </div>
+              <span className="text-sm text-gray-500">|</span>
+              <span className="text-sm text-gray-400 shrink-0">{processId?.slice(0, 8)}</span>
+            </>
           ) : (
-            <h3
-              className={`text-sm font-medium text-white truncate ${onTitleChange ? 'cursor-pointer hover:text-blue-400 transition-colors' : ''}`}
-              onClick={onTitleChange ? handleTitleEdit : undefined}
-              title={onTitleChange ? 'Click to edit title' : undefined}
-            >
-              {title}
-            </h3>
-          )}
-          {entities.length > 0 && (
-            <div className="flex items-center gap-1 flex-wrap shrink-0">
-              {entities.map((entity, idx) => (
-                <span
-                  key={idx}
-                  className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded ${
-                    entity.kind === 'issue'
-                      ? 'bg-green-900/30 text-green-400'
-                      : 'bg-purple-900/30 text-purple-400'
-                  }`}
+            <>
+              {/* Transcript view: show title */}
+              {!isActiveProcess && (
+                <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+              )}
+              {isEditingTitle ? (
+                <input
+                  type="text"
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                  onKeyDown={handleTitleKeyDown}
+                  onBlur={handleTitleSave}
+                  className="text-sm font-medium text-white bg-gray-700 border border-gray-600 rounded px-2 py-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 min-w-0 flex-1"
+                  autoFocus
+                />
+              ) : (
+                <h3
+                  className={`text-sm font-medium text-white truncate ${onTitleChange ? 'cursor-pointer hover:text-blurple-400 transition-colors' : ''}`}
+                  onClick={onTitleChange ? handleTitleEdit : undefined}
+                  title={onTitleChange ? 'Click to edit title' : undefined}
                 >
-                  <button
-                    onClick={() => entity.kind === 'issue' ? onShowIssue?.(entity.number) : onShowPR?.(entity.number)}
-                    className="hover:underline"
-                  >
-                    #{entity.number}
-                  </button>
-                  <button
-                    onClick={() => handleRemoveEntity(idx)}
-                    className="opacity-60 hover:opacity-100 transition-opacity"
-                    title="Unlink"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </span>
-              ))}
-            </div>
+                  {title}
+                </h3>
+              )}
+            </>
+          )}
+          {/* Entities - shown in both views */}
+          {entities.length > 0 && (
+            <>
+              {showTerminalView && <span className="text-sm text-gray-500">|</span>}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {entities.map((entity, idx) => (
+                  showTerminalView ? (
+                    <button
+                      key={idx}
+                      onClick={() => entity.kind === 'issue' ? onShowIssue?.(entity.number) : onShowPR?.(entity.number)}
+                      className={`text-xs px-1.5 py-0.5 rounded transition-colors ${
+                        entity.kind === 'issue'
+                          ? 'bg-green-900/30 text-green-400 hover:bg-green-900/50'
+                          : 'bg-purple-900/30 text-purple-400 hover:bg-purple-900/50'
+                      }`}
+                    >
+                      #{entity.number}
+                    </button>
+                  ) : (
+                    <span
+                      key={idx}
+                      className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded ${
+                        entity.kind === 'issue'
+                          ? 'bg-green-900/30 text-green-400'
+                          : 'bg-purple-900/30 text-purple-400'
+                      }`}
+                    >
+                      <button
+                        onClick={() => entity.kind === 'issue' ? onShowIssue?.(entity.number) : onShowPR?.(entity.number)}
+                        className="hover:underline"
+                      >
+                        #{entity.number}
+                      </button>
+                      <button
+                        onClick={() => handleRemoveEntity(idx)}
+                        className="opacity-60 hover:opacity-100 transition-opacity"
+                        title="Unlink"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </span>
+                  )
+                ))}
+              </div>
+            </>
           )}
           {session.scheduled_job_id && (
-            <button
-              onClick={() => onShowSchedule?.(session.scheduled_job_id!)}
-              className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs rounded bg-indigo-900/30 text-indigo-400 hover:bg-indigo-900/50 transition-colors shrink-0"
-              title="View schedule"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>Scheduled</span>
-            </button>
+            <>
+              {showTerminalView && <span className="text-sm text-gray-500">|</span>}
+              <button
+                onClick={() => onShowSchedule?.(session.scheduled_job_id!)}
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs rounded bg-indigo-900/30 text-indigo-400 hover:bg-indigo-900/50 transition-colors shrink-0"
+                title="View schedule"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>Scheduled</span>
+              </button>
+            </>
           )}
         </div>
 
         {/* Right: Controls (never truncate) */}
         <div className="flex items-center gap-2 shrink-0">
           {/* View toggle (only show for active sessions with processId) */}
-          {isActiveProcess && processId && (
+          {hasTerminal && (
             <div className="flex items-center bg-gray-900 rounded-lg p-0.5 mr-1">
               <button
                 onClick={() => setViewMode('transcript')}
-                className="px-2.5 py-1 text-xs font-medium rounded-md transition-colors bg-gray-700 text-white"
+                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                  !showTerminalView ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'
+                }`}
               >
                 Transcript
               </button>
               <button
                 onClick={() => setViewMode('terminal')}
-                className="px-2.5 py-1 text-xs font-medium rounded-md transition-colors text-gray-400 hover:text-white"
+                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                  showTerminalView ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'
+                }`}
               >
                 Terminal
               </button>
@@ -850,7 +803,7 @@ export function SessionView({
               }
             }}
             className={`p-1.5 rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-              searchVisible ? 'bg-blue-600 text-white' : 'hover:bg-gray-700 text-gray-400 hover:text-white'
+              searchVisible ? 'bg-blurple-500 text-white' : 'hover:bg-gray-750 text-gray-400 hover:text-white'
             }`}
             title="Search transcript (Ctrl+F)"
             aria-label="Search transcript"
@@ -868,7 +821,7 @@ export function SessionView({
               className={`copy-button p-1.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                 copyStatus === 'copied'
                   ? 'bg-green-600 text-white'
-                  : 'hover:bg-gray-700 text-gray-400 hover:text-white'
+                  : 'hover:bg-gray-750 text-gray-400 hover:text-white'
               }`}
               title={copyStatus === 'copied' ? 'Copied!' : 'Copy transcript'}
               aria-label={copyStatus === 'copied' ? 'Copied to clipboard' : 'Copy transcript to clipboard'}
@@ -891,7 +844,7 @@ export function SessionView({
               <button
                 onClick={() => setShowExportMenu(!showExportMenu)}
                 className={`p-1.5 rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                  showExportMenu ? 'bg-gray-700 text-white' : 'hover:bg-gray-700 text-gray-400 hover:text-white'
+                  showExportMenu ? 'bg-gray-700 text-white' : 'hover:bg-gray-750 text-gray-400 hover:text-white'
                 }`}
                 title="Download transcript"
                 aria-label="Download transcript"
@@ -904,25 +857,25 @@ export function SessionView({
               </button>
 
               {showExportMenu && (
-                <div className="absolute right-0 top-full mt-1 w-44 bg-gray-800 border border-gray-700 rounded-lg shadow-lg py-1 z-50 origin-top-right animate-in fade-in zoom-in-95 duration-100">
+                <div className="absolute right-0 top-full mt-1 w-44 bg-gray-800 border border-gray-750 rounded-lg shadow-lg py-1 z-50 origin-top-right animate-in fade-in zoom-in-95 duration-100">
                   <div className="px-3 py-1.5 text-xs text-gray-500 font-medium">Download as</div>
                   <button
                     onClick={() => handleDownload('markdown')}
-                    className="w-full px-3 py-1.5 text-sm text-left hover:bg-gray-700 text-gray-300 flex items-center gap-2 transition-colors focus:outline-none focus:bg-gray-700"
+                    className="w-full px-3 py-1.5 text-sm text-left hover:bg-gray-750 text-gray-300 flex items-center gap-2 transition-colors focus:outline-none focus:bg-gray-700"
                   >
                     <span className="text-purple-400">.md</span>
                     <span>Markdown</span>
                   </button>
                   <button
                     onClick={() => handleDownload('text')}
-                    className="w-full px-3 py-1.5 text-sm text-left hover:bg-gray-700 text-gray-300 flex items-center gap-2 transition-colors focus:outline-none focus:bg-gray-700"
+                    className="w-full px-3 py-1.5 text-sm text-left hover:bg-gray-750 text-gray-300 flex items-center gap-2 transition-colors focus:outline-none focus:bg-gray-700"
                   >
-                    <span className="text-blue-400">.txt</span>
+                    <span className="text-blurple-400">.txt</span>
                     <span>Plain text</span>
                   </button>
                   <button
                     onClick={() => handleDownload('json')}
-                    className="w-full px-3 py-1.5 text-sm text-left hover:bg-gray-700 text-gray-300 flex items-center gap-2 transition-colors focus:outline-none focus:bg-gray-700"
+                    className="w-full px-3 py-1.5 text-sm text-left hover:bg-gray-750 text-gray-300 flex items-center gap-2 transition-colors focus:outline-none focus:bg-gray-700"
                   >
                     <span className="text-green-400">.json</span>
                     <span>JSON</span>
@@ -937,7 +890,7 @@ export function SessionView({
             <button
               onClick={() => setShowActionsMenu(!showActionsMenu)}
               className={`p-1.5 rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                showActionsMenu ? 'bg-gray-700 text-white' : 'hover:bg-gray-700 text-gray-400 hover:text-white'
+                showActionsMenu ? 'bg-gray-700 text-white' : 'hover:bg-gray-750 text-gray-400 hover:text-white'
               }`}
               title="Actions"
               aria-label="Actions"
@@ -950,13 +903,13 @@ export function SessionView({
             </button>
 
             {showActionsMenu && (
-              <div className="absolute right-0 top-full mt-1 w-40 bg-gray-800 border border-gray-700 rounded-lg shadow-lg py-1 z-50 origin-top-right animate-in fade-in zoom-in-95 duration-100">
+              <div className="absolute right-0 top-full mt-1 w-40 bg-gray-800 border border-gray-750 rounded-lg shadow-lg py-1 z-50 origin-top-right animate-in fade-in zoom-in-95 duration-100">
                 <button
                   onClick={() => {
                     setEntityPickerType('issue');
                     setShowActionsMenu(false);
                   }}
-                  className="w-full px-3 py-1.5 text-sm text-left hover:bg-gray-700 text-gray-300 flex items-center gap-2 transition-colors focus:outline-none focus:bg-gray-700"
+                  className="w-full px-3 py-1.5 text-sm text-left hover:bg-gray-750 text-gray-300 flex items-center gap-2 transition-colors focus:outline-none focus:bg-gray-700"
                 >
                   <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -968,7 +921,7 @@ export function SessionView({
                     setEntityPickerType('pr');
                     setShowActionsMenu(false);
                   }}
-                  className="w-full px-3 py-1.5 text-sm text-left hover:bg-gray-700 text-gray-300 flex items-center gap-2 transition-colors focus:outline-none focus:bg-gray-700"
+                  className="w-full px-3 py-1.5 text-sm text-left hover:bg-gray-750 text-gray-300 flex items-center gap-2 transition-colors focus:outline-none focus:bg-gray-700"
                 >
                   <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -979,7 +932,7 @@ export function SessionView({
                 {getInitialPrompt() && (
                   <button
                     onClick={handleCopyInitialPrompt}
-                    className="w-full px-3 py-1.5 text-sm text-left hover:bg-gray-700 text-gray-300 flex items-center gap-2 transition-colors focus:outline-none focus:bg-gray-700"
+                    className="w-full px-3 py-1.5 text-sm text-left hover:bg-gray-750 text-gray-300 flex items-center gap-2 transition-colors focus:outline-none focus:bg-gray-700"
                   >
                     {promptCopyStatus === 'copied' ? (
                       <>
@@ -990,7 +943,7 @@ export function SessionView({
                       </>
                     ) : (
                       <>
-                        <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 text-blurple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                         </svg>
                         Copy Prompt
@@ -1001,7 +954,7 @@ export function SessionView({
                 {/* Delete button - only for non-active sessions */}
                 {!isActiveProcess && onDelete && (
                   <>
-                    <div className="border-t border-gray-700 my-1" />
+                    <div className="border-t border-gray-750 my-1" />
                     <button
                       onClick={() => {
                         setShowDeleteConfirm(true);
@@ -1023,7 +976,7 @@ export function SessionView({
           {/* Close button */}
           <button
             onClick={onClose}
-            className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="p-1 hover:bg-gray-750 rounded text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             title="Close"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1035,7 +988,7 @@ export function SessionView({
 
       {/* Search bar */}
       {searchVisible && (
-        <div className="flex items-center gap-2 px-4 py-2 bg-gray-800/30 border-b border-gray-700">
+        <div className="flex items-center gap-2 px-4 py-2 bg-gray-800/30 border-b border-gray-750">
           <div className="relative flex-1 max-w-md">
             <input
               type="text"
@@ -1060,7 +1013,7 @@ export function SessionView({
                   const input = document.querySelector('[data-transcript-search]') as HTMLInputElement;
                   input?.focus();
                 }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-gray-750 text-gray-400 hover:text-white transition-colors"
                 title="Clear search"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1078,7 +1031,7 @@ export function SessionView({
               <button
                 onClick={goToPrevMatch}
                 disabled={totalMatches === 0}
-                className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="p-1 hover:bg-gray-750 rounded text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 title="Previous match (Shift+Enter)"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1088,7 +1041,7 @@ export function SessionView({
               <button
                 onClick={goToNextMatch}
                 disabled={totalMatches === 0}
-                className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="p-1 hover:bg-gray-750 rounded text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 title="Next match (Enter)"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1103,7 +1056,7 @@ export function SessionView({
               setSearchVisible(false);
               setSearchQuery('');
             }}
-            className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="p-1 hover:bg-gray-750 rounded text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             title="Close search (Esc)"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1113,12 +1066,25 @@ export function SessionView({
         </div>
       )}
 
-      {/* Content */}
-      <div className="flex-1 overflow-auto">
+      {/* Content - Terminal and Transcript views */}
+      {/* Terminal view: always mounted when hasTerminal, but hidden when not active */}
+      {/* This preserves xterm buffer across view switches */}
+      {hasTerminal && (
+        <div className={`flex-1 min-h-0 ${showTerminalView ? '' : 'hidden'}`}>
+          <Terminal
+            processId={processId!}
+            showHeader={false}
+            onConnectionChange={setIsConnected}
+          />
+        </div>
+      )}
+
+      {/* Transcript view: hidden when terminal view is active */}
+      <div className={`flex-1 overflow-auto ${showTerminalView ? 'hidden' : ''}`}>
         {loading && (
           <div className="p-4">
             {/* Stats bar skeleton */}
-            <div className="bg-gray-850 border-b border-gray-700 px-3 py-2 rounded-t-lg mb-4">
+            <div className="bg-gray-850 border-b border-gray-750 px-3 py-2 rounded-t-lg mb-4">
               <div className="flex items-center gap-4">
                 <div className="h-5 w-16 rounded-full skeleton-shimmer" />
                 <div className="h-4 w-24 rounded skeleton-shimmer" />
@@ -1143,7 +1109,7 @@ export function SessionView({
                   <div className="flex justify-start mb-1">
                     <div className="h-3 w-20 rounded skeleton-shimmer" />
                   </div>
-                  <div className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
+                  <div className="bg-gray-800 border border-gray-750 rounded-lg px-3 py-2">
                     <div className="h-4 w-full rounded skeleton-shimmer mb-2" />
                     <div className="h-4 w-5/6 rounded skeleton-shimmer mb-2" />
                     <div className="h-4 w-4/6 rounded skeleton-shimmer" />
@@ -1156,7 +1122,7 @@ export function SessionView({
 
         {error && (
           <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-            <div className="p-6 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-sm">
+            <div className="p-6 rounded-xl bg-gray-800/40 border border-gray-750/50 max-w-sm">
               <div className="w-14 h-14 rounded-full bg-red-900/30 flex items-center justify-center mx-auto mb-4">
                 <svg className="w-7 h-7 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -1214,7 +1180,7 @@ export function SessionView({
 
       {/* Message input for inactive sessions (continue with message) */}
       {!isActiveProcess && onContinue && (
-        <div className="shrink-0 border-t border-gray-700 bg-gray-900 p-3">
+        <div className="shrink-0 border-t border-gray-750 bg-gray-900 p-3">
           <Editor
             value={continueMessage}
             onChange={setContinueMessage}
@@ -1228,7 +1194,7 @@ export function SessionView({
             <button
               onClick={handleContinueWithMessage}
               disabled={isContinuing}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center gap-2 btn-press"
+              className="px-3 py-1.5 bg-blurple-500 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center gap-2 btn-press"
             >
               {isContinuing ? (
                 <>
@@ -1253,7 +1219,7 @@ export function SessionView({
       )}
 
       {/* Footer with metadata and token usage */}
-      <div className="px-4 py-2 border-t border-gray-700 bg-gray-800/30 space-y-2">
+      <div className="px-4 py-2 border-t border-gray-750 bg-gray-800/30 space-y-2">
         {/* Token usage bar (only show if we have token data) */}
         {detail && (detail.total_input_tokens > 0 || detail.total_output_tokens > 0) && (
           <TokenUsageBar
@@ -1308,7 +1274,7 @@ export function SessionView({
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setShowDeleteConfirm(false)}
           />
-          <div className="relative bg-gray-800 border border-gray-700 rounded-lg shadow-xl p-6 max-w-sm w-full mx-4 modal-content-enter">
+          <div className="relative bg-gray-800 border border-gray-750 rounded-lg shadow-xl p-6 max-w-sm w-full mx-4 modal-content-enter">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-red-900/50 flex items-center justify-center">
                 <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1327,7 +1293,7 @@ export function SessionView({
               <button
                 onClick={() => setShowDeleteConfirm(false)}
                 disabled={deleting}
-                className="px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-750 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
