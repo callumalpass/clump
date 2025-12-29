@@ -286,7 +286,7 @@ export function SessionTabs({
           newSessionDisabled
             ? 'text-gray-600 cursor-not-allowed'
             : 'text-gray-400 hover:text-pink-400 hover:bg-gray-800'
-        }`}
+        } ${sessions.length === 0 && !newSessionDisabled && !prefersReducedMotion ? 'action-breathe' : ''}`}
         title={newSessionDisabled ? "Select a repository first" : "New session (Ctrl+N)"}
         aria-label="Create new session"
       >

@@ -1622,6 +1622,26 @@ button:disabled .kbd-hint {
   animation: plus-wiggle 400ms ease-out forwards;
 }
 
+/* Gentle breathing animation for action buttons that need attention */
+@keyframes action-breathe {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.08);
+  }
+}
+
+.action-breathe {
+  animation: action-breathe 2.5s ease-in-out infinite;
+}
+
+.action-breathe:hover {
+  animation: none;
+}
+
 /* Page number edit mode transition - playful flip animation */
 @keyframes page-number-flip-out {
   0% {
@@ -1738,6 +1758,11 @@ button:disabled .kbd-hint {
   .plus-icon-wiggle {
     animation: none;
     transform: rotate(90deg);
+  }
+
+  /* Disable action breathe animation */
+  .action-breathe {
+    animation: none;
   }
 
   /* Disable status dot hover animation */
