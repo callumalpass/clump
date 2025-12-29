@@ -11,10 +11,15 @@ vi.mock('../hooks/useProcessWebSocket');
 vi.mock('./Terminal', () => ({
   Terminal: ({ processId, onConnectionChange }: { processId: string; onConnectionChange?: (connected: boolean) => void }) => {
     // Use useEffect to properly trigger the callback after mount
-    const { useEffect } = require('react');
-    useEffect(() => {
+    const React = require('react');
+    React.useEffect(() => {
       if (onConnectionChange) {
-        onConnectionChange(true);
+        // Use setTimeout to ensure the callback runs in a separate tick,
+        // avoiding act() warnings by allowing React to finish rendering first
+        const timeoutId = setTimeout(() => {
+          onConnectionChange(true);
+        }, 0);
+        return () => clearTimeout(timeoutId);
       }
     }, [onConnectionChange]);
     return <div data-testid="terminal">Terminal: {processId}</div>;

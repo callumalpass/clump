@@ -97,10 +97,14 @@
 [data-theme="light"] .bg-gray-800 { background-color: #ffffff !important; }
 [data-theme="light"] .bg-gray-750 { background-color: #eaeae5 !important; }
 [data-theme="light"] .bg-gray-700 { background-color: #dfe6e9 !important; }
+[data-theme="light"] .bg-gray-600 { background-color: #b2bec3 !important; }
+[data-theme="light"] .bg-gray-500 { background-color: #636e72 !important; }
+[data-theme="light"] .bg-gray-200 { background-color: #f4f4f0 !important; }
 [data-theme="light"] .bg-gray-800\/50 { background-color: rgba(255, 255, 255, 0.5) !important; }
 [data-theme="light"] .bg-gray-800\/40 { background-color: rgba(255, 255, 255, 0.4) !important; }
 [data-theme="light"] .bg-gray-750\/50 { background-color: rgba(234, 234, 229, 0.5) !important; }
 [data-theme="light"] .bg-gray-700\/30 { background-color: rgba(223, 230, 233, 0.3) !important; }
+[data-theme="light"] .bg-gray-600\/50 { background-color: rgba(178, 190, 195, 0.5) !important; }
 
 /* Sidebar with green tint gradient */
 [data-theme="light"] .light-sidebar-tint {
@@ -117,19 +121,31 @@
 [data-theme="light"] .text-gray-600 { color: #b2bec3 !important; }
 
 /* Border colors */
+[data-theme="light"] .border-gray-900 { border-color: #dfe6e9 !important; }
+[data-theme="light"] .border-gray-800 { border-color: #f4f4f0 !important; }
 [data-theme="light"] .border-gray-750 { border-color: #dfe6e9 !important; }
 [data-theme="light"] .border-gray-700 { border-color: #b2bec3 !important; }
-[data-theme="light"] .border-gray-800 { border-color: #f4f4f0 !important; }
+[data-theme="light"] .border-gray-600 { border-color: #b2bec3 !important; }
+[data-theme="light"] .border-gray-500 { border-color: #636e72 !important; }
+[data-theme="light"] .border-gray-400 { border-color: #636e72 !important; }
+
+/* Divide colors */
+[data-theme="light"] .divide-gray-700 > :not([hidden]) ~ :not([hidden]) { border-color: #dfe6e9 !important; }
+[data-theme="light"] .divide-gray-750 > :not([hidden]) ~ :not([hidden]) { border-color: #dfe6e9 !important; }
 
 /* Hover states */
-[data-theme="light"] .hover\:bg-gray-750:hover { background-color: #eaeae5 !important; }
+[data-theme="light"] .hover\:bg-gray-900:hover { background-color: #f4f4f0 !important; }
+[data-theme="light"] .hover\:bg-gray-850:hover { background-color: #eaeae5 !important; }
 [data-theme="light"] .hover\:bg-gray-800:hover { background-color: #f4f4f0 !important; }
 [data-theme="light"] .hover\:bg-gray-800\/50:hover { background-color: rgba(244, 244, 240, 0.5) !important; }
-[data-theme="light"] .hover\:bg-gray-850:hover { background-color: #eaeae5 !important; }
+[data-theme="light"] .hover\:bg-gray-750:hover { background-color: #eaeae5 !important; }
+[data-theme="light"] .hover\:bg-gray-700:hover { background-color: #dfe6e9 !important; }
+[data-theme="light"] .hover\:bg-gray-600:hover { background-color: #b2bec3 !important; }
 [data-theme="light"] .hover\:text-white:hover { color: #2d3436 !important; }
 [data-theme="light"] .hover\:text-gray-200:hover { color: #2d3436 !important; }
 [data-theme="light"] .hover\:text-gray-300:hover { color: #636e72 !important; }
 [data-theme="light"] .hover\:border-gray-700:hover { border-color: #b2bec3 !important; }
+[data-theme="light"] .hover\:border-gray-600:hover { border-color: #636e72 !important; }
 
 /* Group hover states */
 [data-theme="light"] .group:hover .group-hover\:text-white { color: #2d3436 !important; }
@@ -137,6 +153,58 @@
 
 /* Focus states */
 [data-theme="light"] .focus\:border-gray-600:focus { border-color: #b2bec3 !important; }
+[data-theme="light"] .focus\:ring-blue-500:focus { --tw-ring-color: #6c5ce7 !important; }
+[data-theme="light"] .focus-visible\:ring-blue-500:focus-visible { --tw-ring-color: #6c5ce7 !important; }
+
+/* Accent colors - Green (Mint) */
+[data-theme="light"] .text-green-400 { color: #00b894 !important; }
+[data-theme="light"] .text-green-500 { color: #00b894 !important; }
+[data-theme="light"] .text-green-300 { color: #55efc4 !important; }
+[data-theme="light"] .bg-green-500 { background-color: #00b894 !important; }
+[data-theme="light"] .bg-green-600 { background-color: #00a884 !important; }
+[data-theme="light"] .bg-green-700 { background-color: #009874 !important; }
+[data-theme="light"] .bg-green-900 { background-color: rgba(0, 184, 148, 0.15) !important; }
+[data-theme="light"] .bg-green-500\/20 { background-color: rgba(0, 184, 148, 0.2) !important; }
+
+/* Accent colors - Purple (Blurple) */
+[data-theme="light"] .text-purple-400 { color: #6c5ce7 !important; }
+[data-theme="light"] .text-purple-300 { color: #a29bfe !important; }
+[data-theme="light"] .bg-purple-500 { background-color: #6c5ce7 !important; }
+[data-theme="light"] .bg-purple-900 { background-color: rgba(108, 92, 231, 0.15) !important; }
+[data-theme="light"] .bg-purple-500\/20 { background-color: rgba(108, 92, 231, 0.2) !important; }
+
+/* Accent colors - Blue */
+[data-theme="light"] .text-blue-400 { color: #0984e3 !important; }
+[data-theme="light"] .text-blue-300 { color: #74b9ff !important; }
+[data-theme="light"] .bg-blue-500 { background-color: #0984e3 !important; }
+[data-theme="light"] .bg-blue-600 { background-color: #0873c4 !important; }
+[data-theme="light"] .bg-blue-700 { background-color: #0763a5 !important; }
+[data-theme="light"] .bg-blue-900 { background-color: rgba(9, 132, 227, 0.15) !important; }
+[data-theme="light"] .bg-blue-500\/20 { background-color: rgba(9, 132, 227, 0.2) !important; }
+
+/* Accent colors - Red */
+[data-theme="light"] .text-red-400 { color: #d63031 !important; }
+[data-theme="light"] .text-red-500 { color: #d63031 !important; }
+[data-theme="light"] .text-red-300 { color: #ff7675 !important; }
+[data-theme="light"] .bg-red-500 { background-color: #d63031 !important; }
+[data-theme="light"] .bg-red-600 { background-color: #c0292a !important; }
+[data-theme="light"] .bg-red-700 { background-color: #aa2223 !important; }
+[data-theme="light"] .bg-red-900 { background-color: rgba(214, 48, 49, 0.15) !important; }
+[data-theme="light"] .bg-red-950 { background-color: rgba(214, 48, 49, 0.1) !important; }
+[data-theme="light"] .bg-red-500\/20 { background-color: rgba(214, 48, 49, 0.2) !important; }
+
+/* Accent colors - Yellow */
+[data-theme="light"] .text-yellow-400 { color: #d19a00 !important; }
+[data-theme="light"] .text-yellow-500 { color: #d19a00 !important; }
+[data-theme="light"] .text-yellow-300 { color: #fdcb6e !important; }
+[data-theme="light"] .bg-yellow-400 { background-color: #fdcb6e !important; }
+[data-theme="light"] .bg-yellow-500 { background-color: #f9b800 !important; }
+[data-theme="light"] .bg-yellow-500\/20 { background-color: rgba(253, 203, 110, 0.2) !important; }
+
+/* Ring colors for focus */
+[data-theme="light"] .ring-blue-500 { --tw-ring-color: #6c5ce7 !important; }
+[data-theme="light"] .ring-green-500 { --tw-ring-color: #00b894 !important; }
+[data-theme="light"] .ring-red-500 { --tw-ring-color: #d63031 !important; }
 
 /* Scrollbar for light theme */
 [data-theme="light"] * {

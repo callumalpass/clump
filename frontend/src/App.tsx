@@ -1385,7 +1385,10 @@ export default function App() {
           <span className="ml-1.5 inline-block w-2 h-2 rounded-full bg-mint-400 group-hover:bg-pink-400 group-hover:scale-125 transition-all duration-200" />
         </h1>
         <div className="flex items-center gap-6">
-          <span className="text-sm text-gray-400">
+          <span
+            className="text-sm text-gray-400"
+            title={processes.length === 0 ? "No Claude Code sessions running" : `${processes.length} Claude Code session${processes.length !== 1 ? 's' : ''} actively running`}
+          >
             {processes.length} active process{processes.length !== 1 ? 'es' : ''}
           </span>
           {/* Usage stats summary */}
@@ -1411,7 +1414,7 @@ export default function App() {
             title="Keyboard shortcuts (?)"
           >
             <kbd className="px-2 py-1 bg-gray-850 border border-gray-750 rounded-stoody-sm text-gray-400 shadow-stoody-sm">?</kbd>
-            <span>Help</span>
+            <span>Shortcuts</span>
           </button>
           <button
             onClick={() => setSettingsOpen(true)}
@@ -1457,7 +1460,7 @@ export default function App() {
 
       <Group orientation="horizontal" className="flex-1 min-h-0">
         {/* Left sidebar */}
-        <Panel defaultSize="380px" minSize="240px" maxSize="700px" className="border-r border-gray-750 flex flex-col bg-gray-900">
+        <Panel defaultSize="380px" minSize="240px" maxSize="700px" className="border-r border-gray-750 flex flex-col bg-gray-900 light-sidebar-tint">
           <RepoSelector
             repos={repos}
             selectedRepo={selectedRepo}

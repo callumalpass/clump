@@ -214,7 +214,7 @@ test.describe('UI Exploration - Modals', () => {
     await waitForAnimations(page);
 
     // Open keyboard shortcuts
-    await page.getByRole('button', { name: /help/i }).click();
+    await page.getByRole('button', { name: /shortcuts/i }).click();
     await waitForAnimations(page);
 
     await screenshot(page, '10-keyboard-shortcuts-modal');
@@ -338,7 +338,7 @@ test.describe('UI Exploration - Viewport Sizes', () => {
 });
 
 test.describe('UI Exploration - Error States', () => {
-  test('API error on issues fetch', async ({ page }) => {
+  test('API error on issues fetch shows error UI', async ({ page }) => {
     // Mock other endpoints first
     await mockAllApis(page, {
       repos: mockRepos,
@@ -359,10 +359,58 @@ test.describe('UI Exploration - Error States', () => {
     await page.goto('/');
     await selectRepo(page);
 
-    // Wait a bit for error state to appear
+    // Wait for error state to appear
     await page.waitForTimeout(500);
 
+    // Verify error UI is shown with retry button in left panel
+    await expect(page.getByText('Failed to load issues')).toBeVisible();
+    await expect(page.getByRole('button', { name: /try again/i })).toBeVisible();
+
+    // Verify center pane shows error-aware state instead of generic empty state
+    await expect(page.getByText('Unable to load issues')).toBeVisible();
+    await expect(page.getByText('There was a problem fetching data from the server')).toBeVisible();
+
     await screenshot(page, '19-error-issues-fetch');
+  });
+
+  test('API error on PRs fetch shows error UI', async ({ page }) => {
+    // Mock other endpoints first
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+    });
+
+    // Remove the PRs route set up by mockAllApis, then add error route
+    // Playwright routes run in LIFO order (last registered takes precedence)
+    await page.unroute('**/api/repos/*/prs*');
+    await page.route('**/api/repos/*/prs*', async (route) => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Internal server error' }),
+      });
+    });
+
+    await page.goto('/');
+    await selectRepo(page);
+
+    // Switch to PRs tab
+    await page.getByRole('tab', { name: /PRs/i }).click();
+    await waitForAnimations(page);
+
+    // Wait for error state to appear
+    await page.waitForTimeout(500);
+
+    // Verify error UI is shown in left panel
+    await expect(page.getByText('Failed to load pull requests')).toBeVisible();
+
+    // Verify center pane shows error-aware state
+    await expect(page.getByText('Unable to load pull requests')).toBeVisible();
+
+    await screenshot(page, '51-error-prs-fetch');
   });
 
   test('empty issues list', async ({ page }) => {
@@ -1113,5 +1161,222 @@ test.describe('UI Exploration - Tooltip States', () => {
     }
 
     await screenshot(page, '50-session-tooltip-hover');
+  });
+});
+
+test.describe('UI Exploration - Settings Selection States', () => {
+  test('permissions tab shows selected mode with border and checkmark', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      sessions: mockSessions,
+      settings: { ...mockSettings, permission_mode: 'default' },
+      sessionCounts: mockSessionCounts,
+    });
+
+    await page.goto('/');
+    await waitForAnimations(page);
+
+    // Open settings
+    await page.locator('button[title="Settings"]').click();
+    await waitForAnimations(page);
+
+    // Click Permissions tab
+    await page.getByRole('button', { name: /permissions/i }).click();
+    await waitForAnimations(page);
+
+    // Verify we can see the permission mode cards
+    await expect(page.getByRole('button', { name: /Default/ })).toBeVisible();
+    await expect(page.getByText('Prompts for each permission')).toBeVisible();
+
+    await screenshot(page, '52-settings-permission-mode-selected');
+  });
+
+  test('execution tab shows selected model with border', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      sessions: mockSessions,
+      settings: { ...mockSettings, model: 'sonnet' },
+      sessionCounts: mockSessionCounts,
+    });
+
+    await page.goto('/');
+    await waitForAnimations(page);
+
+    // Open settings
+    await page.locator('button[title="Settings"]').click();
+    await waitForAnimations(page);
+
+    // Click Execution tab
+    await page.getByRole('button', { name: /execution/i }).click();
+    await waitForAnimations(page);
+
+    await screenshot(page, '53-settings-model-selected');
+  });
+
+  test('advanced tab shows selected theme with border', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+    });
+
+    await page.goto('/');
+    await waitForAnimations(page);
+
+    // Open settings
+    await page.locator('button[title="Settings"]').click();
+    await waitForAnimations(page);
+
+    // Click Advanced tab
+    await page.getByRole('button', { name: /advanced/i }).click();
+    await waitForAnimations(page);
+
+    // Verify theme options are visible
+    await expect(page.getByRole('button', { name: /dark/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /light/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /system/i })).toBeVisible();
+
+    await screenshot(page, '54-settings-theme-selected');
+  });
+});
+
+test.describe('UI Exploration - Light Theme', () => {
+  test('light theme applied to main interface', async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+
+    await page.goto('/');
+    await waitForAnimations(page);
+
+    // Open settings and switch to light theme
+    await page.locator('button[title="Settings"]').click();
+    await waitForAnimations(page);
+
+    await page.getByRole('button', { name: /advanced/i }).click();
+    await waitForAnimations(page);
+
+    // Click Light theme button
+    await page.getByRole('button', { name: /light/i }).click();
+    await waitForAnimations(page);
+
+    // Close settings (use aria-label "Close" button to avoid ambiguity)
+    await page.getByLabel('Close').click();
+    await waitForAnimations(page);
+
+    // Select a repo to see the full UI
+    await selectRepo(page);
+
+    await screenshot(page, '55-light-theme-main');
+  });
+});
+
+test.describe('UI Exploration - Button Hover States', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+  });
+
+  test('analyze button hover state', async ({ page }) => {
+    await page.goto('/');
+    await selectRepo(page);
+
+    // Find and hover over an analyze button
+    const analyzeBtn = page.getByRole('button', { name: /analyze/i }).first();
+    if (await analyzeBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await analyzeBtn.hover();
+      await waitForAnimations(page);
+    }
+
+    await screenshot(page, '56-analyze-button-hover');
+  });
+
+  test('settings button hover state', async ({ page }) => {
+    await page.goto('/');
+    await waitForAnimations(page);
+
+    // Hover over settings button
+    await page.locator('button[title="Settings"]').hover();
+    await waitForAnimations(page);
+
+    await screenshot(page, '57-settings-button-hover');
+  });
+});
+
+test.describe('UI Exploration - Pagination States', () => {
+  test.beforeEach(async ({ page }) => {
+    // Create more issues for pagination
+    const manyIssues = Array.from({ length: 35 }, (_, i) => ({
+      number: 100 + i,
+      title: `Test issue ${i + 1}`,
+      body: `Body for issue ${i + 1}`,
+      state: 'open' as const,
+      labels: [],
+      author: 'testuser',
+      created_at: '2024-01-15T10:00:00Z',
+      updated_at: '2024-01-16T14:30:00Z',
+      comments_count: 0,
+      url: `https://github.com/acme/webapp/issues/${100 + i}`,
+    }));
+
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: manyIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+  });
+
+  test('pagination controls visible with many items', async ({ page }) => {
+    await page.goto('/');
+    await selectRepo(page);
+
+    // Should see pagination controls (use .first() since there are multiple matching elements)
+    await expect(page.getByText(/\d+ issues/).first()).toBeVisible();
+
+    await screenshot(page, '58-pagination-controls');
+  });
+});
+
+test.describe('UI Exploration - Star Toggle Animation', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAllApis(page, {
+      repos: mockRepos,
+      issues: mockIssues,
+      prs: mockPRs,
+      sessions: mockSessions,
+      settings: mockSettings,
+      sessionCounts: mockSessionCounts,
+      commands: mockCommands,
+    });
+  });
+
+  test('starred session shows star icon', async ({ page }) => {
+    await page.goto('/');
+    await selectRepo(page);
+
+    // Go to History tab
+    await page.getByRole('tab', { name: /History/i }).click();
+    await waitForAnimations(page);
+
+    // Look for starred session (mockSessions has one starred)
+    await screenshot(page, '59-starred-session-icon');
   });
 });

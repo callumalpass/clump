@@ -7,6 +7,7 @@ import { TokenUsageBar } from './TokenUsageBar';
 import type { SessionSummary, SessionDetail, EntityLink, Issue, PR, ParsedTranscript, TranscriptMessage } from '../types';
 import { fetchSessionDetail, addEntityToSession, removeEntityFromSession } from '../hooks/useApi';
 import { useProcessWebSocket } from '../hooks/useProcessWebSocket';
+import { useTheme } from '../hooks/useTheme';
 import { formatDuration } from '../utils/time';
 import { focusRing } from '../utils/styles';
 
@@ -297,6 +298,10 @@ export function SessionView({
   onViewModeChange,
   needsAttention,
 }: SessionViewProps) {
+  // Theme for styling
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+
   // Determine if process is active (has a running PTY)
   const isActiveProcess = !!processId || session.is_active;
 
@@ -724,9 +729,13 @@ export function SessionView({
     git_branch: detail.git_branch || undefined,
   } : null;
 
+  // Theme-aware colors for the container
+  const containerBg = isLight ? 'bg-[#fdfbf7]' : 'bg-[#2d3436]';
+  const containerBorder = isLight ? 'border-[#dfe6e9]' : 'border-gray-750';
+
   // Transcript view (default, or only option for completed sessions)
   return (
-    <div className="h-full flex flex-col bg-[#0d1117] rounded-lg border border-gray-750 overflow-hidden">
+    <div className={`h-full flex flex-col ${containerBg} rounded-lg border ${containerBorder} overflow-hidden`}>
       {/* Header */}
       <div className="flex items-center justify-between gap-3 px-4 py-2 bg-gray-800/50 border-b border-gray-750">
         {/* Left: Title/Status + Entity chips */}

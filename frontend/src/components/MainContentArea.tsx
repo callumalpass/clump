@@ -203,13 +203,18 @@ function QuickNavItem({ shortcut, label, active = false, onClick }: { shortcut: 
       disabled={active}
       className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-400 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900 ${
         active
-          ? 'bg-blurple-500/20 text-blurple-400 cursor-default'
-          : 'bg-gray-700/30 text-gray-400 hover:bg-gray-750/50 hover:text-gray-200 active:scale-[0.98]'
+          ? 'bg-blurple-500/20 text-blurple-400 cursor-default border border-blurple-500/30'
+          : 'bg-gray-700/30 text-gray-400 hover:bg-gray-750/50 hover:text-gray-200 active:scale-[0.98] border border-transparent'
       }`}
       aria-current={active ? 'page' : undefined}
     >
       <KeyHint>{shortcut}</KeyHint>
       <span className="text-sm">{label}</span>
+      {active && (
+        <svg className="w-3 h-3 text-blurple-400 ml-auto" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+        </svg>
+      )}
     </button>
   );
 }

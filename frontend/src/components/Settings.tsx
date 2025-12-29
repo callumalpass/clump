@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { useClaudeSettings } from '../hooks/useApi';
+import { useTheme, type Theme } from '../hooks/useTheme';
 import type { PermissionMode, OutputFormat, CommandMetadata } from '../types';
 import { CommandEditor } from './CommandEditor';
 import { AlertMessage } from './AlertMessage';
@@ -19,6 +20,7 @@ interface SettingsProps {
 
 export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommands }: SettingsProps) {
   const { settings, loading, error, saving, updateSettings, resetSettings } = useClaudeSettings();
+  const { theme, setTheme } = useTheme();
   const [customTool, setCustomTool] = useState('');
   const [activeTab, setActiveTab] = useState<'github' | 'permissions' | 'execution' | 'commands' | 'advanced'>('github');
 
@@ -367,12 +369,19 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                       key={mode.value}
                       onClick={() => handlePermissionModeChange(mode.value as PermissionMode)}
                       disabled={saving}
-                      className={`p-4 rounded-stoody text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all ${
+                      className={`p-4 rounded-stoody text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all border-2 relative ${
                         settings.permission_mode === mode.value
-                          ? 'bg-blurple-500/10 shadow-stoody-sm'
-                          : 'bg-gray-800 hover:bg-gray-850'
+                          ? 'bg-blurple-500/10 border-blurple-400 shadow-stoody-sm'
+                          : 'bg-gray-800 border-transparent hover:bg-gray-850 hover:border-gray-700'
                       }`}
                     >
+                      {settings.permission_mode === mode.value && (
+                        <div className="absolute top-2 right-2">
+                          <svg className="w-4 h-4 text-blurple-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                      )}
                       <div className="font-medium text-sm">{mode.label}</div>
                       <div className="text-xs text-gray-400 mt-1">{mode.desc}</div>
                     </button>
@@ -465,10 +474,10 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                       key={model}
                       onClick={() => handleModelChange(model)}
                       disabled={saving}
-                      className={`flex-1 px-4 py-2.5 rounded-stoody capitalize focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all ${
+                      className={`flex-1 px-4 py-2.5 rounded-stoody capitalize focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all border-2 ${
                         settings.model === model
-                          ? 'bg-blurple-500/10 shadow-stoody-sm'
-                          : 'bg-gray-800 hover:bg-gray-850'
+                          ? 'bg-blurple-500/10 border-blurple-400 shadow-stoody-sm'
+                          : 'bg-gray-800 border-transparent hover:bg-gray-850 hover:border-gray-700'
                       }`}
                     >
                       {model}
@@ -493,10 +502,10 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                       key={format.value}
                       onClick={() => handleOutputFormatChange(format.value as OutputFormat)}
                       disabled={saving}
-                      className={`flex-1 px-4 py-2.5 rounded-stoody focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all ${
+                      className={`flex-1 px-4 py-2.5 rounded-stoody focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all border-2 ${
                         settings.output_format === format.value
-                          ? 'bg-blurple-500/10 shadow-stoody-sm'
-                          : 'bg-gray-800 hover:bg-gray-850'
+                          ? 'bg-blurple-500/10 border-blurple-400 shadow-stoody-sm'
+                          : 'bg-gray-800 border-transparent hover:bg-gray-850 hover:border-gray-700'
                       }`}
                     >
                       {format.label}
@@ -536,6 +545,60 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
 
           {settings && activeTab === 'advanced' && (
             <div className="space-y-6 tab-content-enter" key="advanced-tab">
+              {/* Theme Selection */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Theme</label>
+                <p className="text-xs text-gray-400 mb-3">
+                  Choose your preferred color scheme
+                </p>
+                <div className="flex gap-3">
+                  {/* Dark mode */}
+                  <button
+                    onClick={() => setTheme('dark')}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-stoody focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all border-2 ${
+                      theme === 'dark'
+                        ? 'bg-blurple-500/10 border-blurple-400 shadow-stoody-sm'
+                        : 'bg-gray-800 border-transparent hover:bg-gray-850 hover:border-gray-700'
+                    }`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                    Dark
+                  </button>
+
+                  {/* Light mode */}
+                  <button
+                    onClick={() => setTheme('light')}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-stoody focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all border-2 ${
+                      theme === 'light'
+                        ? 'bg-blurple-500/10 border-blurple-400 shadow-stoody-sm'
+                        : 'bg-gray-800 border-transparent hover:bg-gray-850 hover:border-gray-700'
+                    }`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                    Light
+                  </button>
+
+                  {/* System mode */}
+                  <button
+                    onClick={() => setTheme('system')}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-stoody focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-500 transition-all border-2 ${
+                      theme === 'system'
+                        ? 'bg-blurple-500/10 border-blurple-400 shadow-stoody-sm'
+                        : 'bg-gray-800 border-transparent hover:bg-gray-850 hover:border-gray-700'
+                    }`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    System
+                  </button>
+                </div>
+              </div>
+
               {/* MCP GitHub */}
               <div className="bg-gray-800 rounded-stoody p-4">
                 <label className="flex items-center gap-4 cursor-pointer">
