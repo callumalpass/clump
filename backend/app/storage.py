@@ -9,13 +9,22 @@ We store sidecar metadata in:
 
 The encoded-path uses Claude's format: path with slashes replaced by dashes.
 e.g., /home/user/projects/myapp -> -home-user-projects-myapp
+
+Performance optimizations:
+- Parallel filesystem scanning using thread pool
+- Batched I/O operations for session discovery
 """
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from datetime import datetime
 from typing import Any, TypedDict, Optional
 from dataclasses import dataclass, field
+
+
+# Thread pool for parallel filesystem operations
+_fs_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="fs_scan")
 
 
 class RepoInfo(TypedDict):
@@ -177,12 +186,71 @@ def is_subsession(session_id: str) -> bool:
     return session_id.startswith("agent-")
 
 
+def _scan_project_dir(
+    project_dir: Path,
+    include_subsessions: bool,
+    clump_projects_dir: Path,
+) -> list[DiscoveredSession]:
+    """
+    Scan a single project directory for sessions.
+
+    This is designed to be called in parallel from a thread pool.
+    """
+    sessions: list[DiscoveredSession] = []
+    encoded_path = project_dir.name
+
+    # Batch stat all JSONL files in this directory
+    try:
+        jsonl_files = list(project_dir.glob("*.jsonl"))
+    except OSError:
+        return sessions
+
+    for jsonl_file in jsonl_files:
+        session_id = jsonl_file.stem  # filename without extension
+
+        # Skip subsessions unless explicitly requested
+        if not include_subsessions and is_subsession(session_id):
+            continue
+
+        try:
+            stat = jsonl_file.stat()
+            modified_at = datetime.fromtimestamp(stat.st_mtime)
+            file_size = stat.st_size
+        except OSError:
+            continue
+
+        # Try to load sidecar metadata (inline to avoid function call overhead)
+        metadata = None
+        sidecar_path = clump_projects_dir / encoded_path / f"{session_id}.json"
+        if sidecar_path.exists():
+            try:
+                with open(sidecar_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    metadata = SessionMetadata.from_dict(data)
+            except (json.JSONDecodeError, IOError, KeyError):
+                pass
+
+        sessions.append(DiscoveredSession(
+            session_id=session_id,
+            encoded_path=encoded_path,
+            transcript_path=jsonl_file,
+            modified_at=modified_at,
+            file_size=file_size,
+            metadata=metadata,
+        ))
+
+    return sessions
+
+
 def discover_sessions(
     repo_path: Optional[str] = None,
     include_subsessions: bool = False,
 ) -> list[DiscoveredSession]:
     """
     Discover all Claude sessions from ~/.claude/projects/.
+
+    Uses parallel filesystem scanning for improved performance on large
+    project directories.
 
     Args:
         repo_path: Optional path to filter sessions by repo.
@@ -198,49 +266,48 @@ def discover_sessions(
     if not claude_projects.exists():
         return []
 
-    sessions: list[DiscoveredSession] = []
-
     # If filtering by repo, only look in that directory
     if repo_path:
         encoded = encode_path(repo_path)
         project_dirs = [claude_projects / encoded] if (claude_projects / encoded).exists() else []
     else:
-        project_dirs = [d for d in claude_projects.iterdir() if d.is_dir()]
+        try:
+            project_dirs = [d for d in claude_projects.iterdir() if d.is_dir()]
+        except OSError:
+            return []
 
-    for project_dir in project_dirs:
-        encoded_path = project_dir.name
+    # For single directory, scan directly without thread pool overhead
+    if len(project_dirs) <= 1:
+        if not project_dirs:
+            return []
+        clump_projects_dir = get_clump_projects_dir()
+        sessions = _scan_project_dir(project_dirs[0], include_subsessions, clump_projects_dir)
+        sessions.sort(key=lambda s: s.modified_at, reverse=True)
+        return sessions
 
-        # Find all JSONL files in this project directory
-        for jsonl_file in project_dir.glob("*.jsonl"):
-            session_id = jsonl_file.stem  # filename without extension
+    # For multiple directories, scan in parallel using thread pool
+    clump_projects_dir = get_clump_projects_dir()
 
-            # Skip subsessions unless explicitly requested
-            if not include_subsessions and is_subsession(session_id):
-                continue
+    # Submit all directory scans to the thread pool
+    futures = [
+        _fs_executor.submit(_scan_project_dir, project_dir, include_subsessions, clump_projects_dir)
+        for project_dir in project_dirs
+    ]
 
-            try:
-                stat = jsonl_file.stat()
-                modified_at = datetime.fromtimestamp(stat.st_mtime)
-                file_size = stat.st_size
-            except OSError:
-                continue
-
-            # Try to load sidecar metadata
-            metadata = get_session_metadata(encoded_path, session_id)
-
-            sessions.append(DiscoveredSession(
-                session_id=session_id,
-                encoded_path=encoded_path,
-                transcript_path=jsonl_file,
-                modified_at=modified_at,
-                file_size=file_size,
-                metadata=metadata,
-            ))
+    # Collect all results
+    all_sessions: list[DiscoveredSession] = []
+    for future in futures:
+        try:
+            sessions = future.result(timeout=30)  # 30s timeout per directory
+            all_sessions.extend(sessions)
+        except Exception:
+            # Skip directories that fail to scan
+            continue
 
     # Sort by modification time, newest first
-    sessions.sort(key=lambda s: s.modified_at, reverse=True)
+    all_sessions.sort(key=lambda s: s.modified_at, reverse=True)
 
-    return sessions
+    return all_sessions
 
 
 def get_session_metadata(encoded_path: str, session_id: str) -> Optional[SessionMetadata]:

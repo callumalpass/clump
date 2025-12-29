@@ -6,13 +6,19 @@ This module provides:
 - Engine/session factory management per repo
 - Lazy initialization of databases
 - Context managers for getting database sessions
+
+Performance optimizations:
+- WAL mode for better read/write concurrency
+- Optimized SQLite pragmas for performance
 """
 
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker, AsyncEngine
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import StaticPool
 
 from app.storage import get_repo_db_path
 
@@ -28,12 +34,44 @@ _session_factories: dict[str, async_sessionmaker[AsyncSession]] = {}
 _initialized_dbs: set[str] = set()  # Track which DBs have been initialized
 
 
+def _set_sqlite_pragmas(dbapi_conn, connection_record):
+    """Set SQLite pragmas for optimal performance on each connection."""
+    cursor = dbapi_conn.cursor()
+    # WAL mode for better read/write concurrency
+    cursor.execute("PRAGMA journal_mode=WAL")
+    # Synchronous NORMAL is safe with WAL and faster than FULL
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    # Increase cache size (negative = KB, so -64000 = 64MB)
+    cursor.execute("PRAGMA cache_size=-64000")
+    # Store temp tables in memory
+    cursor.execute("PRAGMA temp_store=MEMORY")
+    # Enable memory-mapped I/O (256MB)
+    cursor.execute("PRAGMA mmap_size=268435456")
+    cursor.close()
+
+
 def _get_engine(local_path: str) -> AsyncEngine:
     """Get or create an engine for a repo's database."""
     if local_path not in _engines:
         db_path = get_repo_db_path(local_path)
         db_url = f"sqlite+aiosqlite:///{db_path}"
-        _engines[local_path] = create_async_engine(db_url, echo=False)
+
+        # Use StaticPool for SQLite to maintain a single connection per engine
+        # This works well with aiosqlite's async nature and avoids connection churn
+        engine = create_async_engine(
+            db_url,
+            echo=False,
+            poolclass=StaticPool,
+            connect_args={
+                "timeout": 30,  # Wait up to 30s for locks
+                "check_same_thread": False,  # Required for async
+            },
+        )
+
+        # Register event listener to set pragmas on each new connection
+        event.listen(engine.sync_engine, "connect", _set_sqlite_pragmas)
+
+        _engines[local_path] = engine
 
     return _engines[local_path]
 
