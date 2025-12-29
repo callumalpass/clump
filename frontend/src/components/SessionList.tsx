@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useState, useRef, useEffect } from 'react';
 import type { SessionSummary, Process, BulkOperationResult } from '../types';
 import { getModelShortName, getModelTextColor } from '../utils/models';
 import { formatRelativeTime, formatDuration, isRecentlyModified } from '../utils/time';
@@ -45,6 +45,18 @@ const SessionListItem = memo(function SessionListItem({
   selectionMode = false,
   isViewing = false,
 }: SessionListItemProps) {
+  // Track checkbox bounce animation
+  const [isBouncing, setIsBouncing] = useState(false);
+  const prevSelectedRef = useRef(isSelected);
+
+  // Trigger bounce animation when selection changes
+  useEffect(() => {
+    if (isSelected !== prevSelectedRef.current) {
+      setIsBouncing(true);
+      prevSelectedRef.current = isSelected;
+    }
+  }, [isSelected]);
+
   // Format repo path for display - show last 2-3 segments
   const formatRepoPath = (s: SessionSummary) => {
     if (s.repo_name) return s.repo_name;
@@ -83,11 +95,12 @@ const SessionListItem = memo(function SessionListItem({
         {selectionMode && onToggleSelect && (
           <button
             onClick={onToggleSelect}
+            onAnimationEnd={() => setIsBouncing(false)}
             className={`flex-shrink-0 w-4 h-4 rounded border transition-colors ${
               isSelected
                 ? 'bg-blue-500 border-blue-500'
                 : 'border-gray-500 hover:border-gray-400'
-            }`}
+            } ${isBouncing ? 'checkbox-bounce' : ''}`}
             title={isSelected ? 'Deselect' : 'Select'}
           >
             {isSelected && (
@@ -101,7 +114,7 @@ const SessionListItem = memo(function SessionListItem({
         {/* Status indicator with text label for accessibility */}
         {session.is_active ? (
           <span
-            className="status-badge status-badge-enter inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-stoody-lg bg-warning-500/20 text-warning-500 flex-shrink-0"
+            className="status-badge status-badge-enter status-badge-active inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-stoody-lg bg-warning-500/20 text-warning-500 flex-shrink-0"
             title="Session is actively running"
             aria-label="Active session"
           >
@@ -110,7 +123,7 @@ const SessionListItem = memo(function SessionListItem({
           </span>
         ) : isRecentlyModified(session.modified_at) ? (
           <span
-            className="status-badge status-badge-enter inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-stoody-lg bg-blurple-400/20 text-blurple-400 flex-shrink-0"
+            className="status-badge status-badge-enter status-badge-recent inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-stoody-lg bg-blurple-400/20 text-blurple-400 flex-shrink-0"
             title="Session updated in the last 10 minutes"
             aria-label="Recently updated session"
           >
@@ -119,7 +132,7 @@ const SessionListItem = memo(function SessionListItem({
           </span>
         ) : (
           <span
-            className="status-badge status-badge-enter inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-stoody-lg bg-mint-400/20 text-mint-400 flex-shrink-0"
+            className="status-badge status-badge-enter status-badge-done inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-stoody-lg bg-mint-400/20 text-mint-400 flex-shrink-0"
             title="Session completed"
             aria-label="Completed session"
           >

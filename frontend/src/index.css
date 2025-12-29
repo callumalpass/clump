@@ -412,10 +412,20 @@
   border-color: #6c5ce7;
 }
 
-/* Active session badge in light theme - warmer orange */
+/* Active session badge in light theme - warmer orange with border */
 [data-theme="light"] .active-session-badge-light {
   background-color: rgba(243, 156, 18, 0.15);
-  color: #d68910;
+  color: #b8860b;
+  border: 1px solid rgba(243, 156, 18, 0.3);
+}
+
+/* Active sessions header badge - more visible in light theme */
+[data-theme="light"] .bg-warning-500\/20 {
+  background-color: rgba(243, 156, 18, 0.18) !important;
+}
+
+[data-theme="light"] .text-warning-500 {
+  color: #b8860b !important;
 }
 
 /* Filter pill buttons - better active state contrast in light theme */
@@ -423,6 +433,42 @@
   background-color: #6c5ce7 !important;
   color: #ffffff !important;
   border-color: #6c5ce7 !important;
+}
+
+/* Toggle button indicator - ensure it's visible in light theme */
+[data-theme="light"] .toggle-indicator {
+  background-color: #6c5ce7;
+}
+
+/* Toggle button active text - ensure contrast in light theme */
+[data-theme="light"] .toggle-btn-active {
+  color: #ffffff !important;
+  font-weight: 600;
+}
+
+/* Session status badges in light theme - improve visibility */
+[data-theme="light"] .status-badge-active {
+  background-color: rgba(243, 156, 18, 0.18) !important;
+  color: #b8860b !important;
+  border: 1px solid rgba(243, 156, 18, 0.3);
+}
+
+[data-theme="light"] .status-badge-recent {
+  background-color: rgba(108, 92, 231, 0.15) !important;
+  color: #5849be !important;
+  border: 1px solid rgba(108, 92, 231, 0.25);
+}
+
+[data-theme="light"] .status-badge-done {
+  background-color: rgba(0, 184, 148, 0.15) !important;
+  color: #00856a !important;
+  border: 1px solid rgba(0, 184, 148, 0.25);
+}
+
+/* Filter group background - slightly more visible in light theme */
+[data-theme="light"] .filter-group-light {
+  background-color: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 /* Primary action buttons in light theme - ensure good contrast */
@@ -1302,6 +1348,52 @@ button:disabled .kbd-hint {
   filter: drop-shadow(0 0 4px rgba(250, 204, 21, 0.4));
 }
 
+/* Checkbox bounce animation - playful feedback for bulk selection */
+@keyframes checkbox-bounce {
+  0% {
+    transform: scale(1);
+  }
+  20% {
+    transform: scale(0.85);
+  }
+  40% {
+    transform: scale(1.15);
+  }
+  60% {
+    transform: scale(0.95);
+  }
+  80% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes checkmark-draw {
+  0% {
+    stroke-dashoffset: 24;
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+.checkbox-bounce {
+  animation: checkbox-bounce 300ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.checkbox-bounce svg path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: checkmark-draw 200ms ease-out 100ms forwards;
+}
+
 /* Session tab entrance animation - subtle slide-in from above */
 @keyframes session-tab-enter {
   from {
@@ -1546,8 +1638,17 @@ button:disabled .kbd-hint {
   .filter-indicator-enter,
   .copy-success-icon,
   .input-shake,
-  .typewriter-cursor {
+  .typewriter-cursor,
+  .checkbox-bounce {
     animation: none;
+  }
+
+  /* Disable checkbox checkmark draw animation */
+  .checkbox-bounce svg path {
+    animation: none;
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+    opacity: 1;
   }
 
   /* Show cursor as static when reduced motion is preferred */
