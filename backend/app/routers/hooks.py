@@ -213,8 +213,13 @@ async def notifications_websocket(websocket: WebSocket):
     # Unified queue for all events (notifications + general events)
     event_queue: asyncio.Queue[dict] = asyncio.Queue()
 
+    # Flag to track if the connection is closing to prevent sending on closed socket
+    closing = False
+
     def on_notification(notification: Notification) -> None:
         """Callback when a notification is received."""
+        if closing:
+            return
         try:
             event_queue.put_nowait({
                 "type": "notification",
@@ -225,6 +230,8 @@ async def notifications_websocket(websocket: WebSocket):
 
     def on_event(event: Event) -> None:
         """Callback when a general event is received."""
+        if closing:
+            return
         try:
             event_queue.put_nowait(event.to_dict())
         except asyncio.QueueFull:
@@ -236,22 +243,37 @@ async def notifications_websocket(websocket: WebSocket):
 
     async def send_events() -> None:
         """Task to send events to the client."""
+        nonlocal closing
         while True:
             try:
                 event = await event_queue.get()
+                if closing:
+                    break
                 await websocket.send_json(event)
             except WebSocketDisconnect:
                 logger.debug("WebSocket disconnected during send")
+                closing = True
                 break
             except asyncio.CancelledError:
                 # Task cancellation is expected during cleanup
+                closing = True
+                break
+            except RuntimeError as e:
+                # Expected when websocket closes - don't log as error
+                if "websocket.close" in str(e) or "response already completed" in str(e):
+                    logger.debug("WebSocket already closed, stopping send task")
+                else:
+                    logger.exception("Unexpected runtime error sending WebSocket event")
+                closing = True
                 break
             except Exception:
                 logger.exception("Unexpected error sending WebSocket event")
+                closing = True
                 break
 
     async def receive_messages() -> None:
         """Task to receive messages from client (e.g., clear attention)."""
+        nonlocal closing
         while True:
             try:
                 message = await websocket.receive_json()
@@ -263,12 +285,15 @@ async def notifications_websocket(websocket: WebSocket):
 
             except WebSocketDisconnect:
                 logger.debug("WebSocket disconnected during receive")
+                closing = True
                 break
             except asyncio.CancelledError:
                 # Task cancellation is expected during cleanup
+                closing = True
                 break
             except Exception:
                 logger.exception("Unexpected error receiving WebSocket message")
+                closing = True
                 break
 
     try:
@@ -294,6 +319,7 @@ async def notifications_websocket(websocket: WebSocket):
             "processes": process_list,
         })
     except WebSocketDisconnect:
+        closing = True
         notification_manager.unsubscribe_global(on_notification)
         event_manager.unsubscribe(on_event)
         return
@@ -305,6 +331,8 @@ async def notifications_websocket(websocket: WebSocket):
     try:
         await asyncio.gather(send_task, receive_task, return_exceptions=True)
     finally:
+        # Set closing flag first to prevent callbacks from queuing more events
+        closing = True
         notification_manager.unsubscribe_global(on_notification)
         event_manager.unsubscribe(on_event)
         send_task.cancel()
