@@ -738,6 +738,37 @@ a:hover {
 
 .empty-state-icon-float {
   animation: empty-state-float 3s ease-in-out infinite;
+  transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Playful wiggle animation on hover - makes empty state feel interactive */
+@keyframes empty-state-wiggle {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  15% {
+    transform: rotate(-12deg) scale(1.1);
+  }
+  30% {
+    transform: rotate(10deg) scale(1.1);
+  }
+  45% {
+    transform: rotate(-8deg) scale(1.05);
+  }
+  60% {
+    transform: rotate(6deg) scale(1.05);
+  }
+  75% {
+    transform: rotate(-3deg) scale(1.02);
+  }
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+/* When hovering over the empty state container, wiggle the icon */
+.empty-state-enter:hover .empty-state-icon-float {
+  animation: empty-state-wiggle 600ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
 /* Subtle dot pattern background for empty state areas */
@@ -1888,6 +1919,7 @@ button:disabled .kbd-hint {
   .modal-content-enter,
   .empty-state-enter,
   .empty-state-icon-float,
+  .empty-state-enter:hover .empty-state-icon-float,
   .message-bubble-enter,
   .dropdown-menu-enter,
   .dropdown-item-enter,
