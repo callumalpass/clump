@@ -75,6 +75,22 @@ class ParsedTranscript:
     git_branch: str | None = None
 
 
+def _find_tool_use_by_id(
+    messages: list["TranscriptMessage"], tool_use_id: str
+) -> ToolUse | None:
+    """
+    Find a ToolUse by its ID, searching backwards through messages.
+
+    Returns the matching ToolUse or None if not found.
+    """
+    for msg in reversed(messages):
+        if msg.role == "assistant":
+            for tool_use in msg.tool_uses:
+                if tool_use.id == tool_use_id:
+                    return tool_use
+    return None
+
+
 def extract_agent_id(content: list) -> str | None:
     """
     Extract agentId from tool_result content blocks.
@@ -234,31 +250,17 @@ def parse_transcript(session_id: str, working_dir: str) -> ParsedTranscript | No
 
                                         # Also check for spawned agent
                                         agent_id = extract_agent_id(tool_content)
-                                        if agent_id and tool_use_id and messages:
-                                            agent_found = False
-                                            for msg in reversed(messages):
-                                                if msg.role == 'assistant':
-                                                    for tool_use in msg.tool_uses:
-                                                        if tool_use.id == tool_use_id:
-                                                            tool_use.spawned_agent_id = agent_id
-                                                            agent_found = True
-                                                            break
-                                                if agent_found:
-                                                    break
+                                        if agent_id and tool_use_id:
+                                            tool_use = _find_tool_use_by_id(messages, tool_use_id)
+                                            if tool_use:
+                                                tool_use.spawned_agent_id = agent_id
 
                                     # Match result to the corresponding tool_use
-                                    if tool_use_id and messages:
-                                        found = False
-                                        for msg in reversed(messages):
-                                            if msg.role == 'assistant':
-                                                for tool_use in msg.tool_uses:
-                                                    if tool_use.id == tool_use_id:
-                                                        tool_use.result = result_text
-                                                        tool_use.result_is_error = is_error
-                                                        found = True
-                                                        break
-                                            if found:
-                                                break
+                                    if tool_use_id:
+                                        tool_use = _find_tool_use_by_id(messages, tool_use_id)
+                                        if tool_use:
+                                            tool_use.result = result_text
+                                            tool_use.result_is_error = is_error
                             elif isinstance(part, str):
                                 text_parts.append(part)
                         text_content = '\n'.join(text_parts)
