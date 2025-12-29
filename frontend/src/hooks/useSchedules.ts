@@ -356,7 +356,26 @@ export const CRON_PRESETS = [
   { label: 'Every Monday at 9am', value: '0 9 * * 1' },
   { label: 'Every 6 hours', value: '0 */6 * * *' },
   { label: 'Every 15 minutes', value: '*/15 * * * *' },
+  { label: 'Custom...', value: 'custom' },
 ];
+
+// Basic cron expression validation (5 fields)
+export function isValidCronExpression(cron: string): boolean {
+  if (!cron || typeof cron !== 'string') return false;
+  const parts = cron.trim().split(/\s+/);
+  if (parts.length !== 5) return false;
+
+  // Basic field validation patterns
+  const fieldPatterns = [
+    /^(\*|(\*\/)?[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*)$/, // minute (0-59)
+    /^(\*|(\*\/)?[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*)$/, // hour (0-23)
+    /^(\*|(\*\/)?[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*)$/, // day of month (1-31)
+    /^(\*|(\*\/)?[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*)$/, // month (1-12)
+    /^(\*|(\*\/)?[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*)$/, // day of week (0-6)
+  ];
+
+  return parts.every((part, i) => fieldPatterns[i]?.test(part));
+}
 
 export function describeCron(cron: string): string {
   // Simple human-readable descriptions for common patterns

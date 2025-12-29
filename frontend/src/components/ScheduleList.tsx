@@ -1,6 +1,6 @@
 import { useState, useEffect, memo, type MutableRefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { useSchedules, describeCron, formatRelativeTime, CRON_PRESETS } from '../hooks/useSchedules';
+import { useSchedules, describeCron, formatRelativeTime, CRON_PRESETS, isValidCronExpression } from '../hooks/useSchedules';
 import type { ScheduledJob, ScheduledJobCreate, ScheduledJobTargetType, CommandsResponse } from '../types';
 
 interface ScheduleListProps {
@@ -361,6 +361,7 @@ interface ScheduleCreateModalProps {
 function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModalProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isCustomCron, setIsCustomCron] = useState(false);
 
   const [form, setForm] = useState({
     name: '',
@@ -382,6 +383,11 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
     // Validation
     if (!form.name.trim()) {
       setError('Name is required');
+      return;
+    }
+
+    if (isCustomCron && !isValidCronExpression(form.cron_expression)) {
+      setError('Invalid cron expression. Format: minute hour day-of-month month day-of-week (e.g., 0 9 * * 1-5)');
       return;
     }
 
@@ -479,8 +485,16 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
           <div>
             <label className="block text-sm font-medium mb-1">Schedule</label>
             <select
-              value={form.cron_expression}
-              onChange={(e) => setForm((f) => ({ ...f, cron_expression: e.target.value }))}
+              value={isCustomCron ? 'custom' : form.cron_expression}
+              onChange={(e) => {
+                if (e.target.value === 'custom') {
+                  setIsCustomCron(true);
+                  setForm((f) => ({ ...f, cron_expression: '' }));
+                } else {
+                  setIsCustomCron(false);
+                  setForm((f) => ({ ...f, cron_expression: e.target.value }));
+                }
+              }}
               className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {CRON_PRESETS.map((preset) => (
@@ -489,8 +503,32 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
                 </option>
               ))}
             </select>
+            {isCustomCron && (
+              <div className="mt-2">
+                <input
+                  type="text"
+                  value={form.cron_expression}
+                  onChange={(e) => setForm((f) => ({ ...f, cron_expression: e.target.value }))}
+                  placeholder="e.g., 30 14 * * 1,3,5"
+                  className={`w-full bg-gray-800 border rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    form.cron_expression && !isValidCronExpression(form.cron_expression)
+                      ? 'border-red-500'
+                      : 'border-gray-600'
+                  }`}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Format: minute hour day-of-month month day-of-week
+                </p>
+              </div>
+            )}
             <p className="text-xs text-gray-500 mt-1">
-              Cron: {form.cron_expression} ({form.timezone})
+              {form.cron_expression ? (
+                <>
+                  {describeCron(form.cron_expression)} ({form.timezone})
+                </>
+              ) : (
+                <>Enter a cron expression ({form.timezone})</>
+              )}
             </p>
           </div>
 

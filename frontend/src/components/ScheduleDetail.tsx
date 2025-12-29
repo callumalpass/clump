@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ScheduledJob, ScheduledJobUpdate, SessionSummary, CommandsResponse } from '../types';
-import { useScheduleDetail, describeCron, formatRelativeTime, CRON_PRESETS } from '../hooks/useSchedules';
+import { useScheduleDetail, describeCron, formatRelativeTime, CRON_PRESETS, isValidCronExpression } from '../hooks/useSchedules';
 
 interface ScheduleDetailProps {
   repoId: number;
@@ -43,6 +43,7 @@ export function ScheduleDetail({
   const [actionError, setActionError] = useState<string | null>(null);
   const [expandedRunId, setExpandedRunId] = useState<number | null>(null);
   const [triggering, setTriggering] = useState(false);
+  const [isCustomCron, setIsCustomCron] = useState(false);
 
   // Get command name for display
   const getCommandName = (commandId: string | null) => {
@@ -60,6 +61,9 @@ export function ScheduleDetail({
   // Start editing
   const handleStartEdit = () => {
     if (!schedule) return;
+    // Check if current cron expression matches a preset (excluding 'custom')
+    const isPreset = CRON_PRESETS.some(p => p.value !== 'custom' && p.value === schedule.cron_expression);
+    setIsCustomCron(!isPreset);
     setEditForm({
       name: schedule.name,
       description: schedule.description || undefined,
@@ -83,17 +87,25 @@ export function ScheduleDetail({
   const handleCancelEdit = () => {
     setIsEditing(false);
     setEditForm({});
+    setIsCustomCron(false);
     setActionError(null);
   };
 
   // Save changes
   const handleSave = async () => {
+    // Validate custom cron expression
+    if (isCustomCron && editForm.cron_expression && !isValidCronExpression(editForm.cron_expression)) {
+      setActionError('Invalid cron expression. Format: minute hour day-of-month month day-of-week');
+      return;
+    }
+
     setSaving(true);
     setActionError(null);
     try {
       const updated = await updateSchedule(editForm);
       setIsEditing(false);
       setEditForm({});
+      setIsCustomCron(false);
       onScheduleUpdated?.(updated);
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'Failed to save');
@@ -286,17 +298,46 @@ export function ScheduleDetail({
         <div className="grid grid-cols-2 gap-4 text-sm">
           {isEditing ? (
             <>
-              <div>
+              <div className="col-span-2">
                 <label className="block text-gray-500 mb-1">Schedule (Cron)</label>
                 <select
-                  value={editForm.cron_expression || ''}
-                  onChange={(e) => setEditForm({ ...editForm, cron_expression: e.target.value })}
+                  value={isCustomCron ? 'custom' : (editForm.cron_expression || '')}
+                  onChange={(e) => {
+                    if (e.target.value === 'custom') {
+                      setIsCustomCron(true);
+                      setEditForm({ ...editForm, cron_expression: '' });
+                    } else {
+                      setIsCustomCron(false);
+                      setEditForm({ ...editForm, cron_expression: e.target.value });
+                    }
+                  }}
                   className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-gray-200"
                 >
                   {CRON_PRESETS.map(p => (
                     <option key={p.value} value={p.value}>{p.label}</option>
                   ))}
                 </select>
+                {isCustomCron && (
+                  <div className="mt-2">
+                    <input
+                      type="text"
+                      value={editForm.cron_expression || ''}
+                      onChange={(e) => setEditForm({ ...editForm, cron_expression: e.target.value })}
+                      placeholder="e.g., 30 14 * * 1,3,5"
+                      className={`w-full bg-gray-700 border rounded px-2 py-1 text-gray-200 font-mono text-sm ${
+                        editForm.cron_expression && !isValidCronExpression(editForm.cron_expression)
+                          ? 'border-red-500'
+                          : 'border-gray-600'
+                      }`}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Format: minute hour day-of-month month day-of-week
+                    </p>
+                  </div>
+                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  {editForm.cron_expression ? describeCron(editForm.cron_expression) : 'Enter a cron expression'}
+                </p>
               </div>
               <div>
                 <label className="block text-gray-500 mb-1">Target</label>
