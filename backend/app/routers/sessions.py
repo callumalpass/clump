@@ -321,6 +321,8 @@ def _message_to_response(msg: TranscriptMessage) -> TranscriptMessageResponse:
             name=t.name,
             input=t.input,
             spawned_agent_id=t.spawned_agent_id,
+            result=t.result,
+            result_is_error=t.result_is_error,
         )
         for t in msg.tool_uses
     ]

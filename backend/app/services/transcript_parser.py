@@ -21,6 +21,8 @@ class ToolUse:
     name: str
     input: dict
     spawned_agent_id: str | None = None  # Agent ID if this tool spawned a subsession
+    result: str | None = None  # Tool result content (populated from subsequent user message)
+    result_is_error: bool = False  # Whether the result was an error
 
 
 @dataclass
@@ -200,19 +202,61 @@ def parse_transcript(session_id: str, working_dir: str) -> ParsedTranscript | No
                                 if part.get('type') == 'text':
                                     text_parts.append(part.get('text', ''))
                                 elif part.get('type') == 'tool_result':
-                                    # Tool results in user messages - check for spawned agent
+                                    # Tool results in user messages - extract content and match to tool_use
                                     tool_use_id = part.get('tool_use_id')
                                     tool_content = part.get('content', [])
-                                    if isinstance(tool_content, list):
+                                    is_error = part.get('is_error', False)
+
+                                    # Extract the result content as a string
+                                    result_text = None
+                                    if isinstance(tool_content, str):
+                                        result_text = tool_content
+                                    elif isinstance(tool_content, list):
+                                        # Content is array of blocks - can be text or image
+                                        text_parts_inner = []
+                                        for item in tool_content:
+                                            if isinstance(item, dict):
+                                                if item.get('type') == 'text':
+                                                    text_parts_inner.append(item.get('text', ''))
+                                                elif item.get('type') == 'image':
+                                                    # Image block - extract base64 data as data URL
+                                                    source = item.get('source', {})
+                                                    if source.get('type') == 'base64':
+                                                        media_type = source.get('media_type', 'image/png')
+                                                        data = source.get('data', '')
+                                                        if data:
+                                                            # Store as data URL for frontend to render
+                                                            result_text = f"data:{media_type};base64,{data}"
+                                        if text_parts_inner and not result_text:
+                                            result_text = '\n'.join(text_parts_inner)
+
+                                        # Also check for spawned agent
                                         agent_id = extract_agent_id(tool_content)
                                         if agent_id and tool_use_id and messages:
-                                            # Find matching tool_use in recent assistant messages
+                                            agent_found = False
                                             for msg in reversed(messages):
                                                 if msg.role == 'assistant':
                                                     for tool_use in msg.tool_uses:
                                                         if tool_use.id == tool_use_id:
                                                             tool_use.spawned_agent_id = agent_id
-                                                    break  # Only check most recent assistant message
+                                                            agent_found = True
+                                                            break
+                                                if agent_found:
+                                                    break
+
+                                    # Match result to the corresponding tool_use
+                                    if tool_use_id and messages:
+                                        found = False
+                                        for msg in reversed(messages):
+                                            if msg.role == 'assistant':
+                                                for tool_use in msg.tool_uses:
+                                                    if tool_use.id == tool_use_id:
+                                                        tool_use.result = result_text
+                                                        tool_use.result_is_error = is_error
+                                                        found = True
+                                                        break
+                                            if found:
+                                                break
                             elif isinstance(part, str):
                                 text_parts.append(part)
                         text_content = '\n'.join(text_parts)
@@ -327,6 +371,8 @@ def transcript_to_dict(transcript: ParsedTranscript) -> dict:
                         'name': t.name,
                         'input': t.input,
                         'spawned_agent_id': t.spawned_agent_id,
+                        'result': t.result,
+                        'result_is_error': t.result_is_error,
                     }
                     for t in msg.tool_uses
                 ],

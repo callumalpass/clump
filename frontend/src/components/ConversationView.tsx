@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback, memo } from 'react';
+import { createPortal } from 'react-dom';
 import type { TranscriptMessage, ToolUse, ParsedTranscript } from '../types';
 import { Markdown } from './Markdown';
 import { Editor } from './Editor';
@@ -452,9 +453,83 @@ function EditToolDisplay({ tool }: ToolDisplayProps) {
   );
 }
 
+// Helper to check if a file is an image based on extension
+function isImageFile(filePath: string): boolean {
+  const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico'];
+  const lower = filePath.toLowerCase();
+  return imageExtensions.some(ext => lower.endsWith(ext));
+}
+
+// Image modal for viewing images full-size (rendered via portal)
+function ImageModal({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+  // Close on escape key and prevent body scroll
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    // Prevent body scroll while modal is open
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
+
+  const modal = (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90"
+      onClick={onClose}
+      style={{ margin: 0 }}
+    >
+      {/* Close button - top right corner */}
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors p-2 z-10"
+        title="Close (Esc)"
+      >
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+
+      {/* Image container */}
+      <div className="p-8" onClick={e => e.stopPropagation()}>
+        <img
+          src={src}
+          alt={alt}
+          className="max-w-[85vw] max-h-[85vh] object-contain rounded-lg shadow-2xl"
+        />
+        {/* Filename below image */}
+        <div className="mt-3 text-center text-gray-400 text-sm">
+          {alt}
+        </div>
+      </div>
+    </div>
+  );
+
+  return createPortal(modal, document.body);
+}
+
+// Helper to detect if content might be base64 image data
+function isBase64ImageData(content: string): { isBase64: boolean; mimeType?: string } {
+  // Check for data URL format
+  const dataUrlMatch = content.match(/^data:(image\/[^;]+);base64,/);
+  if (dataUrlMatch) {
+    return { isBase64: true, mimeType: dataUrlMatch[1] };
+  }
+  // Check for raw base64 (starts with common image magic bytes in base64)
+  // PNG: iVBOR, JPEG: /9j/, GIF: R0lG, WebP: UklGR
+  if (/^(iVBOR|\/9j\/|R0lG|UklGR)/.test(content.trim())) {
+    return { isBase64: true };
+  }
+  return { isBase64: false };
+}
+
 // ============ READ TOOL ============
 function ReadToolDisplay({ tool }: ToolDisplayProps) {
   const [expanded, setExpanded] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
   const input = tool.input as {
     file_path?: string;
     offset?: number;
@@ -464,6 +539,44 @@ function ReadToolDisplay({ tool }: ToolDisplayProps) {
   const filePath = input.file_path || 'unknown';
   const fileName = getFileName(filePath);
   const hasRange = input.offset !== undefined || input.limit !== undefined;
+  const hasResult = !!tool.result;
+  const isImage = isImageFile(filePath);
+
+  // Process result content for display
+  const resultContent = useMemo(() => {
+    if (!tool.result) return null;
+
+    // Check if it's an image
+    if (isImage) {
+      const base64Check = isBase64ImageData(tool.result);
+      if (base64Check.isBase64) {
+        // If it's already a data URL, use as-is; otherwise construct one
+        if (tool.result.startsWith('data:')) {
+          return { type: 'image' as const, src: tool.result };
+        }
+        // Guess mime type from extension
+        const ext = filePath.toLowerCase().split('.').pop();
+        const mimeTypes: Record<string, string> = {
+          png: 'image/png',
+          jpg: 'image/jpeg',
+          jpeg: 'image/jpeg',
+          gif: 'image/gif',
+          webp: 'image/webp',
+          svg: 'image/svg+xml',
+          bmp: 'image/bmp',
+          ico: 'image/x-icon',
+        };
+        const mimeType = mimeTypes[ext || ''] || 'image/png';
+        return { type: 'image' as const, src: `data:${mimeType};base64,${tool.result.trim()}` };
+      }
+    }
+
+    // It's text content
+    return { type: 'text' as const, content: tool.result };
+  }, [tool.result, isImage, filePath]);
+
+  // Count lines in result
+  const lineCount = tool.result ? countLines(tool.result) : 0;
 
   return (
     <div className="mt-2 text-xs border border-blue-800/50 rounded-lg bg-gray-800/80 overflow-hidden tool-card-hover">
@@ -479,10 +592,25 @@ function ReadToolDisplay({ tool }: ToolDisplayProps) {
         <span className="text-gray-300 font-mono truncate flex-1" title={filePath}>
           {fileName}
         </span>
+        {isImage && (
+          <span className="text-xs px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300">
+            image
+          </span>
+        )}
         {hasRange && (
           <span className="text-xs text-gray-500">
             {input.offset !== undefined && `from L${input.offset}`}
             {input.limit !== undefined && ` (${input.limit} lines)`}
+          </span>
+        )}
+        {!hasRange && hasResult && !isImage && lineCount > 0 && (
+          <span className="text-xs text-gray-500">
+            {lineCount} lines
+          </span>
+        )}
+        {tool.result_is_error && (
+          <span className="text-xs px-1.5 py-0.5 rounded bg-red-900/50 text-red-400">
+            error
           </span>
         )}
         <svg
@@ -495,15 +623,68 @@ function ReadToolDisplay({ tool }: ToolDisplayProps) {
 
       <div className="tool-card-content" data-expanded={expanded}>
         <div className="tool-card-content-inner">
-          <div className="border-t border-gray-700 px-2 py-1.5 bg-gray-900/50">
-            <div className="font-mono text-gray-400 text-[10px] break-all">
-              {filePath}
+          <div className="border-t border-gray-700">
+            {/* File path header */}
+            <div className="px-2 py-1.5 bg-gray-900/50 border-b border-gray-700">
+              <div className="font-mono text-gray-400 text-[10px] break-all">
+                {filePath}
+              </div>
+              {hasRange && (
+                <div className="mt-1 text-gray-500">
+                  {input.offset !== undefined && <span>Offset: {input.offset}</span>}
+                  {input.offset !== undefined && input.limit !== undefined && <span> | </span>}
+                  {input.limit !== undefined && <span>Limit: {input.limit} lines</span>}
+                </div>
+              )}
             </div>
-            {hasRange && (
-              <div className="mt-1 text-gray-500">
-                {input.offset !== undefined && <span>Offset: {input.offset}</span>}
-                {input.offset !== undefined && input.limit !== undefined && <span> | </span>}
-                {input.limit !== undefined && <span>Limit: {input.limit} lines</span>}
+
+            {/* Result content */}
+            {resultContent && (
+              <div className={tool.result_is_error ? 'bg-red-950/20' : 'bg-gray-900/30'}>
+                {resultContent.type === 'image' ? (
+                  <div className="p-3 flex justify-center">
+                    <button
+                      onClick={() => setShowImageModal(true)}
+                      className="relative group cursor-zoom-in"
+                      title="Click to enlarge"
+                    >
+                      <img
+                        src={resultContent.src}
+                        alt={fileName}
+                        className="max-w-full max-h-96 h-auto rounded-lg border border-gray-700 transition-all group-hover:border-blue-500"
+                        loading="lazy"
+                      />
+                      {/* Zoom indicator */}
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors rounded-lg">
+                        <svg className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                        </svg>
+                      </div>
+                    </button>
+                  </div>
+                ) : (
+                  <pre className={`p-2 text-xs whitespace-pre-wrap overflow-auto max-h-80 font-mono ${
+                    tool.result_is_error ? 'text-red-300' : 'text-gray-300'
+                  }`}>
+                    {resultContent.content}
+                  </pre>
+                )}
+              </div>
+            )}
+
+            {/* Image modal */}
+            {showImageModal && resultContent?.type === 'image' && (
+              <ImageModal
+                src={resultContent.src}
+                alt={fileName}
+                onClose={() => setShowImageModal(false)}
+              />
+            )}
+
+            {/* No result message */}
+            {!resultContent && (
+              <div className="px-2 py-3 text-gray-500 italic text-center">
+                No result content available
               </div>
             )}
           </div>

@@ -244,6 +244,8 @@ export interface ToolUse {
   name: string;
   input: Record<string, unknown>;
   spawned_agent_id?: string | null;  // Agent ID if this tool spawned a subsession
+  result?: string | null;  // Tool result content
+  result_is_error?: boolean;  // Whether the result was an error
 }
 
 export interface TokenUsage {

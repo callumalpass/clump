@@ -117,6 +117,8 @@ class ToolUseResponse(BaseModel):
     name: str
     input: dict[str, Any]
     spawned_agent_id: Optional[str] = None  # Agent ID if this tool spawned a subsession
+    result: Optional[str] = None  # Tool result content
+    result_is_error: bool = False  # Whether the result was an error
 
 
 class TokenUsageResponse(BaseModel):
