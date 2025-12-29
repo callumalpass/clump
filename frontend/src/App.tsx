@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
-import { Group, Panel, Separator } from 'react-resizable-panels';
+import { Group, Panel } from 'react-resizable-panels';
 import { useRepos, useIssues, usePRs, useProcesses, useSessions, useActiveSessions, useTags, useIssueTags, useCommands, useSessionCounts, useStats, buildPromptFromTemplate, exportSession, downloadExport } from './hooks/useApi';
 import { useNotifications } from './hooks/useNotifications';
 import { useLayoutMode } from './hooks/useLayoutMode';
@@ -16,37 +16,10 @@ import { StatsModal } from './components/StatsModal';
 import { Settings } from './components/Settings';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { CommandPalette, type Command } from './components/CommandPalette';
+import { ResizeHandle } from './components/ResizeHandle';
 import type { Repo, Issue, PR, SessionSummary, CommandMetadata, EntityLink } from './types';
 import type { SessionListFilters } from './components/SessionList';
 import { LRUCache } from './utils/cache';
-
-function ResizeHandle({ orientation = 'vertical' }: { orientation?: 'vertical' | 'horizontal' }) {
-  const isVertical = orientation === 'vertical';
-  return (
-    <Separator
-      className={`group relative flex items-center justify-center transition-all resize-handle ${
-        isVertical ? 'w-2 cursor-col-resize' : 'h-2 cursor-row-resize'
-      }`}
-    >
-      {/* Visible drag line */}
-      <div
-        className={`bg-gray-750 group-hover:bg-blurple-400 group-active:bg-blurple-300 transition-colors ${
-          isVertical ? 'w-px h-full' : 'h-px w-full'
-        }`}
-      />
-      {/* Grip dots indicator - subtly visible, enhanced on hover */}
-      <div
-        className={`absolute flex items-center justify-center gap-1 opacity-30 group-hover:opacity-100 transition-opacity pointer-events-none resize-handle-dots ${
-          isVertical ? 'inset-y-0 flex-col' : 'inset-x-0 flex-row'
-        }`}
-      >
-        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blurple-400 transition-colors" />
-        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blurple-400 transition-colors" />
-        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blurple-400 transition-colors" />
-      </div>
-    </Separator>
-  );
-}
 
 type Tab = 'issues' | 'prs' | 'history' | 'schedules';
 
@@ -278,6 +251,7 @@ export default function App() {
   const {
     issues,
     loading: issuesLoading,
+    error: issuesError,
     refresh: refreshIssues,
     page: issuesPage,
     totalPages: issuesTotalPages,
@@ -326,7 +300,7 @@ export default function App() {
   const { tags, createTag } = useTags(selectedRepo?.id ?? null);
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
   // Lazy-load PRs only when the PRs tab is active (perf optimization)
-  const { prs, loading: prsLoading, refresh: refreshPRs, page: prsPage, totalPages: prsTotalPages, total: prsTotal, goToPage: goToPRsPage } = usePRs(selectedRepo?.id ?? null, prFilters, activeTab === 'prs');
+  const { prs, loading: prsLoading, error: prsError, refresh: refreshPRs, page: prsPage, totalPages: prsTotalPages, total: prsTotal, goToPage: goToPRsPage } = usePRs(selectedRepo?.id ?? null, prFilters, activeTab === 'prs');
   const { commands, refresh: refreshCommands } = useCommands(selectedRepo?.local_path);
   const { counts: sessionCounts, refresh: refreshSessionCounts, updateCounts } = useSessionCounts();
 
@@ -866,68 +840,6 @@ export default function App() {
     }
   }, [sessionsById, processesBySessionId, clearAttention, getCachedSession]);
 
-  // Session tab keyboard shortcuts (Alt + 1-9, [, ], N)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger shortcuts when typing in inputs/textareas
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return;
-      }
-
-      // Tab navigation shortcuts (Alt + 1-9)
-      if (e.altKey && !e.metaKey && !e.ctrlKey && e.key >= '1' && e.key <= '9') {
-        e.preventDefault();
-        const tabIndex = parseInt(e.key) - 1;
-        const sessionId = openSessionIds[tabIndex];
-        if (sessionId) {
-          handleSelectSessionTab(sessionId);
-        }
-        return;
-      }
-
-      // Previous tab (Alt + [)
-      if (e.altKey && !e.metaKey && !e.ctrlKey && e.key === '[') {
-        e.preventDefault();
-        if (openSessionIds.length > 0 && activeTabSessionId) {
-          const currentIndex = openSessionIds.indexOf(activeTabSessionId);
-          const prevIndex = currentIndex > 0 ? currentIndex - 1 : openSessionIds.length - 1;
-          const sessionId = openSessionIds[prevIndex];
-          if (sessionId) {
-            handleSelectSessionTab(sessionId);
-          }
-        }
-        return;
-      }
-
-      // Next tab (Alt + ])
-      if (e.altKey && !e.metaKey && !e.ctrlKey && e.key === ']') {
-        e.preventDefault();
-        if (openSessionIds.length > 0 && activeTabSessionId) {
-          const currentIndex = openSessionIds.indexOf(activeTabSessionId);
-          const nextIndex = currentIndex < openSessionIds.length - 1 ? currentIndex + 1 : 0;
-          const sessionId = openSessionIds[nextIndex];
-          if (sessionId) {
-            handleSelectSessionTab(sessionId);
-          }
-        }
-        return;
-      }
-
-      // New session (Alt + N)
-      if (e.altKey && !e.metaKey && !e.ctrlKey && e.key === 'n') {
-        e.preventDefault();
-        if (selectedRepo) {
-          handleNewProcess();
-        }
-        return;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [openSessionIds, activeTabSessionId, handleSelectSessionTab, handleCloseSessionTab, selectedRepo, handleNewProcess]);
-
   // Find the active process and its related session
   const activeProcess = activeProcessId ? processesById.get(activeProcessId) : undefined;
   const activeSessionFromList = activeProcess?.claude_session_id
@@ -1058,6 +970,77 @@ export default function App() {
       })
       .filter((s): s is SessionSummary => !!s);
   }, [openSessionIds, sessionsById, processesBySessionId, selectedRepo, getCachedSession]);
+
+  // Session tab keyboard shortcuts (Alt + 1-9, [, ], N)
+  // Uses openSessions (resolved sessions) instead of openSessionIds to match visual tab order
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts when typing in inputs/textareas
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
+      // Tab navigation shortcuts (Alt + 1-9)
+      if (e.altKey && !e.metaKey && !e.ctrlKey && e.key >= '1' && e.key <= '9') {
+        e.preventDefault();
+        const tabIndex = parseInt(e.key) - 1;
+        const session = openSessions[tabIndex];
+        if (session) {
+          handleSelectSessionTab(session.session_id);
+        }
+        return;
+      }
+
+      // Previous tab (Alt + [)
+      if (e.altKey && !e.metaKey && !e.ctrlKey && e.key === '[') {
+        e.preventDefault();
+        if (openSessions.length > 0) {
+          const currentIndex = activeTabSessionId
+            ? openSessions.findIndex(s => s.session_id === activeTabSessionId)
+            : -1;
+          // If no active tab or not found, select the last tab; otherwise go to previous (wrap around)
+          const prevIndex = currentIndex > 0 ? currentIndex - 1 : openSessions.length - 1;
+          const session = openSessions[prevIndex];
+          if (session) {
+            handleSelectSessionTab(session.session_id);
+          }
+        }
+        return;
+      }
+
+      // Next tab (Alt + ])
+      if (e.altKey && !e.metaKey && !e.ctrlKey && e.key === ']') {
+        e.preventDefault();
+        if (openSessions.length > 0) {
+          const currentIndex = activeTabSessionId
+            ? openSessions.findIndex(s => s.session_id === activeTabSessionId)
+            : -1;
+          // If no active tab or not found, select the first tab; otherwise go to next (wrap around)
+          const nextIndex = currentIndex >= 0 && currentIndex < openSessions.length - 1
+            ? currentIndex + 1
+            : 0;
+          const session = openSessions[nextIndex];
+          if (session) {
+            handleSelectSessionTab(session.session_id);
+          }
+        }
+        return;
+      }
+
+      // New session (Alt + N)
+      if (e.altKey && !e.metaKey && !e.ctrlKey && e.key === 'n') {
+        e.preventDefault();
+        if (selectedRepo) {
+          handleNewProcess();
+        }
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [openSessions, activeTabSessionId, handleSelectSessionTab, selectedRepo, handleNewProcess]);
 
   // Compute layout mode using the centralized hook
   const { mode: layoutMode } = useLayoutMode({
@@ -1646,6 +1629,7 @@ export default function App() {
                     issueCommands={commands.issue}
                     onStartSession={handleStartIssueSession}
                     loading={issuesLoading}
+                    error={issuesError}
                     page={issuesPage}
                     totalPages={issuesTotalPages}
                     total={issuesTotal}
@@ -1692,6 +1676,7 @@ export default function App() {
                     prCommands={commands.pr}
                     onStartSession={handleStartPRSession}
                     loading={prsLoading}
+                    error={prsError}
                     filters={prFilters}
                     onFiltersChange={setPRFilters}
                     sessions={sessions}
@@ -1734,6 +1719,7 @@ export default function App() {
             layoutMode={layoutMode}
             activeTab={activeTab}
             listEmpty={activeTab === 'issues' ? issues.length === 0 : activeTab === 'prs' ? prs.length === 0 : activeTab === 'history' ? sessions.length === 0 : false}
+            listError={activeTab === 'issues' ? issuesError : activeTab === 'prs' ? prsError : null}
             selectedRepo={selectedRepo}
             selectedIssue={selectedIssue}
             selectedPR={selectedPR}

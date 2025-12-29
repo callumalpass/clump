@@ -5,6 +5,7 @@ import { IssueCreateView } from './IssueCreateView';
 import { PRDetail } from './PRDetail';
 import { ScheduleDetail } from './ScheduleDetail';
 import { SessionPanel } from './SessionPanel';
+import { ResizeHandle } from './ResizeHandle';
 import type { LayoutMode } from '../hooks/useLayoutMode';
 import type {
   Repo,
@@ -16,25 +17,6 @@ import type {
   CommandsResponse,
   Tag,
 } from '../types';
-
-// =============================================================================
-// Resize Handle Component
-// =============================================================================
-
-import { Separator } from 'react-resizable-panels';
-
-function ResizeHandle() {
-  return (
-    <Separator className="group relative flex items-center justify-center w-2 cursor-col-resize transition-all resize-handle">
-      <div className="w-px h-full bg-gray-750 group-hover:bg-blurple-400 group-active:bg-blurple-300 transition-colors" />
-      <div className="absolute inset-y-0 flex flex-col items-center justify-center gap-1 opacity-30 group-hover:opacity-100 transition-opacity pointer-events-none resize-handle-dots">
-        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blurple-400 transition-colors" />
-        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blurple-400 transition-colors" />
-        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blurple-400 transition-colors" />
-      </div>
-    </Separator>
-  );
-}
 
 // =============================================================================
 // Types
@@ -53,6 +35,9 @@ export interface MainContentAreaProps {
 
   // Whether the current list is empty (helps provide contextual empty state messages)
   listEmpty?: boolean;
+
+  // Whether the current list has an error (for error-aware empty states)
+  listError?: string | null;
 
   // Repo context
   selectedRepo: Repo | null;
@@ -336,11 +321,47 @@ const emptyStateContent: Record<Tab, { title: string; description: string; empty
 interface EmptyStateProps {
   activeTab: Tab;
   listEmpty?: boolean;
+  listError?: string | null;
   onTabChange?: (tab: Tab) => void;
 }
 
-function EmptyState({ activeTab, listEmpty, onTabChange }: EmptyStateProps) {
+function EmptyState({ activeTab, listEmpty, listError, onTabChange }: EmptyStateProps) {
   const content = emptyStateContent[activeTab];
+
+  // If there's an error loading the list, show error-aware empty state
+  if (listError) {
+    const tabLabel = activeTab === 'issues' ? 'issues' : activeTab === 'prs' ? 'pull requests' : activeTab === 'history' ? 'sessions' : 'schedules';
+    return (
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="text-center p-8 rounded-xl bg-danger-500/5 border border-danger-500/20 max-w-md empty-state-enter">
+          {/* Error icon */}
+          <div className="w-16 h-16 rounded-full bg-danger-500/10 flex items-center justify-center mx-auto mb-5 empty-state-icon-float">
+            <svg className="w-8 h-8 text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+
+          {/* Error message */}
+          <h3 className="text-danger-300 font-semibold text-lg mb-2">Unable to load {tabLabel}</h3>
+          <p className="text-gray-400 text-sm mb-4">There was a problem fetching data from the server.</p>
+          <p className="text-gray-500 text-xs">Use the retry button in the sidebar to try again.</p>
+
+          {/* Navigation hint - switch to another tab */}
+          <div className="mt-6 pt-4 border-t border-gray-750/50">
+            <p className="text-gray-500 text-xs mb-3">Or switch to a different view:</p>
+            <div className="flex justify-center gap-2">
+              {activeTab !== 'history' && (
+                <QuickNavItem shortcut="3" label="History" onClick={() => onTabChange?.('history')} />
+              )}
+              {activeTab !== 'issues' && (
+                <QuickNavItem shortcut="1" label="Issues" onClick={() => onTabChange?.('issues')} />
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // If the list has items, show a minimal "select an item" prompt
   // If the list is empty, show the full empty state with navigation shortcuts
@@ -407,6 +428,7 @@ export function MainContentArea(props: MainContentAreaProps) {
     layoutMode,
     activeTab,
     listEmpty,
+    listError,
     selectedRepo,
     selectedIssue,
     selectedPR,
@@ -698,7 +720,7 @@ export function MainContentArea(props: MainContentAreaProps) {
     ),
 
     // Empty state
-    'empty': () => <EmptyState activeTab={activeTab} listEmpty={listEmpty} onTabChange={onTabChange} />,
+    'empty': () => <EmptyState activeTab={activeTab} listEmpty={listEmpty} listError={listError} onTabChange={onTabChange} />,
   };
 
   // =============================================================================
