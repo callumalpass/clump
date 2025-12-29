@@ -1,5 +1,30 @@
 import { describe, it, expect } from 'vitest';
-import { stripAnsiCodes, deduplicateLines, cleanTerminalOutput } from './text';
+import { pluralize, stripAnsiCodes, deduplicateLines, cleanTerminalOutput } from './text';
+
+describe('pluralize', () => {
+  it('uses singular form for count of 1', () => {
+    expect(pluralize(1, 'session')).toBe('1 session');
+    expect(pluralize(1, 'item')).toBe('1 item');
+  });
+
+  it('uses plural form for count of 0', () => {
+    expect(pluralize(0, 'session')).toBe('0 sessions');
+  });
+
+  it('uses plural form for counts greater than 1', () => {
+    expect(pluralize(2, 'session')).toBe('2 sessions');
+    expect(pluralize(100, 'item')).toBe('100 items');
+  });
+
+  it('uses custom plural when provided', () => {
+    expect(pluralize(2, 'process', 'processes')).toBe('2 processes');
+    expect(pluralize(1, 'process', 'processes')).toBe('1 process');
+  });
+
+  it('handles negative numbers', () => {
+    expect(pluralize(-1, 'item')).toBe('-1 items');
+  });
+});
 
 describe('stripAnsiCodes', () => {
   it('removes CSI sequences (colors, styles)', () => {

@@ -20,6 +20,7 @@ import { ResizeHandle } from './components/ResizeHandle';
 import type { Repo, Issue, PR, SessionSummary, CommandMetadata, EntityLink } from './types';
 import type { SessionListFilters } from './components/SessionList';
 import { LRUCache } from './utils/cache';
+import { pluralize } from './utils/text';
 
 type Tab = 'issues' | 'prs' | 'history' | 'schedules';
 
@@ -1387,9 +1388,9 @@ export default function App() {
         <div className="flex items-center gap-6">
           <span
             className="text-sm text-gray-400"
-            title={processes.length === 0 ? "No Claude Code sessions running" : `${processes.length} Claude Code session${processes.length !== 1 ? 's' : ''} actively running`}
+            title={processes.length === 0 ? "No Claude Code sessions running" : `${pluralize(processes.length, 'Claude Code session')} actively running`}
           >
-            {processes.length} active process{processes.length !== 1 ? 'es' : ''}
+            {pluralize(processes.length, 'active process', 'active processes')}
           </span>
           {/* Usage stats summary */}
           {stats && (

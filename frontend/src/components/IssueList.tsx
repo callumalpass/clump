@@ -7,6 +7,7 @@ import { StartSessionButton } from './StartSessionButton';
 import { Pagination, PaginationSkeleton } from './Pagination';
 import { getContrastColor } from '../utils/colors';
 import { focusRing } from '../utils/styles';
+import { pluralize } from '../utils/text';
 
 // Memoized list item component to prevent unnecessary re-renders
 interface IssueListItemProps {
@@ -73,8 +74,8 @@ const IssueListItem = memo(function IssueListItem({
             {!hasRunning && hasCompleted && (
               <span
                 className="status-badge status-badge-enter inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-stoody-lg bg-mint-400/20 text-mint-400 shrink-0"
-                title={`${issueSessions.length} completed session${issueSessions.length !== 1 ? 's' : ''}`}
-                aria-label={`${issueSessions.length} completed session${issueSessions.length !== 1 ? 's' : ''}`}
+                title={pluralize(issueSessions.length, 'completed session')}
+                aria-label={pluralize(issueSessions.length, 'completed session')}
               >
                 <span className="status-dot w-2 h-2 rounded-full bg-mint-400" />
                 {issueSessions.length}
@@ -108,7 +109,7 @@ const IssueListItem = memo(function IssueListItem({
           <div className="list-item-metadata text-xs text-gray-400 mt-2">
             by {issue.author} · {issue.comments_count} comments
             {issueSessions.length > 0 && (
-              <span className="text-blurple-400"> · {issueSessions.length} session{issueSessions.length !== 1 ? 's' : ''}</span>
+              <span className="text-blurple-400"> · {pluralize(issueSessions.length, 'session')}</span>
             )}
           </div>
         </div>

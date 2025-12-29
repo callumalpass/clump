@@ -16,6 +16,7 @@ import {
   filterBarStyles,
 } from './FilterBar';
 import { ConfirmDialog } from './ConfirmDialog';
+import { pluralize } from '../utils/text';
 
 // Memoized list item component to prevent unnecessary re-renders
 interface SessionListItemProps {
@@ -734,7 +735,7 @@ export function SessionList({
         onConfirm={handleBulkDeleteConfirm}
         onCancel={() => setShowDeleteConfirm(false)}
         title="Delete Sessions"
-        message={`Are you sure you want to delete ${selectedIds.size} session${selectedIds.size !== 1 ? 's' : ''}? This action cannot be undone.`}
+        message={`Are you sure you want to delete ${pluralize(selectedIds.size, 'session')}? This action cannot be undone.`}
         confirmLabel="Delete"
         cancelLabel="Cancel"
         variant="danger"

@@ -7,7 +7,7 @@ import { SubsessionView } from './SubsessionView';
 import { calculateCost, formatCost } from '../utils/costs';
 import { getModelDisplayName, getModelBadgeStyle } from '../utils/models';
 import { computeLineDiff } from '../utils/diffing';
-import { cleanTerminalOutput } from '../utils/text';
+import { cleanTerminalOutput, pluralize } from '../utils/text';
 import { calculateDuration } from '../hooks/useElapsedTime';
 
 // Highlight matching text in a string
@@ -184,7 +184,7 @@ function ToolUsageSummary({ toolCounts }: { toolCounts: Record<string, number> }
           <span
             key={name}
             className={`${style.color} tabular-nums`}
-            title={`${count} ${name} call${count !== 1 ? 's' : ''}`}
+            title={`${pluralize(count, `${name} call`)}`}
           >
             {count} {style.label}
           </span>

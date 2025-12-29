@@ -17,6 +17,7 @@ import {
   ActiveFiltersIndicator,
 } from './FilterBar';
 import { focusRing } from '../utils/styles';
+import { pluralize } from '../utils/text';
 
 // Memoized list item component to prevent unnecessary re-renders
 interface PRListItemProps {
@@ -81,8 +82,8 @@ const PRListItem = memo(function PRListItem({
             {!hasRunning && hasCompleted && (
               <span
                 className="status-badge status-badge-enter inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-stoody-lg bg-mint-400/20 text-mint-400 shrink-0"
-                title={`${prSessions.length} completed session${prSessions.length !== 1 ? 's' : ''}`}
-                aria-label={`${prSessions.length} completed session${prSessions.length !== 1 ? 's' : ''}`}
+                title={pluralize(prSessions.length, 'completed session')}
+                aria-label={pluralize(prSessions.length, 'completed session')}
               >
                 <span className="status-dot w-2 h-2 rounded-full bg-mint-400" />
                 {prSessions.length}
@@ -122,9 +123,9 @@ const PRListItem = memo(function PRListItem({
               <span className="text-danger-400">-{pr.deletions}</span>
             </span>
             <DiffBar additions={pr.additions} deletions={pr.deletions} />
-            <span>{pr.changed_files} file{pr.changed_files !== 1 ? 's' : ''}</span>
+            <span>{pluralize(pr.changed_files, 'file')}</span>
             {prSessions.length > 0 && (
-              <span className="text-blurple-400">{prSessions.length} session{prSessions.length !== 1 ? 's' : ''}</span>
+              <span className="text-blurple-400">{pluralize(prSessions.length, 'session')}</span>
             )}
           </div>
         </div>
