@@ -242,7 +242,7 @@ interface EmptyStateActionProps {
 }
 
 export function EmptyStateAction({ onClick, children, variant = 'secondary' }: EmptyStateActionProps) {
-  const baseClasses = 'px-3 py-1.5 text-xs rounded transition-all active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900';
+  const baseClasses = 'px-3 py-1.5 text-xs rounded transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900 btn-squish';
   const variantClasses = variant === 'primary'
     ? 'bg-blurple-500 hover:bg-blue-700 text-white focus-visible:ring-blue-500'
     : 'bg-gray-700 hover:bg-gray-600 text-gray-200 focus-visible:ring-gray-500';

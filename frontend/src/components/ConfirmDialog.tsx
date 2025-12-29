@@ -121,7 +121,7 @@ export function ConfirmDialog({
               ref={cancelButtonRef}
               onClick={onCancel}
               disabled={loading}
-              className={`btn-secondary px-4 py-2 text-sm font-medium bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${focusRing}`}
+              className={`btn-secondary px-4 py-2 text-sm font-medium bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed btn-squish ${focusRing}`}
             >
               {cancelLabel}
             </button>
@@ -129,7 +129,7 @@ export function ConfirmDialog({
               ref={confirmButtonRef}
               onClick={onConfirm}
               disabled={loading}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${styles.confirmButton} ${focusRing}`}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed btn-squish ${styles.confirmButton} ${focusRing}`}
             >
               {loading ? (
                 <span className="flex items-center gap-2">

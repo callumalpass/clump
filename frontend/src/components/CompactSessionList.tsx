@@ -68,7 +68,7 @@ export function CompactSessionList({
         {onViewAll && (
           <button
             onClick={onViewAll}
-            className="px-4 py-2.5 text-sm text-gray-400 hover:text-pink-400 hover:bg-gray-800/50 border-t border-gray-750/50 transition-colors text-center"
+            className="px-4 py-2.5 text-sm text-gray-400 hover:text-pink-400 hover:bg-gray-800/50 border-t border-gray-750/50 transition-colors text-center btn-squish"
           >
             View history
           </button>
@@ -148,7 +148,7 @@ export function CompactSessionList({
               {session.is_active && onKillSession && (
                 <button
                   onClick={(e) => handleKill(e, session)}
-                  className="flex-1 sm:flex-initial px-2 py-1 sm:px-2.5 text-[10px] sm:text-xs text-danger-400 bg-danger-500/20 hover:bg-danger-500 hover:text-white active:scale-95 rounded-stoody-sm btn-stop-light flex items-center justify-center gap-1 sm:gap-1.5 transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-danger-400"
+                  className="flex-1 sm:flex-initial px-2 py-1 sm:px-2.5 text-[10px] sm:text-xs text-danger-400 bg-danger-500/20 hover:bg-danger-500 hover:text-white rounded-stoody-sm btn-stop-light flex items-center justify-center gap-1 sm:gap-1.5 transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-danger-400 btn-squish"
                   title="Stop this session"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -162,7 +162,7 @@ export function CompactSessionList({
               {!session.is_active && onContinueSession && (
                 <button
                   onClick={(e) => handleContinue(e, session)}
-                  className="flex-1 sm:flex-initial px-2 py-1 sm:px-2.5 text-[10px] sm:text-xs text-blurple-400 bg-blurple-500/20 hover:bg-blurple-500 hover:text-pink-400 active:scale-95 rounded-stoody-sm btn-continue-light flex items-center justify-center gap-1 sm:gap-1.5 transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-blurple-400"
+                  className="flex-1 sm:flex-initial px-2 py-1 sm:px-2.5 text-[10px] sm:text-xs text-blurple-400 bg-blurple-500/20 hover:bg-blurple-500 hover:text-pink-400 rounded-stoody-sm btn-continue-light flex items-center justify-center gap-1 sm:gap-1.5 transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-blurple-400 btn-squish"
                   title="Continue this session"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -181,7 +181,7 @@ export function CompactSessionList({
       {onViewAll && (
         <button
           onClick={onViewAll}
-          className="group/view px-4 py-2.5 text-sm text-gray-400 hover:text-pink-400 hover:bg-gray-800/50 border-t border-gray-750/50 transition-colors text-center flex items-center justify-center gap-1.5"
+          className="group/view px-4 py-2.5 text-sm text-gray-400 hover:text-pink-400 hover:bg-gray-800/50 border-t border-gray-750/50 transition-colors text-center flex items-center justify-center gap-1.5 btn-squish"
         >
           {hasMore ? 'View all sessions' : 'View history'}
           <svg className="w-3.5 h-3.5 transition-transform duration-200 group-hover/view:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

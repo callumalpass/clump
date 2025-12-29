@@ -181,7 +181,7 @@ const SessionListItem = memo(function SessionListItem({
         {showContinueButton && !session.is_active && onContinue && (
           <button
             onClick={onContinue}
-            className="flex-shrink-0 px-3 py-1.5 text-xs bg-blurple-500/20 text-blurple-400 hover:bg-blurple-500 hover:text-pink-400 active:scale-95 rounded-stoody flex items-center gap-1.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-400"
+            className="flex-shrink-0 px-3 py-1.5 text-xs bg-blurple-500/20 text-blurple-400 hover:bg-blurple-500 hover:text-pink-400 rounded-stoody flex items-center gap-1.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-400 btn-squish"
             title="Continue this conversation"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
