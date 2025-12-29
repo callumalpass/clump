@@ -192,7 +192,8 @@ describe('Terminal', () => {
 
       const { container } = render(<Terminal {...defaultProps} />);
 
-      const statusBadge = container.querySelector('.bg-green-500\\/20');
+      // Stoody theme uses mint color (#55efc4) for connected status
+      const statusBadge = container.querySelector('.bg-\\[\\#55efc4\\]\\/20');
       expect(statusBadge).toBeInTheDocument();
     });
 
@@ -205,7 +206,8 @@ describe('Terminal', () => {
 
       const { container } = render(<Terminal {...defaultProps} />);
 
-      const statusBadge = container.querySelector('.bg-red-500\\/20');
+      // Stoody theme uses coral-red color (#ff7675) for disconnected status
+      const statusBadge = container.querySelector('.bg-\\[\\#ff7675\\]\\/20');
       expect(statusBadge).toBeInTheDocument();
     });
 
@@ -486,7 +488,8 @@ describe('Terminal', () => {
     it('applies dark background', () => {
       const { container } = render(<Terminal {...defaultProps} />);
 
-      expect(container.querySelector('.bg-\\[\\#0d1117\\]')).toBeInTheDocument();
+      // Stoody theme uses #2d3436 for the terminal background
+      expect(container.querySelector('.bg-\\[\\#2d3436\\]')).toBeInTheDocument();
     });
 
     it('applies rounded border when header is shown', () => {

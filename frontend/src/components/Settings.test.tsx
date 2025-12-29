@@ -4,9 +4,13 @@ import userEvent from '@testing-library/user-event';
 import { Settings } from './Settings';
 import type { ClaudeCodeSettings, CommandMetadata } from '../types';
 import * as useApiModule from '../hooks/useApi';
+import * as useThemeModule from '../hooks/useTheme';
 
 // Mock the useApi module
 vi.mock('../hooks/useApi');
+
+// Mock the useTheme module
+vi.mock('../hooks/useTheme');
 
 // Mock the CommandEditor component
 vi.mock('./CommandEditor', () => ({
@@ -60,6 +64,7 @@ function createMockCommands(): { issue: CommandMetadata[]; pr: CommandMetadata[]
 describe('Settings', () => {
   let mockUpdateSettings: ReturnType<typeof vi.fn>;
   let mockResetSettings: ReturnType<typeof vi.fn>;
+  let mockSetTheme: ReturnType<typeof vi.fn>;
 
   const defaultProps = {
     isOpen: true,
@@ -80,6 +85,7 @@ describe('Settings', () => {
 
     mockUpdateSettings = vi.fn().mockResolvedValue(undefined);
     mockResetSettings = vi.fn().mockResolvedValue(undefined);
+    mockSetTheme = vi.fn();
 
     vi.mocked(useApiModule.useClaudeSettings).mockReturnValue({
       settings: createMockSettings(),
@@ -89,6 +95,15 @@ describe('Settings', () => {
       updateSettings: mockUpdateSettings,
       resetSettings: mockResetSettings,
       refresh: vi.fn(),
+    });
+
+    // Mock useTheme hook
+    vi.mocked(useThemeModule.useTheme).mockReturnValue({
+      theme: 'dark',
+      resolvedTheme: 'dark',
+      setTheme: mockSetTheme,
+      isDark: true,
+      isLight: false,
     });
   });
 
@@ -699,6 +714,95 @@ describe('Settings', () => {
       expect(mockResetSettings).not.toHaveBeenCalled();
 
       confirmSpy.mockRestore();
+    });
+
+    it('shows theme selection options', async () => {
+      render(<Settings {...defaultProps} />);
+
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'advanced' }));
+
+      expect(screen.getByText('Theme')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Dark/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Light/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /System/i })).toBeInTheDocument();
+    });
+
+    it('highlights the current theme selection', async () => {
+      vi.mocked(useThemeModule.useTheme).mockReturnValue({
+        theme: 'light',
+        resolvedTheme: 'light',
+        setTheme: mockSetTheme,
+        isDark: false,
+        isLight: true,
+      });
+
+      render(<Settings {...defaultProps} />);
+
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'advanced' }));
+
+      // The selected theme button uses bg-blurple-500/10 styling
+      const lightButton = screen.getByRole('button', { name: /Light/i });
+      expect(lightButton).toHaveClass('bg-blurple-500/10');
+    });
+
+    it('calls setTheme when dark theme is selected', async () => {
+      vi.mocked(useThemeModule.useTheme).mockReturnValue({
+        theme: 'light',
+        resolvedTheme: 'light',
+        setTheme: mockSetTheme,
+        isDark: false,
+        isLight: true,
+      });
+
+      render(<Settings {...defaultProps} />);
+
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'advanced' }));
+      fireEvent.click(screen.getByRole('button', { name: /Dark/i }));
+
+      expect(mockSetTheme).toHaveBeenCalledWith('dark');
+    });
+
+    it('calls setTheme when light theme is selected', async () => {
+      render(<Settings {...defaultProps} />);
+
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'advanced' }));
+      fireEvent.click(screen.getByRole('button', { name: /Light/i }));
+
+      expect(mockSetTheme).toHaveBeenCalledWith('light');
+    });
+
+    it('calls setTheme when system theme is selected', async () => {
+      render(<Settings {...defaultProps} />);
+
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'advanced' }));
+      fireEvent.click(screen.getByRole('button', { name: /System/i }));
+
+      expect(mockSetTheme).toHaveBeenCalledWith('system');
     });
   });
 
