@@ -47,21 +47,11 @@ export function IssueCreateView({ repoId, onCancel, onCreated }: IssueCreateView
     }
   };
 
-  const toggleLabel = (labelName: string) => {
-    setSelectedLabels(prev =>
-      prev.includes(labelName)
-        ? prev.filter(l => l !== labelName)
-        : [...prev, labelName]
-    );
-  };
+  const createToggle = <T,>(setState: React.Dispatch<React.SetStateAction<T[]>>) =>
+    (item: T) => setState(prev => prev.includes(item) ? prev.filter(x => x !== item) : [...prev, item]);
 
-  const toggleAssignee = (assignee: string) => {
-    setSelectedAssignees(prev =>
-      prev.includes(assignee)
-        ? prev.filter(a => a !== assignee)
-        : [...prev, assignee]
-    );
-  };
+  const toggleLabel = createToggle(setSelectedLabels);
+  const toggleAssignee = createToggle(setSelectedAssignees);
 
   // Get color for a label
   const getLabelColor = (labelName: string): string => {
