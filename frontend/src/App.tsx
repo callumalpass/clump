@@ -1,21 +1,16 @@
 import { useState, useCallback, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
-import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
+import { Group, Panel, Separator } from 'react-resizable-panels';
 import { useRepos, useIssues, usePRs, useProcesses, useSessions, useActiveSessions, useTags, useIssueTags, useCommands, useSessionCounts, useStats, buildPromptFromTemplate, exportSession, downloadExport } from './hooks/useApi';
 import { useNotifications } from './hooks/useNotifications';
+import { useLayoutMode } from './hooks/useLayoutMode';
 import type { IssueFilters, SessionFilters, PRFilters } from './hooks/useApi';
 import { RepoSelector } from './components/RepoSelector';
 import { IssueList } from './components/IssueList';
-import { IssueDetail } from './components/IssueDetail';
-import { IssueCreateView } from './components/IssueCreateView';
 import { PRList } from './components/PRList';
-import { PRDetail } from './components/PRDetail';
-import { Terminal } from './components/Terminal';
-import { SessionView } from './components/SessionView';
-import { SessionTabs } from './components/SessionTabs';
 import { SessionList } from './components/SessionList';
 import { CompactSessionList } from './components/CompactSessionList';
 import { ScheduleList } from './components/ScheduleList';
-import { ScheduleDetail } from './components/ScheduleDetail';
+import { MainContentArea } from './components/MainContentArea';
 import { StatsModal } from './components/StatsModal';
 import { Settings } from './components/Settings';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
@@ -55,6 +50,73 @@ function HorizontalResizeHandle() {
 }
 
 type Tab = 'issues' | 'prs' | 'history' | 'schedules';
+
+// Pre-defined SVG icons as constants to avoid recreating JSX objects on every render
+const ICON_ISSUE = (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10" strokeWidth={2} />
+    <circle cx="12" cy="12" r="3" fill="currentColor" />
+  </svg>
+);
+
+const ICON_PR = (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+  </svg>
+);
+
+const ICON_HISTORY = (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const ICON_SCHEDULES = (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  </svg>
+);
+
+const ICON_PLUS = (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+  </svg>
+);
+
+const ICON_SETTINGS = (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+  </svg>
+);
+
+const ICON_STATS = (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+  </svg>
+);
+
+const ICON_HELP = (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const ICON_REFRESH = (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+  </svg>
+);
+
+const ICON_CHAT = (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+  </svg>
+);
+
+const ICON_ACTIVE_PULSE = (
+  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+);
 
 // Storage key for persisting active tab
 const ACTIVE_TAB_STORAGE_KEY = 'clump:activeTab';
@@ -152,9 +214,6 @@ export default function App() {
   // Sessions are cached when viewed so tabs persist across page changes
   const cachedSessionsRef = useRef(new LRUCache<string, SessionSummary>(100));
 
-  // Ref for collapsible issue/PR context panel
-  const contextPanelRef = useRef<PanelImperativeHandle>(null);
-
   // Refs for animated tab indicator
   const tabsContainerRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Map<Tab, HTMLButtonElement>>(new Map());
@@ -163,7 +222,8 @@ export default function App() {
   // Ref for refreshing schedule list from ScheduleDetail
   const scheduleListRefreshRef = useRef<(() => void) | null>(null);
 
-  // Save session tabs on every change
+  // Debounced localStorage write for session tabs (avoids blocking main thread on rapid changes)
+  const saveTabsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Track which repo the current tabs belong to (prevents saving old tabs to new repo on switch)
   const tabsRepoIdRef = useRef<number | null>(null);
   useEffect(() => {
@@ -172,17 +232,33 @@ export default function App() {
     // Only save if these tabs belong to this repo (prevents race on repo switch)
     if (tabsRepoIdRef.current !== selectedRepo.id) return;
 
-    const STORAGE_KEY = 'clump:repoSessionTabs';
-    try {
-      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-      stored[selectedRepo.id] = {
-        openSessionIds,
-        activeTabSessionId,
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
-    } catch (e) {
-      console.error('Failed to save session tabs:', e);
+    // Clear any pending save
+    if (saveTabsTimeoutRef.current) {
+      clearTimeout(saveTabsTimeoutRef.current);
     }
+
+    // Debounce the localStorage write by 500ms
+    saveTabsTimeoutRef.current = setTimeout(() => {
+      const STORAGE_KEY = 'clump:repoSessionTabs';
+      try {
+        const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        stored[selectedRepo.id] = {
+          openSessionIds,
+          activeTabSessionId,
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+      } catch (e) {
+        console.error('Failed to save session tabs:', e);
+      }
+      saveTabsTimeoutRef.current = null;
+    }, 500);
+
+    // Cleanup on unmount
+    return () => {
+      if (saveTabsTimeoutRef.current) {
+        clearTimeout(saveTabsTimeoutRef.current);
+      }
+    };
   }, [openSessionIds, activeTabSessionId, selectedRepo?.id]);
 
   const { repos, addRepo, deleteRepo } = useRepos();
@@ -234,6 +310,33 @@ export default function App() {
   const { prs, loading: prsLoading, refresh: refreshPRs, page: prsPage, totalPages: prsTotalPages, total: prsTotal, goToPage: goToPRsPage } = usePRs(selectedRepo?.id ?? null, prFilters);
   const { commands, refresh: refreshCommands } = useCommands(selectedRepo?.local_path);
   const { counts: sessionCounts, refresh: refreshSessionCounts, updateCounts } = useSessionCounts();
+
+  // Performance: Memoized lookup maps to avoid O(n) .find() calls
+  const processesById = useMemo(() => {
+    const map = new Map<string, typeof processes[0]>();
+    for (const p of processes) {
+      map.set(p.id, p);
+    }
+    return map;
+  }, [processes]);
+
+  const processesBySessionId = useMemo(() => {
+    const map = new Map<string, typeof processes[0]>();
+    for (const p of processes) {
+      if (p.claude_session_id) {
+        map.set(p.claude_session_id, p);
+      }
+    }
+    return map;
+  }, [processes]);
+
+  const sessionsById = useMemo(() => {
+    const map = new Map<string, SessionSummary>();
+    for (const s of sessions) {
+      map.set(s.session_id, s);
+    }
+    return map;
+  }, [sessions]);
 
   // Event-driven updates from WebSocket
   // Handle session created - add to list and refresh counts
@@ -328,10 +431,12 @@ export default function App() {
 
   // Update the sliding tab indicator position when active tab changes
   useLayoutEffect(() => {
+    const container = tabsContainerRef.current;
+    if (!container) return;
+
     const updateIndicator = () => {
-      const container = tabsContainerRef.current;
       const activeTabElement = tabRefs.current.get(activeTab);
-      if (container && activeTabElement) {
+      if (activeTabElement) {
         const containerRect = container.getBoundingClientRect();
         const tabRect = activeTabElement.getBoundingClientRect();
         setIndicatorStyle({
@@ -340,10 +445,23 @@ export default function App() {
         });
       }
     };
-    updateIndicator();
+
+    // Initial update - use rAF to ensure DOM has settled
+    const rafId = requestAnimationFrame(updateIndicator);
+
+    // Watch for size changes on tab elements
+    const resizeObserver = new ResizeObserver(updateIndicator);
+    tabRefs.current.forEach((el) => resizeObserver.observe(el));
+    resizeObserver.observe(container);
+
     // Also update on window resize
     window.addEventListener('resize', updateIndicator);
-    return () => window.removeEventListener('resize', updateIndicator);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateIndicator);
+    };
   }, [activeTab]);
 
   // Restore session tabs when repo changes
@@ -559,7 +677,7 @@ export default function App() {
 
   const handleSelectSession = useCallback((session: SessionSummary) => {
     // Check if this session is active (has a running process)
-    const activeProcess = session.is_active ? processes.find(p => p.claude_session_id === session.session_id) : null;
+    const activeProcess = session.is_active ? processesBySessionId.get(session.session_id) : null;
 
     // Select the first linked issue or PR for context
     const firstIssue = session.entities?.find(e => e.kind === 'issue');
@@ -602,7 +720,7 @@ export default function App() {
       setViewingSessionId(session.session_id);
       setExpandedSessionId(null);
     }
-  }, [processes]);
+  }, [processesBySessionId]);
 
   const handleContinueSession = useCallback(
     async (session: SessionSummary, prompt?: string) => {
@@ -611,6 +729,9 @@ export default function App() {
 
       // Add the new process to state immediately
       addProcess(process);
+
+      // Refresh active sessions to show the session as active
+      refreshActiveSessions();
 
       // Store pending context for first linked issue/PR so side-by-side shows immediately
       const firstIssue = session.entities?.find(e => e.kind === 'issue');
@@ -638,7 +759,7 @@ export default function App() {
       setViewingSessionId(null);
       setActiveProcessId(process.id);
     },
-    [continueSession, addProcess]
+    [continueSession, addProcess, refreshActiveSessions]
   );
 
   const handleToggleStar = useCallback(
@@ -651,10 +772,10 @@ export default function App() {
   // Handler for closing a session tab (not deleting the session)
   const handleCloseSessionTab = useCallback((sessionId: string) => {
     // Find the session to check if it has a running process
-    const session = sessions.find(s => s.session_id === sessionId)
+    const session = sessionsById.get(sessionId)
       ?? cachedSessionsRef.current.get(sessionId);
     if (session?.is_active) {
-      const activeProcess = processes.find(p => p.claude_session_id === sessionId);
+      const activeProcess = processesBySessionId.get(sessionId);
       if (activeProcess) {
         killProcess(activeProcess.id);
       }
@@ -670,11 +791,11 @@ export default function App() {
       setActiveProcessId(null);
       setViewingSessionId(null);
     }
-  }, [sessions, processes, killProcess, activeTabSessionId]);
+  }, [sessionsById, processesBySessionId, killProcess, activeTabSessionId]);
 
   // Handler for selecting a session tab
   const handleSelectSessionTab = useCallback((sessionId: string) => {
-    const session = sessions.find(s => s.session_id === sessionId)
+    const session = sessionsById.get(sessionId)
       ?? cachedSessionsRef.current.get(sessionId);
     if (!session) return;
 
@@ -684,7 +805,7 @@ export default function App() {
     clearAttention(sessionId);
 
     // Check if session is active
-    const activeProcess = session.is_active ? processes.find(p => p.claude_session_id === sessionId) : null;
+    const activeProcess = session.is_active ? processesBySessionId.get(sessionId) : null;
     if (activeProcess) {
       setActiveProcessId(activeProcess.id);
       setViewingSessionId(null);
@@ -704,7 +825,7 @@ export default function App() {
       setSelectedPR(firstPR.number);
       setSelectedIssue(null);
     }
-  }, [sessions, processes, clearAttention]);
+  }, [sessionsById, processesBySessionId, clearAttention]);
 
   // Session tab keyboard shortcuts (Alt + 1-9, [, ], N)
   useEffect(() => {
@@ -769,9 +890,9 @@ export default function App() {
   }, [openSessionIds, activeTabSessionId, handleSelectSessionTab, handleCloseSessionTab, selectedRepo, handleNewProcess]);
 
   // Find the active process and its related session
-  const activeProcess = processes.find(p => p.id === activeProcessId);
+  const activeProcess = activeProcessId ? processesById.get(activeProcessId) : undefined;
   const activeSessionFromList = activeProcess?.claude_session_id
-    ? (sessions.find(s => s.session_id === activeProcess.claude_session_id)
+    ? (sessionsById.get(activeProcess.claude_session_id)
       ?? cachedSessionsRef.current.get(activeProcess.claude_session_id))
     : null;
 
@@ -797,14 +918,10 @@ export default function App() {
 
   // Find the session being viewed (for transcript panel)
   const viewingSession = viewingSessionId
-    ? (sessions.find(s => s.session_id === viewingSessionId)
+    ? (sessionsById.get(viewingSessionId)
       ?? cachedSessionsRef.current.get(viewingSessionId))
     : null;
 
-  // Find the process for the viewing session (if it's still active)
-  const viewingSessionProcess = viewingSession
-    ? processes.find(p => p.claude_session_id === viewingSession.session_id)
-    : null;
 
   // Cache active/viewing sessions so they persist across pagination changes
   // Only cache real sessions from API, not synthetic ones
@@ -851,11 +968,6 @@ export default function App() {
         : null
   );
 
-  // Show side-by-side when we have sessions AND any issue/PR context
-  // This keeps the session panel always visible when sessions exist
-  const hasIssueContext = !!activeIssueNumber;
-  const hasPRContext = !!activePRNumber;
-
   // Get the list of open sessions (sessions that have tabs open)
   // Uses optimistic UI: if a session isn't in the backend yet but has an active process,
   // synthesize a session from process data + pending metadata so the tab appears immediately
@@ -864,7 +976,7 @@ export default function App() {
     return openSessionIds
       .map(id => {
         // First try to find in fetched sessions (current page)
-        const session = sessions.find(s => s.session_id === id);
+        const session = sessionsById.get(id);
         if (session) {
           // Clear pending data once we have real session data
           pendingSessionsRef.current.delete(id);
@@ -880,7 +992,7 @@ export default function App() {
         }
 
         // If not found anywhere, check if there's an active process for this session
-        const process = processes.find(p => p.claude_session_id === id);
+        const process = processesBySessionId.get(id);
         if (process && selectedRepo) {
           // Get pending session data (title, entities) if available
           const pendingData = pendingSessionsRef.current.get(id);
@@ -907,21 +1019,18 @@ export default function App() {
         return null;
       })
       .filter((s): s is SessionSummary => !!s);
-  }, [openSessionIds, sessions, processes, selectedRepo]);
+  }, [openSessionIds, sessionsById, processesBySessionId, selectedRepo]);
 
-  // Show side-by-side if we have open session tabs and any issue/PR selected
-  const showSideBySide = openSessions.length > 0 && (hasIssueContext || hasPRContext);
-
-  // Determine which context to show in side-by-side (issue vs PR)
-  // Prioritize user's explicit selection over analysis context
-  const showIssueSideBySide = selectedIssue ? true : (hasIssueContext && !hasPRContext);
-  const showPRSideBySide = selectedPR ? true : (!selectedIssue && hasPRContext);
-
-  // Find the active PR data (for side-by-side with terminal/transcript)
-  const activePR = activePRNumber ? prs.find(p => p.number === activePRNumber) : null;
-
-  // Find the selected PR data (for standalone PR detail view)
-  const selectedPRData = selectedPR ? prs.find(p => p.number === selectedPR) : null;
+  // Compute layout mode using the centralized hook
+  const { mode: layoutMode } = useLayoutMode({
+    selectedIssue,
+    selectedPR,
+    selectedSchedule,
+    isCreatingIssue,
+    openSessions,
+    activeIssueNumber,
+    activePRNumber,
+  });
 
   // Handlers for navigating to issues/PRs from SessionView
   const handleShowIssue = useCallback((issueNumber: number) => {
@@ -1021,7 +1130,7 @@ export default function App() {
       if (e.key === 's' && !e.altKey && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         const currentSession = activeTabSessionId
-          ? (sessions.find(s => s.session_id === activeTabSessionId)
+          ? (sessionsById.get(activeTabSessionId)
             ?? cachedSessionsRef.current.get(activeTabSessionId))
           : null;
         if (currentSession) {
@@ -1114,7 +1223,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [commandPaletteOpen, settingsOpen, shortcutsOpen, statsModalOpen, activeProcessId, selectedIssue, selectedPR, activeTab, issuesPage, issuesTotalPages, goToIssuesPage, prsPage, prsTotalPages, goToPRsPage, sessionsPage, sessionsTotalPages, goToSessionsPage, activeTabSessionId, handleCloseSessionTab, sessions, handleToggleStar, sessionViewModes, handleSetSessionViewMode, refreshIssues, refreshPRs, refreshSessions]);
+  }, [commandPaletteOpen, settingsOpen, shortcutsOpen, statsModalOpen, activeProcessId, selectedIssue, selectedPR, activeTab, issuesPage, issuesTotalPages, goToIssuesPage, prsPage, prsTotalPages, goToPRsPage, sessionsPage, sessionsTotalPages, goToSessionsPage, activeTabSessionId, handleCloseSessionTab, sessionsById, handleToggleStar, sessionViewModes, handleSetSessionViewMode, refreshIssues, refreshPRs, refreshSessions]);
 
   // Command palette commands
   const paletteCommands = useMemo((): Command[] => {
@@ -1125,12 +1234,7 @@ export default function App() {
       id: 'nav-issues',
       label: 'Go to Issues',
       description: 'View GitHub issues',
-      icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <circle cx="12" cy="12" r="10" strokeWidth={2} />
-          <circle cx="12" cy="12" r="3" fill="currentColor" />
-        </svg>
-      ),
+      icon: ICON_ISSUE,
       category: 'navigation',
       action: () => setActiveTab('issues'),
     });
@@ -1139,11 +1243,7 @@ export default function App() {
       id: 'nav-prs',
       label: 'Go to Pull Requests',
       description: 'View GitHub pull requests',
-      icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-        </svg>
-      ),
+      icon: ICON_PR,
       category: 'navigation',
       action: () => setActiveTab('prs'),
     });
@@ -1152,11 +1252,7 @@ export default function App() {
       id: 'nav-history',
       label: 'Go to History',
       description: 'View past sessions',
-      icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
+      icon: ICON_HISTORY,
       category: 'navigation',
       action: () => setActiveTab('history'),
     });
@@ -1165,11 +1261,7 @@ export default function App() {
       id: 'nav-schedules',
       label: 'Go to Schedules',
       description: 'View scheduled tasks',
-      icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-      ),
+      icon: ICON_SCHEDULES,
       category: 'navigation',
       action: () => setActiveTab('schedules'),
     });
@@ -1181,11 +1273,7 @@ export default function App() {
         label: 'New Session',
         description: 'Start a new Claude Code session',
         shortcut: ['Alt', 'N'],
-        icon: (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-        ),
+        icon: ICON_PLUS,
         category: 'actions',
         action: handleNewProcess,
       });
@@ -1195,12 +1283,7 @@ export default function App() {
       id: 'action-settings',
       label: 'Open Settings',
       description: 'Configure application settings',
-      icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-      ),
+      icon: ICON_SETTINGS,
       category: 'actions',
       action: () => setSettingsOpen(true),
     });
@@ -1209,11 +1292,7 @@ export default function App() {
       id: 'action-stats',
       label: 'View Usage Statistics',
       description: 'See token usage and costs',
-      icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-        </svg>
-      ),
+      icon: ICON_STATS,
       category: 'actions',
       action: () => setStatsModalOpen(true),
     });
@@ -1223,11 +1302,7 @@ export default function App() {
       label: 'Keyboard Shortcuts',
       description: 'View all keyboard shortcuts',
       shortcut: ['?'],
-      icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
+      icon: ICON_HELP,
       category: 'actions',
       action: () => setShortcutsOpen(true),
     });
@@ -1236,11 +1311,7 @@ export default function App() {
       id: 'action-refresh',
       label: 'Refresh Data',
       description: 'Refresh current view data',
-      icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-        </svg>
-      ),
+      icon: ICON_REFRESH,
       category: 'actions',
       action: () => {
         if (activeTab === 'issues') refreshIssues();
@@ -1255,13 +1326,7 @@ export default function App() {
         id: `session-${session.session_id}`,
         label: session.title || 'Untitled Session',
         description: session.is_active ? 'Active session' : `${session.message_count} messages`,
-        icon: session.is_active ? (
-          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-        ) : (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-          </svg>
-        ),
+        icon: session.is_active ? ICON_ACTIVE_PULSE : ICON_CHAT,
         category: 'sessions',
         action: () => handleSelectSessionTab(session.session_id),
       });
@@ -1278,11 +1343,7 @@ export default function App() {
         id: `recent-${session.session_id}`,
         label: session.title || 'Untitled Session',
         description: `${session.message_count} messages`,
-        icon: (
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        ),
+        icon: ICON_HISTORY,
         category: 'recent',
         action: () => handleSelectSession(session),
       });
@@ -1627,443 +1688,60 @@ export default function App() {
 
         {/* Main content */}
         <Panel minSize="400px" className="flex flex-col min-w-0">
-          {/* Content area */}
-          <div className="flex-1 flex min-h-0">
-            {/* Side-by-side view: Issue/PR + Terminal */}
-            {showSideBySide && selectedRepo && (
-              <Group orientation="horizontal" className="flex-1">
-                {/* Collapsible context panel (issue or PR) */}
-                <Panel
-                  panelRef={contextPanelRef}
-                  defaultSize="40%"
-                  minSize="200px"
-                  maxSize="60%"
-                  collapsible
-                  collapsedSize="40px"
-                  className="flex flex-col border-r border-gray-700"
-                >
-                  {/* Always-visible header with toggle button */}
-                  <div className={`flex items-center p-2 border-b border-gray-700 bg-gray-800/50 shrink-0 ${issuePanelCollapsed ? 'flex-col gap-2' : 'justify-between'}`}>
-                    {issuePanelCollapsed ? (
-                      <>
-                        <button
-                          onClick={() => {
-                            const panel = contextPanelRef.current;
-                            if (panel?.isCollapsed()) {
-                              panel.expand();
-                              setIssuePanelCollapsed(false);
-                            }
-                          }}
-                          className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                          title="Expand panel"
-                          aria-label={`Expand ${showIssueSideBySide ? 'issue' : 'PR'} context panel`}
-                        >
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
-                        {/* Vertical label when collapsed */}
-                        <div
-                          className="flex flex-col items-center gap-1 cursor-pointer group"
-                          onClick={() => {
-                            const panel = contextPanelRef.current;
-                            if (panel?.isCollapsed()) {
-                              panel.expand();
-                              setIssuePanelCollapsed(false);
-                            }
-                          }}
-                          title={`Click to expand ${showIssueSideBySide ? 'issue' : 'PR'} context`}
-                        >
-                          {/* Icon for content type */}
-                          {showIssueSideBySide ? (
-                            <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <circle cx="12" cy="12" r="10" strokeWidth={2} />
-                              <circle cx="12" cy="12" r="3" fill="currentColor" />
-                            </svg>
-                          ) : (
-                            <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
-                            </svg>
-                          )}
-                          {/* Vertical text */}
-                          <span
-                            className="text-xs font-medium text-gray-400 group-hover:text-gray-200 transition-colors"
-                            style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
-                          >
-                            {showIssueSideBySide ? 'Issue' : 'PR'}
-                          </span>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <span className="text-sm font-medium text-gray-300">
-                          {showIssueSideBySide ? 'Issue Context' : 'PR Context'}
-                        </span>
-                        <button
-                          onClick={() => {
-                            const panel = contextPanelRef.current;
-                            panel?.collapse();
-                            setIssuePanelCollapsed(true);
-                          }}
-                          className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                          title="Collapse panel"
-                          aria-label={`Collapse ${showIssueSideBySide ? 'issue' : 'PR'} context panel`}
-                        >
-                          <svg
-                            className="w-4 h-4 rotate-180"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
-                      </>
-                    )}
-                  </div>
-                  {/* Content area - invisible when collapsed but still in layout */}
-                  <div className={`flex-1 overflow-auto transition-opacity duration-150 ${issuePanelCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-                        {showIssueSideBySide && activeIssueNumber && (
-                          <IssueDetail
-                            repoId={selectedRepo.id}
-                            issueNumber={activeIssueNumber}
-                            issueCommands={commands.issue}
-                            onStartSession={(command) => {
-                              const issue = issues.find((i) => i.number === activeIssueNumber);
-                              if (issue) handleStartIssueSession(issue, command);
-                            }}
-                            sessions={sessions}
-                            processes={processes}
-                            expandedSessionId={expandedSessionId}
-                            onToggleSession={setExpandedSessionId}
-                            onSelectSession={handleSelectSession}
-                            onContinueSession={handleContinueSession}
-                            tags={tags}
-                            issueTags={issueTagsMap[activeIssueNumber] || []}
-                            onAddTag={(tagId) => addTagToIssue(activeIssueNumber, tagId)}
-                            onRemoveTag={(tagId) => removeTagFromIssue(activeIssueNumber, tagId)}
-                            onCreateTag={createTag}
-                          />
-                        )}
-                        {showPRSideBySide && activePR && selectedRepo && (
-                          <PRDetail
-                            repoId={selectedRepo.id}
-                            prNumber={activePR.number}
-                            prCommands={commands.pr}
-                            onStartSession={(command) => handleStartPRSession(activePR, command)}
-                            sessions={sessions}
-                            processes={processes}
-                            onSelectSession={handleSelectSession}
-                            onContinueSession={handleContinueSession}
-                          />
-                        )}
-                  </div>
-                </Panel>
-                <ResizeHandle />
-                <Panel minSize="300px" className="flex flex-col">
-                  {/* Session tabs */}
-                  {openSessions.length > 0 && (
-                    <SessionTabs
-                      sessions={openSessions}
-                      processes={processes}
-                      activeSessionId={activeTabSessionId}
-                      onSelectSession={handleSelectSessionTab}
-                      onCloseSession={handleCloseSessionTab}
-                      onNewSession={handleNewProcess}
-                      needsAttention={needsAttention}
-                      newSessionDisabled={!selectedRepo}
-                    />
-                  )}
-                  <div className="flex-1 min-h-0 p-2">
-                    {activeProcessId && activeSession ? (
-                      <SessionView
-                        session={activeSession}
-                        processId={activeProcessId}
-                        onClose={() => {
-                          killProcess(activeProcessId);
-                          setActiveProcessId(null);
-                        }}
-                        onShowIssue={handleShowIssue}
-                        onShowPR={handleShowPR}
-                        onShowSchedule={handleShowSchedule}
-                        issues={issues}
-                        prs={prs}
-                        onEntitiesChange={refreshSessions}
-                        viewMode={sessionViewModes[activeSession.session_id]}
-                        onViewModeChange={(mode) => handleSetSessionViewMode(activeSession.session_id, mode)}
-                        needsAttention={needsAttention}
-                      />
-                    ) : activeProcessId ? (
-                      // Fallback to terminal-only if no analysis found yet
-                      <Terminal
-                        processId={activeProcessId}
-                        onClose={() => {
-                          killProcess(activeProcessId);
-                          setActiveProcessId(null);
-                        }}
-                      />
-                    ) : viewingSession ? (
-                      <SessionView
-                        session={viewingSession}
-                        processId={viewingSessionProcess?.id}
-                        onContinue={(prompt) => handleContinueSession(viewingSession, prompt)}
-                        onClose={() => setViewingSessionId(null)}
-                        onDelete={async () => {
-                          await deleteSession(viewingSession.session_id);
-                          setViewingSessionId(null);
-                        }}
-                        onTitleChange={async (title) => {
-                          await updateSessionMetadata(viewingSession.session_id, { title });
-                        }}
-                        onShowIssue={handleShowIssue}
-                        onShowPR={handleShowPR}
-                        onShowSchedule={handleShowSchedule}
-                        issues={issues}
-                        prs={prs}
-                        onEntitiesChange={refreshSessions}
-                        viewMode={sessionViewModes[viewingSession.session_id]}
-                        onViewModeChange={(mode) => handleSetSessionViewMode(viewingSession.session_id, mode)}
-                        needsAttention={needsAttention}
-                      />
-                    ) : (
-                      <div className="h-full flex items-center justify-center">
-                        <div className="text-center text-gray-400">
-                          <p className="text-sm">Select a session above</p>
-                          <p className="text-xs mt-1">or click a tab to view</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </Panel>
-              </Group>
-            )}
-
-            {/* Issue creation panel */}
-            {isCreatingIssue && selectedRepo && (
-              <div className="flex-1 border-r border-gray-700 overflow-auto">
-                <IssueCreateView
-                  repoId={selectedRepo.id}
-                  onCancel={() => setIsCreatingIssue(false)}
-                  onCreated={(issue) => {
-                    setIsCreatingIssue(false);
-                    setSelectedIssue(issue.number);
-                    refreshIssues();
-                  }}
-                />
-              </div>
-            )}
-
-            {/* Issue detail panel only (when issue selected but no sessions) */}
-            {selectedIssue && selectedRepo && !showSideBySide && !selectedPR && !isCreatingIssue && (
-              <div className="flex-1 border-r border-gray-700 overflow-auto">
-                <IssueDetail
-                  repoId={selectedRepo.id}
-                  issueNumber={selectedIssue}
-                  issueCommands={commands.issue}
-                  onStartSession={(command) => {
-                    const issue = issues.find((i) => i.number === selectedIssue);
-                    if (issue) handleStartIssueSession(issue, command);
-                  }}
-                  sessions={sessions}
-                  processes={processes}
-                  expandedSessionId={expandedSessionId}
-                  onToggleSession={setExpandedSessionId}
-                  onSelectSession={handleSelectSession}
-                  onContinueSession={handleContinueSession}
-                  tags={tags}
-                  issueTags={issueTagsMap[selectedIssue] || []}
-                  onAddTag={(tagId) => addTagToIssue(selectedIssue, tagId)}
-                  onRemoveTag={(tagId) => removeTagFromIssue(selectedIssue, tagId)}
-                  onCreateTag={createTag}
-                />
-              </div>
-            )}
-
-            {/* PR detail panel only (when PR selected but no sessions) */}
-            {selectedPRData && selectedRepo && !showSideBySide && (
-              <div className="flex-1 border-r border-gray-700 overflow-auto">
-                <PRDetail
-                  repoId={selectedRepo.id}
-                  prNumber={selectedPRData.number}
-                  prCommands={commands.pr}
-                  onStartSession={(command) => handleStartPRSession(selectedPRData, command)}
-                  sessions={sessions}
-                  processes={processes}
-                  onSelectSession={handleSelectSession}
-                  onContinueSession={handleContinueSession}
-                />
-              </div>
-            )}
-
-            {/* Schedule detail panel (when schedule selected) */}
-            {selectedSchedule && selectedRepo && !showSideBySide && !selectedIssue && !selectedPR && (
-              <Group orientation="horizontal" className="flex-1">
-                <Panel
-                  defaultSize="40%"
-                  minSize="250px"
-                  maxSize="60%"
-                  className="flex flex-col border-r border-gray-700"
-                >
-                  <div className="flex-1 overflow-auto">
-                    <ScheduleDetail
-                      repoId={selectedRepo.id}
-                      scheduleId={selectedSchedule}
-                      onShowSession={(sessionId) => {
-                        const session = sessions.find(s => s.session_id === sessionId);
-                        if (session) {
-                          handleSelectSession(session);
-                        }
-                      }}
-                      sessions={sessions}
-                      commands={commands}
-                      onScheduleDeleted={() => setSelectedSchedule(null)}
-                      onScheduleUpdated={() => {
-                        // Refresh schedules list to show updated data in cards
-                        scheduleListRefreshRef.current?.();
-                      }}
-                    />
-                  </div>
-                </Panel>
-                <ResizeHandle />
-                <Panel minSize="300px" className="flex flex-col">
-                  {/* Session area when schedule is selected */}
-                  {openSessions.length > 0 && (
-                    <SessionTabs
-                      sessions={openSessions}
-                      processes={processes}
-                      activeSessionId={activeTabSessionId}
-                      onSelectSession={handleSelectSessionTab}
-                      onCloseSession={handleCloseSessionTab}
-                      onNewSession={handleNewProcess}
-                      needsAttention={needsAttention}
-                      newSessionDisabled={!selectedRepo}
-                    />
-                  )}
-                  <div className="flex-1 min-h-0 p-2">
-                    {activeProcessId && activeSession ? (
-                      <SessionView
-                        session={activeSession}
-                        processId={activeProcessId}
-                        onClose={() => {
-                          killProcess(activeProcessId);
-                          setActiveProcessId(null);
-                        }}
-                      />
-                    ) : (
-                      <div className="h-full flex flex-col items-center justify-center text-gray-500">
-                        <svg className="w-12 h-12 mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        <p className="text-sm">No active session</p>
-                        <p className="text-xs text-gray-600 mt-1">Run a schedule to start a session</p>
-                      </div>
-                    )}
-                  </div>
-                </Panel>
-              </Group>
-            )}
-
-            {/* Sessions panel (no issue/PR context but open sessions exist) */}
-            {openSessions.length > 0 && !hasIssueContext && !hasPRContext && (
-              <div className="flex-1 flex flex-col">
-                <SessionTabs
-                  sessions={openSessions}
-                  processes={processes}
-                  activeSessionId={activeTabSessionId}
-                  onSelectSession={handleSelectSessionTab}
-                  onCloseSession={handleCloseSessionTab}
-                  onNewSession={handleNewProcess}
-                  needsAttention={needsAttention}
-                  newSessionDisabled={!selectedRepo}
-                />
-                <div className="flex-1 min-h-0 p-2">
-                  {activeProcessId && activeSession ? (
-                    <SessionView
-                      session={activeSession}
-                      processId={activeProcessId}
-                      onClose={() => {
-                        killProcess(activeProcessId);
-                        setActiveProcessId(null);
-                      }}
-                      onShowIssue={handleShowIssue}
-                      onShowPR={handleShowPR}
-                      onShowSchedule={handleShowSchedule}
-                      issues={issues}
-                      prs={prs}
-                      onEntitiesChange={refreshSessions}
-                      viewMode={sessionViewModes[activeSession.session_id]}
-                      onViewModeChange={(mode) => handleSetSessionViewMode(activeSession.session_id, mode)}
-                      needsAttention={needsAttention}
-                    />
-                  ) : activeProcessId ? (
-                    // Fallback to terminal-only if no analysis found yet
-                    <Terminal
-                      processId={activeProcessId}
-                      onClose={() => {
-                        killProcess(activeProcessId);
-                        setActiveProcessId(null);
-                      }}
-                    />
-                  ) : viewingSession ? (
-                    <SessionView
-                      session={viewingSession}
-                      processId={viewingSessionProcess?.id}
-                      onContinue={(prompt) => handleContinueSession(viewingSession, prompt)}
-                      onClose={() => setViewingSessionId(null)}
-                      onDelete={async () => {
-                        await deleteSession(viewingSession.session_id);
-                        setViewingSessionId(null);
-                      }}
-                      onTitleChange={async (title) => {
-                        await updateSessionMetadata(viewingSession.session_id, { title });
-                      }}
-                      onShowIssue={handleShowIssue}
-                      onShowPR={handleShowPR}
-                      onShowSchedule={handleShowSchedule}
-                      issues={issues}
-                      prs={prs}
-                      onEntitiesChange={refreshSessions}
-                      viewMode={sessionViewModes[viewingSession.session_id]}
-                      onViewModeChange={(mode) => handleSetSessionViewMode(viewingSession.session_id, mode)}
-                      needsAttention={needsAttention}
-                    />
-                  ) : (
-                    <div className="h-full flex items-center justify-center p-8">
-                      <div className="text-center p-6 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-xs empty-state-enter">
-                        <div className="w-12 h-12 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4 empty-state-icon-float">
-                          <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                          </svg>
-                        </div>
-                        <p className="text-gray-300 font-medium mb-1">Select a session</p>
-                        <p className="text-gray-400 text-sm">Click a tab above to view the conversation</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Empty state (no open session tabs and no issue/PR/schedule selected) */}
-            {openSessions.length === 0 && !selectedIssue && !selectedPR && !selectedSchedule && (
-              <div className="flex-1 flex items-center justify-center p-8">
-                <div className="text-center p-8 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-sm empty-state-enter">
-                  <div className="w-16 h-16 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-5 empty-state-icon-float">
-                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
-                    </svg>
-                  </div>
-                  <p className="text-gray-300 font-medium mb-2">Select an issue or PR to view details</p>
-                  <p className="text-gray-400 text-sm">or start a session from an issue or PR</p>
-                </div>
-              </div>
-            )}
-          </div>
+          <MainContentArea
+            layoutMode={layoutMode}
+            selectedRepo={selectedRepo}
+            selectedIssue={selectedIssue}
+            selectedPR={selectedPR}
+            selectedSchedule={selectedSchedule}
+            activeIssueNumber={activeIssueNumber}
+            activePRNumber={activePRNumber}
+            issuePanelCollapsed={issuePanelCollapsed}
+            onIssuePanelCollapsedChange={setIssuePanelCollapsed}
+            issues={issues}
+            prs={prs}
+            sessions={sessions}
+            openSessions={openSessions}
+            processes={processes}
+            commands={commands}
+            tags={tags}
+            issueTagsMap={issueTagsMap}
+            activeTabSessionId={activeTabSessionId}
+            activeProcessId={activeProcessId}
+            viewingSessionId={viewingSessionId}
+            sessionViewModes={sessionViewModes}
+            expandedSessionId={expandedSessionId}
+            onStartIssueSession={handleStartIssueSession}
+            onSelectSession={handleSelectSession}
+            onContinueSession={handleContinueSession}
+            onToggleExpandedSession={setExpandedSessionId}
+            onAddTagToIssue={addTagToIssue}
+            onRemoveTagFromIssue={removeTagFromIssue}
+            onCreateTag={createTag}
+            onStartPRSession={handleStartPRSession}
+            onScheduleDeleted={() => setSelectedSchedule(null)}
+            onScheduleUpdated={() => scheduleListRefreshRef.current?.()}
+            onCancelIssueCreate={() => setIsCreatingIssue(false)}
+            onIssueCreated={(issue) => {
+              setIsCreatingIssue(false);
+              setSelectedIssue(issue.number);
+            }}
+            onSelectSessionTab={handleSelectSessionTab}
+            onCloseSessionTab={handleCloseSessionTab}
+            onNewSession={handleNewProcess}
+            onDeleteSession={deleteSession}
+            onUpdateSessionTitle={async (sessionId, title) => { await updateSessionMetadata(sessionId, { title }); }}
+            onCloseViewingSession={() => setViewingSessionId(null)}
+            onSetViewMode={handleSetSessionViewMode}
+            onKillProcess={killProcess}
+            onClearActiveProcess={() => setActiveProcessId(null)}
+            onShowIssue={handleShowIssue}
+            onShowPR={handleShowPR}
+            onShowSchedule={handleShowSchedule}
+            onEntitiesChange={refreshSessions}
+            needsAttention={needsAttention}
+            onRefreshIssues={refreshIssues}
+          />
         </Panel>
       </Group>
     </div>
