@@ -102,12 +102,17 @@ describe('Settings', () => {
       expect(screen.queryByText('Settings')).not.toBeInTheDocument();
     });
 
-    it('renders the modal when isOpen is true', () => {
+    it('renders the modal when isOpen is true', async () => {
       render(<Settings {...defaultProps} />);
       expect(screen.getByText('Settings')).toBeInTheDocument();
+
+      // Wait for async token status fetch to complete
+      await waitFor(() => {
+        expect(screen.getByText(/Token configured:/)).toBeInTheDocument();
+      });
     });
 
-    it('shows all tab options', () => {
+    it('shows all tab options', async () => {
       render(<Settings {...defaultProps} />);
 
       expect(screen.getByRole('button', { name: 'GitHub' })).toBeInTheDocument();
@@ -115,6 +120,11 @@ describe('Settings', () => {
       expect(screen.getByRole('button', { name: 'execution' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'commands' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'advanced' })).toBeInTheDocument();
+
+      // Wait for async token status fetch to complete
+      await waitFor(() => {
+        expect(screen.getByText(/Token configured:/)).toBeInTheDocument();
+      });
     });
   });
 
@@ -134,7 +144,7 @@ describe('Settings', () => {
       expect(onClose).toHaveBeenCalled();
     });
 
-    it('calls onClose when backdrop is clicked', () => {
+    it('calls onClose when backdrop is clicked', async () => {
       const onClose = vi.fn();
       render(<Settings {...defaultProps} onClose={onClose} />);
 
@@ -144,29 +154,46 @@ describe('Settings', () => {
         fireEvent.click(backdrop);
       }
       expect(onClose).toHaveBeenCalled();
+
+      // Wait for async token status fetch to complete
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
     });
 
-    it('calls onClose when Escape key is pressed', () => {
+    it('calls onClose when Escape key is pressed', async () => {
       const onClose = vi.fn();
       render(<Settings {...defaultProps} onClose={onClose} />);
 
       fireEvent.keyDown(window, { key: 'Escape' });
       expect(onClose).toHaveBeenCalled();
+
+      // Wait for async token status fetch to complete
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
     });
   });
 
   describe('GitHub Tab', () => {
-    it('shows GitHub tab by default', () => {
+    it('shows GitHub tab by default', async () => {
       render(<Settings {...defaultProps} />);
       expect(screen.getByText('Personal Access Token')).toBeInTheDocument();
+
+      // Wait for async token status fetch to complete
+      await waitFor(() => {
+        expect(screen.getByText(/Token configured:/)).toBeInTheDocument();
+      });
     });
 
-    it('shows loading state while fetching token status', async () => {
+    it('shows loading skeleton while fetching token status', async () => {
       global.fetch = vi.fn().mockImplementation(() => new Promise(() => {}));
 
       render(<Settings {...defaultProps} />);
 
-      expect(screen.getByText('Loading...')).toBeInTheDocument();
+      // Should have skeleton shimmer elements
+      const skeletonElements = document.querySelectorAll('.skeleton-shimmer');
+      expect(skeletonElements.length).toBeGreaterThan(0);
     });
 
     it('shows token configured status when token exists', async () => {
@@ -300,6 +327,11 @@ describe('Settings', () => {
     it('shows permission settings when tab is selected', async () => {
       render(<Settings {...defaultProps} />);
 
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
       fireEvent.click(screen.getByRole('button', { name: 'permissions' }));
 
       expect(screen.getByText('Permission Mode')).toBeInTheDocument();
@@ -318,6 +350,12 @@ describe('Settings', () => {
       });
 
       render(<Settings {...defaultProps} />);
+
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
       fireEvent.click(screen.getByRole('button', { name: 'permissions' }));
 
       const acceptEditsButton = screen.getByRole('button', { name: /Accept Edits/i });
@@ -326,6 +364,11 @@ describe('Settings', () => {
 
     it('updates permission mode when clicked', async () => {
       render(<Settings {...defaultProps} />);
+
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
 
       fireEvent.click(screen.getByRole('button', { name: 'permissions' }));
       fireEvent.click(screen.getByRole('button', { name: /Plan Only/i }));
@@ -338,6 +381,11 @@ describe('Settings', () => {
     it('shows allowed tools list', async () => {
       render(<Settings {...defaultProps} />);
 
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
       fireEvent.click(screen.getByRole('button', { name: 'permissions' }));
 
       expect(screen.getByText('Read')).toBeInTheDocument();
@@ -346,6 +394,11 @@ describe('Settings', () => {
 
     it('adds a new tool when entered', async () => {
       render(<Settings {...defaultProps} />);
+
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
 
       fireEvent.click(screen.getByRole('button', { name: 'permissions' }));
 
@@ -362,6 +415,11 @@ describe('Settings', () => {
 
     it('removes a tool when X is clicked', async () => {
       render(<Settings {...defaultProps} />);
+
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
 
       fireEvent.click(screen.getByRole('button', { name: 'permissions' }));
 
@@ -384,6 +442,11 @@ describe('Settings', () => {
     it('shows execution settings when tab is selected', async () => {
       render(<Settings {...defaultProps} />);
 
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
       fireEvent.click(screen.getByRole('button', { name: 'execution' }));
 
       expect(screen.getByText('Max Turns')).toBeInTheDocument();
@@ -393,6 +456,11 @@ describe('Settings', () => {
 
     it('updates max turns when slider changes', async () => {
       render(<Settings {...defaultProps} />);
+
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
 
       fireEvent.click(screen.getByRole('button', { name: 'execution' }));
 
@@ -407,6 +475,11 @@ describe('Settings', () => {
     it('updates model when selected', async () => {
       render(<Settings {...defaultProps} />);
 
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
       fireEvent.click(screen.getByRole('button', { name: 'execution' }));
       fireEvent.click(screen.getByRole('button', { name: 'opus' }));
 
@@ -417,6 +490,11 @@ describe('Settings', () => {
 
     it('updates output format when selected', async () => {
       render(<Settings {...defaultProps} />);
+
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
 
       fireEvent.click(screen.getByRole('button', { name: 'execution' }));
       fireEvent.click(screen.getByRole('button', { name: 'JSON' }));
@@ -431,6 +509,11 @@ describe('Settings', () => {
     it('shows commands tab content when selected', async () => {
       render(<Settings {...defaultProps} />);
 
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
       fireEvent.click(screen.getByRole('button', { name: 'commands' }));
 
       expect(screen.getByText('Session Commands')).toBeInTheDocument();
@@ -438,6 +521,11 @@ describe('Settings', () => {
 
     it('shows message to select repo when no commands provided', async () => {
       render(<Settings {...defaultProps} />);
+
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
 
       fireEvent.click(screen.getByRole('button', { name: 'commands' }));
 
@@ -454,6 +542,11 @@ describe('Settings', () => {
           onRefreshCommands={onRefreshCommands}
         />
       );
+
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
 
       fireEvent.click(screen.getByRole('button', { name: 'commands' }));
 
@@ -473,6 +566,11 @@ describe('Settings', () => {
         />
       );
 
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
       fireEvent.click(screen.getByRole('button', { name: 'commands' }));
       fireEvent.click(screen.getByTestId('refresh-commands'));
 
@@ -484,6 +582,11 @@ describe('Settings', () => {
     it('shows advanced settings when tab is selected', async () => {
       render(<Settings {...defaultProps} />);
 
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
       fireEvent.click(screen.getByRole('button', { name: 'advanced' }));
 
       expect(screen.getByText('Enable GitHub MCP Server')).toBeInTheDocument();
@@ -492,6 +595,11 @@ describe('Settings', () => {
 
     it('toggles MCP GitHub setting', async () => {
       render(<Settings {...defaultProps} />);
+
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
 
       fireEvent.click(screen.getByRole('button', { name: 'advanced' }));
 
@@ -509,6 +617,11 @@ describe('Settings', () => {
 
       render(<Settings {...defaultProps} />);
 
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
       fireEvent.click(screen.getByRole('button', { name: 'advanced' }));
       fireEvent.click(screen.getByRole('button', { name: 'Reset to Defaults' }));
 
@@ -524,6 +637,11 @@ describe('Settings', () => {
       const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
 
       render(<Settings {...defaultProps} />);
+
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
 
       fireEvent.click(screen.getByRole('button', { name: 'advanced' }));
       fireEvent.click(screen.getByRole('button', { name: 'Reset to Defaults' }));
@@ -548,6 +666,11 @@ describe('Settings', () => {
 
       render(<Settings {...defaultProps} />);
 
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
       // Switch to a tab that shows loading (not GitHub which has its own loading)
       fireEvent.click(screen.getByRole('button', { name: 'permissions' }));
 
@@ -569,6 +692,11 @@ describe('Settings', () => {
 
       render(<Settings {...defaultProps} />);
 
+      // Wait for token fetch to complete
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
       expect(screen.getByText('Failed to load settings')).toBeInTheDocument();
     });
   });
@@ -587,11 +715,21 @@ describe('Settings', () => {
 
       render(<Settings {...defaultProps} />);
 
+      // Wait for token fetch to complete
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
       expect(screen.getByText('Saving...')).toBeInTheDocument();
     });
 
     it('shows auto-save message when not saving', async () => {
       render(<Settings {...defaultProps} />);
+
+      // Wait for token fetch to complete
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
 
       expect(screen.getByText('Changes are saved automatically')).toBeInTheDocument();
     });
@@ -609,6 +747,11 @@ describe('Settings', () => {
 
       render(<Settings {...defaultProps} />);
 
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
       fireEvent.click(screen.getByRole('button', { name: 'permissions' }));
 
       // Permission mode buttons should be disabled
@@ -620,6 +763,11 @@ describe('Settings', () => {
   describe('Tab Navigation', () => {
     it('switches between tabs correctly', async () => {
       render(<Settings {...defaultProps} />);
+
+      // Wait for token fetch to complete before switching tabs
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
 
       // Start on GitHub tab
       expect(screen.getByText('Personal Access Token')).toBeInTheDocument();
@@ -643,6 +791,11 @@ describe('Settings', () => {
 
     it('highlights the active tab', async () => {
       render(<Settings {...defaultProps} />);
+
+      // Wait for token fetch to complete
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
 
       // The active tab gets 'text-white' class, while inactive tabs get 'text-gray-400'
       const githubTab = screen.getByRole('button', { name: 'GitHub' });

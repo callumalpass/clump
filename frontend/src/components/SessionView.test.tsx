@@ -10,10 +10,13 @@ vi.mock('../hooks/useApi');
 vi.mock('../hooks/useProcessWebSocket');
 vi.mock('./Terminal', () => ({
   Terminal: ({ processId, onConnectionChange }: { processId: string; onConnectionChange?: (connected: boolean) => void }) => {
-    // Simulate connection after mount
-    if (onConnectionChange) {
-      setTimeout(() => onConnectionChange(true), 0);
-    }
+    // Use useEffect to properly trigger the callback after mount
+    const { useEffect } = require('react');
+    useEffect(() => {
+      if (onConnectionChange) {
+        onConnectionChange(true);
+      }
+    }, [onConnectionChange]);
     return <div data-testid="terminal">Terminal: {processId}</div>;
   },
 }));
@@ -28,10 +31,13 @@ vi.mock('./ConversationView', () => ({
     onMatchesFound?: (count: number) => void;
     onSendMessage?: (msg: string) => void;
   }) => {
-    // Simulate match count when search query changes
-    if (searchQuery && onMatchesFound) {
-      setTimeout(() => onMatchesFound(searchQuery === 'test' ? 3 : 0), 0);
-    }
+    // Use useEffect to properly trigger the callback after mount/update
+    const { useEffect } = require('react');
+    useEffect(() => {
+      if (searchQuery && onMatchesFound) {
+        onMatchesFound(searchQuery === 'test' ? 3 : 0);
+      }
+    }, [searchQuery, onMatchesFound]);
     return (
       <div data-testid="conversation-view">
         <span data-testid="search-query">{searchQuery || ''}</span>
@@ -236,6 +242,32 @@ describe('SessionView', () => {
         expect(screen.getByText('Failed to load session')).toBeInTheDocument();
         expect(screen.getByText('Network error')).toBeInTheDocument();
       });
+    });
+
+    it('shows retry button that reloads session on click', async () => {
+      mockFetchSessionDetail.mockRejectedValueOnce(new Error('Network error'));
+      mockFetchSessionDetail.mockResolvedValueOnce(createMockDetail());
+
+      render(<SessionView {...defaultProps} />);
+
+      // Wait for error state
+      await waitFor(() => {
+        expect(screen.getByText('Failed to load session')).toBeInTheDocument();
+      });
+
+      // Find and click retry button
+      const retryButton = screen.getByRole('button', { name: /try again/i });
+      expect(retryButton).toBeInTheDocument();
+
+      fireEvent.click(retryButton);
+
+      // Should show loading then success
+      await waitFor(() => {
+        expect(screen.getByTestId('conversation-view')).toBeInTheDocument();
+      });
+
+      // Should have called fetch twice (initial + retry)
+      expect(mockFetchSessionDetail).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -826,6 +858,12 @@ describe('SessionView', () => {
 
       // Terminal should render immediately
       expect(screen.getByTestId('terminal')).toBeInTheDocument();
+
+      // Wait for the mock terminal's connection callback to complete
+      await waitFor(() => {
+        // The mock terminal calls onConnectionChange(true) after mount
+        expect(screen.getByTestId('terminal')).toBeInTheDocument();
+      });
     });
   });
 
