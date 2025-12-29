@@ -1,5 +1,5 @@
 /**
- * Formats a date string as a human-readable relative time (e.g., "2 hours ago", "yesterday").
+ * Formats a date string as a compact human-readable relative time (e.g., "2h ago", "1d ago").
  * Falls back to a short date format for older dates.
  * Returns empty string for invalid date strings.
  */
@@ -20,44 +20,44 @@ export function formatRelativeTime(dateString: string): string {
 
   // Handle future dates (shouldn't happen but just in case)
   if (diffMs < 0) {
-    return 'just now';
+    return 'now';
   }
 
   // Less than a minute
   if (diffSeconds < 60) {
-    return 'just now';
+    return 'now';
   }
 
   // Less than an hour
   if (diffMinutes < 60) {
-    return diffMinutes === 1 ? '1 minute ago' : `${diffMinutes} minutes ago`;
+    return `${diffMinutes}m ago`;
   }
 
   // Less than a day
   if (diffHours < 24) {
-    return diffHours === 1 ? '1 hour ago' : `${diffHours} hours ago`;
+    return `${diffHours}h ago`;
   }
 
   // Yesterday
   if (diffDays === 1) {
-    return 'yesterday';
+    return '1d ago';
   }
 
   // Less than a week
   if (diffDays < 7) {
-    return `${diffDays} days ago`;
+    return `${diffDays}d ago`;
   }
 
   // Less than a month (roughly)
   if (diffDays < 30) {
     const weeks = Math.floor(diffDays / 7);
-    return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`;
+    return `${weeks}w ago`;
   }
 
   // Less than a year
   if (diffDays < 365) {
     const months = Math.floor(diffDays / 30);
-    return months === 1 ? '1 month ago' : `${months} months ago`;
+    return `${months}mo ago`;
   }
 
   // More than a year - show short date
@@ -112,6 +112,21 @@ export function isRecentlyModified(dateString: string, thresholdMinutes: number 
   const now = new Date();
   const thresholdTime = new Date(now.getTime() - thresholdMinutes * 60 * 1000);
   return date > thresholdTime;
+}
+
+/**
+ * Formats a Date object as a YYYY-MM-DD string in the local timezone.
+ * This avoids the timezone shift that can occur when using toISOString().
+ *
+ * For example, if it's 10 PM on January 15 in UTC-5, toISOString() returns
+ * "2024-01-16T03:00:00Z", and substring(0,10) gives "2024-01-16" (wrong day).
+ * This function correctly returns "2024-01-15".
+ */
+export function formatLocalDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 /**

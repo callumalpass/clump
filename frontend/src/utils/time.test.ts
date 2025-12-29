@@ -13,112 +13,112 @@ describe('formatRelativeTime', () => {
   });
 
   describe('seconds ago', () => {
-    it('returns "just now" for less than a minute ago', () => {
+    it('returns "now" for less than a minute ago', () => {
       const now = new Date();
-      expect(formatRelativeTime(now.toISOString())).toBe('just now');
+      expect(formatRelativeTime(now.toISOString())).toBe('now');
 
       const thirtySecondsAgo = new Date(now.getTime() - 30 * 1000);
-      expect(formatRelativeTime(thirtySecondsAgo.toISOString())).toBe('just now');
+      expect(formatRelativeTime(thirtySecondsAgo.toISOString())).toBe('now');
 
       const fiftyNineSecondsAgo = new Date(now.getTime() - 59 * 1000);
-      expect(formatRelativeTime(fiftyNineSecondsAgo.toISOString())).toBe('just now');
+      expect(formatRelativeTime(fiftyNineSecondsAgo.toISOString())).toBe('now');
     });
   });
 
   describe('minutes ago', () => {
-    it('returns "1 minute ago" for exactly 1 minute', () => {
+    it('returns "1m ago" for exactly 1 minute', () => {
       const now = new Date();
       const oneMinuteAgo = new Date(now.getTime() - 60 * 1000);
-      expect(formatRelativeTime(oneMinuteAgo.toISOString())).toBe('1 minute ago');
+      expect(formatRelativeTime(oneMinuteAgo.toISOString())).toBe('1m ago');
     });
 
-    it('returns "X minutes ago" for less than an hour', () => {
+    it('returns "Xm ago" for less than an hour', () => {
       const now = new Date();
       const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
-      expect(formatRelativeTime(fiveMinutesAgo.toISOString())).toBe('5 minutes ago');
+      expect(formatRelativeTime(fiveMinutesAgo.toISOString())).toBe('5m ago');
 
       const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
-      expect(formatRelativeTime(thirtyMinutesAgo.toISOString())).toBe('30 minutes ago');
+      expect(formatRelativeTime(thirtyMinutesAgo.toISOString())).toBe('30m ago');
 
       const fiftyNineMinutesAgo = new Date(now.getTime() - 59 * 60 * 1000);
-      expect(formatRelativeTime(fiftyNineMinutesAgo.toISOString())).toBe('59 minutes ago');
+      expect(formatRelativeTime(fiftyNineMinutesAgo.toISOString())).toBe('59m ago');
     });
   });
 
   describe('hours ago', () => {
-    it('returns "1 hour ago" for exactly 1 hour', () => {
+    it('returns "1h ago" for exactly 1 hour', () => {
       const now = new Date();
       const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-      expect(formatRelativeTime(oneHourAgo.toISOString())).toBe('1 hour ago');
+      expect(formatRelativeTime(oneHourAgo.toISOString())).toBe('1h ago');
     });
 
-    it('returns "X hours ago" for less than a day', () => {
+    it('returns "Xh ago" for less than a day', () => {
       const now = new Date();
       const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
-      expect(formatRelativeTime(twoHoursAgo.toISOString())).toBe('2 hours ago');
+      expect(formatRelativeTime(twoHoursAgo.toISOString())).toBe('2h ago');
 
       const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
-      expect(formatRelativeTime(twelveHoursAgo.toISOString())).toBe('12 hours ago');
+      expect(formatRelativeTime(twelveHoursAgo.toISOString())).toBe('12h ago');
 
       const twentyThreeHoursAgo = new Date(now.getTime() - 23 * 60 * 60 * 1000);
-      expect(formatRelativeTime(twentyThreeHoursAgo.toISOString())).toBe('23 hours ago');
+      expect(formatRelativeTime(twentyThreeHoursAgo.toISOString())).toBe('23h ago');
     });
   });
 
   describe('days ago', () => {
-    it('returns "yesterday" for exactly 1 day ago', () => {
+    it('returns "1d ago" for exactly 1 day ago', () => {
       const now = new Date();
       const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      expect(formatRelativeTime(oneDayAgo.toISOString())).toBe('yesterday');
+      expect(formatRelativeTime(oneDayAgo.toISOString())).toBe('1d ago');
     });
 
-    it('returns "X days ago" for less than a week', () => {
+    it('returns "Xd ago" for less than a week', () => {
       const now = new Date();
       const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
-      expect(formatRelativeTime(twoDaysAgo.toISOString())).toBe('2 days ago');
+      expect(formatRelativeTime(twoDaysAgo.toISOString())).toBe('2d ago');
 
       const sixDaysAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
-      expect(formatRelativeTime(sixDaysAgo.toISOString())).toBe('6 days ago');
+      expect(formatRelativeTime(sixDaysAgo.toISOString())).toBe('6d ago');
     });
   });
 
   describe('weeks ago', () => {
-    it('returns "1 week ago" for exactly 7 days', () => {
+    it('returns "1w ago" for exactly 7 days', () => {
       const now = new Date();
       const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      expect(formatRelativeTime(oneWeekAgo.toISOString())).toBe('1 week ago');
+      expect(formatRelativeTime(oneWeekAgo.toISOString())).toBe('1w ago');
     });
 
-    it('returns "X weeks ago" for less than a month', () => {
+    it('returns "Xw ago" for less than a month', () => {
       const now = new Date();
       const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-      expect(formatRelativeTime(twoWeeksAgo.toISOString())).toBe('2 weeks ago');
+      expect(formatRelativeTime(twoWeeksAgo.toISOString())).toBe('2w ago');
 
       const threeWeeksAgo = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000);
-      expect(formatRelativeTime(threeWeeksAgo.toISOString())).toBe('3 weeks ago');
+      expect(formatRelativeTime(threeWeeksAgo.toISOString())).toBe('3w ago');
     });
   });
 
   describe('months ago', () => {
-    it('returns "1 month ago" for 30-59 days', () => {
+    it('returns "1mo ago" for 30-59 days', () => {
       const now = new Date();
       const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      expect(formatRelativeTime(thirtyDaysAgo.toISOString())).toBe('1 month ago');
+      expect(formatRelativeTime(thirtyDaysAgo.toISOString())).toBe('1mo ago');
 
       const fortyFiveDaysAgo = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000);
-      expect(formatRelativeTime(fortyFiveDaysAgo.toISOString())).toBe('1 month ago');
+      expect(formatRelativeTime(fortyFiveDaysAgo.toISOString())).toBe('1mo ago');
     });
 
-    it('returns "X months ago" for less than a year', () => {
+    it('returns "Xmo ago" for less than a year', () => {
       const now = new Date();
       const twoMonthsAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
-      expect(formatRelativeTime(twoMonthsAgo.toISOString())).toBe('2 months ago');
+      expect(formatRelativeTime(twoMonthsAgo.toISOString())).toBe('2mo ago');
 
       const sixMonthsAgo = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
-      expect(formatRelativeTime(sixMonthsAgo.toISOString())).toBe('6 months ago');
+      expect(formatRelativeTime(sixMonthsAgo.toISOString())).toBe('6mo ago');
 
       const elevenMonthsAgo = new Date(now.getTime() - 330 * 24 * 60 * 60 * 1000);
-      expect(formatRelativeTime(elevenMonthsAgo.toISOString())).toBe('11 months ago');
+      expect(formatRelativeTime(elevenMonthsAgo.toISOString())).toBe('11mo ago');
     });
   });
 
@@ -139,10 +139,10 @@ describe('formatRelativeTime', () => {
   });
 
   describe('future dates', () => {
-    it('returns "just now" for future dates', () => {
+    it('returns "now" for future dates', () => {
       const now = new Date();
       const future = new Date(now.getTime() + 60 * 60 * 1000);
-      expect(formatRelativeTime(future.toISOString())).toBe('just now');
+      expect(formatRelativeTime(future.toISOString())).toBe('now');
     });
   });
 
@@ -156,7 +156,7 @@ describe('formatRelativeTime', () => {
       const now = new Date();
       const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
       // Format as ISO string which is always in UTC
-      expect(formatRelativeTime(twoHoursAgo.toISOString())).toBe('2 hours ago');
+      expect(formatRelativeTime(twoHoursAgo.toISOString())).toBe('2h ago');
     });
 
     it('returns empty string for invalid date strings', () => {
@@ -195,7 +195,7 @@ describe('getTimeWithTooltip', () => {
     const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
     const result = getTimeWithTooltip(fiveMinutesAgo.toISOString());
 
-    expect(result.relative).toBe('5 minutes ago');
+    expect(result.relative).toBe('5m ago');
   });
 
   it('full contains readable date and time', () => {
