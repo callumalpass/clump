@@ -683,7 +683,7 @@ describe('useActiveSessions', () => {
     const calledUrl = mockFetch.mock.calls[0][0] as string;
     expect(calledUrl).toContain('sort=updated');
     expect(calledUrl).toContain('order=desc');
-    expect(calledUrl).toContain('limit=50');
+    expect(calledUrl).toContain('limit=20');
     expect(calledUrl).toContain('offset=0');
   });
 

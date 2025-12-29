@@ -195,37 +195,39 @@ describe('MainContentArea', () => {
   });
 
   describe('Empty State', () => {
+    const repo = createMockRepo();
+
     describe('Simplified Empty State (list has items)', () => {
       it('renders simplified empty state when list has items but nothing selected', () => {
-        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: false, activeTab: 'issues' })} />);
+        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: false, activeTab: 'issues', selectedRepo: repo })} />);
 
         expect(screen.getByText('Select an issue to view details')).toBeInTheDocument();
         expect(screen.getByText('or start a session to work on it')).toBeInTheDocument();
       });
 
       it('shows context-specific message for PRs tab', () => {
-        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: false, activeTab: 'prs' })} />);
+        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: false, activeTab: 'prs', selectedRepo: repo })} />);
 
         expect(screen.getByText('Select a pull request to view details')).toBeInTheDocument();
         expect(screen.getByText('or start a session to review it')).toBeInTheDocument();
       });
 
       it('shows context-specific message for History tab', () => {
-        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: false, activeTab: 'history' })} />);
+        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: false, activeTab: 'history', selectedRepo: repo })} />);
 
         expect(screen.getByText('Select a session to view details')).toBeInTheDocument();
         expect(screen.getByText('browse past sessions and their transcripts')).toBeInTheDocument();
       });
 
       it('shows context-specific message for Schedules tab', () => {
-        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: false, activeTab: 'schedules' })} />);
+        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: false, activeTab: 'schedules', selectedRepo: repo })} />);
 
         expect(screen.getByText('Select a schedule to view details')).toBeInTheDocument();
         expect(screen.getByText('manage automated sessions')).toBeInTheDocument();
       });
 
       it('does not show keyboard shortcut hints in simplified empty state', () => {
-        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: false })} />);
+        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: false, selectedRepo: repo })} />);
 
         expect(screen.queryByText('Command palette')).not.toBeInTheDocument();
         expect(screen.queryByText('All shortcuts')).not.toBeInTheDocument();
@@ -234,40 +236,40 @@ describe('MainContentArea', () => {
 
     describe('Full Empty State (list is empty)', () => {
       it('renders full empty state when list is empty', () => {
-        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: true, activeTab: 'issues' })} />);
+        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: true, activeTab: 'issues', selectedRepo: repo })} />);
 
         expect(screen.getByText('No issues to display')).toBeInTheDocument();
-        expect(screen.getByText('Try adjusting your filters in the sidebar')).toBeInTheDocument();
+        expect(screen.getByText('Check your filters or switch to a different state')).toBeInTheDocument();
       });
 
       it('shows different messages for empty PRs list', () => {
-        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: true, activeTab: 'prs' })} />);
+        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: true, activeTab: 'prs', selectedRepo: repo })} />);
 
         expect(screen.getByText('No pull requests to display')).toBeInTheDocument();
       });
 
       it('shows different messages for empty History list', () => {
-        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: true, activeTab: 'history' })} />);
+        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: true, activeTab: 'history', selectedRepo: repo })} />);
 
-        expect(screen.getByText('No sessions to display')).toBeInTheDocument();
+        expect(screen.getByText('No sessions yet')).toBeInTheDocument();
       });
 
       it('shows different messages for empty Schedules list', () => {
-        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: true, activeTab: 'schedules' })} />);
+        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: true, activeTab: 'schedules', selectedRepo: repo })} />);
 
-        expect(screen.getByText('No schedules to display')).toBeInTheDocument();
-        expect(screen.getByText('Create a schedule to automate your workflows')).toBeInTheDocument();
+        expect(screen.getByText('No schedules yet')).toBeInTheDocument();
+        expect(screen.getByText('Create a schedule to automate recurring tasks')).toBeInTheDocument();
       });
 
       it('shows keyboard shortcut hints in full empty state', () => {
-        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: true })} />);
+        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: true, selectedRepo: repo })} />);
 
         expect(screen.getByText('Command palette')).toBeInTheDocument();
         expect(screen.getByText('All shortcuts')).toBeInTheDocument();
       });
 
       it('renders quick navigation buttons', () => {
-        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: true })} />);
+        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: true, selectedRepo: repo })} />);
 
         expect(screen.getByRole('button', { name: /Issues/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /PRs/i })).toBeInTheDocument();
@@ -276,7 +278,7 @@ describe('MainContentArea', () => {
       });
 
       it('highlights current tab in quick navigation', () => {
-        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: true, activeTab: 'issues' })} />);
+        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: true, activeTab: 'issues', selectedRepo: repo })} />);
 
         const issuesButton = screen.getByRole('button', { name: /Issues/i });
         expect(issuesButton).toHaveAttribute('aria-current', 'page');
@@ -285,7 +287,7 @@ describe('MainContentArea', () => {
 
       it('calls onTabChange when clicking navigation buttons', () => {
         const onTabChange = vi.fn();
-        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: true, onTabChange })} />);
+        render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: true, onTabChange, selectedRepo: repo })} />);
 
         fireEvent.click(screen.getByRole('button', { name: /PRs/i }));
 
@@ -451,8 +453,10 @@ describe('MainContentArea', () => {
 
     describe('sessions-only layout', () => {
       it('renders only session panel', () => {
+        const repo = createMockRepo();
         render(<MainContentArea {...createDefaultProps({
           layoutMode: 'sessions-only',
+          selectedRepo: repo,
         })} />);
 
         expect(screen.getByTestId('session-panel')).toBeInTheDocument();
@@ -565,8 +569,10 @@ describe('MainContentArea', () => {
   });
 
   describe('Keyboard Hints', () => {
+    const repo = createMockRepo();
+
     it('renders keyboard hint badges in full empty state', () => {
-      render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: true })} />);
+      render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: true, selectedRepo: repo })} />);
 
       // Check for keyboard shortcut badges
       const kbdElements = document.querySelectorAll('.kbd-hint');
@@ -574,7 +580,7 @@ describe('MainContentArea', () => {
     });
 
     it('displays shortcut numbers for tab navigation', () => {
-      render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: true })} />);
+      render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: true, selectedRepo: repo })} />);
 
       expect(screen.getByText('1')).toBeInTheDocument();
       expect(screen.getByText('2')).toBeInTheDocument();
@@ -584,8 +590,10 @@ describe('MainContentArea', () => {
   });
 
   describe('Icon Rendering', () => {
+    const repo = createMockRepo();
+
     it('renders issue icon in empty state for issues tab', () => {
-      const { container } = render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: false, activeTab: 'issues' })} />);
+      const { container } = render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: false, activeTab: 'issues', selectedRepo: repo })} />);
 
       // Issue icon has a circle with stroke
       const svg = container.querySelector('svg');
@@ -593,14 +601,14 @@ describe('MainContentArea', () => {
     });
 
     it('renders clock icon in empty state for history tab', () => {
-      const { container } = render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: false, activeTab: 'history' })} />);
+      const { container } = render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: false, activeTab: 'history', selectedRepo: repo })} />);
 
       const svg = container.querySelector('svg');
       expect(svg).toBeInTheDocument();
     });
 
     it('renders calendar icon in empty state for schedules tab', () => {
-      const { container } = render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: false, activeTab: 'schedules' })} />);
+      const { container } = render(<MainContentArea {...createDefaultProps({ layoutMode: 'empty', listEmpty: false, activeTab: 'schedules', selectedRepo: repo })} />);
 
       const svg = container.querySelector('svg');
       expect(svg).toBeInTheDocument();

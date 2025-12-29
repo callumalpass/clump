@@ -218,7 +218,7 @@ describe('IssueList', () => {
       render(<IssueList {...defaultProps} issues={issues} total={2} selectedIssue={1} />);
 
       const selectedItem = screen.getByText('Issue 1').closest('.p-3');
-      expect(selectedItem).toHaveClass('border-blue-500');
+      expect(selectedItem).toHaveClass('border-blurple-400');
     });
   });
 

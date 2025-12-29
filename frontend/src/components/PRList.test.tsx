@@ -238,7 +238,7 @@ describe('PRList', () => {
       render(<PRList {...defaultProps} prs={prs} selectedPR={1} />);
 
       const selectedItem = screen.getByText('PR 1').closest('.p-3');
-      expect(selectedItem).toHaveClass('border-blue-500');
+      expect(selectedItem).toHaveClass('border-blurple-400');
       expect(selectedItem).toHaveClass('list-item-selected');
     });
 
@@ -559,7 +559,7 @@ describe('PRList', () => {
       filterButtons.forEach(button => {
         expect(button).toHaveClass('focus:outline-none');
         expect(button).toHaveClass('focus-visible:ring-2');
-        expect(button).toHaveClass('focus-visible:ring-blue-500');
+        expect(button).toHaveClass('focus-visible:ring-blurple-400');
       });
     });
 

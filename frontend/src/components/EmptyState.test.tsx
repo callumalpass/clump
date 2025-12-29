@@ -185,7 +185,7 @@ describe('EmptyState', () => {
     it('has background and border styling', () => {
       const { container } = render(<EmptyState title="No items" />);
 
-      const innerContainer = container.querySelector('.border-gray-700\\/50');
+      const innerContainer = container.querySelector('.border-gray-750\\/50');
       expect(innerContainer).toBeInTheDocument();
     });
   });
@@ -222,7 +222,7 @@ describe('EmptyStateAction', () => {
 
       const button = screen.getByRole('button');
       expect(button).toHaveClass('bg-gray-700');
-      expect(button).not.toHaveClass('bg-blue-600');
+      expect(button).not.toHaveClass('bg-blurple-500');
     });
 
     it('applies secondary variant explicitly', () => {
@@ -236,7 +236,7 @@ describe('EmptyStateAction', () => {
       render(<EmptyStateAction onClick={() => {}} variant="primary">Click Me</EmptyStateAction>);
 
       const button = screen.getByRole('button');
-      expect(button).toHaveClass('bg-blue-600');
+      expect(button).toHaveClass('bg-blurple-500');
       expect(button).not.toHaveClass('bg-gray-700');
     });
   });

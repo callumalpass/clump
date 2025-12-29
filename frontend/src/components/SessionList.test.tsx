@@ -77,10 +77,10 @@ describe('SessionList', () => {
       render(<SessionList {...defaultProps} filters={{ category: 'starred' }} />);
 
       const starredButton = screen.getByRole('button', { name: 'Starred' });
-      expect(starredButton).toHaveClass('bg-blue-600');
+      expect(starredButton).toHaveClass('bg-blurple-500');
 
       const allButton = screen.getByRole('button', { name: 'All' });
-      expect(allButton).not.toHaveClass('bg-blue-600');
+      expect(allButton).not.toHaveClass('bg-blurple-500');
     });
 
     it('calls onFiltersChange when a filter is clicked', () => {
@@ -619,7 +619,7 @@ describe('SessionList', () => {
       render(<SessionList {...defaultProps} />);
 
       const filterButton = screen.getByRole('button', { name: 'All' });
-      expect(filterButton).toHaveClass('focus-visible:ring-2', 'focus-visible:ring-blue-500');
+      expect(filterButton).toHaveClass('focus-visible:ring-2', 'focus-visible:ring-blurple-400');
     });
 
     it('has proper aria-label on status badges', () => {
@@ -1295,7 +1295,7 @@ describe('SessionList', () => {
       render(<SessionList {...defaultProps} filters={{ category: 'completed' }} />);
 
       const completedButton = screen.getByRole('button', { name: 'Completed' });
-      expect(completedButton).toHaveClass('bg-blue-600');
+      expect(completedButton).toHaveClass('bg-blurple-500');
     });
   });
 });

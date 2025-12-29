@@ -10,8 +10,8 @@ describe('focusRing', () => {
     expect(focusRing).toContain('focus-visible:ring-2');
   });
 
-  it('uses blue-500 ring color', () => {
-    expect(focusRing).toContain('focus-visible:ring-blue-500');
+  it('uses blurple-400 ring color', () => {
+    expect(focusRing).toContain('focus-visible:ring-blurple-400');
   });
 
   it('has ring-offset for dark backgrounds (gray-900)', () => {
@@ -29,8 +29,8 @@ describe('focusRingGray800', () => {
     expect(focusRingGray800).toContain('focus-visible:ring-2');
   });
 
-  it('uses blue-500 ring color', () => {
-    expect(focusRingGray800).toContain('focus-visible:ring-blue-500');
+  it('uses blurple-400 ring color', () => {
+    expect(focusRingGray800).toContain('focus-visible:ring-blurple-400');
   });
 
   it('has ring-offset for gray-800 backgrounds', () => {
@@ -48,8 +48,8 @@ describe('focusRingInset', () => {
     expect(focusRingInset).toContain('focus-visible:ring-2');
   });
 
-  it('uses blue-400 ring color for better visibility in dropdowns', () => {
-    expect(focusRingInset).toContain('focus-visible:ring-blue-400');
+  it('uses blurple-300 ring color for better visibility in dropdowns', () => {
+    expect(focusRingInset).toContain('focus-visible:ring-blurple-300');
   });
 
   it('uses inset ring to avoid overflow clipping', () => {
