@@ -140,15 +140,21 @@ describe('describeCron', () => {
       });
     });
 
-    it('all presets have valid cron values', () => {
-      CRON_PRESETS.forEach((preset) => {
+    it('all presets have valid cron values (except custom)', () => {
+      CRON_PRESETS.filter((preset) => preset.value !== 'custom').forEach((preset) => {
         expect(preset.value).toBeTruthy();
         expect(preset.value.split(' ')).toHaveLength(5);
       });
     });
 
-    it('describeCron produces meaningful output for all presets', () => {
-      CRON_PRESETS.forEach((preset) => {
+    it('has exactly one custom preset option', () => {
+      const customPresets = CRON_PRESETS.filter((preset) => preset.value === 'custom');
+      expect(customPresets).toHaveLength(1);
+      expect(customPresets[0].label).toContain('Custom');
+    });
+
+    it('describeCron produces meaningful output for all cron presets', () => {
+      CRON_PRESETS.filter((preset) => preset.value !== 'custom').forEach((preset) => {
         const description = describeCron(preset.value);
         // Description should not just be the raw cron expression
         // (though for complex patterns it might be)

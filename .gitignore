@@ -26,3 +26,4 @@ dist/
 
 # Tools
 .claude/
+frontend/e2e/screenshots

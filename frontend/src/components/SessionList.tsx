@@ -7,6 +7,7 @@ import { Pagination, PaginationSkeleton } from './Pagination';
 import {
   FilterBar,
   FilterBarRow,
+  FilterGroup,
   SearchInput,
   SortControl,
   ItemCount,
@@ -535,38 +536,47 @@ export function SessionList({
           />
         </div>
       </div>
-      <FilterBarRow className="flex-wrap gap-1">
-        {CATEGORY_FILTERS.map((f) => (
-          <button
-            key={f.value}
-            onClick={() => setCategory(f.value)}
-            className={filterBarStyles.pillButton(filters.category === f.value)}
-          >
-            {f.label}
-          </button>
-        ))}
-        <span className="text-gray-600 mx-1">|</span>
-        {MODEL_FILTERS.map((f) => (
-          <button
-            key={f.value}
-            onClick={() => setModel(f.value)}
-            className={`${filterBarStyles.pillButton((filters.model || 'all') === f.value)} ${
-              (filters.model || 'all') === f.value ? f.color : ''
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
-        <span className="text-gray-600 mx-1">|</span>
-        {DATE_RANGE_FILTERS.map((f) => (
-          <button
-            key={f.value}
-            onClick={() => setDateRange(f.value)}
-            className={filterBarStyles.pillButton((filters.dateRange || 'all') === f.value)}
-          >
-            {f.label}
-          </button>
-        ))}
+      <FilterBarRow className="flex-wrap gap-2">
+        {/* Status filter group */}
+        <FilterGroup label="Status">
+          {CATEGORY_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setCategory(f.value)}
+              className={filterBarStyles.pillButton(filters.category === f.value)}
+            >
+              {f.label}
+            </button>
+          ))}
+        </FilterGroup>
+
+        {/* Model filter group */}
+        <FilterGroup label="Model">
+          {MODEL_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setModel(f.value)}
+              className={`${filterBarStyles.pillButton((filters.model || 'all') === f.value)} ${
+                (filters.model || 'all') === f.value ? f.color : ''
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </FilterGroup>
+
+        {/* Date range filter group */}
+        <FilterGroup label="When">
+          {DATE_RANGE_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setDateRange(f.value)}
+              className={filterBarStyles.pillButton((filters.dateRange || 'all') === f.value)}
+            >
+              {f.label}
+            </button>
+          ))}
+        </FilterGroup>
       </FilterBarRow>
       <FilterBarRow className="justify-between">
         <SortControl
@@ -618,25 +628,41 @@ export function SessionList({
   }
 
   if (sessions.length === 0) {
-    const hasFilters = filters.search || filters.category !== 'all';
+    const hasFilters = filters.search || filters.category !== 'all' || filters.model || filters.dateRange;
     return (
       <div className="flex flex-col flex-1 min-h-0">
         {filterBar}
         <div className="flex-1 flex flex-col items-center justify-center p-8">
           <div className="text-center p-6 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-xs empty-state-enter">
             <div className="w-14 h-14 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4 empty-state-icon-float">
-              <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              </svg>
+              {hasFilters ? (
+                <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                </svg>
+              ) : (
+                <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+              )}
             </div>
             <p className="text-gray-300 font-medium mb-1">
-              {hasFilters ? 'No matching sessions' : 'No Claude sessions found'}
+              {hasFilters ? 'No matching sessions' : 'No sessions yet'}
             </p>
-            <p className="text-gray-400 text-sm">
+            <p className="text-gray-400 text-sm mb-3">
               {hasFilters
-                ? 'Try adjusting your filters'
-                : 'Sessions from Claude Code will appear here'}
+                ? filters.search
+                  ? `No sessions match "${filters.search}"`
+                  : 'No sessions match the selected filters'
+                : 'Start a session from an issue or PR'}
             </p>
+            {hasFilters && (
+              <button
+                onClick={clearFilters}
+                className="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 active:scale-95 text-gray-200 rounded transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                Clear filters
+              </button>
+            )}
           </div>
         </div>
       </div>

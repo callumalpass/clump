@@ -220,12 +220,14 @@ export function PRList({
   };
 
   // Count active filters for the indicator
+  // Only count filters that deviate from the default state (open, created, desc)
+  // This prevents showing "2 filters" when user hasn't changed anything from defaults
   const activeFilterCount = [
     filters.search ? 1 : 0,
-    filters.state !== 'open' ? 1 : 0,
-    filters.sort !== 'created' ? 1 : 0,
-    filters.order !== 'desc' ? 1 : 0,
-    filters.sessionStatus ? 1 : 0,
+    filters.state && filters.state !== 'open' ? 1 : 0,  // 'open' is default
+    filters.sort && filters.sort !== 'created' ? 1 : 0,  // 'created' is default
+    filters.order && filters.order !== 'desc' ? 1 : 0,  // 'desc' is default
+    filters.sessionStatus ? 1 : 0,  // undefined/'all' is default
   ].reduce((a, b) => a + b, 0);
 
   // Memoize filtered PRs to avoid recalculation on every render
