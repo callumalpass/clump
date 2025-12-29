@@ -30,7 +30,7 @@ function ResizeHandle({ orientation = 'vertical' }: { orientation?: 'vertical' |
     >
       {/* Visible drag line */}
       <div
-        className={`bg-gray-700 group-hover:bg-blue-500 group-active:bg-blue-400 transition-colors ${
+        className={`bg-gray-750 group-hover:bg-blurple-400 group-active:bg-blurple-300 transition-colors ${
           isVertical ? 'w-px h-full' : 'h-px w-full'
         }`}
       />
@@ -40,9 +40,9 @@ function ResizeHandle({ orientation = 'vertical' }: { orientation?: 'vertical' |
           isVertical ? 'inset-y-0 flex-col' : 'inset-x-0 flex-row'
         }`}
       >
-        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blue-400 transition-colors" />
-        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blue-400 transition-colors" />
-        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blue-400 transition-colors" />
+        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blurple-400 transition-colors" />
+        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blurple-400 transition-colors" />
+        <div className="w-1 h-1 rounded-full bg-gray-500 group-hover:bg-blurple-400 transition-colors" />
       </div>
     </Separator>
   );
@@ -275,6 +275,7 @@ export default function App() {
   }, [openSessionIds, activeTabSessionId, selectedRepo?.id]);
 
   const { repos, addRepo, deleteRepo } = useRepos();
+  // Lazy-load issues only when the Issues tab is active (perf optimization)
   const {
     issues,
     loading: issuesLoading,
@@ -283,7 +284,7 @@ export default function App() {
     totalPages: issuesTotalPages,
     total: issuesTotal,
     goToPage: goToIssuesPage,
-  } = useIssues(selectedRepo?.id ?? null, issueFilters);
+  } = useIssues(selectedRepo?.id ?? null, issueFilters, activeTab === 'issues');
   const { processes, createProcess, killProcess, addProcess, removeProcess, setProcesses, refresh: refreshProcesses } = useProcesses();
   // Build session filters based on UI state
   const sessionFilters: SessionFilters = {
@@ -325,7 +326,8 @@ export default function App() {
 
   const { tags, createTag } = useTags(selectedRepo?.id ?? null);
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
-  const { prs, loading: prsLoading, refresh: refreshPRs, page: prsPage, totalPages: prsTotalPages, total: prsTotal, goToPage: goToPRsPage } = usePRs(selectedRepo?.id ?? null, prFilters);
+  // Lazy-load PRs only when the PRs tab is active (perf optimization)
+  const { prs, loading: prsLoading, refresh: refreshPRs, page: prsPage, totalPages: prsTotalPages, total: prsTotal, goToPage: goToPRsPage } = usePRs(selectedRepo?.id ?? null, prFilters, activeTab === 'prs');
   const { commands, refresh: refreshCommands } = useCommands(selectedRepo?.local_path);
   const { counts: sessionCounts, refresh: refreshSessionCounts, updateCounts } = useSessionCounts();
 
@@ -1394,9 +1396,9 @@ export default function App() {
   }, [selectedRepo, activeTab, openSessions, sessions, handleNewProcess, handleSelectSessionTab, handleSelectSession, refreshIssues, refreshPRs, refreshSessions]);
 
   return (
-    <div className="h-screen flex flex-col bg-[#0d1117] text-white">
+    <div className="h-screen flex flex-col bg-gray-900 text-white">
       {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-[#161b22]">
+      <header className="flex items-center justify-between px-4 py-3 border-b border-gray-750 bg-gray-850">
         <h1
           className="text-2xl text-white drop-shadow-[0_0_10px_rgba(251,191,36,0.4)] hover:drop-shadow-[0_0_15px_rgba(251,191,36,0.6)] transition-all cursor-default"
           style={{ fontFamily: "'Playfair Display', serif" }}
@@ -1429,12 +1431,12 @@ export default function App() {
             className="hidden sm:flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300 transition-all active:scale-95 focus:outline-none focus:text-gray-300"
             title="Keyboard shortcuts (?)"
           >
-            <kbd className="px-1.5 py-0.5 bg-gray-800 border border-gray-600 rounded text-gray-400">?</kbd>
+            <kbd className="px-1.5 py-0.5 bg-gray-800 border border-gray-750 rounded-stoody-sm text-gray-400">?</kbd>
             <span>Help</span>
           </button>
           <button
             onClick={() => setSettingsOpen(true)}
-            className="p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-all active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="p-1.5 hover:bg-gray-750 rounded-stoody-sm text-gray-400 hover:text-white transition-all active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-400"
             title="Settings"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1476,7 +1478,7 @@ export default function App() {
 
       <Group orientation="horizontal" className="flex-1 min-h-0">
         {/* Left sidebar */}
-        <Panel defaultSize="380px" minSize="240px" maxSize="500px" className="border-r border-gray-700 flex flex-col bg-[#0d1117]">
+        <Panel defaultSize="380px" minSize="240px" maxSize="500px" className="border-r border-gray-750 flex flex-col bg-gray-900">
           <RepoSelector
             repos={repos}
             selectedRepo={selectedRepo}
@@ -1506,7 +1508,7 @@ export default function App() {
               {/* Tabs with sliding indicator */}
               <div
                 ref={tabsContainerRef}
-                className="nav-tabs-container relative flex border-b border-gray-700 shrink-0"
+                className="nav-tabs-container relative flex border-b border-gray-750 shrink-0"
                 role="tablist"
                 aria-label="Main navigation"
                 onKeyDown={(e) => {
@@ -1594,22 +1596,22 @@ export default function App() {
                       aria-controls={`tabpanel-${tab}`}
                       id={`tab-${tab}`}
                       tabIndex={activeTab === tab ? 0 : -1}
-                      className={`nav-tab group flex-1 px-2 py-2 text-sm outline-none focus-visible:bg-blue-500/10 focus-visible:text-blue-300 flex items-center justify-center gap-1 transition-colors duration-150 ${
+                      className={`nav-tab group flex-1 px-2 py-2 text-sm outline-none focus-visible:bg-blurple-500/10 focus-visible:text-blurple-300 flex items-center justify-center gap-1 transition-colors duration-150 ${
                         activeTab === tab
                           ? 'text-white'
                           : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                       }`}
                       title={`${tabLabels[tab]} (${tabShortcuts[tab]})`}
                     >
-                      <span className={`transition-colors duration-150 ${activeTab === tab ? 'text-blue-400' : ''}`}>
+                      <span className={`transition-colors duration-150 ${activeTab === tab ? 'text-blurple-400' : ''}`}>
                         {tabIcons[tab]}
                       </span>
                       <span className="nav-tab-label">{tabLabels[tab]}</span>
                       {(selectedRepo || tab === 'history') && count > 0 && (
                         <span className={`text-xs px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center ${
                           activeTab === tab
-                            ? 'bg-blue-500/20 text-blue-400'
-                            : 'bg-gray-700 text-gray-400'
+                            ? 'bg-blurple-500/20 text-blurple-400'
+                            : 'bg-gray-750 text-gray-400'
                         }`}>
                           {count > 999 ? '999+' : count}
                         </span>
@@ -1621,7 +1623,7 @@ export default function App() {
                 {/* Sliding indicator - only show when width is calculated */}
                 {indicatorStyle.width > 0 && (
                   <div
-                    className="absolute bottom-0 h-0.5 bg-blue-500 transition-all duration-200 ease-out"
+                    className="absolute bottom-0 h-0.5 bg-blurple-400 transition-all duration-200 ease-out"
                     style={{
                       left: indicatorStyle.left,
                       width: indicatorStyle.width,

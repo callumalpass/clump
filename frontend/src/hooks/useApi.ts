@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type {
   Repo, Issue, IssueDetail, PR, PRDetail, Process,
   SessionSummary, SessionDetail, SessionListResponse, EntityLink, EntityKind,
@@ -125,15 +125,25 @@ interface PaginatedResponse {
 function usePaginatedList<TItem, TFilters>(
   repoId: number | null,
   filters: TFilters,
-  config: PaginatedListConfig<TItem, TFilters>
+  config: PaginatedListConfig<TItem, TFilters>,
+  enabled: boolean = true  // Lazy loading: only fetch when enabled
 ): PaginatedListResult<TItem> {
   const [items, setItems] = useState<TItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [perPage] = useState(30);
-  // Start with loading=true if we have a repoId to prevent flash
-  const [loading, setLoading] = useState(repoId !== null);
+  // Start with loading=true if we have a repoId AND enabled to prevent flash
+  const [loading, setLoading] = useState(repoId !== null && enabled);
   const [error, setError] = useState<string | null>(null);
+  // Track if we've ever fetched for this repoId (for lazy loading)
+  const hasFetchedRef = useRef(false);
+  const lastRepoIdRef = useRef<number | null>(null);
+
+  // Reset hasFetched when repoId changes
+  if (lastRepoIdRef.current !== repoId) {
+    hasFetchedRef.current = false;
+    lastRepoIdRef.current = repoId;
+  }
 
   const fetchPage = useCallback(async (pageNum: number, signal?: AbortSignal) => {
     if (!repoId) return;
@@ -149,6 +159,7 @@ function usePaginatedList<TItem, TFilters>(
       setTotal(data.total ?? 0);
       setPage(data.page);
       setError(null);
+      hasFetchedRef.current = true;
     } catch (e) {
       if (isAbortError(e)) return;
       setError(getErrorMessage(e, config.errorMessage));
@@ -167,11 +178,17 @@ function usePaginatedList<TItem, TFilters>(
   // Get filter dependencies to track changes
   const filterDeps = config.getFilterDeps(filters);
 
-  // Reset to page 1 when filters change
+  // Reset to page 1 when filters change OR when enabled becomes true (lazy load trigger)
   useEffect(() => {
     if (!repoId) {
       setItems([]);
       setTotal(0);
+      setLoading(false);
+      return;
+    }
+
+    // Don't fetch if not enabled
+    if (!enabled) {
       setLoading(false);
       return;
     }
@@ -183,7 +200,7 @@ function usePaginatedList<TItem, TFilters>(
 
     return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repoId, ...filterDeps]);
+  }, [repoId, enabled, ...filterDeps]);
 
   const totalPages = Math.ceil(total / perPage);
 
@@ -267,8 +284,8 @@ const issuesConfig: PaginatedListConfig<Issue, IssueFilters> = {
   ],
 };
 
-export function useIssues(repoId: number | null, filters: IssueFilters = {}) {
-  const result = usePaginatedList(repoId, filters, issuesConfig);
+export function useIssues(repoId: number | null, filters: IssueFilters = {}, enabled: boolean = true) {
+  const result = usePaginatedList(repoId, filters, issuesConfig, enabled);
   // Rename 'items' to 'issues' for API compatibility
   return {
     issues: result.items,
@@ -313,8 +330,8 @@ const prsConfig: PaginatedListConfig<PR, PRFilters> = {
   getFilterDeps: (filters) => getEntityFilterDeps(filters, PR_FILTER_DEFAULTS),
 };
 
-export function usePRs(repoId: number | null, filters: PRFilters = {}) {
-  const result = usePaginatedList(repoId, filters, prsConfig);
+export function usePRs(repoId: number | null, filters: PRFilters = {}, enabled: boolean = true) {
+  const result = usePaginatedList(repoId, filters, prsConfig, enabled);
   // Rename 'items' to 'prs' for API compatibility
   return {
     prs: result.items,
