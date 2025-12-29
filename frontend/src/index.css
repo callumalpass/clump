@@ -799,15 +799,15 @@ button:disabled .kbd-hint {
 
 /* Session tab close button - hidden by default, visible on tab hover */
 .session-tab-close {
-  transition: opacity 150ms ease-out, background-color 150ms ease, color 150ms ease, transform 100ms ease;
+  transition: opacity 150ms ease-out, background-color 150ms ease, color 150ms ease, transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .session-tab-close:hover {
-  transform: scale(1.1);
+  transform: scale(1.1) rotate(90deg);
 }
 
 .session-tab-close:active {
-  transform: scale(0.9);
+  transform: scale(0.9) rotate(90deg);
 }
 
 /* Resize handle styling - improved discoverability */
