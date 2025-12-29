@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Repo, RepoSessionCount } from '../types';
+import { ConfirmDialog } from './ConfirmDialog';
+import { focusRing } from '../utils/styles';
 
 interface RepoSelectorProps {
   repos: Repo[];
   selectedRepo: Repo | null;
   onSelectRepo: (repo: Repo) => void;
   onAddRepo: (localPath: string) => Promise<Repo>;
+  onDeleteRepo?: (id: number) => Promise<void>;
   sessionCounts?: Map<number, RepoSessionCount>;
 }
 
@@ -14,6 +17,7 @@ export function RepoSelector({
   selectedRepo,
   onSelectRepo,
   onAddRepo,
+  onDeleteRepo,
   sessionCounts,
 }: RepoSelectorProps) {
   const [isAdding, setIsAdding] = useState(false);
@@ -22,6 +26,8 @@ export function RepoSelector({
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [deleteConfirmRepo, setDeleteConfirmRepo] = useState<Repo | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -47,6 +53,33 @@ export function RepoSelector({
     setHighlightedIndex(-1);
     buttonRef.current?.focus();
   }, [onSelectRepo]);
+
+  const handleDeleteClick = useCallback((e: React.MouseEvent, repo: Repo) => {
+    e.stopPropagation();
+    setDeleteConfirmRepo(repo);
+  }, []);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteConfirmRepo || !onDeleteRepo) return;
+
+    setIsDeleting(true);
+    try {
+      await onDeleteRepo(deleteConfirmRepo.id);
+      setDeleteConfirmRepo(null);
+      // If we deleted the selected repo, clear the selection
+      if (selectedRepo?.id === deleteConfirmRepo.id) {
+        // Find another repo to select, or null if none
+        const remainingRepos = repos.filter(r => r.id !== deleteConfirmRepo.id);
+        if (remainingRepos.length > 0) {
+          onSelectRepo(remainingRepos[0]!);
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete repository');
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [deleteConfirmRepo, onDeleteRepo, selectedRepo, repos, onSelectRepo]);
 
   // Reset highlighted index when dropdown opens/closes
   useEffect(() => {
@@ -190,14 +223,13 @@ export function RepoSelector({
                     const isHighlighted = highlightedIndex === index;
 
                     return (
-                      <button
+                      <div
                         key={repo.id}
-                        type="button"
                         role="option"
                         aria-selected={isSelected}
                         onClick={() => handleSelectRepo(repo)}
                         onMouseEnter={() => setHighlightedIndex(index)}
-                        className={`w-full px-3 py-2 text-sm text-left flex items-center justify-between transition-colors ${
+                        className={`group/repo w-full px-3 py-2 text-sm text-left flex items-center justify-between transition-colors cursor-pointer ${
                           isHighlighted
                             ? 'bg-blue-600/30 text-white'
                             : isSelected
@@ -221,12 +253,27 @@ export function RepoSelector({
                             </span>
                           )}
                           {counts && counts.total > 0 && (
-                            <span className="text-xs text-gray-500">
+                            <span className="text-xs text-gray-500 group-hover/repo:hidden">
                               {counts.total} session{counts.total !== 1 ? 's' : ''}
                             </span>
                           )}
+                          {onDeleteRepo && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteClick(e, repo)}
+                              className={`p-1 rounded text-gray-500 hover:text-red-400 hover:bg-red-500/15 transition-all ${
+                                counts && counts.total > 0 ? 'hidden group-hover/repo:block' : 'opacity-0 group-hover/repo:opacity-100'
+                              } ${focusRing}`}
+                              title={`Remove ${repo.owner}/${repo.name}`}
+                              aria-label={`Remove ${repo.owner}/${repo.name} from list`}
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
                         </span>
-                      </button>
+                      </div>
                     );
                   })
                 )}
@@ -273,6 +320,22 @@ export function RepoSelector({
           </button>
         </form>
       )}
+
+      {/* Delete confirmation dialog */}
+      <ConfirmDialog
+        isOpen={deleteConfirmRepo !== null}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteConfirmRepo(null)}
+        title="Remove Repository"
+        message={deleteConfirmRepo
+          ? `Remove "${deleteConfirmRepo.owner}/${deleteConfirmRepo.name}" from the list? This will delete all saved sessions and data for this repository.`
+          : ''
+        }
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        variant="danger"
+        loading={isDeleting}
+      />
     </div>
   );
 }
