@@ -49,7 +49,7 @@ export function SearchInput({ value, onChange, placeholder = 'Search...', deboun
       }
     }, debounceMs);
     return () => clearTimeout(timeout);
-  }, [inputValue, debounceMs]);
+  }, [inputValue, debounceMs, onChange, value]);
 
   // Sync with external changes
   useEffect(() => {
@@ -367,6 +367,26 @@ interface FilterBarRowProps {
 
 export function FilterBarRow({ children, className = '' }: FilterBarRowProps) {
   return <div className={`${filterBarStyles.row} ${className}`}>{children}</div>;
+}
+
+// Filter group - visually groups related filters with optional label
+interface FilterGroupProps {
+  children: ReactNode;
+  label?: string;
+  className?: string;
+}
+
+export function FilterGroup({ children, label, className = '' }: FilterGroupProps) {
+  return (
+    <div className={`flex items-center gap-1 px-2 py-1 rounded-md bg-gray-800/50 ${className}`}>
+      {label && (
+        <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide mr-1">
+          {label}
+        </span>
+      )}
+      {children}
+    </div>
+  );
 }
 
 // Item count display
