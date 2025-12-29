@@ -1654,7 +1654,7 @@ export default function App() {
                               setIssuePanelCollapsed(false);
                             }
                           }}
-                          className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white"
+                          className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                           title="Expand panel"
                           aria-label={`Expand ${showIssueSideBySide ? 'issue' : 'PR'} context panel`}
                         >
@@ -1710,7 +1710,7 @@ export default function App() {
                             panel?.collapse();
                             setIssuePanelCollapsed(true);
                           }}
-                          className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white"
+                          className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                           title="Collapse panel"
                           aria-label={`Collapse ${showIssueSideBySide ? 'issue' : 'PR'} context panel`}
                         >
