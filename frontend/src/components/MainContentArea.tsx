@@ -42,9 +42,17 @@ function ResizeHandle() {
 
 type ViewMode = 'transcript' | 'terminal';
 
+export type Tab = 'issues' | 'prs' | 'history' | 'schedules';
+
 export interface MainContentAreaProps {
   // Layout mode
   layoutMode: LayoutMode;
+
+  // Current active tab for context-aware empty states
+  activeTab: Tab;
+
+  // Whether the current list is empty (helps provide contextual empty state messages)
+  listEmpty?: boolean;
 
   // Repo context
   selectedRepo: Repo | null;
@@ -120,6 +128,9 @@ export interface MainContentAreaProps {
 
   // Refresh functions
   onRefreshIssues: () => void;
+
+  // Tab navigation (for empty state quick nav)
+  onTabChange?: (tab: Tab) => void;
 }
 
 // =============================================================================
@@ -202,26 +213,117 @@ function KeyHint({ children }: { children: React.ReactNode }) {
   );
 }
 
-function EmptyState() {
+function QuickNavItem({ shortcut, label, active = false, onClick }: { shortcut: string; label: string; active?: boolean; onClick?: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={active}
+      className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-gray-900 ${
+        active
+          ? 'bg-blue-600/20 text-blue-400 cursor-default'
+          : 'bg-gray-700/30 text-gray-400 hover:bg-gray-700/50 hover:text-gray-200 active:scale-[0.98]'
+      }`}
+      aria-current={active ? 'page' : undefined}
+    >
+      <KeyHint>{shortcut}</KeyHint>
+      <span className="text-sm">{label}</span>
+    </button>
+  );
+}
+
+// Context-aware empty state content based on active tab
+const emptyStateContent: Record<Tab, { title: string; description: string; emptyTitle: string; emptyDescription: string; icon: React.ReactNode }> = {
+  issues: {
+    title: 'Select an issue to view details',
+    description: 'or start a session to work on it',
+    emptyTitle: 'No issues to display',
+    emptyDescription: 'Try adjusting your filters in the sidebar',
+    icon: (
+      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" strokeWidth={1.5} />
+        <circle cx="12" cy="12" r="3" fill="currentColor" />
+      </svg>
+    ),
+  },
+  prs: {
+    title: 'Select a pull request to view details',
+    description: 'or start a session to review it',
+    emptyTitle: 'No pull requests to display',
+    emptyDescription: 'Try adjusting your filters in the sidebar',
+    icon: (
+      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h7" />
+      </svg>
+    ),
+  },
+  history: {
+    title: 'Select a session to view details',
+    description: 'browse past sessions and their transcripts',
+    emptyTitle: 'No sessions to display',
+    emptyDescription: 'Try adjusting your filters in the sidebar',
+    icon: (
+      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
+  schedules: {
+    title: 'Select a schedule to view details',
+    description: 'manage automated sessions',
+    emptyTitle: 'No schedules to display',
+    emptyDescription: 'Create a schedule to automate your workflows',
+    icon: (
+      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+    ),
+  },
+};
+
+interface EmptyStateProps {
+  activeTab: Tab;
+  listEmpty?: boolean;
+  onTabChange?: (tab: Tab) => void;
+}
+
+function EmptyState({ activeTab, listEmpty, onTabChange }: EmptyStateProps) {
+  const content = emptyStateContent[activeTab];
+
+  // If the list is empty, show a different message that acknowledges the empty state
+  const title = listEmpty ? content.emptyTitle : content.title;
+  const description = listEmpty ? content.emptyDescription : content.description;
+
   return (
     <div className="flex-1 flex items-center justify-center p-8">
-      <div className="text-center p-8 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-md empty-state-enter">
+      <div className="text-center p-8 rounded-xl bg-gray-800/40 border border-gray-700/50 max-w-lg empty-state-enter">
+        {/* Icon */}
         <div className="w-16 h-16 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-5 empty-state-icon-float">
-          <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
-          </svg>
+          {content.icon}
         </div>
-        <p className="text-gray-300 font-medium mb-2">Select an issue or PR to view details</p>
-        <p className="text-gray-400 text-sm mb-5">or start a session from an issue or PR</p>
 
-        {/* Keyboard shortcut hints */}
-        <div className="pt-4 border-t border-gray-700/50 space-y-2 text-xs text-gray-500">
-          <p>
-            Press <KeyHint>1</KeyHint> Issues <KeyHint>2</KeyHint> PRs <KeyHint>3</KeyHint> History <KeyHint>4</KeyHint> Schedules
-          </p>
-          <p>
-            <KeyHint>⌘K</KeyHint> Command palette · <KeyHint>?</KeyHint> All shortcuts
-          </p>
+        {/* Main message */}
+        <h3 className="text-gray-200 font-semibold text-lg mb-2">{title}</h3>
+        <p className="text-gray-400 text-sm mb-6">{description}</p>
+
+        {/* Quick navigation grid - clickable buttons to switch tabs */}
+        <div className="grid grid-cols-2 gap-2 mb-5">
+          <QuickNavItem shortcut="1" label="Issues" active={activeTab === 'issues'} onClick={() => onTabChange?.('issues')} />
+          <QuickNavItem shortcut="2" label="PRs" active={activeTab === 'prs'} onClick={() => onTabChange?.('prs')} />
+          <QuickNavItem shortcut="3" label="History" active={activeTab === 'history'} onClick={() => onTabChange?.('history')} />
+          <QuickNavItem shortcut="4" label="Schedules" active={activeTab === 'schedules'} onClick={() => onTabChange?.('schedules')} />
+        </div>
+
+        {/* Command palette hint */}
+        <div className="pt-4 border-t border-gray-700/50 flex items-center justify-center gap-4 text-xs text-gray-500">
+          <span className="flex items-center gap-1.5">
+            <KeyHint>⌘K</KeyHint>
+            <span>Command palette</span>
+          </span>
+          <span className="text-gray-600">·</span>
+          <span className="flex items-center gap-1.5">
+            <KeyHint>?</KeyHint>
+            <span>All shortcuts</span>
+          </span>
         </div>
       </div>
     </div>
@@ -235,6 +337,8 @@ function EmptyState() {
 export function MainContentArea(props: MainContentAreaProps) {
   const {
     layoutMode,
+    activeTab,
+    listEmpty,
     selectedRepo,
     selectedIssue,
     selectedPR,
@@ -284,6 +388,7 @@ export function MainContentArea(props: MainContentAreaProps) {
     onEntitiesChange,
     needsAttention,
     onRefreshIssues,
+    onTabChange,
   } = props;
 
   // Ref for collapsible context panel
@@ -529,7 +634,7 @@ export function MainContentArea(props: MainContentAreaProps) {
     ),
 
     // Empty state
-    'empty': () => <EmptyState />,
+    'empty': () => <EmptyState activeTab={activeTab} listEmpty={listEmpty} onTabChange={onTabChange} />,
   };
 
   // =============================================================================

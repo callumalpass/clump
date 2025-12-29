@@ -1713,6 +1713,8 @@ export default function App() {
         <Panel minSize="400px" className="flex flex-col min-w-0">
           <MainContentArea
             layoutMode={layoutMode}
+            activeTab={activeTab}
+            listEmpty={activeTab === 'issues' ? issues.length === 0 : activeTab === 'prs' ? prs.length === 0 : activeTab === 'history' ? sessions.length === 0 : false}
             selectedRepo={selectedRepo}
             selectedIssue={selectedIssue}
             selectedPR={selectedPR}
@@ -1765,6 +1767,7 @@ export default function App() {
             onEntitiesChange={refreshSessions}
             needsAttention={needsAttention}
             onRefreshIssues={refreshIssues}
+            onTabChange={setActiveTab}
           />
         </Panel>
       </Group>
