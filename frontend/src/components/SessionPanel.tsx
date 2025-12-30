@@ -168,6 +168,10 @@ export function SessionPanel({
               await onKillSession(activeSession.session_id);
               onClearActiveProcess();
             }}
+            onKillSession={async () => {
+              await onKillSession(activeSession.session_id);
+              onClearActiveProcess();
+            }}
             onShowIssue={onShowIssue}
             onShowPR={onShowPR}
             onShowSchedule={onShowSchedule}
@@ -195,6 +199,10 @@ export function SessionPanel({
             onClose={onCloseViewingSession}
             onDelete={async () => {
               await onDeleteSession(viewingSession.session_id);
+              onCloseViewingSession();
+            }}
+            onKillSession={async () => {
+              await onKillSession(viewingSession.session_id);
               onCloseViewingSession();
             }}
             onTitleChange={async (title) => {

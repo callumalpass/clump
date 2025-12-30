@@ -239,6 +239,8 @@ interface SessionViewProps {
   onContinue?: (prompt?: string) => Promise<string | void>;
   /** Callback when session is deleted */
   onDelete?: () => void;
+  /** Callback to kill an active session */
+  onKillSession?: () => Promise<void>;
   /** Callback when session title is changed */
   onTitleChange?: (title: string) => Promise<void>;
   /** Navigate to an issue */
@@ -267,6 +269,7 @@ export function SessionView({
   onClose,
   onContinue,
   onDelete,
+  onKillSession,
   onTitleChange,
   onShowIssue,
   onShowPR,
@@ -362,6 +365,10 @@ export function SessionView({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Kill confirmation state
+  const [showKillConfirm, setShowKillConfirm] = useState(false);
+  const [killing, setKilling] = useState(false);
+
   // Title editing state
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
@@ -438,6 +445,18 @@ export function SessionView({
       setShowDeleteConfirm(false);
     }
   }, [onDelete]);
+
+  // Handle kill confirmation
+  const handleKillConfirm = useCallback(async () => {
+    if (!onKillSession) return;
+    setKilling(true);
+    try {
+      await onKillSession();
+    } finally {
+      setKilling(false);
+      setShowKillConfirm(false);
+    }
+  }, [onKillSession]);
 
   // Handle title editing
   const handleTitleEdit = useCallback(() => {
@@ -1009,6 +1028,25 @@ export function SessionView({
                     )}
                   </button>
                 )}
+                {/* Stop session button - only for active sessions */}
+                {isActiveProcess && onKillSession && (
+                  <>
+                    <div className="border-t border-gray-750 my-1" />
+                    <button
+                      onClick={() => {
+                        setShowKillConfirm(true);
+                        setShowActionsMenu(false);
+                      }}
+                      className="w-full px-3 py-1.5 text-sm text-left hover:bg-orange-900/50 text-orange-400 flex items-center gap-2 transition-colors focus:outline-none focus:bg-orange-900/50"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                      </svg>
+                      Stop Session
+                    </button>
+                  </>
+                )}
                 {/* Delete button - only for non-active sessions */}
                 {!isActiveProcess && onDelete && (
                   <>
@@ -1360,6 +1398,60 @@ export function SessionView({
                   </>
                 ) : (
                   'Delete'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Kill Confirmation Modal */}
+      {showKillConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop-enter">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowKillConfirm(false)}
+          />
+          <div className="relative bg-gray-800 border border-gray-750 rounded-lg shadow-xl p-6 max-w-sm w-full mx-4 modal-content-enter">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-orange-900/50 flex items-center justify-center">
+                <svg className="w-5 h-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">Stop Session</h3>
+                <p className="text-sm text-gray-400">This will terminate the process</p>
+              </div>
+            </div>
+            <p className="text-gray-300 mb-6">
+              Are you sure you want to stop this session? The Claude process will be terminated, but the transcript will be preserved.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowKillConfirm(false)}
+                disabled={killing}
+                className="px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-750 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleKillConfirm}
+                disabled={killing}
+                className="px-4 py-2 text-sm bg-orange-600 hover:bg-orange-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {killing ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Stopping...
+                  </>
+                ) : (
+                  'Stop Session'
                 )}
               </button>
             </div>
