@@ -994,7 +994,20 @@ export function useIssueMetadata(repoId: number | null) {
     });
   };
 
-  return { metadataMap, loading, refresh: () => refresh(), updateMetadata, deleteMetadata };
+  // Refresh a single issue's metadata (e.g., after clicking on it)
+  const refreshSingle = useCallback(async (issueNumber: number) => {
+    if (!repoId) return;
+    try {
+      const data = await fetchIssueMetadata(repoId, issueNumber);
+      if (data) {
+        setMetadataMap((prev) => ({ ...prev, [issueNumber]: data }));
+      }
+    } catch (e) {
+      console.error('Failed to refresh issue metadata:', e);
+    }
+  }, [repoId]);
+
+  return { metadataMap, loading, refresh: () => refresh(), updateMetadata, deleteMetadata, refreshSingle };
 }
 
 // Fetch single issue metadata
@@ -1045,7 +1058,20 @@ export function usePRMetadata(repoId: number | null) {
     return () => controller.abort();
   }, [repoId, refresh]);
 
-  return { metadataMap, loading, refresh: () => refresh() };
+  // Refresh a single PR's metadata (e.g., after clicking on it)
+  const refreshSingle = useCallback(async (prNumber: number) => {
+    if (!repoId) return;
+    try {
+      const data = await fetchPRMetadata(repoId, prNumber);
+      if (data) {
+        setMetadataMap((prev) => ({ ...prev, [prNumber]: data }));
+      }
+    } catch (e) {
+      console.error('Failed to refresh PR metadata:', e);
+    }
+  }, [repoId]);
+
+  return { metadataMap, loading, refresh: () => refresh(), refreshSingle };
 }
 
 // Fetch single PR metadata

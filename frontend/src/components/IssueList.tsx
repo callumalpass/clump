@@ -1,5 +1,5 @@
 import { useMemo, memo } from 'react';
-import type { Issue, SessionSummary, Tag, IssueTagsMap, Process, CommandMetadata } from '../types';
+import type { Issue, SessionSummary, Tag, IssueTagsMap, IssueMetadataMap, IssueMetadata, Process, CommandMetadata } from '../types';
 import type { IssueFilters as IssueFiltersType } from '../hooks/useApi';
 import { useSessionStatus } from '../hooks/useSessionStatus';
 import { IssueFilters } from './IssueFilters';
@@ -9,6 +9,23 @@ import { getContrastColor } from '../utils/colors';
 import { focusRing } from '../utils/styles';
 import { pluralize } from '../utils/text';
 
+// Priority badge color mapping
+const PRIORITY_COLORS: Record<string, { bg: string; text: string }> = {
+  critical: { bg: 'bg-red-500/20', text: 'text-red-400' },
+  high: { bg: 'bg-orange-500/20', text: 'text-orange-400' },
+  medium: { bg: 'bg-yellow-500/20', text: 'text-yellow-400' },
+  low: { bg: 'bg-gray-500/20', text: 'text-gray-400' },
+};
+
+// Difficulty badge color mapping
+const DIFFICULTY_COLORS: Record<string, { bg: string; text: string }> = {
+  trivial: { bg: 'bg-mint-400/20', text: 'text-mint-400' },
+  easy: { bg: 'bg-green-500/20', text: 'text-green-400' },
+  medium: { bg: 'bg-yellow-500/20', text: 'text-yellow-400' },
+  hard: { bg: 'bg-orange-500/20', text: 'text-orange-400' },
+  complex: { bg: 'bg-red-500/20', text: 'text-red-400' },
+};
+
 // Memoized list item component to prevent unnecessary re-renders
 interface IssueListItemProps {
   issue: Issue;
@@ -16,6 +33,7 @@ interface IssueListItemProps {
   isSelected: boolean;
   issueSessions: SessionSummary[];
   issueTags: Tag[];
+  issueMetadata?: IssueMetadata | null;
   issueCommands: CommandMetadata[];
   onSelect: () => void;
   onStartSession: (issue: Issue, command: CommandMetadata) => void;
@@ -27,11 +45,14 @@ const IssueListItem = memo(function IssueListItem({
   isSelected,
   issueSessions,
   issueTags,
+  issueMetadata,
   issueCommands,
   onSelect,
   onStartSession,
 }: IssueListItemProps) {
   const { hasRunning, hasCompleted } = useSessionStatus(issueSessions);
+  const priorityStyle = issueMetadata?.priority ? PRIORITY_COLORS[issueMetadata.priority] : null;
+  const difficultyStyle = issueMetadata?.difficulty ? DIFFICULTY_COLORS[issueMetadata.difficulty] : null;
 
   return (
     <div
@@ -82,8 +103,26 @@ const IssueListItem = memo(function IssueListItem({
               </span>
             )}
           </div>
-          {(issue.labels.length > 0 || issueTags.length > 0) && (
+          {(issue.labels.length > 0 || issueTags.length > 0 || priorityStyle || difficultyStyle) && (
             <div className="flex items-center gap-2 mt-2 flex-wrap">
+              {/* Priority and difficulty badges from AI analysis */}
+              {priorityStyle && (
+                <span
+                  className={`px-2.5 py-1 text-xs font-medium rounded-stoody-lg ${priorityStyle.bg} ${priorityStyle.text}`}
+                  title={`Priority: ${issueMetadata?.priority}`}
+                >
+                  {issueMetadata?.priority}
+                </span>
+              )}
+              {difficultyStyle && (
+                <span
+                  className={`px-2.5 py-1 text-xs font-medium rounded-stoody-lg ${difficultyStyle.bg} ${difficultyStyle.text}`}
+                  title={`Difficulty: ${issueMetadata?.difficulty}`}
+                >
+                  {issueMetadata?.difficulty}
+                </span>
+              )}
+              {/* GitHub labels */}
               {issue.labels.map((label) => (
                 <span
                   key={label}
@@ -92,6 +131,7 @@ const IssueListItem = memo(function IssueListItem({
                   {label}
                 </span>
               ))}
+              {/* Custom tags */}
               {issueTags.map((tag) => {
                 const bgColor = tag.color || '#374151';
                 return (
@@ -143,6 +183,7 @@ interface IssueListProps {
   processes?: Process[];
   tags?: Tag[];
   issueTagsMap?: IssueTagsMap;
+  issueMetadataMap?: IssueMetadataMap;
   selectedTagId?: number | null;
   onSelectTag?: (tagId: number | null) => void;
   filters?: IssueFiltersType;
@@ -167,6 +208,7 @@ export function IssueList({
   processes: _processes = [],
   tags = [],
   issueTagsMap = {},
+  issueMetadataMap = {},
   selectedTagId,
   onSelectTag,
   filters = {},
@@ -283,10 +325,7 @@ export function IssueList({
       {!loading && !error && issues.length === 0 && (
         <div className="flex-1 flex flex-col items-center justify-center p-8">
           <div className="text-center p-6 rounded-xl bg-gray-800/40 border border-gray-750/50 max-w-xs empty-state-enter">
-            <div className="relative w-14 h-14 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4 empty-state-icon-float cursor-pointer">
-              <span className="empty-state-tooltip">
-                {(filters.state !== 'all' || filters.search || filters.sessionStatus) ? 'picky, picky!' : 'so empty...'}
-              </span>
+            <div className="relative w-14 h-14 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4">
               {(filters.state !== 'all' || filters.search || filters.sessionStatus) ? (
                 <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
@@ -358,8 +397,7 @@ export function IssueList({
       {!loading && issues.length > 0 && filteredIssues.length === 0 && (
         <div className="flex-1 flex flex-col items-center justify-center p-8">
           <div className="text-center p-6 rounded-xl bg-gray-800/40 border border-gray-750/50 max-w-xs empty-state-enter">
-            <div className="relative w-14 h-14 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4 empty-state-icon-float cursor-pointer">
-              <span className="empty-state-tooltip">too picky!</span>
+            <div className="relative w-14 h-14 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4">
               <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
               </svg>
@@ -396,6 +434,7 @@ export function IssueList({
               isSelected={selectedIssue === issue.number}
               issueSessions={sessionsByIssue[issue.number.toString()] || []}
               issueTags={issueTagsMap[issue.number] || []}
+              issueMetadata={issueMetadataMap[issue.number]}
               issueCommands={issueCommands}
               onSelect={() => onSelectIssue(issue.number)}
               onStartSession={onStartSession}

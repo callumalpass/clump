@@ -3,7 +3,6 @@ import { Terminal } from './Terminal';
 import { ConversationView } from './ConversationView';
 import { Editor } from './Editor';
 import { EntityPicker } from './EntityPicker';
-import { TokenUsageBar } from './TokenUsageBar';
 import type { SessionSummary, SessionDetail, EntityLink, Issue, PR, ParsedTranscript, TranscriptMessage } from '../types';
 import { fetchSessionDetail, addEntityToSession, removeEntityFromSession } from '../hooks/useApi';
 import { useProcessWebSocket } from '../hooks/useProcessWebSocket';
@@ -1278,19 +1277,8 @@ export function SessionView({
         </div>
       )}
 
-      {/* Footer with metadata and token usage */}
-      <div className="px-4 py-2 border-t border-gray-750 bg-gray-800/30 space-y-2">
-        {/* Token usage bar (only show if we have token data) */}
-        {detail && (detail.total_input_tokens > 0 || detail.total_output_tokens > 0) && (
-          <TokenUsageBar
-            inputTokens={detail.total_input_tokens}
-            outputTokens={detail.total_output_tokens}
-            cacheReadTokens={detail.total_cache_read_tokens}
-            cacheCreationTokens={detail.total_cache_creation_tokens}
-            model={detail.model}
-          />
-        )}
-
+      {/* Footer with metadata */}
+      <div className="px-4 py-2 border-t border-gray-750 bg-gray-800/30">
         {/* Metadata row */}
         <div className="flex items-center justify-between text-xs text-gray-500">
           <div className="flex items-center gap-3">

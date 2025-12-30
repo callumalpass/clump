@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect, useRef, useLayoutEffect, useMemo } fr
 import { Group, Panel } from 'react-resizable-panels';
 import { useRepos, useIssues, usePRs, useProcesses, useSessions, useActiveSessions, useTags, useIssueTags, useIssueMetadata, usePRMetadata, useCommands, useSessionCounts, useStats, buildPromptFromTemplate, exportSession, downloadExport } from './hooks/useApi';
 import { useNotifications } from './hooks/useNotifications';
-import { useLayoutMode } from './hooks/useLayoutMode';
 import { useWebSocketManager } from './contexts/WebSocketContext';
 import type { IssueFilters, SessionFilters, PRFilters } from './hooks/useApi';
 import { RepoSelector } from './components/RepoSelector';
@@ -11,7 +10,8 @@ import { PRList } from './components/PRList';
 import { SessionList } from './components/SessionList';
 import { CompactSessionList } from './components/CompactSessionList';
 import { ScheduleList } from './components/ScheduleList';
-import { MainContentArea } from './components/MainContentArea';
+import { DetailPane } from './components/DetailPane';
+import { SessionPanel } from './components/SessionPanel';
 import { StatsModal } from './components/StatsModal';
 import { Settings } from './components/Settings';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
@@ -138,19 +138,6 @@ function saveActiveTab(tab: Tab): void {
   }
 }
 
-// Track pending issue/PR context for processes being created
-// This fixes the race condition where the sidepane doesn't show the issue/PR
-// until the analysis is created and fetched via polling
-interface PendingIssueContext {
-  processId: string;
-  issueNumber: number;
-}
-
-interface PendingPRContext {
-  processId: string;
-  prNumber: number;
-}
-
 // Track pending session metadata for optimistic UI
 interface PendingSessionData {
   title: string;
@@ -166,7 +153,7 @@ export default function App() {
   const [openSessionIds, setOpenSessionIds] = useState<string[]>([]);
   // Track which session tab is currently active
   const [activeTabSessionId, setActiveTabSessionId] = useState<string | null>(null);
-  const [issuePanelCollapsed, setIssuePanelCollapsed] = useState(false);
+  const [sessionPanelCollapsed, setSessionPanelCollapsed] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [statsModalOpen, setStatsModalOpen] = useState(false);
@@ -188,10 +175,6 @@ export default function App() {
     setActiveTabState(tab);
     saveActiveTab(tab);
   }, []);
-
-  // Track pending issue/PR context to show side-by-side view immediately
-  const pendingIssueContextRef = useRef<PendingIssueContext | null>(null);
-  const pendingPRContextRef = useRef<PendingPRContext | null>(null);
 
   // Track pending session data for optimistic UI (title, entities before backend returns)
   const pendingSessionsRef = useRef<Map<string, PendingSessionData>>(new Map());
@@ -312,8 +295,8 @@ export default function App() {
 
   const { tags, createTag } = useTags(selectedRepo?.id ?? null);
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
-  const { metadataMap: issueMetadataMap } = useIssueMetadata(selectedRepo?.id ?? null);
-  const { metadataMap: prMetadataMap } = usePRMetadata(selectedRepo?.id ?? null);
+  const { metadataMap: issueMetadataMap, refreshSingle: refreshIssueMetadata } = useIssueMetadata(selectedRepo?.id ?? null);
+  const { metadataMap: prMetadataMap, refreshSingle: refreshPRMetadata } = usePRMetadata(selectedRepo?.id ?? null);
   // Lazy-load PRs only when the PRs tab is active (perf optimization)
   const { prs, loading: prsLoading, error: prsError, refresh: refreshPRs, page: prsPage, totalPages: prsTotalPages, total: prsTotal, goToPage: goToPRsPage } = usePRs(selectedRepo?.id ?? null, prFilters, activeTab === 'prs');
   const { commands, refresh: refreshCommands } = useCommands(selectedRepo?.local_path);
@@ -494,9 +477,6 @@ export default function App() {
     // Clear process/cache if repo changed (BEFORE restoring tabs for new repo)
     if (repoActuallyChanged || !selectedRepo?.id) {
       setActiveProcessId(null);
-      // Clear pending context refs (session cache is NOT cleared - getCachedSession validates repo_path)
-      pendingIssueContextRef.current = null;
-      pendingPRContextRef.current = null;
       // Cancel any pending debounced refresh to prevent stale context
       if (refreshSessionsTimeoutRef.current) {
         clearTimeout(refreshSessionsTimeoutRef.current);
@@ -539,17 +519,23 @@ export default function App() {
     }
   }, [selectedRepo?.id]);
 
-  // Handle issue selection from list - clears PR selection
+  // Handle issue selection from list - clears other selections
   const handleSelectIssue = useCallback((issueNumber: number) => {
     setSelectedIssue(issueNumber);
     setSelectedPR(null);
-  }, []);
+    setSelectedSchedule(null);
+    // Refresh the issue's metadata in case Claude updated it
+    refreshIssueMetadata(issueNumber);
+  }, [refreshIssueMetadata]);
 
-  // Handle PR selection from list - clears issue selection
+  // Handle PR selection from list - clears other selections
   const handleSelectPR = useCallback((prNumber: number) => {
     setSelectedPR(prNumber);
     setSelectedIssue(null);
-  }, []);
+    setSelectedSchedule(null);
+    // Refresh the PR's metadata in case Claude updated it
+    refreshPRMetadata(prNumber);
+  }, [refreshPRMetadata]);
 
   // Note: Session list is now event-driven via WebSocket - no polling needed
   // Events trigger refreshSessions() when sessions change
@@ -583,13 +569,6 @@ export default function App() {
         entities,
         title
       );
-
-      // Store pending context so side-by-side view shows immediately
-      // (before session is created and fetched via polling)
-      pendingIssueContextRef.current = {
-        processId: process.id,
-        issueNumber: issue.number,
-      };
 
       // Store pending session data for optimistic UI
       if (process.claude_session_id) {
@@ -637,12 +616,6 @@ export default function App() {
         entities,
         title
       );
-
-      // Store pending context so side-by-side view shows immediately
-      pendingPRContextRef.current = {
-        processId: process.id,
-        prNumber: pr.number,
-      };
 
       // Store pending session data for optimistic UI
       if (process.claude_session_id) {
@@ -721,20 +694,6 @@ export default function App() {
       // Process is still running - open the terminal
       setActiveProcessId(activeProcess.id);
       setViewingSessionId(null);
-
-      // Store pending context for immediate side-by-side view
-      if (firstIssue) {
-        pendingIssueContextRef.current = {
-          processId: activeProcess.id,
-          issueNumber: firstIssue.number,
-        };
-      }
-      if (firstPR) {
-        pendingPRContextRef.current = {
-          processId: activeProcess.id,
-          prNumber: firstPR.number,
-        };
-      }
     } else {
       // Process ended - show transcript in details panel
       setActiveProcessId(null);
@@ -752,24 +711,6 @@ export default function App() {
 
       // Refresh active sessions to show the session as active
       refreshActiveSessions();
-
-      // Store pending context for first linked issue/PR so side-by-side shows immediately
-      const firstIssue = session.entities?.find(e => e.kind === 'issue');
-      const firstPR = session.entities?.find(e => e.kind === 'pr');
-
-      if (firstIssue) {
-        pendingIssueContextRef.current = {
-          processId: process.id,
-          issueNumber: firstIssue.number,
-        };
-      }
-
-      if (firstPR) {
-        pendingPRContextRef.current = {
-          processId: process.id,
-          prNumber: firstPR.number,
-        };
-      }
 
       // Ensure session is in open tabs and active
       setOpenSessionIds(prev => prev.includes(session.session_id) ? prev : [...prev, session.session_id]);
@@ -798,7 +739,7 @@ export default function App() {
     [killSession, refreshActiveSessions]
   );
 
-  // Handler for killing a session by ID (for MainContentArea/SessionPanel)
+  // Handler for killing a session by ID (for SessionPanel)
   const handleKillSessionById = useCallback(
     async (sessionId: string) => {
       await killSession(sessionId);
@@ -867,81 +808,23 @@ export default function App() {
 
   // Find the active process and its related session
   const activeProcess = activeProcessId ? processesById.get(activeProcessId) : undefined;
+  // Find sessions for caching
   const activeSessionFromList = activeProcess?.claude_session_id
     ? (sessionsById.get(activeProcess.claude_session_id)
       ?? getCachedSession(activeProcess.claude_session_id))
     : null;
 
-  // Synthesize session from process data if not found (handles hot reloads, pagination gaps)
-  const activeSession: SessionSummary | null = activeSessionFromList
-    ?? (activeProcess?.claude_session_id && selectedRepo ? {
-      session_id: activeProcess.claude_session_id,
-      encoded_path: '',
-      repo_path: activeProcess.working_dir,
-      repo_name: `${selectedRepo.owner}/${selectedRepo.name}`,
-      title: pendingSessionsRef.current.get(activeProcess.claude_session_id)?.title || 'Active Session',
-      model: null,
-      start_time: activeProcess.created_at,
-      end_time: null,
-      message_count: 0,
-      modified_at: activeProcess.created_at,
-      file_size: 0,
-      entities: pendingSessionsRef.current.get(activeProcess.claude_session_id)?.entities || [],
-      tags: [],
-      starred: false,
-      is_active: true,
-    } : null);
-
-  // Find the session being viewed (for transcript panel)
   const viewingSession = viewingSessionId
     ? (sessionsById.get(viewingSessionId) ?? getCachedSession(viewingSessionId))
     : null;
 
-
   // Cache active/viewing sessions so they persist across pagination changes
-  // Only cache real sessions from API, not synthetic ones
   if (activeSessionFromList && activeProcess?.claude_session_id) {
     cachedSessionsRef.current.set(activeProcess.claude_session_id, activeSessionFromList);
   }
   if (viewingSession && viewingSessionId) {
     cachedSessionsRef.current.set(viewingSessionId, viewingSession);
   }
-
-  // Check pending context for newly created processes (before analysis is fetched)
-  const pendingIssueContext = pendingIssueContextRef.current;
-  const hasPendingIssue = pendingIssueContext && pendingIssueContext.processId === activeProcessId;
-  const pendingPRContext = pendingPRContextRef.current;
-  const hasPendingPR = pendingPRContext && pendingPRContext.processId === activeProcessId;
-
-  // Clear pending context once analysis is loaded
-  if (activeSession && hasPendingIssue) {
-    pendingIssueContextRef.current = null;
-  }
-  if (activeSession && hasPendingPR) {
-    pendingPRContextRef.current = null;
-  }
-
-  // Determine the issue number to display - prefer user selection, fallback to session context
-  const sessionIssue = activeSession?.entities?.find(e => e.kind === 'issue')
-    ?? viewingSession?.entities?.find(e => e.kind === 'issue');
-  const activeIssueNumber = selectedIssue ?? (
-    sessionIssue
-      ? sessionIssue.number
-      : hasPendingIssue
-        ? pendingIssueContext.issueNumber
-        : null
-  );
-
-  // Determine the PR number to display - prefer user selection, fallback to session context
-  const sessionPR = activeSession?.entities?.find(e => e.kind === 'pr')
-    ?? viewingSession?.entities?.find(e => e.kind === 'pr');
-  const activePRNumber = selectedPR ?? (
-    sessionPR
-      ? sessionPR.number
-      : hasPendingPR
-        ? pendingPRContext.prNumber
-        : null
-  );
 
   // Get the list of open sessions (sessions that have tabs open)
   // Uses optimistic UI: if a session isn't in the backend yet but has an active process,
@@ -1067,26 +950,26 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [openSessions, activeTabSessionId, handleSelectSessionTab, selectedRepo, handleNewProcess]);
 
-  // Compute layout mode using the centralized hook
-  const { mode: layoutMode } = useLayoutMode({
-    selectedIssue,
-    selectedPR,
-    selectedSchedule,
-    isCreatingIssue,
-    openSessions,
-    activeIssueNumber,
-    activePRNumber,
-  });
+  // Auto-expand session panel when sessions are opened, auto-collapse when all closed
+  useEffect(() => {
+    if (openSessions.length > 0 && sessionPanelCollapsed) {
+      setSessionPanelCollapsed(false);
+    } else if (openSessions.length === 0 && !sessionPanelCollapsed) {
+      setSessionPanelCollapsed(true);
+    }
+  }, [openSessions.length, sessionPanelCollapsed]);
 
-  // Handlers for navigating to issues/PRs from SessionView
+  // Handlers for navigating to issues/PRs from SessionView/ScheduleDetail
   const handleShowIssue = useCallback((issueNumber: number) => {
     setSelectedIssue(issueNumber);
     setSelectedPR(null);
+    setSelectedSchedule(null);
   }, []);
 
   const handleShowPR = useCallback((prNumber: number) => {
     setSelectedPR(prNumber);
     setSelectedIssue(null);
+    setSelectedSchedule(null);
   }, []);
 
   const handleShowSchedule = useCallback((scheduleId: number) => {
@@ -1752,35 +1635,22 @@ export default function App() {
 
         <ResizeHandle />
 
-        {/* Main content */}
-        <Panel minSize="400px" className="flex flex-col min-w-0">
-          <MainContentArea
-            layoutMode={layoutMode}
-            activeTab={activeTab}
-            listEmpty={activeTab === 'issues' ? issues.length === 0 : activeTab === 'prs' ? prs.length === 0 : activeTab === 'history' ? sessions.length === 0 : false}
-            listError={activeTab === 'issues' ? issuesError : activeTab === 'prs' ? prsError : null}
+        {/* Detail pane - shows issue/PR/schedule details */}
+        <Panel minSize="300px" className="flex flex-col min-w-0 border-r border-gray-750">
+          <DetailPane
             selectedRepo={selectedRepo}
             selectedIssue={selectedIssue}
             selectedPR={selectedPR}
             selectedSchedule={selectedSchedule}
-            activeIssueNumber={activeIssueNumber}
-            activePRNumber={activePRNumber}
-            issuePanelCollapsed={issuePanelCollapsed}
-            onIssuePanelCollapsedChange={setIssuePanelCollapsed}
-            issues={issues}
-            prs={prs}
+            isCreatingIssue={isCreatingIssue}
+            activeTab={activeTab}
             sessions={sessions}
-            openSessions={openSessions}
             processes={processes}
             commands={commands}
             tags={tags}
             issueTagsMap={issueTagsMap}
             issueMetadataMap={issueMetadataMap}
             prMetadataMap={prMetadataMap}
-            activeTabSessionId={activeTabSessionId}
-            activeProcessId={activeProcessId}
-            viewingSessionId={viewingSessionId}
-            sessionViewModes={sessionViewModes}
             onStartIssueSession={handleStartIssueSession}
             onSelectSession={handleSelectSession}
             onContinueSession={handleContinueSession}
@@ -1795,25 +1665,46 @@ export default function App() {
               setIsCreatingIssue(false);
               setSelectedIssue(issue.number);
             }}
-            onSelectSessionTab={handleSelectSessionTab}
-            onCloseSessionTab={handleCloseSessionTab}
-            onNewSession={handleNewProcess}
-            onDeleteSession={deleteSession}
-            onUpdateSessionTitle={async (sessionId, title) => { await updateSessionMetadata(sessionId, { title }); }}
-            onCloseViewingSession={() => setViewingSessionId(null)}
-            onSetViewMode={handleSetSessionViewMode}
-            onKillProcess={killProcess}
-            onKillSession={handleKillSessionById}
-            onClearActiveProcess={() => setActiveProcessId(null)}
-            onShowIssue={handleShowIssue}
-            onShowPR={handleShowPR}
-            onShowSchedule={handleShowSchedule}
-            onEntitiesChange={refreshSessions}
-            needsAttention={needsAttention}
             onRefreshIssues={refreshIssues}
             onTabChange={setActiveTab}
           />
         </Panel>
+
+        {/* Session pane - collapsible when no sessions */}
+        {!sessionPanelCollapsed && (
+          <>
+            <ResizeHandle />
+            <Panel minSize="300px" className="flex flex-col min-w-0">
+              <SessionPanel
+                openSessions={openSessions}
+                processes={processes}
+                activeTabSessionId={activeTabSessionId}
+                activeProcessId={activeProcessId}
+                viewingSessionId={viewingSessionId}
+                sessionViewModes={sessionViewModes}
+                onSelectSessionTab={handleSelectSessionTab}
+                onCloseSessionTab={handleCloseSessionTab}
+                onNewSession={handleNewProcess}
+                onContinueSession={handleContinueSession}
+                onDeleteSession={deleteSession}
+                onUpdateSessionTitle={async (sessionId, title) => { await updateSessionMetadata(sessionId, { title }); }}
+                onCloseViewingSession={() => setViewingSessionId(null)}
+                onSetViewMode={handleSetSessionViewMode}
+                onKillProcess={killProcess}
+                onKillSession={handleKillSessionById}
+                onClearActiveProcess={() => setActiveProcessId(null)}
+                onShowIssue={handleShowIssue}
+                onShowPR={handleShowPR}
+                onShowSchedule={handleShowSchedule}
+                issues={issues}
+                prs={prs}
+                onEntitiesChange={refreshSessions}
+                needsAttention={needsAttention}
+                newSessionDisabled={!selectedRepo}
+              />
+            </Panel>
+          </>
+        )}
       </Group>
     </div>
   );
