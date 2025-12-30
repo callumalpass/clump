@@ -828,8 +828,6 @@ async def list_sessions(
     date_to: Optional[str] = None,
     sort: SessionSortField = SessionSortField.UPDATED,
     order: SortOrder = SortOrder.DESC,
-    limit: int = Query(default=DEFAULT_PAGE_SIZE, le=MAX_PAGE_SIZE),
-    offset: int = 0,
 ):
     """
     List all discovered sessions.
@@ -936,44 +934,27 @@ async def list_sessions(
                 else:
                     all_pending = [p for p in all_pending if len(p.entities) == 0]
 
-        pending_count = len(all_pending)
-
-        # Adjust pagination to account for pending sessions at the start
-        if offset < pending_count:
-            # Some or all pending sessions are on this page
-            pending_on_page = all_pending[offset:offset + limit]
-            remaining_limit = limit - len(pending_on_page)
-            if remaining_limit > 0:
-                page_sessions = filtered_sessions[:remaining_limit]
-            else:
-                page_sessions = []
-        else:
-            # All pending sessions are on earlier pages
-            adjusted_offset = offset - pending_count
-            page_sessions = filtered_sessions[adjusted_offset:adjusted_offset + limit]
-            pending_on_page = []
-
-        # Only scan the paginated subset (fast!)
+        # Convert all filtered sessions to summaries
         loop = asyncio.get_event_loop()
-        if len(page_sessions) > 1:
+        if len(filtered_sessions) > 1:
             conversion_tasks = [
                 loop.run_in_executor(
                     _summary_thread_pool,
                     partial(_session_to_summary, s, active_session_ids)
                 )
-                for s in page_sessions
+                for s in filtered_sessions
             ]
-            page_summaries = list(await asyncio.gather(*conversion_tasks))
-        elif page_sessions:
-            page_summaries = [_session_to_summary(page_sessions[0], active_session_ids)]
+            summaries = list(await asyncio.gather(*conversion_tasks))
+        elif filtered_sessions:
+            summaries = [_session_to_summary(filtered_sessions[0], active_session_ids)]
         else:
-            page_summaries = []
+            summaries = []
 
-        # Combine pending sessions with scanned page
-        summaries = list(pending_on_page) + page_summaries
-        total += pending_count
+        # Prepend pending sessions
+        summaries = list(all_pending) + summaries
+        total = len(summaries)
 
-        # Return early - we've already done filtering and pagination
+        # Return early - we've already done filtering
         return SessionListResponse(sessions=summaries, total=total)
 
     # SLOW PATH: Need to scan all sessions for content-dependent filters/sorts
@@ -1073,9 +1054,6 @@ async def list_sessions(
         summaries = [s for s in summaries if matches_filters(s)]
 
     total = len(summaries)
-
-    # Apply pagination
-    summaries = summaries[offset:offset + limit]
 
     return SessionListResponse(sessions=summaries, total=total)
 

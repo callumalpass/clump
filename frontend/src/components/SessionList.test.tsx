@@ -54,9 +54,6 @@ describe('SessionList', () => {
     filters: { category: 'all' } as SessionListFilters,
     onFiltersChange: vi.fn(),
     total: 0,
-    page: 1,
-    totalPages: 1,
-    onPageChange: vi.fn(),
   };
 
   beforeEach(() => {
@@ -1243,47 +1240,6 @@ describe('SessionList', () => {
       fireEvent.click(screen.getByTitle('Clear all active filters'));
 
       expect(onFiltersChange).toHaveBeenCalledWith({ category: 'all' });
-    });
-  });
-
-  describe('Pagination', () => {
-    it('renders pagination with current page indicator', () => {
-      const sessions = [createMockSession()];
-
-      render(
-        <SessionList
-          {...defaultProps}
-          sessions={sessions}
-          total={100}
-          page={2}
-          totalPages={5}
-        />
-      );
-
-      // Should display page indicator
-      expect(screen.getByText('2 / 5')).toBeInTheDocument();
-    });
-
-    it('calls onPageChange when next page button clicked', () => {
-      const onPageChange = vi.fn();
-      const sessions = [createMockSession()];
-
-      render(
-        <SessionList
-          {...defaultProps}
-          sessions={sessions}
-          total={100}
-          page={2}
-          totalPages={5}
-          onPageChange={onPageChange}
-        />
-      );
-
-      // Find and click next page button by its aria-label
-      const nextButton = screen.getByLabelText(/Go to next page/);
-      fireEvent.click(nextButton);
-
-      expect(onPageChange).toHaveBeenCalledWith(3);
     });
   });
 

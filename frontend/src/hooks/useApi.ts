@@ -458,14 +458,12 @@ export interface SessionFilters {
 export function useSessions(filters: SessionFilters = {}) {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [perPage] = useState(30);
   const [loading, setLoading] = useState(true);
 
   const { repoPath, starred, hasEntities, search, isActive, model, sort, order, dateRange, dateFrom, dateTo } = filters;
 
   // Internal fetch that optionally shows loading state
-  const fetchPage = useCallback(async (pageNum: number, showLoading: boolean) => {
+  const fetchSessions = useCallback(async (showLoading: boolean) => {
     try {
       if (showLoading) setLoading(true);
       const params = new URLSearchParams();
@@ -507,39 +505,30 @@ export function useSessions(filters: SessionFilters = {}) {
         }
       }
 
-      params.set('limit', perPage.toString());
-      params.set('offset', ((pageNum - 1) * perPage).toString());
-
       const data = await fetchJson<SessionListResponse>(
         `${API_BASE}/sessions?${params}`
       );
       setSessions(data.sessions);
       setTotal(data.total);
-      setPage(pageNum);
     } catch (e) {
       console.error('Failed to fetch sessions:', e);
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [repoPath, starred, hasEntities, search, isActive, model, sort, order, dateRange, dateFrom, dateTo, perPage]);
+  }, [repoPath, starred, hasEntities, search, isActive, model, sort, order, dateRange, dateFrom, dateTo]);
 
   // Public refresh - silent by default for polling
-  const refresh = useCallback(() => fetchPage(page, false), [fetchPage, page]);
+  const refresh = useCallback(() => fetchSessions(false), [fetchSessions]);
 
-  const goToPage = useCallback((pageNum: number) => {
-    fetchPage(pageNum, true);
-  }, [fetchPage]);
-
-  // Initial load and when filters change - reset to page 1
+  // Initial load and when filters change
   useEffect(() => {
-    setPage(1);
     // Clear old sessions immediately to prevent showing stale data from wrong repo
     setSessions([]);
     setTotal(0);
-    fetchPage(1, true);
-  // fetchPage captures all filter values, so we just need it as a dependency
+    fetchSessions(true);
+  // fetchSessions captures all filter values, so we just need it as a dependency
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchPage]);
+  }, [fetchSessions]);
 
   const continueSession = async (sessionId: string, prompt?: string): Promise<Process> => {
     const result = await fetchJson<Process>(
@@ -621,9 +610,7 @@ export function useSessions(filters: SessionFilters = {}) {
     return result;
   };
 
-  const totalPages = Math.ceil(total / perPage);
-
-  return { sessions, total, loading, refresh, continueSession, killSession, deleteSession, updateSessionMetadata, bulkDeleteSessions, bulkUpdateSessions, page, totalPages, goToPage };
+  return { sessions, total, loading, refresh, continueSession, killSession, deleteSession, updateSessionMetadata, bulkDeleteSessions, bulkUpdateSessions };
 }
 
 // Active/Recent Sessions (for the always-visible sessions panel)

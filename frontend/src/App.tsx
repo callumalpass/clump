@@ -269,7 +269,7 @@ export default function App() {
     order: sessionListFilters.order,
     dateRange: sessionListFilters.dateRange,
   };
-  const { sessions, loading: sessionsLoading, refresh: refreshSessions, continueSession, killSession, deleteSession, updateSessionMetadata, bulkDeleteSessions, bulkUpdateSessions, total: sessionsTotal, page: sessionsPage, totalPages: sessionsTotalPages, goToPage: goToSessionsPage } = useSessions(sessionFilters);
+  const { sessions, loading: sessionsLoading, refresh: refreshSessions, continueSession, killSession, deleteSession, updateSessionMetadata, bulkDeleteSessions, bulkUpdateSessions, total: sessionsTotal } = useSessions(sessionFilters);
   const { stats, loading: statsLoading, error: statsError, refresh: refreshStats } = useStats();
 
   // WebSocket connection manager for persistent connections across tab switches
@@ -557,13 +557,14 @@ export default function App() {
   // 3. Repo is switched (handled in the repo change useEffect)
 
   const handleStartIssueSession = useCallback(
-    async (issue: { number: number; title: string; body: string }, command: CommandMetadata) => {
+    async (issue: { number: number; title: string; body: string; author: string }, command: CommandMetadata) => {
       if (!selectedRepo) return;
 
       const prompt = buildPromptFromTemplate(command.template, {
         number: issue.number,
         title: issue.title,
         body: issue.body,
+        author: issue.author,
         encoded_path: encodeRepoPath(selectedRepo.local_path),
         local_path: selectedRepo.local_path,
       });
@@ -602,13 +603,14 @@ export default function App() {
   );
 
   const handleStartPRSession = useCallback(
-    async (pr: { number: number; title: string; body: string; head_ref: string; base_ref: string }, command: CommandMetadata) => {
+    async (pr: { number: number; title: string; body: string; author: string; head_ref: string; base_ref: string }, command: CommandMetadata) => {
       if (!selectedRepo) return;
 
       const prompt = buildPromptFromTemplate(command.template, {
         number: pr.number,
         title: pr.title,
         body: pr.body,
+        author: pr.author,
         head_ref: pr.head_ref,
         base_ref: pr.base_ref,
         encoded_path: encodeRepoPath(selectedRepo.local_path),
@@ -1121,8 +1123,6 @@ export default function App() {
           goToIssuesPage(issuesPage - 1);
         } else if (activeTab === 'prs' && prsPage > 1) {
           goToPRsPage(prsPage - 1);
-        } else if (activeTab === 'history' && sessionsPage > 1) {
-          goToSessionsPage(sessionsPage - 1);
         }
         return;
       }
@@ -1134,8 +1134,6 @@ export default function App() {
           goToIssuesPage(issuesPage + 1);
         } else if (activeTab === 'prs' && prsPage < prsTotalPages) {
           goToPRsPage(prsPage + 1);
-        } else if (activeTab === 'history' && sessionsPage < sessionsTotalPages) {
-          goToSessionsPage(sessionsPage + 1);
         }
         return;
       }
@@ -1163,7 +1161,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [commandPaletteOpen, settingsOpen, shortcutsOpen, statsModalOpen, activeProcessId, selectedIssue, selectedPR, activeTab, issuesPage, issuesTotalPages, goToIssuesPage, prsPage, prsTotalPages, goToPRsPage, sessionsPage, sessionsTotalPages, goToSessionsPage, activeTabSessionId, handleCloseSessionTab, sessionsById, handleToggleStar, sessionViewModes, handleSetSessionViewMode, refreshIssues, refreshPRs, refreshSessions, getCachedSession]);
+  }, [commandPaletteOpen, settingsOpen, shortcutsOpen, statsModalOpen, activeProcessId, selectedIssue, selectedPR, activeTab, issuesPage, issuesTotalPages, goToIssuesPage, prsPage, prsTotalPages, goToPRsPage, activeTabSessionId, handleCloseSessionTab, sessionsById, handleToggleStar, sessionViewModes, handleSetSessionViewMode, refreshIssues, refreshPRs, refreshSessions, getCachedSession]);
 
   // Command palette commands
   const paletteCommands = useMemo((): Command[] => {
@@ -1327,6 +1325,22 @@ export default function App() {
               </span>
             </button>
           )}
+          {/* New Session button */}
+          <button
+            onClick={handleNewProcess}
+            disabled={!selectedRepo}
+            className={`flex items-center gap-2 px-4 py-2 rounded-stoody text-sm font-medium transition-all active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-800 ${
+              selectedRepo
+                ? 'bg-blurple-500 hover:bg-blurple-400 text-white shadow-stoody'
+                : 'bg-gray-750 text-gray-500 cursor-not-allowed'
+            }`}
+            title={selectedRepo ? 'Start a new Claude session (Alt+N)' : 'Select a repository first'}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            <span className="hidden sm:inline">New Session</span>
+          </button>
           {/* Keyboard shortcuts hint */}
           <button
             onClick={() => setShortcutsOpen(true)}
@@ -1570,9 +1584,6 @@ export default function App() {
                     filters={sessionListFilters}
                     onFiltersChange={setSessionListFilters}
                     total={sessionsTotal}
-                    page={sessionsPage}
-                    totalPages={sessionsTotalPages}
-                    onPageChange={goToSessionsPage}
                     activeSessionId={selectedSessionId}
                   />
                 )}
@@ -1607,6 +1618,7 @@ export default function App() {
                       // Clear other selections
                       setSelectedIssue(null);
                       setSelectedPR(null);
+                      setSelectedSessionId(null);
                     }}
                     refreshRef={scheduleListRefreshRef}
                   />

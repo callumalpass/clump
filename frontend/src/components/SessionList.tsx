@@ -3,7 +3,6 @@ import type { SessionSummary, Process, BulkOperationResult } from '../types';
 import { getModelShortName, getModelTextColor } from '../utils/models';
 import { formatRelativeTime, formatDuration, isRecentlyModified } from '../utils/time';
 import { ElapsedTimer } from './ElapsedTimer';
-import { Pagination, PaginationSkeleton } from './Pagination';
 import {
   FilterBar,
   FilterBarRow,
@@ -292,9 +291,6 @@ interface SessionListProps {
   filters: SessionListFilters;
   onFiltersChange: (filters: SessionListFilters) => void;
   total: number;
-  page: number;
-  totalPages: number;
-  onPageChange: (page: number) => void;
   activeSessionId?: string | null;
 }
 
@@ -340,9 +336,6 @@ export function SessionList({
   filters,
   onFiltersChange,
   total,
-  page,
-  totalPages,
-  onPageChange,
   activeSessionId,
 }: SessionListProps) {
   // Selection state for bulk operations
@@ -663,10 +656,9 @@ export function SessionList({
             </div>
           ))}
         </div>
-        {/* Pagination skeleton */}
-        <div className="shrink-0 border-t border-gray-750 p-2 flex items-center justify-between text-sm">
+        {/* Footer skeleton */}
+        <div className="shrink-0 border-t border-gray-750 p-2 flex items-center text-sm">
           <div className="h-4 w-20 rounded skeleton-shimmer" />
-          <PaginationSkeleton />
         </div>
       </div>
     );
@@ -738,16 +730,11 @@ export function SessionList({
           ))}
         </div>
 
-        {/* Pagination - always visible to prevent layout shift */}
-        <div className="shrink-0 border-t border-gray-750 p-2 flex items-center justify-between text-sm">
+        {/* Footer */}
+        <div className="shrink-0 border-t border-gray-750 p-2 flex items-center text-sm">
           <span className="text-gray-400">
             {total} sessions
           </span>
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            onPageChange={onPageChange}
-          />
         </div>
       </div>
 
