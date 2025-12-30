@@ -68,27 +68,11 @@ Quick access to all actions with `Ctrl+K`. Jump to issues, PRs, sessions, or run
 
 ## Setup
 
-### Backend
-
 ```bash
-cd backend
-python -m venv venv
-source venv/bin/activate
-pip install -e .
-cp .env.example .env
-# Edit .env with your GitHub token
-uvicorn app.main:app --reload
+git clone https://github.com/anthropics/clump.git
+cd clump
+./run.sh
 ```
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Or use `./run.sh` to start both.
 
 Open http://localhost:5173
 
