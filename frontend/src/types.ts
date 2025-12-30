@@ -55,6 +55,37 @@ export interface Tag {
 
 export type IssueTagsMap = Record<number, Tag[]>;
 
+// Issue metadata (sidecar files written by Claude)
+export type IssuePriority = 'critical' | 'high' | 'medium' | 'low';
+export type IssueDifficulty = 'trivial' | 'easy' | 'medium' | 'hard' | 'complex';
+export type IssueRisk = 'low' | 'medium' | 'high';
+export type IssueType = 'bug' | 'feature' | 'refactor' | 'docs' | 'chore' | 'question';
+
+export interface IssueMetadata {
+  issue_number: number;
+
+  // Assessments
+  priority?: IssuePriority | null;
+  difficulty?: IssueDifficulty | null;
+  risk?: IssueRisk | null;
+
+  // Categorical
+  type?: IssueType | null;
+  affected_areas?: string[];
+
+  // Analysis content
+  ai_summary?: string | null;
+  notes?: string | null;
+  root_cause?: string | null;
+  suggested_fix?: string | null;
+
+  // Meta
+  analyzed_at?: string | null;
+  analyzed_by?: string | null;
+}
+
+export type IssueMetadataMap = Record<number, IssueMetadata>;
+
 export interface PR {
   number: number;
   title: string;
@@ -84,12 +115,49 @@ export interface PRDetail extends PR {
   comments: PRComment[];
 }
 
+// PR metadata (sidecar files written by Claude)
+export type PRRisk = 'low' | 'medium' | 'high';
+export type PRComplexity = 'trivial' | 'simple' | 'moderate' | 'complex';
+export type PRReviewPriority = 'critical' | 'high' | 'medium' | 'low';
+export type PRTestCoverage = 'good' | 'partial' | 'missing';
+export type PRChangeType = 'feature' | 'bugfix' | 'refactor' | 'docs' | 'chore';
+
+export interface PRMetadata {
+  pr_number: number;
+
+  // Assessments
+  risk?: PRRisk | null;
+  complexity?: PRComplexity | null;
+  review_priority?: PRReviewPriority | null;
+
+  // Review findings
+  security_concerns?: string[];
+  test_coverage?: PRTestCoverage | null;
+  breaking_changes?: boolean;
+
+  // Categorical
+  change_type?: PRChangeType | null;
+  affected_areas?: string[];
+
+  // Analysis content
+  ai_summary?: string | null;
+  review_notes?: string | null;
+  suggested_improvements?: string | null;
+
+  // Meta
+  analyzed_at?: string | null;
+  analyzed_by?: string | null;
+}
+
+export type PRMetadataMap = Record<number, PRMetadata>;
+
 export interface Process {
   id: string;
   working_dir: string;
   created_at: string;
   session_id: number | null;  // Legacy - may be null in new model
   claude_session_id: string | null;
+  mode: 'pty' | 'headless';  // PTY for interactive, headless for issue/PR sessions
 }
 
 // ==========================================

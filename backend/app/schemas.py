@@ -51,6 +51,75 @@ class SessionMetadataUpdate(BaseModel):
     starred: Optional[bool] = None
 
 
+# ==========================================
+# Issue Metadata
+# ==========================================
+
+class IssueMetadataResponse(BaseModel):
+    """Sidecar metadata for a GitHub issue (written by Claude)."""
+    issue_number: int
+
+    # Assessments
+    priority: Optional[str] = None      # "critical" | "high" | "medium" | "low"
+    difficulty: Optional[str] = None    # "trivial" | "easy" | "medium" | "hard" | "complex"
+    risk: Optional[str] = None          # "low" | "medium" | "high"
+
+    # Categorical
+    type: Optional[str] = None          # "bug" | "feature" | "refactor" | "docs" | "chore" | "question"
+    affected_areas: list[str] = []      # e.g., ["auth", "api", "frontend"]
+
+    # Analysis content
+    ai_summary: Optional[str] = None    # One-line AI-generated summary
+    notes: Optional[str] = None         # Free-form analysis/notes
+    root_cause: Optional[str] = None    # For bugs - underlying cause
+    suggested_fix: Optional[str] = None # Brief fix approach
+
+    # Meta
+    analyzed_at: Optional[str] = None   # ISO timestamp of last analysis
+    analyzed_by: Optional[str] = None   # Model that analyzed
+
+
+class IssueMetadataUpdate(BaseModel):
+    """Request to update issue metadata (for manual edits)."""
+    priority: Optional[str] = None
+    difficulty: Optional[str] = None
+    risk: Optional[str] = None
+    type: Optional[str] = None
+    affected_areas: Optional[list[str]] = None
+    ai_summary: Optional[str] = None
+    notes: Optional[str] = None
+    root_cause: Optional[str] = None
+    suggested_fix: Optional[str] = None
+
+
+class PRMetadataResponse(BaseModel):
+    """Sidecar metadata for a GitHub PR (written by Claude)."""
+    pr_number: int
+
+    # Assessments
+    risk: Optional[str] = None              # "low" | "medium" | "high"
+    complexity: Optional[str] = None        # "trivial" | "simple" | "moderate" | "complex"
+    review_priority: Optional[str] = None   # "critical" | "high" | "medium" | "low"
+
+    # Review findings
+    security_concerns: list[str] = []       # Security issues found
+    test_coverage: Optional[str] = None     # "good" | "partial" | "missing"
+    breaking_changes: bool = False          # Has breaking changes?
+
+    # Categorical
+    change_type: Optional[str] = None       # "feature" | "bugfix" | "refactor" | "docs" | "chore"
+    affected_areas: list[str] = []          # e.g., ["auth", "api", "frontend"]
+
+    # Analysis content
+    ai_summary: Optional[str] = None        # One-line AI-generated summary
+    review_notes: Optional[str] = None      # Code review notes/feedback
+    suggested_improvements: Optional[str] = None  # Suggestions for improvement
+
+    # Meta
+    analyzed_at: Optional[str] = None       # ISO timestamp of last analysis
+    analyzed_by: Optional[str] = None       # Model that analyzed
+
+
 class ContinueSessionRequest(BaseModel):
     """Request to continue a session with an optional message."""
     prompt: Optional[str] = None  # Message to send to Claude after resuming

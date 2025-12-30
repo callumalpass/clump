@@ -28,8 +28,18 @@ from app.storage import (
     add_repo as storage_add_repo,
     delete_repo as storage_delete_repo,
     delete_repo_data,
+    encode_path,
+    get_issue_metadata,
+    save_issue_metadata,
+    delete_issue_metadata,
+    list_issue_metadata,
+    IssueMetadata,
+    get_pr_metadata,
+    list_pr_metadata,
+    PRMetadata,
     RepoInfo,
 )
+from app.schemas import IssueMetadataResponse, IssueMetadataUpdate, PRMetadataResponse
 from app.database import clear_engine_cache
 from app.services.github_client import github_client, IssueData, PRData
 
@@ -347,7 +357,8 @@ async def get_issue(
 ):
     """Get a single issue with comments."""
     repo = get_repo_or_404(repo_id)
-    issue = github_client.get_issue(repo["owner"], repo["name"], issue_number)
+    with github_api_error_handler():
+        issue = github_client.get_issue(repo["owner"], repo["name"], issue_number)
     response = _issue_to_response(issue)
     response_dict = response.model_dump()
     response_dict["comments"] = [
@@ -403,6 +414,203 @@ async def reopen_issue(
     with github_api_error_handler():
         github_client.reopen_issue(repo["owner"], repo["name"], issue_number)
         return {"status": "opened"}
+
+
+# Issue metadata endpoints (sidecar files written by Claude)
+@router.get("/repos/{repo_id}/issue-metadata")
+async def list_all_issue_metadata(repo_id: int) -> dict[int, IssueMetadataResponse]:
+    """
+    Get all issue metadata for a repository.
+
+    Returns a dict mapping issue numbers to their metadata.
+    This is used for bulk loading metadata to display in issue lists.
+    """
+    repo = get_repo_or_404(repo_id)
+    encoded_path = encode_path(repo["local_path"])
+    metadata_list = list_issue_metadata(encoded_path)
+
+    return {
+        m.issue_number: IssueMetadataResponse(
+            issue_number=m.issue_number,
+            priority=m.priority,
+            difficulty=m.difficulty,
+            risk=m.risk,
+            type=m.type,
+            affected_areas=m.affected_areas,
+            ai_summary=m.ai_summary,
+            notes=m.notes,
+            root_cause=m.root_cause,
+            suggested_fix=m.suggested_fix,
+            analyzed_at=m.analyzed_at,
+            analyzed_by=m.analyzed_by,
+        )
+        for m in metadata_list
+    }
+
+
+@router.get("/repos/{repo_id}/issues/{issue_number}/metadata", response_model=IssueMetadataResponse | None)
+async def get_single_issue_metadata(
+    repo_id: int,
+    issue_number: int,
+):
+    """Get metadata for a single issue."""
+    repo = get_repo_or_404(repo_id)
+    encoded_path = encode_path(repo["local_path"])
+    metadata = get_issue_metadata(encoded_path, issue_number)
+
+    if metadata is None:
+        return None
+
+    return IssueMetadataResponse(
+        issue_number=metadata.issue_number,
+        priority=metadata.priority,
+        difficulty=metadata.difficulty,
+        risk=metadata.risk,
+        type=metadata.type,
+        affected_areas=metadata.affected_areas,
+        ai_summary=metadata.ai_summary,
+        notes=metadata.notes,
+        root_cause=metadata.root_cause,
+        suggested_fix=metadata.suggested_fix,
+        analyzed_at=metadata.analyzed_at,
+        analyzed_by=metadata.analyzed_by,
+    )
+
+
+@router.put("/repos/{repo_id}/issues/{issue_number}/metadata", response_model=IssueMetadataResponse)
+async def update_issue_metadata(
+    repo_id: int,
+    issue_number: int,
+    update: IssueMetadataUpdate,
+):
+    """
+    Update metadata for an issue.
+
+    This is for manual edits through the UI. Claude writes metadata directly
+    to the sidecar files, but users can also edit via this endpoint.
+    """
+    repo = get_repo_or_404(repo_id)
+    encoded_path = encode_path(repo["local_path"])
+
+    # Load existing metadata or create new
+    existing = get_issue_metadata(encoded_path, issue_number)
+    if existing is None:
+        existing = IssueMetadata(issue_number=issue_number)
+
+    # Apply updates (only non-None fields)
+    if update.priority is not None:
+        existing.priority = update.priority
+    if update.difficulty is not None:
+        existing.difficulty = update.difficulty
+    if update.risk is not None:
+        existing.risk = update.risk
+    if update.type is not None:
+        existing.type = update.type
+    if update.affected_areas is not None:
+        existing.affected_areas = update.affected_areas
+    if update.ai_summary is not None:
+        existing.ai_summary = update.ai_summary
+    if update.notes is not None:
+        existing.notes = update.notes
+    if update.root_cause is not None:
+        existing.root_cause = update.root_cause
+    if update.suggested_fix is not None:
+        existing.suggested_fix = update.suggested_fix
+
+    # Save updated metadata
+    save_issue_metadata(encoded_path, issue_number, existing)
+
+    return IssueMetadataResponse(
+        issue_number=existing.issue_number,
+        priority=existing.priority,
+        difficulty=existing.difficulty,
+        risk=existing.risk,
+        type=existing.type,
+        affected_areas=existing.affected_areas,
+        ai_summary=existing.ai_summary,
+        notes=existing.notes,
+        root_cause=existing.root_cause,
+        suggested_fix=existing.suggested_fix,
+        analyzed_at=existing.analyzed_at,
+        analyzed_by=existing.analyzed_by,
+    )
+
+
+@router.delete("/repos/{repo_id}/issues/{issue_number}/metadata")
+async def remove_issue_metadata(
+    repo_id: int,
+    issue_number: int,
+):
+    """Delete metadata for an issue."""
+    repo = get_repo_or_404(repo_id)
+    encoded_path = encode_path(repo["local_path"])
+    deleted = delete_issue_metadata(encoded_path, issue_number)
+    return {"deleted": deleted}
+
+
+# PR metadata endpoints (sidecar files written by Claude)
+@router.get("/repos/{repo_id}/pr-metadata")
+async def list_all_pr_metadata(repo_id: int) -> dict[int, PRMetadataResponse]:
+    """
+    Get all PR metadata for a repository.
+
+    Returns a dict mapping PR numbers to their metadata.
+    This is used for bulk loading metadata to display in PR lists.
+    """
+    repo = get_repo_or_404(repo_id)
+    encoded_path = encode_path(repo["local_path"])
+    metadata_list = list_pr_metadata(encoded_path)
+
+    return {
+        m.pr_number: PRMetadataResponse(
+            pr_number=m.pr_number,
+            risk=m.risk,
+            complexity=m.complexity,
+            review_priority=m.review_priority,
+            security_concerns=m.security_concerns,
+            test_coverage=m.test_coverage,
+            breaking_changes=m.breaking_changes,
+            change_type=m.change_type,
+            affected_areas=m.affected_areas,
+            ai_summary=m.ai_summary,
+            review_notes=m.review_notes,
+            suggested_improvements=m.suggested_improvements,
+            analyzed_at=m.analyzed_at,
+            analyzed_by=m.analyzed_by,
+        )
+        for m in metadata_list
+    }
+
+
+@router.get("/repos/{repo_id}/prs/{pr_number}/metadata", response_model=PRMetadataResponse | None)
+async def get_single_pr_metadata(
+    repo_id: int,
+    pr_number: int,
+):
+    """Get metadata for a single PR."""
+    repo = get_repo_or_404(repo_id)
+    encoded_path = encode_path(repo["local_path"])
+    metadata = get_pr_metadata(encoded_path, pr_number)
+
+    if metadata is None:
+        return None
+
+    return PRMetadataResponse(
+        pr_number=metadata.pr_number,
+        risk=metadata.risk,
+        complexity=metadata.complexity,
+        review_priority=metadata.review_priority,
+        security_concerns=metadata.security_concerns,
+        test_coverage=metadata.test_coverage,
+        breaking_changes=metadata.breaking_changes,
+        change_type=metadata.change_type,
+        affected_areas=metadata.affected_areas,
+        ai_summary=metadata.ai_summary,
+        review_notes=metadata.review_notes,
+        suggested_improvements=metadata.suggested_improvements,
+        analyzed_at=metadata.analyzed_at,
+        analyzed_by=metadata.analyzed_by,
+    )
 
 
 class IssueCreate(BaseModel):

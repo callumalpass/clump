@@ -7,6 +7,10 @@ Claude Code stores transcripts in:
 We store sidecar metadata in:
 ~/.clump/projects/{encoded-path}/{session-uuid}.json
 
+Issue metadata is stored in (checked in order):
+1. {repo-path}/.clump/issues/{issue-number}.json  (primary - works with Claude sandbox)
+2. ~/.clump/projects/{encoded-path}/issues/{issue-number}.json  (fallback)
+
 The encoded-path uses Claude's format: path with slashes replaced by dashes.
 e.g., /home/user/projects/myapp -> -home-user-projects-myapp
 
@@ -88,6 +92,144 @@ class SessionMetadata:
             starred=data.get("starred", False),
             created_at=data.get("created_at"),
             scheduled_job_id=data.get("scheduled_job_id"),
+        )
+
+
+@dataclass
+class IssueMetadata:
+    """
+    Sidecar metadata for a GitHub issue.
+
+    Primary location: {repo-path}/.clump/issues/{issue-number}.json
+    Fallback: ~/.clump/projects/{encoded-path}/issues/{issue-number}.json
+
+    This allows Claude to directly write issue analysis and metadata.
+    """
+    issue_number: int
+
+    # Assessments (independent per-issue evaluations)
+    priority: Optional[str] = None      # "critical" | "high" | "medium" | "low"
+    difficulty: Optional[str] = None    # "trivial" | "easy" | "medium" | "hard" | "complex"
+    risk: Optional[str] = None          # "low" | "medium" | "high"
+
+    # Categorical
+    type: Optional[str] = None          # "bug" | "feature" | "refactor" | "docs" | "chore" | "question"
+    affected_areas: list[str] = field(default_factory=list)  # e.g., ["auth", "api", "frontend"]
+
+    # Analysis content
+    ai_summary: Optional[str] = None    # One-line AI-generated summary
+    notes: Optional[str] = None         # Free-form analysis/notes
+    root_cause: Optional[str] = None    # For bugs - underlying cause
+    suggested_fix: Optional[str] = None # Brief fix approach
+
+    # Meta
+    analyzed_at: Optional[str] = None   # ISO timestamp of last analysis
+    analyzed_by: Optional[str] = None   # Model that analyzed (e.g., "claude-sonnet-4")
+
+    def to_dict(self) -> dict:
+        return {
+            "issue_number": self.issue_number,
+            "priority": self.priority,
+            "difficulty": self.difficulty,
+            "risk": self.risk,
+            "type": self.type,
+            "affected_areas": self.affected_areas,
+            "ai_summary": self.ai_summary,
+            "notes": self.notes,
+            "root_cause": self.root_cause,
+            "suggested_fix": self.suggested_fix,
+            "analyzed_at": self.analyzed_at,
+            "analyzed_by": self.analyzed_by,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "IssueMetadata":
+        return cls(
+            issue_number=data.get("issue_number", 0),
+            priority=data.get("priority"),
+            difficulty=data.get("difficulty"),
+            risk=data.get("risk"),
+            type=data.get("type"),
+            affected_areas=data.get("affected_areas", []),
+            ai_summary=data.get("ai_summary"),
+            notes=data.get("notes"),
+            root_cause=data.get("root_cause"),
+            suggested_fix=data.get("suggested_fix"),
+            analyzed_at=data.get("analyzed_at"),
+            analyzed_by=data.get("analyzed_by"),
+        )
+
+
+@dataclass
+class PRMetadata:
+    """
+    Sidecar metadata for a GitHub pull request.
+
+    Primary location: {repo-path}/.clump/prs/{pr-number}.json
+    Fallback: ~/.clump/projects/{encoded-path}/prs/{pr-number}.json
+
+    This allows Claude to directly write PR analysis and metadata.
+    """
+    pr_number: int
+
+    # Assessments
+    risk: Optional[str] = None              # "low" | "medium" | "high"
+    complexity: Optional[str] = None        # "trivial" | "simple" | "moderate" | "complex"
+    review_priority: Optional[str] = None   # "critical" | "high" | "medium" | "low"
+
+    # Review findings
+    security_concerns: list[str] = field(default_factory=list)  # Security issues found
+    test_coverage: Optional[str] = None     # "good" | "partial" | "missing"
+    breaking_changes: bool = False          # Has breaking changes?
+
+    # Categorical
+    change_type: Optional[str] = None       # "feature" | "bugfix" | "refactor" | "docs" | "chore"
+    affected_areas: list[str] = field(default_factory=list)  # e.g., ["auth", "api", "frontend"]
+
+    # Analysis content
+    ai_summary: Optional[str] = None        # One-line AI-generated summary
+    review_notes: Optional[str] = None      # Code review notes/feedback
+    suggested_improvements: Optional[str] = None  # Suggestions for improvement
+
+    # Meta
+    analyzed_at: Optional[str] = None       # ISO timestamp of last analysis
+    analyzed_by: Optional[str] = None       # Model that analyzed
+
+    def to_dict(self) -> dict:
+        return {
+            "pr_number": self.pr_number,
+            "risk": self.risk,
+            "complexity": self.complexity,
+            "review_priority": self.review_priority,
+            "security_concerns": self.security_concerns,
+            "test_coverage": self.test_coverage,
+            "breaking_changes": self.breaking_changes,
+            "change_type": self.change_type,
+            "affected_areas": self.affected_areas,
+            "ai_summary": self.ai_summary,
+            "review_notes": self.review_notes,
+            "suggested_improvements": self.suggested_improvements,
+            "analyzed_at": self.analyzed_at,
+            "analyzed_by": self.analyzed_by,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "PRMetadata":
+        return cls(
+            pr_number=data.get("pr_number", 0),
+            risk=data.get("risk"),
+            complexity=data.get("complexity"),
+            review_priority=data.get("review_priority"),
+            security_concerns=data.get("security_concerns", []),
+            test_coverage=data.get("test_coverage"),
+            breaking_changes=data.get("breaking_changes", False),
+            change_type=data.get("change_type"),
+            affected_areas=data.get("affected_areas", []),
+            ai_summary=data.get("ai_summary"),
+            review_notes=data.get("review_notes"),
+            suggested_improvements=data.get("suggested_improvements"),
+            analyzed_at=data.get("analyzed_at"),
+            analyzed_by=data.get("analyzed_by"),
         )
 
 
@@ -364,6 +506,338 @@ def delete_session_metadata(encoded_path: str, session_id: str) -> bool:
         sidecar_path.unlink()
         return True
     return False
+
+
+# ==========================================
+# Issue Metadata Operations
+# ==========================================
+
+def get_local_issues_dir(repo_path: str) -> Path:
+    """
+    Get the local issues metadata directory for a repo.
+
+    Returns {repo_path}/.clump/issues/ and creates it if needed.
+    This is the primary location for issue metadata (works with Claude sandbox).
+    """
+    issues_dir = Path(repo_path) / ".clump" / "issues"
+    issues_dir.mkdir(parents=True, exist_ok=True)
+    return issues_dir
+
+
+def get_clump_issues_dir(encoded_path: str) -> Path:
+    """
+    Get the global issues metadata directory for a specific encoded path.
+
+    Returns ~/.clump/projects/{encoded-path}/issues/ and creates it if needed.
+    This is the fallback location for issue metadata.
+    """
+    issues_dir = get_clump_projects_dir() / encoded_path / "issues"
+    issues_dir.mkdir(parents=True, exist_ok=True)
+    return issues_dir
+
+
+def get_issue_metadata(encoded_path: str, issue_number: int) -> Optional[IssueMetadata]:
+    """
+    Read sidecar metadata for an issue.
+
+    Checks local repo .clump/issues/ first, then falls back to ~/.clump/projects/.
+
+    Args:
+        encoded_path: The encoded path directory name
+        issue_number: The GitHub issue number
+
+    Returns:
+        IssueMetadata if sidecar exists, None otherwise.
+    """
+    # Primary: check local repo .clump/issues/
+    repo_path = decode_path(encoded_path)
+    local_issues_dir = Path(repo_path) / ".clump" / "issues"
+    local_sidecar_path = local_issues_dir / f"{issue_number}.json"
+
+    if local_sidecar_path.exists():
+        try:
+            with open(local_sidecar_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return IssueMetadata.from_dict(data)
+        except (json.JSONDecodeError, IOError, KeyError):
+            pass
+
+    # Fallback: check ~/.clump/projects/{encoded-path}/issues/
+    global_issues_dir = get_clump_projects_dir() / encoded_path / "issues"
+    global_sidecar_path = global_issues_dir / f"{issue_number}.json"
+
+    if global_sidecar_path.exists():
+        try:
+            with open(global_sidecar_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return IssueMetadata.from_dict(data)
+        except (json.JSONDecodeError, IOError, KeyError):
+            pass
+
+    return None
+
+
+def save_issue_metadata(encoded_path: str, issue_number: int, metadata: IssueMetadata) -> None:
+    """
+    Save sidecar metadata for an issue.
+
+    Saves to local repo .clump/issues/ (primary location).
+
+    Args:
+        encoded_path: The encoded path directory name
+        issue_number: The GitHub issue number
+        metadata: The metadata to save
+    """
+    repo_path = decode_path(encoded_path)
+    issues_dir = get_local_issues_dir(repo_path)
+    sidecar_path = issues_dir / f"{issue_number}.json"
+
+    with open(sidecar_path, 'w', encoding='utf-8') as f:
+        json.dump(metadata.to_dict(), f, indent=2)
+
+
+def delete_issue_metadata(encoded_path: str, issue_number: int) -> bool:
+    """
+    Delete sidecar metadata for an issue.
+
+    Checks both local and global locations.
+    Returns True if a file existed and was deleted.
+    """
+    deleted = False
+
+    # Try local repo .clump/issues/
+    repo_path = decode_path(encoded_path)
+    local_issues_dir = Path(repo_path) / ".clump" / "issues"
+    local_sidecar_path = local_issues_dir / f"{issue_number}.json"
+
+    if local_sidecar_path.exists():
+        local_sidecar_path.unlink()
+        deleted = True
+
+    # Also try global ~/.clump/projects/{encoded-path}/issues/
+    global_issues_dir = get_clump_projects_dir() / encoded_path / "issues"
+    global_sidecar_path = global_issues_dir / f"{issue_number}.json"
+
+    if global_sidecar_path.exists():
+        global_sidecar_path.unlink()
+        deleted = True
+
+    return deleted
+
+
+def list_issue_metadata(encoded_path: str) -> list[IssueMetadata]:
+    """
+    List all issue metadata for a repo.
+
+    Merges metadata from both local repo .clump/issues/ and ~/.clump/projects/.
+    Local metadata takes precedence for duplicate issue numbers.
+
+    Args:
+        encoded_path: The encoded path directory name
+
+    Returns:
+        List of IssueMetadata objects for all issues with metadata.
+    """
+    metadata_by_issue: dict[int, IssueMetadata] = {}
+
+    # First, load from global ~/.clump/projects/{encoded-path}/issues/
+    global_issues_dir = get_clump_projects_dir() / encoded_path / "issues"
+    if global_issues_dir.exists():
+        try:
+            for json_file in global_issues_dir.glob("*.json"):
+                try:
+                    with open(json_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        meta = IssueMetadata.from_dict(data)
+                        metadata_by_issue[meta.issue_number] = meta
+                except (json.JSONDecodeError, IOError, KeyError):
+                    continue
+        except OSError:
+            pass
+
+    # Then, load from local repo .clump/issues/ (overrides global)
+    repo_path = decode_path(encoded_path)
+    local_issues_dir = Path(repo_path) / ".clump" / "issues"
+    if local_issues_dir.exists():
+        try:
+            for json_file in local_issues_dir.glob("*.json"):
+                try:
+                    with open(json_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        meta = IssueMetadata.from_dict(data)
+                        metadata_by_issue[meta.issue_number] = meta
+                except (json.JSONDecodeError, IOError, KeyError):
+                    continue
+        except OSError:
+            pass
+
+    return list(metadata_by_issue.values())
+
+
+# ==========================================
+# PR Metadata Operations
+# ==========================================
+
+def get_local_prs_dir(repo_path: str) -> Path:
+    """
+    Get the local PRs metadata directory for a repo.
+
+    Returns {repo_path}/.clump/prs/ and creates it if needed.
+    This is the primary location for PR metadata (works with Claude sandbox).
+    """
+    prs_dir = Path(repo_path) / ".clump" / "prs"
+    prs_dir.mkdir(parents=True, exist_ok=True)
+    return prs_dir
+
+
+def get_clump_prs_dir(encoded_path: str) -> Path:
+    """
+    Get the global PRs metadata directory for a specific encoded path.
+
+    Returns ~/.clump/projects/{encoded-path}/prs/ and creates it if needed.
+    This is the fallback location for PR metadata.
+    """
+    prs_dir = get_clump_projects_dir() / encoded_path / "prs"
+    prs_dir.mkdir(parents=True, exist_ok=True)
+    return prs_dir
+
+
+def get_pr_metadata(encoded_path: str, pr_number: int) -> Optional[PRMetadata]:
+    """
+    Read sidecar metadata for a PR.
+
+    Checks local repo .clump/prs/ first, then falls back to ~/.clump/projects/.
+
+    Args:
+        encoded_path: The encoded path directory name
+        pr_number: The GitHub PR number
+
+    Returns:
+        PRMetadata if sidecar exists, None otherwise.
+    """
+    # Primary: check local repo .clump/prs/
+    repo_path = decode_path(encoded_path)
+    local_prs_dir = Path(repo_path) / ".clump" / "prs"
+    local_sidecar_path = local_prs_dir / f"{pr_number}.json"
+
+    if local_sidecar_path.exists():
+        try:
+            with open(local_sidecar_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return PRMetadata.from_dict(data)
+        except (json.JSONDecodeError, IOError, KeyError):
+            pass
+
+    # Fallback: check ~/.clump/projects/{encoded-path}/prs/
+    global_prs_dir = get_clump_projects_dir() / encoded_path / "prs"
+    global_sidecar_path = global_prs_dir / f"{pr_number}.json"
+
+    if global_sidecar_path.exists():
+        try:
+            with open(global_sidecar_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return PRMetadata.from_dict(data)
+        except (json.JSONDecodeError, IOError, KeyError):
+            pass
+
+    return None
+
+
+def save_pr_metadata(encoded_path: str, pr_number: int, metadata: PRMetadata) -> None:
+    """
+    Save sidecar metadata for a PR.
+
+    Saves to local repo .clump/prs/ (primary location).
+
+    Args:
+        encoded_path: The encoded path directory name
+        pr_number: The GitHub PR number
+        metadata: The metadata to save
+    """
+    repo_path = decode_path(encoded_path)
+    prs_dir = get_local_prs_dir(repo_path)
+    sidecar_path = prs_dir / f"{pr_number}.json"
+
+    with open(sidecar_path, 'w', encoding='utf-8') as f:
+        json.dump(metadata.to_dict(), f, indent=2)
+
+
+def delete_pr_metadata(encoded_path: str, pr_number: int) -> bool:
+    """
+    Delete sidecar metadata for a PR.
+
+    Checks both local and global locations.
+    Returns True if a file existed and was deleted.
+    """
+    deleted = False
+
+    # Try local repo .clump/prs/
+    repo_path = decode_path(encoded_path)
+    local_prs_dir = Path(repo_path) / ".clump" / "prs"
+    local_sidecar_path = local_prs_dir / f"{pr_number}.json"
+
+    if local_sidecar_path.exists():
+        local_sidecar_path.unlink()
+        deleted = True
+
+    # Also try global ~/.clump/projects/{encoded-path}/prs/
+    global_prs_dir = get_clump_projects_dir() / encoded_path / "prs"
+    global_sidecar_path = global_prs_dir / f"{pr_number}.json"
+
+    if global_sidecar_path.exists():
+        global_sidecar_path.unlink()
+        deleted = True
+
+    return deleted
+
+
+def list_pr_metadata(encoded_path: str) -> list[PRMetadata]:
+    """
+    List all PR metadata for a repo.
+
+    Merges metadata from both local repo .clump/prs/ and ~/.clump/projects/.
+    Local metadata takes precedence for duplicate PR numbers.
+
+    Args:
+        encoded_path: The encoded path directory name
+
+    Returns:
+        List of PRMetadata objects for all PRs with metadata.
+    """
+    metadata_by_pr: dict[int, PRMetadata] = {}
+
+    # First, load from global ~/.clump/projects/{encoded-path}/prs/
+    global_prs_dir = get_clump_projects_dir() / encoded_path / "prs"
+    if global_prs_dir.exists():
+        try:
+            for json_file in global_prs_dir.glob("*.json"):
+                try:
+                    with open(json_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        meta = PRMetadata.from_dict(data)
+                        metadata_by_pr[meta.pr_number] = meta
+                except (json.JSONDecodeError, IOError, KeyError):
+                    continue
+        except OSError:
+            pass
+
+    # Then, load from local repo .clump/prs/ (overrides global)
+    repo_path = decode_path(encoded_path)
+    local_prs_dir = Path(repo_path) / ".clump" / "prs"
+    if local_prs_dir.exists():
+        try:
+            for json_file in local_prs_dir.glob("*.json"):
+                try:
+                    with open(json_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        meta = PRMetadata.from_dict(data)
+                        metadata_by_pr[meta.pr_number] = meta
+                except (json.JSONDecodeError, IOError, KeyError):
+                    continue
+        except OSError:
+            pass
+
+    return list(metadata_by_pr.values())
 
 
 def match_encoded_path_to_repo(encoded_path: str) -> Optional[RepoInfo]:

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import { Group, Panel } from 'react-resizable-panels';
-import { useRepos, useIssues, usePRs, useProcesses, useSessions, useActiveSessions, useTags, useIssueTags, useCommands, useSessionCounts, useStats, buildPromptFromTemplate, exportSession, downloadExport } from './hooks/useApi';
+import { useRepos, useIssues, usePRs, useProcesses, useSessions, useActiveSessions, useTags, useIssueTags, useIssueMetadata, usePRMetadata, useCommands, useSessionCounts, useStats, buildPromptFromTemplate, exportSession, downloadExport } from './hooks/useApi';
 import { useNotifications } from './hooks/useNotifications';
 import { useLayoutMode } from './hooks/useLayoutMode';
 import { useWebSocketManager } from './contexts/WebSocketContext';
@@ -17,10 +17,11 @@ import { Settings } from './components/Settings';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { CommandPalette, type Command } from './components/CommandPalette';
 import { ResizeHandle } from './components/ResizeHandle';
-import type { Repo, Issue, PR, SessionSummary, CommandMetadata, EntityLink } from './types';
+import type { Repo, SessionSummary, CommandMetadata, EntityLink } from './types';
 import type { SessionListFilters } from './components/SessionList';
 import { LRUCache } from './utils/cache';
 import { pluralize } from './utils/text';
+import { encodeRepoPath } from './utils/paths';
 
 type Tab = 'issues' | 'prs' | 'history' | 'schedules';
 
@@ -311,6 +312,8 @@ export default function App() {
 
   const { tags, createTag } = useTags(selectedRepo?.id ?? null);
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
+  const { metadataMap: issueMetadataMap } = useIssueMetadata(selectedRepo?.id ?? null);
+  const { metadataMap: prMetadataMap } = usePRMetadata(selectedRepo?.id ?? null);
   // Lazy-load PRs only when the PRs tab is active (perf optimization)
   const { prs, loading: prsLoading, error: prsError, refresh: refreshPRs, page: prsPage, totalPages: prsTotalPages, total: prsTotal, goToPage: goToPRsPage } = usePRs(selectedRepo?.id ?? null, prFilters, activeTab === 'prs');
   const { commands, refresh: refreshCommands } = useCommands(selectedRepo?.local_path);
@@ -393,12 +396,14 @@ export default function App() {
   // Handle initial state from WebSocket
   const handleInitialState = useCallback((event: { processes: Array<{ id: string; session_id: number | null; working_dir: string; created_at: string; claude_session_id?: string | null }> }) => {
     // Update processes from WebSocket initial state
+    // These are all PTY processes (headless sessions don't appear in this list)
     setProcesses(event.processes.map(p => ({
       id: p.id,
       session_id: p.session_id,
       working_dir: p.working_dir,
       created_at: p.created_at,
       claude_session_id: p.claude_session_id ?? null,
+      mode: 'pty' as const,
     })));
   }, [setProcesses]);
 
@@ -557,13 +562,15 @@ export default function App() {
   // 3. Repo is switched (handled in the repo change useEffect)
 
   const handleStartIssueSession = useCallback(
-    async (issue: Issue, command: CommandMetadata) => {
+    async (issue: { number: number; title: string; body: string }, command: CommandMetadata) => {
       if (!selectedRepo) return;
 
       const prompt = buildPromptFromTemplate(command.template, {
         number: issue.number,
         title: issue.title,
         body: issue.body,
+        encoded_path: encodeRepoPath(selectedRepo.local_path),
+        local_path: selectedRepo.local_path,
       });
 
       const title = `${command.name}: Issue #${issue.number}`;
@@ -589,7 +596,10 @@ export default function App() {
         pendingSessionsRef.current.set(process.claude_session_id, { title, entities });
       }
 
-      setActiveProcessId(process.id);
+      // Only set activeProcessId for PTY sessions (headless sessions have no PTY to connect to)
+      if (process.mode === 'pty') {
+        setActiveProcessId(process.id);
+      }
 
       // Add session to open tabs if claude_session_id is available
       if (process.claude_session_id) {
@@ -604,7 +614,7 @@ export default function App() {
   );
 
   const handleStartPRSession = useCallback(
-    async (pr: PR, command: CommandMetadata) => {
+    async (pr: { number: number; title: string; body: string; head_ref: string; base_ref: string }, command: CommandMetadata) => {
       if (!selectedRepo) return;
 
       const prompt = buildPromptFromTemplate(command.template, {
@@ -613,6 +623,8 @@ export default function App() {
         body: pr.body,
         head_ref: pr.head_ref,
         base_ref: pr.base_ref,
+        encoded_path: encodeRepoPath(selectedRepo.local_path),
+        local_path: selectedRepo.local_path,
       });
 
       const title = `${command.name}: PR #${pr.number}`;
@@ -637,7 +649,10 @@ export default function App() {
         pendingSessionsRef.current.set(process.claude_session_id, { title, entities });
       }
 
-      setActiveProcessId(process.id);
+      // Only set activeProcessId for PTY sessions (headless sessions have no PTY to connect to)
+      if (process.mode === 'pty') {
+        setActiveProcessId(process.id);
+      }
 
       // Add session to open tabs if claude_session_id is available
       if (process.claude_session_id) {
@@ -1652,6 +1667,7 @@ export default function App() {
                     processes={processes}
                     tags={tags}
                     issueTagsMap={issueTagsMap}
+                    issueMetadataMap={issueMetadataMap}
                     selectedTagId={selectedTagId}
                     onSelectTag={setSelectedTagId}
                     filters={issueFilters}
@@ -1759,6 +1775,8 @@ export default function App() {
             commands={commands}
             tags={tags}
             issueTagsMap={issueTagsMap}
+            issueMetadataMap={issueMetadataMap}
+            prMetadataMap={prMetadataMap}
             activeTabSessionId={activeTabSessionId}
             activeProcessId={activeProcessId}
             viewingSessionId={viewingSessionId}

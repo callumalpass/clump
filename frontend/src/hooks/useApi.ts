@@ -4,7 +4,8 @@ import type {
   SessionSummary, SessionDetail, SessionListResponse, EntityLink, EntityKind,
   ClaudeCodeSettings, ProcessCreateOptions, Tag, IssueTagsMap, GitHubLabel,
   CommandsResponse, CommandMetadata, SubsessionDetail,
-  RepoSessionCount, SessionCountsResponse, StatsResponse, BulkOperationResult
+  RepoSessionCount, SessionCountsResponse, StatsResponse, BulkOperationResult,
+  IssueMetadataMap, IssueMetadata, PRMetadataMap, PRMetadata
 } from '../types';
 import { formatLocalDate } from '../utils/time';
 
@@ -392,7 +393,10 @@ export function useProcesses() {
         resume_session: options?.resume_session,
       }),
     });
-    setProcesses((prev) => [...prev, process]);
+    // Only add PTY processes to the list (headless sessions have no PTY)
+    if (process.mode === 'pty') {
+      setProcesses((prev) => [...prev, process]);
+    }
     return process;
   };
 
@@ -928,6 +932,131 @@ export function useIssueTags(repoId: number | null) {
   };
 
   return { issueTagsMap, loading, refresh: () => refresh(), addTagToIssue, removeTagFromIssue };
+}
+
+// Issue Metadata (bulk loading for issue list - sidecar files written by Claude)
+export function useIssueMetadata(repoId: number | null) {
+  const [metadataMap, setMetadataMap] = useState<IssueMetadataMap>({});
+  const [loading, setLoading] = useState(repoId !== null);
+
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    if (!repoId) return;
+
+    try {
+      setLoading(true);
+      const data = await fetchJson<IssueMetadataMap>(
+        `${API_BASE}/repos/${repoId}/issue-metadata`,
+        { signal }
+      );
+      setMetadataMap(data);
+    } catch (e) {
+      if (isAbortError(e)) return;
+      console.error('Failed to fetch issue metadata:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [repoId]);
+
+  useEffect(() => {
+    if (!repoId) {
+      setMetadataMap({});
+      setLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setLoading(true);
+    refresh(controller.signal);
+
+    return () => controller.abort();
+  }, [repoId, refresh]);
+
+  const updateMetadata = async (issueNumber: number, update: Partial<IssueMetadata>) => {
+    if (!repoId) return;
+    const data = await fetchJson<IssueMetadata>(
+      `${API_BASE}/repos/${repoId}/issues/${issueNumber}/metadata`,
+      { method: 'PUT', body: JSON.stringify(update) }
+    );
+    setMetadataMap((prev) => ({ ...prev, [issueNumber]: data }));
+    return data;
+  };
+
+  const deleteMetadata = async (issueNumber: number) => {
+    if (!repoId) return;
+    await fetchJson(
+      `${API_BASE}/repos/${repoId}/issues/${issueNumber}/metadata`,
+      { method: 'DELETE' }
+    );
+    setMetadataMap((prev) => {
+      const next = { ...prev };
+      delete next[issueNumber];
+      return next;
+    });
+  };
+
+  return { metadataMap, loading, refresh: () => refresh(), updateMetadata, deleteMetadata };
+}
+
+// Fetch single issue metadata
+export async function fetchIssueMetadata(repoId: number, issueNumber: number): Promise<IssueMetadata | null> {
+  try {
+    return await fetchJson<IssueMetadata | null>(
+      `${API_BASE}/repos/${repoId}/issues/${issueNumber}/metadata`
+    );
+  } catch {
+    return null;
+  }
+}
+
+// PR Metadata hook
+export function usePRMetadata(repoId: number | null) {
+  const [metadataMap, setMetadataMap] = useState<PRMetadataMap>({});
+  const [loading, setLoading] = useState(repoId !== null);
+
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    if (!repoId) return;
+
+    try {
+      setLoading(true);
+      const data = await fetchJson<PRMetadataMap>(
+        `${API_BASE}/repos/${repoId}/pr-metadata`,
+        { signal }
+      );
+      setMetadataMap(data);
+    } catch (e) {
+      if (isAbortError(e)) return;
+      console.error('Failed to fetch PR metadata:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [repoId]);
+
+  useEffect(() => {
+    if (!repoId) {
+      setMetadataMap({});
+      setLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setLoading(true);
+    refresh(controller.signal);
+
+    return () => controller.abort();
+  }, [repoId, refresh]);
+
+  return { metadataMap, loading, refresh: () => refresh() };
+}
+
+// Fetch single PR metadata
+export async function fetchPRMetadata(repoId: number, prNumber: number): Promise<PRMetadata | null> {
+  try {
+    return await fetchJson<PRMetadata | null>(
+      `${API_BASE}/repos/${repoId}/prs/${prNumber}/metadata`
+    );
+  } catch {
+    return null;
+  }
 }
 
 // Session Entity Management

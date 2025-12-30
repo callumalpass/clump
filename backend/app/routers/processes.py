@@ -6,6 +6,7 @@ Sessions (the persistent records) are stored in per-repo databases.
 """
 
 import asyncio
+from uuid import uuid4
 
 # Default terminal dimensions (standard VT100 size)
 DEFAULT_TERMINAL_ROWS = 24
@@ -25,6 +26,7 @@ from app.db_helpers import get_repo_or_404
 from app.models import Session, SessionStatus, SessionEntity
 from app.services.session_manager import process_manager
 from app.services.event_manager import event_manager, EventType
+from app.services.headless_analyzer import headless_analyzer
 from app.storage import (
     get_repo_by_path,
     encode_path,
@@ -70,6 +72,160 @@ async def _emit_counts_changed():
     await event_manager.emit_counts_changed(counts)
 
 
+async def _run_headless_background(
+    repo_path: str,
+    session_db_id: int,
+    claude_session_id: str,
+    prompt: str,
+    allowed_tools: list[str] | None,
+    disallowed_tools: list[str] | None,
+    permission_mode: str | None,
+    max_turns: int | None,
+    model: str | None,
+):
+    """Background task to run headless analysis and update session on completion."""
+    try:
+        result = await headless_analyzer.analyze(
+            prompt=prompt,
+            working_dir=repo_path,
+            session_id=claude_session_id,
+            allowed_tools=allowed_tools,
+            disallowed_tools=disallowed_tools,
+            permission_mode=permission_mode,
+            max_turns=max_turns,
+            model=model,
+        )
+
+        # Update session with results
+        async with get_repo_db(repo_path) as db:
+            db_result = await db.execute(
+                select(Session).where(Session.id == session_db_id)
+            )
+            session = db_result.scalar_one_or_none()
+            if session:
+                session.status = (
+                    SessionStatus.COMPLETED.value if result.success
+                    else SessionStatus.FAILED.value
+                )
+                session.transcript = result.result
+                session.cost_usd = result.cost_usd
+                session.duration_ms = result.duration_ms
+                session.completed_at = datetime.now(timezone.utc)
+                await db.commit()
+
+        # Emit completion event
+        await event_manager.emit(EventType.SESSION_COMPLETED, {
+            "session_id": claude_session_id,
+            "repo_path": repo_path,
+            "end_time": datetime.now(timezone.utc).isoformat(),
+        })
+        await _emit_counts_changed()
+
+    except Exception as e:
+        logger.error(f"Headless session {claude_session_id} failed: {e}")
+        # Update session as failed
+        async with get_repo_db(repo_path) as db:
+            db_result = await db.execute(
+                select(Session).where(Session.id == session_db_id)
+            )
+            session = db_result.scalar_one_or_none()
+            if session:
+                session.status = SessionStatus.FAILED.value
+                session.completed_at = datetime.now(timezone.utc)
+                await db.commit()
+
+        await event_manager.emit(EventType.SESSION_COMPLETED, {
+            "session_id": claude_session_id,
+            "repo_path": repo_path,
+            "end_time": datetime.now(timezone.utc).isoformat(),
+        })
+        await _emit_counts_changed()
+
+    finally:
+        headless_analyzer.unregister_running(claude_session_id)
+
+
+async def _create_headless_session(data: "ProcessCreate", repo: dict) -> "ProcessResponse":
+    """Create a headless session for issue/PR analysis."""
+    # Generate session ID upfront so it's immediately trackable
+    claude_session_id = str(uuid4())
+    created_at = datetime.now(timezone.utc)
+
+    async with get_repo_db(repo["local_path"]) as db:
+        # Create session record
+        session = Session(
+            repo_id=repo["id"],
+            kind=data.kind,
+            title=data.title,
+            prompt=data.prompt or "",
+            status=SessionStatus.RUNNING.value,
+            claude_session_id=claude_session_id,
+        )
+        db.add(session)
+        await db.flush()
+
+        # Create entity links
+        for entity in data.entities:
+            session_entity = SessionEntity(
+                session_id=session.id,
+                repo_id=repo["id"],
+                entity_kind=entity.kind,
+                entity_number=entity.number,
+            )
+            db.add(session_entity)
+
+        await db.commit()
+        session_db_id = session.id
+
+    # Save sidecar metadata for transcript-first architecture
+    encoded = encode_path(repo["local_path"])
+    metadata = SessionMetadata(
+        session_id=claude_session_id,
+        title=data.title,
+        repo_path=repo["local_path"],
+        entities=[
+            EntityLink(kind=e.kind, number=e.number)
+            for e in data.entities
+        ],
+        created_at=created_at.isoformat(),
+    )
+    save_session_metadata(encoded, claude_session_id, metadata)
+
+    # Register as running before spawning background task
+    headless_analyzer.register_running(claude_session_id)
+
+    # Spawn background task to run analysis
+    asyncio.create_task(_run_headless_background(
+        repo_path=repo["local_path"],
+        session_db_id=session_db_id,
+        claude_session_id=claude_session_id,
+        prompt=data.prompt or "",
+        allowed_tools=data.allowed_tools,
+        disallowed_tools=data.disallowed_tools,
+        permission_mode=data.permission_mode,
+        max_turns=data.max_turns,
+        model=data.model,
+    ))
+
+    # Emit session created event
+    await event_manager.emit(EventType.SESSION_CREATED, {
+        "session_id": claude_session_id,
+        "repo_path": repo["local_path"],
+        "title": data.title,
+        "is_active": True,
+    })
+    await _emit_counts_changed()
+
+    return ProcessResponse(
+        id=claude_session_id,  # Use claude_session_id as the "process" ID for headless
+        working_dir=repo["local_path"],
+        created_at=created_at.isoformat(),
+        session_id=session_db_id,
+        claude_session_id=claude_session_id,
+        mode="headless",
+    )
+
+
 class EntityInput(BaseModel):
     kind: str  # "issue" or "pr"
     number: int
@@ -97,6 +253,7 @@ class ProcessResponse(BaseModel):
     created_at: str
     session_id: int | None
     claude_session_id: str | None = None
+    mode: str = "pty"  # "pty" or "headless"
 
 
 class ProcessListResponse(BaseModel):
@@ -105,9 +262,14 @@ class ProcessListResponse(BaseModel):
 
 @router.post("/processes", response_model=ProcessResponse)
 async def create_process(data: ProcessCreate):
-    """Create a new PTY process running Claude Code."""
+    """Create a new session - headless for issue/PR, PTY for custom."""
     repo = get_repo_or_404(data.repo_id)
 
+    # Route issue/PR sessions through headless mode
+    if data.kind in ("issue", "pr"):
+        return await _create_headless_session(data, repo)
+
+    # Custom sessions use PTY mode
     async with get_repo_db(repo["local_path"]) as db:
         # Create session record - need to commit to get auto-generated ID
         session = Session(

@@ -114,6 +114,22 @@ def _run_migrations(conn) -> None:
     except Exception:
         pass  # Column already exists
 
+    # Migration: Add cost_usd column to sessions (for headless session cost tracking)
+    try:
+        conn.execute(text(
+            "ALTER TABLE sessions ADD COLUMN cost_usd REAL"
+        ))
+    except Exception:
+        pass  # Column already exists
+
+    # Migration: Add duration_ms column to sessions (for headless session duration tracking)
+    try:
+        conn.execute(text(
+            "ALTER TABLE sessions ADD COLUMN duration_ms INTEGER"
+        ))
+    except Exception:
+        pass  # Column already exists
+
 
 async def init_repo_db(local_path: str) -> None:
     """

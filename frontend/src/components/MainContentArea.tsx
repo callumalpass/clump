@@ -16,6 +16,8 @@ import type {
   CommandMetadata,
   CommandsResponse,
   Tag,
+  IssueMetadataMap,
+  PRMetadataMap,
 } from '../types';
 
 // =============================================================================
@@ -62,6 +64,8 @@ export interface MainContentAreaProps {
   commands: CommandsResponse;
   tags: Tag[];
   issueTagsMap: Record<number, Tag[]>;
+  issueMetadataMap: IssueMetadataMap;
+  prMetadataMap: PRMetadataMap;
 
   // Session panel state
   activeTabSessionId: string | null;
@@ -70,7 +74,7 @@ export interface MainContentAreaProps {
   sessionViewModes: Record<string, ViewMode>;
 
   // Issue actions
-  onStartIssueSession: (issue: Issue, command: CommandMetadata) => void;
+  onStartIssueSession: (issue: { number: number; title: string; body: string }, command: CommandMetadata) => void;
   onSelectSession: (session: SessionSummary) => void;
   onContinueSession: (session: SessionSummary, prompt?: string) => Promise<void>;
   onAddTagToIssue: (issueNumber: number, tagId: number) => void;
@@ -78,7 +82,7 @@ export interface MainContentAreaProps {
   onCreateTag: (name: string, color?: string) => Promise<Tag | undefined>;
 
   // PR actions
-  onStartPRSession: (pr: PR, command: CommandMetadata) => void;
+  onStartPRSession: (pr: { number: number; title: string; body: string; head_ref: string; base_ref: string }, command: CommandMetadata) => void;
 
   // Schedule actions
   onScheduleDeleted: () => void;
@@ -225,8 +229,7 @@ function WelcomeState() {
     <div className="flex-1 flex items-center justify-center p-8 empty-state-pattern">
       <div className="text-center p-8 rounded-xl bg-gray-800/40 border border-gray-750/50 max-w-md empty-state-enter">
         {/* Logo/Icon */}
-        <div className="relative w-20 h-20 rounded-full bg-gradient-to-br from-blurple-500/20 to-mint-500/20 flex items-center justify-center mx-auto mb-6 empty-state-icon-float cursor-pointer">
-          <span className="empty-state-tooltip">let's gooo!</span>
+        <div className="relative w-20 h-20 rounded-full bg-gradient-to-br from-blurple-500/20 to-mint-500/20 flex items-center justify-center mx-auto mb-6">
           <svg className="w-10 h-10 text-blurple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
@@ -342,7 +345,6 @@ function EmptyState({ activeTab, listEmpty, listError, onTabChange }: EmptyState
         <div className="text-center p-8 rounded-xl bg-danger-500/5 border border-danger-500/20 max-w-md empty-state-enter">
           {/* Error icon */}
           <div className="relative w-16 h-16 rounded-full bg-danger-500/10 flex items-center justify-center mx-auto mb-5 empty-state-icon-float cursor-pointer">
-            <span className="empty-state-tooltip">oopsie!</span>
             <svg className="w-8 h-8 text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
@@ -373,18 +375,11 @@ function EmptyState({ activeTab, listEmpty, listError, onTabChange }: EmptyState
   // If the list has items, show a minimal "select an item" prompt
   // If the list is empty, show the full empty state with navigation shortcuts
   if (!listEmpty) {
-    const tooltips = {
-      issues: 'pick one!',
-      prs: 'review time!',
-      history: 'memories...',
-      schedules: 'automate it!',
-    };
     return (
       <div className="flex-1 flex items-center justify-center p-8 empty-state-pattern">
         <div className="text-center empty-state-enter">
           {/* Subtle icon */}
-          <div className="relative w-12 h-12 rounded-full bg-gray-800/60 flex items-center justify-center mx-auto mb-3 empty-state-icon-float cursor-pointer">
-            <span className="empty-state-tooltip">{tooltips[activeTab]}</span>
+          <div className="relative w-12 h-12 rounded-full bg-gray-800/60 flex items-center justify-center mx-auto mb-3">
             {content.icon}
           </div>
           {/* Simple prompt */}
@@ -396,18 +391,11 @@ function EmptyState({ activeTab, listEmpty, listError, onTabChange }: EmptyState
   }
 
   // Full empty state for when the list is truly empty
-  const emptyTooltips = {
-    issues: 'so peaceful!',
-    prs: 'nothing to review',
-    history: 'fresh start!',
-    schedules: 'set one up!',
-  };
   return (
     <div className="flex-1 flex items-center justify-center p-8 empty-state-pattern">
       <div className="text-center p-8 rounded-xl bg-gray-800/40 border border-gray-750/50 max-w-lg empty-state-enter">
         {/* Icon */}
-        <div className="relative w-16 h-16 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-5 empty-state-icon-float cursor-pointer">
-          <span className="empty-state-tooltip">{emptyTooltips[activeTab]}</span>
+        <div className="relative w-16 h-16 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-5">
           {content.icon}
         </div>
 
@@ -466,6 +454,8 @@ export function MainContentArea(props: MainContentAreaProps) {
     commands,
     tags,
     issueTagsMap,
+    issueMetadataMap,
+    prMetadataMap,
     activeTabSessionId,
     activeProcessId,
     viewingSessionId,
@@ -556,9 +546,8 @@ export function MainContentArea(props: MainContentAreaProps) {
         repoId={selectedRepo.id}
         issueNumber={issueNumber}
         issueCommands={commands.issue}
-        onStartSession={(command) => {
-          const issue = issues.find((i) => i.number === issueNumber);
-          if (issue) onStartIssueSession(issue, command);
+        onStartSession={(issue, command) => {
+          onStartIssueSession(issue, command);
         }}
         sessions={sessions}
         processes={processes}
@@ -566,6 +555,7 @@ export function MainContentArea(props: MainContentAreaProps) {
         onContinueSession={onContinueSession}
         tags={tags}
         issueTags={issueTagsMap[issueNumber] || []}
+        issueMetadata={issueMetadataMap[issueNumber]}
         onAddTag={(tagId) => onAddTagToIssue(issueNumber, tagId)}
         onRemoveTag={(tagId) => onRemoveTagFromIssue(issueNumber, tagId)}
         onCreateTag={onCreateTag}
@@ -581,14 +571,14 @@ export function MainContentArea(props: MainContentAreaProps) {
         repoId={selectedRepo.id}
         prNumber={prNumber}
         prCommands={commands.pr}
-        onStartSession={(command) => {
-          const pr = prs.find((p) => p.number === prNumber);
-          if (pr) onStartPRSession(pr, command);
+        onStartSession={(pr, command) => {
+          onStartPRSession(pr, command);
         }}
         sessions={sessions}
         processes={processes}
         onSelectSession={onSelectSession}
         onContinueSession={onContinueSession}
+        prMetadata={prMetadataMap[prNumber]}
       />
     );
   };

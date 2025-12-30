@@ -1,5 +1,5 @@
 import { useState, useEffect, memo } from 'react';
-import type { PRDetail as PRDetailType, SessionSummary, Process, CommandMetadata } from '../types';
+import type { PRDetail as PRDetailType, SessionSummary, Process, CommandMetadata, PRMetadata } from '../types';
 import { fetchPR } from '../hooks/useApi';
 import { Markdown } from './Markdown';
 import { PRStartSessionButton } from './PRStartSessionButton';
@@ -66,11 +66,12 @@ interface PRDetailProps {
   repoId: number;
   prNumber: number;
   prCommands: CommandMetadata[];
-  onStartSession: (command: CommandMetadata) => void;
+  onStartSession: (pr: { number: number; title: string; body: string; head_ref: string; base_ref: string }, command: CommandMetadata) => void;
   sessions?: SessionSummary[];
   processes?: Process[];
   onSelectSession?: (session: SessionSummary) => void;
   onContinueSession?: (session: SessionSummary) => void;
+  prMetadata?: PRMetadata | null;
 }
 
 export function PRDetail({
@@ -82,6 +83,7 @@ export function PRDetail({
   processes = [],
   onSelectSession,
   onContinueSession,
+  prMetadata,
 }: PRDetailProps) {
   const [pr, setPR] = useState<PRDetailType | null>(null);
   const [loading, setLoading] = useState(true);
@@ -218,7 +220,7 @@ export function PRDetail({
         <PRStartSessionButton
           pr={pr}
           commands={prCommands}
-          onStart={(_, command) => onStartSession(command)}
+          onStart={(_, command) => onStartSession({ number: pr.number, title: pr.title, body: pr.body, head_ref: pr.head_ref, base_ref: pr.base_ref }, command)}
           size="md"
           className="shrink-0"
         />
@@ -237,6 +239,136 @@ export function PRDetail({
           )}
         </div>
       </div>
+
+      {/* AI Analysis */}
+      {prMetadata && (prMetadata.risk || prMetadata.complexity || prMetadata.ai_summary || prMetadata.review_notes || prMetadata.suggested_improvements) && (
+        <div className="mb-6">
+          <h3 className="text-lg font-medium text-white mb-3 flex items-center gap-2">
+            <svg className="w-5 h-5 text-blurple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+            AI Analysis
+          </h3>
+          <div className="bg-gray-800 rounded-lg p-4 space-y-4">
+            {/* Assessment badges */}
+            {(prMetadata.risk || prMetadata.complexity || prMetadata.review_priority || prMetadata.change_type || prMetadata.test_coverage) && (
+              <div className="flex flex-wrap gap-2">
+                {prMetadata.review_priority && (
+                  <span className={`px-2.5 py-1 text-xs font-medium rounded-stoody-lg ${
+                    prMetadata.review_priority === 'critical' ? 'bg-red-500/20 text-red-400' :
+                    prMetadata.review_priority === 'high' ? 'bg-orange-500/20 text-orange-400' :
+                    prMetadata.review_priority === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                    'bg-gray-500/20 text-gray-400'
+                  }`}>
+                    Priority: {prMetadata.review_priority}
+                  </span>
+                )}
+                {prMetadata.complexity && (
+                  <span className={`px-2.5 py-1 text-xs font-medium rounded-stoody-lg ${
+                    prMetadata.complexity === 'trivial' ? 'bg-mint-400/20 text-mint-400' :
+                    prMetadata.complexity === 'simple' ? 'bg-green-500/20 text-green-400' :
+                    prMetadata.complexity === 'moderate' ? 'bg-yellow-500/20 text-yellow-400' :
+                    'bg-red-500/20 text-red-400'
+                  }`}>
+                    Complexity: {prMetadata.complexity}
+                  </span>
+                )}
+                {prMetadata.risk && (
+                  <span className={`px-2.5 py-1 text-xs font-medium rounded-stoody-lg ${
+                    prMetadata.risk === 'low' ? 'bg-green-500/20 text-green-400' :
+                    prMetadata.risk === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                    'bg-red-500/20 text-red-400'
+                  }`}>
+                    Risk: {prMetadata.risk}
+                  </span>
+                )}
+                {prMetadata.change_type && (
+                  <span className="px-2.5 py-1 text-xs font-medium rounded-stoody-lg bg-blurple-500/20 text-blurple-400">
+                    Type: {prMetadata.change_type}
+                  </span>
+                )}
+                {prMetadata.test_coverage && (
+                  <span className={`px-2.5 py-1 text-xs font-medium rounded-stoody-lg ${
+                    prMetadata.test_coverage === 'good' ? 'bg-green-500/20 text-green-400' :
+                    prMetadata.test_coverage === 'partial' ? 'bg-yellow-500/20 text-yellow-400' :
+                    'bg-red-500/20 text-red-400'
+                  }`}>
+                    Tests: {prMetadata.test_coverage}
+                  </span>
+                )}
+                {prMetadata.breaking_changes && (
+                  <span className="px-2.5 py-1 text-xs font-medium rounded-stoody-lg bg-red-500/20 text-red-400">
+                    Breaking Changes
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Security concerns */}
+            {prMetadata.security_concerns && prMetadata.security_concerns.length > 0 && (
+              <div>
+                <div className="text-xs text-red-400 mb-1 flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  Security Concerns
+                </div>
+                <ul className="list-disc list-inside text-sm text-gray-300 space-y-1">
+                  {prMetadata.security_concerns.map((concern, i) => (
+                    <li key={i}>{concern}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Affected areas */}
+            {prMetadata.affected_areas && prMetadata.affected_areas.length > 0 && (
+              <div>
+                <div className="text-xs text-gray-400 mb-1">Affected Areas</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {prMetadata.affected_areas.map((area, i) => (
+                    <span key={i} className="px-2 py-0.5 text-xs bg-gray-700 text-gray-300 rounded">
+                      {area}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* AI Summary */}
+            {prMetadata.ai_summary && (
+              <div>
+                <div className="text-xs text-gray-400 mb-1">Summary</div>
+                <p className="text-sm text-gray-300">{prMetadata.ai_summary}</p>
+              </div>
+            )}
+
+            {/* Review Notes */}
+            {prMetadata.review_notes && (
+              <div>
+                <div className="text-xs text-gray-400 mb-1">Review Notes</div>
+                <p className="text-sm text-gray-300">{prMetadata.review_notes}</p>
+              </div>
+            )}
+
+            {/* Suggested Improvements */}
+            {prMetadata.suggested_improvements && (
+              <div>
+                <div className="text-xs text-gray-400 mb-1">Suggested Improvements</div>
+                <p className="text-sm text-gray-300">{prMetadata.suggested_improvements}</p>
+              </div>
+            )}
+
+            {/* Analyzed info */}
+            {prMetadata.analyzed_at && (
+              <div className="text-xs text-gray-500 pt-2 border-t border-gray-700">
+                Analyzed {getTimeWithTooltip(prMetadata.analyzed_at).relative}
+                {prMetadata.analyzed_by && ` by ${prMetadata.analyzed_by}`}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Related Sessions */}
       {prSessions.length > 0 && (

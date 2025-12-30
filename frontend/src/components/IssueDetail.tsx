@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { IssueDetail as IssueDetailType, SessionSummary, Tag, Process, CommandMetadata } from '../types';
+import type { IssueDetail as IssueDetailType, SessionSummary, Tag, Process, CommandMetadata, IssueMetadata } from '../types';
 import { fetchIssue, closeIssue, reopenIssue } from '../hooks/useApi';
 import { Markdown } from './Markdown';
 import { StartSessionButton } from './StartSessionButton';
@@ -11,13 +11,14 @@ interface IssueDetailProps {
   repoId: number;
   issueNumber: number;
   issueCommands: CommandMetadata[];
-  onStartSession: (command: CommandMetadata) => void;
+  onStartSession: (issue: { number: number; title: string; body: string }, command: CommandMetadata) => void;
   sessions?: SessionSummary[];
   processes?: Process[];
   onSelectSession?: (session: SessionSummary) => void;
   onContinueSession?: (session: SessionSummary) => void;
   tags?: Tag[];
   issueTags?: Tag[];
+  issueMetadata?: IssueMetadata | null;
   onAddTag?: (tagId: number) => void;
   onRemoveTag?: (tagId: number) => void;
   onCreateTag?: (name: string, color?: string) => Promise<Tag | undefined>;
@@ -34,6 +35,7 @@ export function IssueDetail({
   onContinueSession,
   tags = [],
   issueTags = [],
+  issueMetadata,
   onAddTag,
   onRemoveTag,
   onCreateTag,
@@ -367,7 +369,7 @@ export function IssueDetail({
         <StartSessionButton
           issue={{ number: issue.number, title: issue.title, body: issue.body || '' }}
           commands={issueCommands}
-          onStart={(_, command) => onStartSession(command)}
+          onStart={(_, command) => onStartSession({ number: issue.number, title: issue.title, body: issue.body || '' }, command)}
           size="md"
           className="shrink-0"
         />
@@ -386,6 +388,114 @@ export function IssueDetail({
           )}
         </div>
       </div>
+
+      {/* AI Analysis */}
+      {issueMetadata && (issueMetadata.priority || issueMetadata.difficulty || issueMetadata.ai_summary || issueMetadata.root_cause || issueMetadata.suggested_fix) && (
+        <div className="mb-6">
+          <h3 className="text-lg font-medium text-white mb-3 flex items-center gap-2">
+            <svg className="w-5 h-5 text-blurple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+            AI Analysis
+          </h3>
+          <div className="bg-gray-800 rounded-lg p-4 space-y-4">
+            {/* Assessment badges */}
+            {(issueMetadata.priority || issueMetadata.difficulty || issueMetadata.risk || issueMetadata.type) && (
+              <div className="flex flex-wrap gap-2">
+                {issueMetadata.priority && (
+                  <span className={`px-2.5 py-1 text-xs font-medium rounded-stoody-lg ${
+                    issueMetadata.priority === 'critical' ? 'bg-red-500/20 text-red-400' :
+                    issueMetadata.priority === 'high' ? 'bg-orange-500/20 text-orange-400' :
+                    issueMetadata.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                    'bg-gray-500/20 text-gray-400'
+                  }`}>
+                    Priority: {issueMetadata.priority}
+                  </span>
+                )}
+                {issueMetadata.difficulty && (
+                  <span className={`px-2.5 py-1 text-xs font-medium rounded-stoody-lg ${
+                    issueMetadata.difficulty === 'trivial' ? 'bg-mint-400/20 text-mint-400' :
+                    issueMetadata.difficulty === 'easy' ? 'bg-green-500/20 text-green-400' :
+                    issueMetadata.difficulty === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                    issueMetadata.difficulty === 'hard' ? 'bg-orange-500/20 text-orange-400' :
+                    'bg-red-500/20 text-red-400'
+                  }`}>
+                    Difficulty: {issueMetadata.difficulty}
+                  </span>
+                )}
+                {issueMetadata.risk && (
+                  <span className={`px-2.5 py-1 text-xs font-medium rounded-stoody-lg ${
+                    issueMetadata.risk === 'low' ? 'bg-green-500/20 text-green-400' :
+                    issueMetadata.risk === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                    'bg-red-500/20 text-red-400'
+                  }`}>
+                    Risk: {issueMetadata.risk}
+                  </span>
+                )}
+                {issueMetadata.type && (
+                  <span className="px-2.5 py-1 text-xs font-medium rounded-stoody-lg bg-blurple-500/20 text-blurple-400">
+                    Type: {issueMetadata.type}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Affected areas */}
+            {issueMetadata.affected_areas && issueMetadata.affected_areas.length > 0 && (
+              <div>
+                <div className="text-xs text-gray-400 mb-1">Affected Areas</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {issueMetadata.affected_areas.map((area, i) => (
+                    <span key={i} className="px-2 py-0.5 text-xs bg-gray-700 text-gray-300 rounded">
+                      {area}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* AI Summary */}
+            {issueMetadata.ai_summary && (
+              <div>
+                <div className="text-xs text-gray-400 mb-1">Summary</div>
+                <p className="text-sm text-gray-300">{issueMetadata.ai_summary}</p>
+              </div>
+            )}
+
+            {/* Root Cause */}
+            {issueMetadata.root_cause && (
+              <div>
+                <div className="text-xs text-gray-400 mb-1">Root Cause</div>
+                <p className="text-sm text-gray-300">{issueMetadata.root_cause}</p>
+              </div>
+            )}
+
+            {/* Suggested Fix */}
+            {issueMetadata.suggested_fix && (
+              <div>
+                <div className="text-xs text-gray-400 mb-1">Suggested Fix</div>
+                <p className="text-sm text-gray-300">{issueMetadata.suggested_fix}</p>
+              </div>
+            )}
+
+            {/* Notes */}
+            {issueMetadata.notes && (
+              <div>
+                <div className="text-xs text-gray-400 mb-1">Notes</div>
+                <p className="text-sm text-gray-300">{issueMetadata.notes}</p>
+              </div>
+            )}
+
+            {/* Analyzed info */}
+            {issueMetadata.analyzed_at && (
+              <div className="text-xs text-gray-500 pt-2 border-t border-gray-700">
+                Analyzed {getTimeWithTooltip(issueMetadata.analyzed_at).relative}
+                {issueMetadata.analyzed_by && ` by ${issueMetadata.analyzed_by}`}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Related Sessions */}
       {issueSessions.length > 0 && (

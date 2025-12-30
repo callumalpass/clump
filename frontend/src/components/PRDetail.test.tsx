@@ -87,6 +87,7 @@ function createMockProcess(overrides: Partial<Process> = {}): Process {
     created_at: '2024-01-16T11:00:00Z',
     session_id: null,
     claude_session_id: 'session-abc123',
+    mode: 'pty',
     ...overrides,
   };
 }

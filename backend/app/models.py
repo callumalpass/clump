@@ -7,7 +7,7 @@ These models are for the per-repo data stored in ~/.clump/projects/{hash}/data.d
 
 from datetime import datetime, timezone
 from enum import Enum
-from sqlalchemy import String, Text, DateTime, ForeignKey, Integer, Index
+from sqlalchemy import String, Text, DateTime, ForeignKey, Integer, Index, Float
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -54,6 +54,8 @@ class Session(Base):
     process_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     claude_session_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     scheduled_job_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # ID of schedule that created this
+    cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)  # Total cost from headless sessions
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Duration from headless sessions
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
