@@ -45,7 +45,7 @@ export interface DetailPaneProps {
   prMetadataMap: PRMetadataMap;
 
   // Issue actions
-  onStartIssueSession: (issue: { number: number; title: string; body: string }, command: CommandMetadata) => void;
+  onStartIssueSession: (issue: { number: number; title: string; body: string; author: string }, command: CommandMetadata) => void;
   onSelectSession: (session: SessionSummary) => void;
   onContinueSession: (session: SessionSummary, prompt?: string) => Promise<void>;
   onAddTagToIssue: (issueNumber: number, tagId: number) => void;
@@ -53,7 +53,7 @@ export interface DetailPaneProps {
   onCreateTag: (name: string, color?: string) => Promise<Tag | undefined>;
 
   // PR actions
-  onStartPRSession: (pr: { number: number; title: string; body: string; head_ref: string; base_ref: string }, command: CommandMetadata) => void;
+  onStartPRSession: (pr: { number: number; title: string; body: string; author: string; head_ref: string; base_ref: string }, command: CommandMetadata) => void;
 
   // Schedule actions
   onScheduleDeleted: () => void;
