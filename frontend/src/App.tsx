@@ -341,8 +341,13 @@ export default function App() {
     refreshSessions();
   }, [refreshSessions]);
 
-  // Handle session completed - update is_active flag
-  const handleSessionCompleted = useCallback((_event: { session_id: string }) => {
+  // Handle session completed - close the tab and refresh
+  const handleSessionCompleted = useCallback((event: { session_id: string }) => {
+    // Close the session tab since right pane is for active sessions only
+    // This handles both PTY and headless sessions
+    setOpenSessionIds(prev => prev.filter(id => id !== event.session_id));
+    setActiveTabSessionId(prev => prev === event.session_id ? null : prev);
+
     refreshSessions();
     refreshSessionCounts();
   }, [refreshSessions, refreshSessionCounts]);
@@ -678,39 +683,25 @@ export default function App() {
     // Check if this session is active (has a running process)
     const activeProcess = session.is_active ? processesBySessionId.get(session.session_id) : null;
 
-    // Select the first linked issue or PR for context
-    const firstIssue = session.entities?.find(e => e.kind === 'issue');
-    const firstPR = session.entities?.find(e => e.kind === 'pr');
-
-    if (firstIssue) {
-      setSelectedIssue(firstIssue.number);
-      setSelectedPR(null);
-    } else if (firstPR) {
-      setSelectedPR(firstPR.number);
-      setSelectedIssue(null);
-    }
-
-    // Add session to open tabs
-    setOpenSessionIds(prev => prev.includes(session.session_id) ? prev : [...prev, session.session_id]);
-    setActiveTabSessionId(session.session_id);
-
     if (activeProcess) {
-      // Process is still running - open the terminal
+      // Active session - open in the right pane for interaction
+      // Select the first linked issue or PR for context
+      const firstIssue = session.entities?.find(e => e.kind === 'issue');
+      const firstPR = session.entities?.find(e => e.kind === 'pr');
+
+      if (firstIssue) {
+        setSelectedIssue(firstIssue.number);
+        setSelectedPR(null);
+      } else if (firstPR) {
+        setSelectedPR(firstPR.number);
+        setSelectedIssue(null);
+      }
+
+      // Add session to open tabs
+      setOpenSessionIds(prev => prev.includes(session.session_id) ? prev : [...prev, session.session_id]);
+      setActiveTabSessionId(session.session_id);
       setActiveProcessId(activeProcess.id);
       setViewingSessionId(null);
-    } else {
-      // Process ended - show transcript in details panel
-      setActiveProcessId(null);
-      setViewingSessionId(session.session_id);
-    }
-  }, [processesBySessionId]);
-
-  // Handle session selection from History list
-  // Active sessions open in right pane, completed sessions show in center pane
-  const handleSelectHistorySession = useCallback((session: SessionSummary) => {
-    if (session.is_active) {
-      // Active session - open in the right pane for interaction
-      handleSelectSession(session);
     } else {
       // Completed session - show in center pane's SessionDetail
       setSelectedSessionId(session.session_id);
@@ -718,7 +709,10 @@ export default function App() {
       setSelectedPR(null);
       setSelectedSchedule(null);
     }
-  }, [handleSelectSession]);
+  }, [processesBySessionId]);
+
+  // Handle session selection from History list (same behavior as handleSelectSession)
+  const handleSelectHistorySession = handleSelectSession;
 
   const handleContinueSession = useCallback(
     async (session: SessionSummary, prompt?: string) => {
