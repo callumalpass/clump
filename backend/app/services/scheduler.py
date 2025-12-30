@@ -350,11 +350,11 @@ class SchedulerService:
         return []
 
     async def _get_issues(self, job: ScheduledJob, repo: dict) -> list:
-        """Get issues matching the filter query."""
+        """Get all issues matching the filter query."""
         filters = parse_filter_query(job.filter_query)
 
         client = GitHubClient()
-        issues, _ = client.list_issues(
+        issues = client.list_all_issues(
             owner=repo["owner"],
             name=repo["name"],
             state=filters.get("state", "open"),
@@ -380,11 +380,11 @@ class SchedulerService:
         ]
 
     async def _get_prs(self, job: ScheduledJob, repo: dict) -> list:
-        """Get PRs matching the filter query."""
+        """Get all PRs matching the filter query."""
         filters = parse_filter_query(job.filter_query)
 
         client = GitHubClient()
-        prs, _ = client.list_prs(
+        prs = client.list_all_prs(
             owner=repo["owner"],
             name=repo["name"],
             state=filters.get("state", "open"),

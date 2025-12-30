@@ -179,6 +179,56 @@ class GitHubClient:
 
         return issues, total_count
 
+    def list_all_issues(
+        self,
+        owner: str,
+        name: str,
+        state: str = "open",
+        labels: list[str] | None = None,
+        search_query: str | None = None,
+        sort: str = "created",
+        order: str = "desc",
+    ) -> list[IssueData]:
+        """List ALL issues for a repository (fetches all pages).
+
+        Args:
+            owner: Repository owner
+            name: Repository name
+            state: Issue state - "open", "closed", or "all"
+            labels: List of label names to filter by
+            search_query: Text to search in issue title/body
+            sort: Sort field - "created", "updated", or "comments"
+            order: Sort order - "asc" or "desc"
+
+        Returns all matching issues.
+        """
+        # Build GitHub search query
+        query = f"repo:{owner}/{name} is:issue"
+
+        if state and state != "all":
+            query += f" state:{state}"
+
+        if labels:
+            for label in labels:
+                if " " in label:
+                    query += f' label:"{label}"'
+                else:
+                    query += f" label:{label}"
+
+        if search_query:
+            query = f"{search_query} {query}"
+
+        sort, order = self._validate_sort_params(sort, order, ISSUE_SORT_FIELDS)
+
+        results = self._github.search_issues(query, sort=sort, order=order)
+
+        # Fetch all issues from the paginated results
+        issues = []
+        for issue in results:
+            issues.append(self._issue_to_data(issue))
+
+        return issues
+
     def get_issue(self, owner: str, name: str, number: int) -> IssueData:
         """Get a single issue with comments."""
         repo = self.get_repo(owner, name)
@@ -272,6 +322,48 @@ class GitHubClient:
             prs.append(self._pr_to_data(pr))
 
         return prs, total_count
+
+    def list_all_prs(
+        self,
+        owner: str,
+        name: str,
+        state: str = "open",
+        search_query: str | None = None,
+        sort: str = "created",
+        order: str = "desc",
+    ) -> list[PRData]:
+        """List ALL pull requests for a repository (fetches all pages).
+
+        Args:
+            owner: Repository owner
+            name: Repository name
+            state: PR state - "open", "closed", or "all"
+            search_query: Text to search in PR title/body
+            sort: Sort field - "created" or "updated"
+            order: Sort order - "asc" or "desc"
+
+        Returns all matching PRs.
+        """
+        query = f"repo:{owner}/{name} is:pr"
+
+        if state and state != "all":
+            query += f" state:{state}"
+
+        if search_query:
+            query = f"{search_query} {query}"
+
+        sort, order = self._validate_sort_params(sort, order, PR_SORT_FIELDS)
+
+        results = self._github.search_issues(query, sort=sort, order=order)
+
+        # Fetch all PRs from the paginated results
+        prs = []
+        repo = self.get_repo(owner, name)
+        for issue in results:
+            pr = repo.get_pull(issue.number)
+            prs.append(self._pr_to_data(pr))
+
+        return prs
 
     def get_pr(self, owner: str, name: str, number: int) -> PRData:
         """Get a single pull request with comments."""
