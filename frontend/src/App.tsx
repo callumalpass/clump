@@ -328,12 +328,19 @@ export default function App() {
   }, [sessions]);
 
   // Event-driven updates from WebSocket
-  // Handle session created - add to list and refresh counts
-  const handleSessionCreated = useCallback(() => {
+  // Handle session created - add to list, refresh counts, and open tab for active sessions
+  const handleSessionCreated = useCallback((event: { session_id: string; repo_path: string; title: string; is_active: boolean }) => {
     // Refresh the session list to pick up the new session
     refreshSessions();
     refreshSessionCounts();
-  }, [refreshSessions, refreshSessionCounts]);
+
+    // If this is an active session for the current repo, open it in a tab
+    // This handles sessions started via "run now" on schedules, headless analysis, etc.
+    if (event.is_active && selectedRepo?.local_path && event.repo_path === selectedRepo.local_path) {
+      setOpenSessionIds(prev => prev.includes(event.session_id) ? prev : [...prev, event.session_id]);
+      setActiveTabSessionId(event.session_id);
+    }
+  }, [refreshSessions, refreshSessionCounts, selectedRepo?.local_path]);
 
   // Handle session updated - update the session in list
   const handleSessionUpdated = useCallback((_event: { session_id: string; changes: Record<string, unknown> }) => {
