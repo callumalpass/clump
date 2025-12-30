@@ -11,7 +11,7 @@ interface IssueDetailProps {
   repoId: number;
   issueNumber: number;
   issueCommands: CommandMetadata[];
-  onStartSession: (issue: { number: number; title: string; body: string }, command: CommandMetadata) => void;
+  onStartSession: (issue: { number: number; title: string; body: string; author: string }, command: CommandMetadata) => void;
   sessions?: SessionSummary[];
   processes?: Process[];
   onSelectSession?: (session: SessionSummary) => void;
@@ -369,7 +369,7 @@ export function IssueDetail({
         <StartSessionButton
           issue={{ number: issue.number, title: issue.title, body: issue.body || '' }}
           commands={issueCommands}
-          onStart={(_, command) => onStartSession({ number: issue.number, title: issue.title, body: issue.body || '' }, command)}
+          onStart={(_, command) => onStartSession({ number: issue.number, title: issue.title, body: issue.body || '', author: issue.author }, command)}
           size="md"
           className="shrink-0"
         />
@@ -458,7 +458,7 @@ export function IssueDetail({
             {issueMetadata.ai_summary && (
               <div>
                 <div className="text-xs text-gray-400 mb-1">Summary</div>
-                <p className="text-sm text-gray-300">{issueMetadata.ai_summary}</p>
+                <div className="text-sm text-gray-300"><Markdown>{issueMetadata.ai_summary}</Markdown></div>
               </div>
             )}
 
@@ -466,7 +466,7 @@ export function IssueDetail({
             {issueMetadata.root_cause && (
               <div>
                 <div className="text-xs text-gray-400 mb-1">Root Cause</div>
-                <p className="text-sm text-gray-300">{issueMetadata.root_cause}</p>
+                <div className="text-sm text-gray-300"><Markdown>{issueMetadata.root_cause}</Markdown></div>
               </div>
             )}
 
@@ -474,7 +474,7 @@ export function IssueDetail({
             {issueMetadata.suggested_fix && (
               <div>
                 <div className="text-xs text-gray-400 mb-1">Suggested Fix</div>
-                <p className="text-sm text-gray-300">{issueMetadata.suggested_fix}</p>
+                <div className="text-sm text-gray-300"><Markdown>{issueMetadata.suggested_fix}</Markdown></div>
               </div>
             )}
 
@@ -482,7 +482,7 @@ export function IssueDetail({
             {issueMetadata.notes && (
               <div>
                 <div className="text-xs text-gray-400 mb-1">Notes</div>
-                <p className="text-sm text-gray-300">{issueMetadata.notes}</p>
+                <div className="text-sm text-gray-300"><Markdown>{issueMetadata.notes}</Markdown></div>
               </div>
             )}
 

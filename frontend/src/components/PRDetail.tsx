@@ -66,7 +66,7 @@ interface PRDetailProps {
   repoId: number;
   prNumber: number;
   prCommands: CommandMetadata[];
-  onStartSession: (pr: { number: number; title: string; body: string; head_ref: string; base_ref: string }, command: CommandMetadata) => void;
+  onStartSession: (pr: { number: number; title: string; body: string; author: string; head_ref: string; base_ref: string }, command: CommandMetadata) => void;
   sessions?: SessionSummary[];
   processes?: Process[];
   onSelectSession?: (session: SessionSummary) => void;
@@ -220,7 +220,7 @@ export function PRDetail({
         <PRStartSessionButton
           pr={pr}
           commands={prCommands}
-          onStart={(_, command) => onStartSession({ number: pr.number, title: pr.title, body: pr.body, head_ref: pr.head_ref, base_ref: pr.base_ref }, command)}
+          onStart={(_, command) => onStartSession({ number: pr.number, title: pr.title, body: pr.body, author: pr.author, head_ref: pr.head_ref, base_ref: pr.base_ref }, command)}
           size="md"
           className="shrink-0"
         />
@@ -339,7 +339,7 @@ export function PRDetail({
             {prMetadata.ai_summary && (
               <div>
                 <div className="text-xs text-gray-400 mb-1">Summary</div>
-                <p className="text-sm text-gray-300">{prMetadata.ai_summary}</p>
+                <div className="text-sm text-gray-300"><Markdown>{prMetadata.ai_summary}</Markdown></div>
               </div>
             )}
 
@@ -347,7 +347,7 @@ export function PRDetail({
             {prMetadata.review_notes && (
               <div>
                 <div className="text-xs text-gray-400 mb-1">Review Notes</div>
-                <p className="text-sm text-gray-300">{prMetadata.review_notes}</p>
+                <div className="text-sm text-gray-300"><Markdown>{prMetadata.review_notes}</Markdown></div>
               </div>
             )}
 
@@ -355,7 +355,7 @@ export function PRDetail({
             {prMetadata.suggested_improvements && (
               <div>
                 <div className="text-xs text-gray-400 mb-1">Suggested Improvements</div>
-                <p className="text-sm text-gray-300">{prMetadata.suggested_improvements}</p>
+                <div className="text-sm text-gray-300"><Markdown>{prMetadata.suggested_improvements}</Markdown></div>
               </div>
             )}
 
