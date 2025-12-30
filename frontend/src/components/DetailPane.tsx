@@ -2,6 +2,7 @@ import { IssueDetail } from './IssueDetail';
 import { IssueCreateView } from './IssueCreateView';
 import { PRDetail } from './PRDetail';
 import { ScheduleDetail } from './ScheduleDetail';
+import { SessionDetail } from './SessionDetail';
 import type {
   Repo,
   Issue,
@@ -28,6 +29,7 @@ export interface DetailPaneProps {
   selectedIssue: number | null;
   selectedPR: number | null;
   selectedSchedule: number | null;
+  selectedSession: SessionSummary | null;
   isCreatingIssue: boolean;
 
   // Current tab for empty state context
@@ -56,6 +58,14 @@ export interface DetailPaneProps {
   // Schedule actions
   onScheduleDeleted: () => void;
   onScheduleUpdated: () => void;
+
+  // Session actions (for SessionDetail)
+  onDeleteSession: (sessionId: string) => Promise<void>;
+  onUpdateSessionTitle: (sessionId: string, title: string) => Promise<void>;
+  onShowIssue: (issueNumber: number) => void;
+  onShowPR: (prNumber: number) => void;
+  onShowSchedule: (scheduleId: number) => void;
+  onSessionClosed: () => void;
 
   // Issue creation
   onCancelIssueCreate: () => void;
@@ -227,6 +237,7 @@ export function DetailPane(props: DetailPaneProps) {
     selectedIssue,
     selectedPR,
     selectedSchedule,
+    selectedSession,
     isCreatingIssue,
     activeTab,
     sessions,
@@ -245,6 +256,12 @@ export function DetailPane(props: DetailPaneProps) {
     onStartPRSession,
     onScheduleDeleted,
     onScheduleUpdated,
+    onDeleteSession,
+    onUpdateSessionTitle,
+    onShowIssue,
+    onShowPR,
+    onShowSchedule,
+    onSessionClosed,
     onCancelIssueCreate,
     onIssueCreated,
     onRefreshIssues,
@@ -267,6 +284,30 @@ export function DetailPane(props: DetailPaneProps) {
             onIssueCreated(issue);
             onRefreshIssues();
           }}
+        />
+      </div>
+    );
+  }
+
+  // Session selected (from History tab)
+  if (selectedSession) {
+    return (
+      <div className="flex-1 flex flex-col min-h-0">
+        <SessionDetail
+          session={selectedSession}
+          onContinue={async (prompt) => {
+            await onContinueSession(selectedSession, prompt);
+          }}
+          onDelete={async () => {
+            await onDeleteSession(selectedSession.session_id);
+            onSessionClosed();
+          }}
+          onTitleChange={async (title) => {
+            await onUpdateSessionTitle(selectedSession.session_id, title);
+          }}
+          onShowIssue={onShowIssue}
+          onShowPR={onShowPR}
+          onShowSchedule={onShowSchedule}
         />
       </div>
     );

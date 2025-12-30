@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import { Group, Panel } from 'react-resizable-panels';
-import { useRepos, useIssues, usePRs, useProcesses, useSessions, useActiveSessions, useTags, useIssueTags, useIssueMetadata, usePRMetadata, useCommands, useSessionCounts, useStats, buildPromptFromTemplate, exportSession, downloadExport } from './hooks/useApi';
+import { useRepos, useIssues, usePRs, useProcesses, useSessions, useTags, useIssueTags, useIssueMetadata, usePRMetadata, useCommands, useSessionCounts, useStats, buildPromptFromTemplate, exportSession, downloadExport } from './hooks/useApi';
 import { useNotifications } from './hooks/useNotifications';
 import { useWebSocketManager } from './contexts/WebSocketContext';
 import type { IssueFilters, SessionFilters, PRFilters } from './hooks/useApi';
@@ -8,7 +8,6 @@ import { RepoSelector } from './components/RepoSelector';
 import { IssueList } from './components/IssueList';
 import { PRList } from './components/PRList';
 import { SessionList } from './components/SessionList';
-import { CompactSessionList } from './components/CompactSessionList';
 import { ScheduleList } from './components/ScheduleList';
 import { DetailPane } from './components/DetailPane';
 import { SessionPanel } from './components/SessionPanel';
@@ -167,6 +166,8 @@ export default function App() {
   const [isCreatingIssue, setIsCreatingIssue] = useState(false);
   // Track selected schedule for center pane detail view
   const [selectedSchedule, setSelectedSchedule] = useState<number | null>(null);
+  // Track selected session for center pane detail view (from History tab)
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   // Track view mode (transcript vs terminal) per session
   const [sessionViewModes, setSessionViewModes] = useState<Record<string, 'transcript' | 'terminal'>>({});
 
@@ -269,8 +270,6 @@ export default function App() {
     dateRange: sessionListFilters.dateRange,
   };
   const { sessions, loading: sessionsLoading, refresh: refreshSessions, continueSession, killSession, deleteSession, updateSessionMetadata, bulkDeleteSessions, bulkUpdateSessions, total: sessionsTotal, page: sessionsPage, totalPages: sessionsTotalPages, goToPage: goToSessionsPage } = useSessions(sessionFilters);
-  // Separate hook for active/recent sessions (independent of history pagination)
-  const { sessions: activeSessions, refresh: refreshActiveSessions } = useActiveSessions(selectedRepo?.local_path);
   const { stats, loading: statsLoading, error: statsError, refresh: refreshStats } = useStats();
 
   // WebSocket connection manager for persistent connections across tab switches
@@ -287,11 +286,10 @@ export default function App() {
       }
       refreshSessionsTimeoutRef.current = setTimeout(() => {
         refreshSessions();
-        refreshActiveSessions();
         refreshSessionsTimeoutRef.current = null;
       }, 500);
     };
-  }, [refreshSessions, refreshActiveSessions]);
+  }, [refreshSessions]);
 
   const { tags, createTag } = useTags(selectedRepo?.id ?? null);
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
@@ -334,30 +332,26 @@ export default function App() {
   const handleSessionCreated = useCallback(() => {
     // Refresh the session list to pick up the new session
     refreshSessions();
-    refreshActiveSessions();
     refreshSessionCounts();
-  }, [refreshSessions, refreshActiveSessions, refreshSessionCounts]);
+  }, [refreshSessions, refreshSessionCounts]);
 
   // Handle session updated - update the session in list
   const handleSessionUpdated = useCallback((_event: { session_id: string; changes: Record<string, unknown> }) => {
     // Refresh sessions to pick up the changes
     refreshSessions();
-    refreshActiveSessions();
-  }, [refreshSessions, refreshActiveSessions]);
+  }, [refreshSessions]);
 
   // Handle session completed - update is_active flag
   const handleSessionCompleted = useCallback((_event: { session_id: string }) => {
     refreshSessions();
-    refreshActiveSessions();
     refreshSessionCounts();
-  }, [refreshSessions, refreshActiveSessions, refreshSessionCounts]);
+  }, [refreshSessions, refreshSessionCounts]);
 
   // Handle session deleted - remove from list
   const handleSessionDeleted = useCallback((_event: { session_id: string }) => {
     refreshSessions();
-    refreshActiveSessions();
     refreshSessionCounts();
-  }, [refreshSessions, refreshActiveSessions, refreshSessionCounts]);
+  }, [refreshSessions, refreshSessionCounts]);
 
   // Handle process started - add to processes list
   const handleProcessStarted = useCallback((_event: { process_id: string; session_id: string; working_dir: string }) => {
@@ -366,9 +360,17 @@ export default function App() {
     refreshProcesses();
   }, [refreshProcesses]);
 
-  // Handle process ended - remove from processes list
+  // Handle process ended - remove from processes list and close the session tab
   const handleProcessEnded = useCallback((event: { process_id: string; session_id: string }) => {
     removeProcess(event.process_id);
+    // Close the session tab since right pane is for active sessions only
+    if (event.session_id) {
+      setOpenSessionIds(prev => prev.filter(id => id !== event.session_id));
+      // If this was the active tab, clear it
+      setActiveTabSessionId(prev => prev === event.session_id ? null : prev);
+      // Clear active process if it was this one
+      setActiveProcessId(prev => prev === event.process_id ? null : prev);
+    }
   }, [removeProcess]);
 
   // Handle counts changed
@@ -524,6 +526,7 @@ export default function App() {
     setSelectedIssue(issueNumber);
     setSelectedPR(null);
     setSelectedSchedule(null);
+    setSelectedSessionId(null);
     // Refresh the issue's metadata in case Claude updated it
     refreshIssueMetadata(issueNumber);
   }, [refreshIssueMetadata]);
@@ -533,6 +536,7 @@ export default function App() {
     setSelectedPR(prNumber);
     setSelectedIssue(null);
     setSelectedSchedule(null);
+    setSelectedSessionId(null);
     // Refresh the PR's metadata in case Claude updated it
     refreshPRMetadata(prNumber);
   }, [refreshPRMetadata]);
@@ -701,6 +705,21 @@ export default function App() {
     }
   }, [processesBySessionId]);
 
+  // Handle session selection from History list
+  // Active sessions open in right pane, completed sessions show in center pane
+  const handleSelectHistorySession = useCallback((session: SessionSummary) => {
+    if (session.is_active) {
+      // Active session - open in the right pane for interaction
+      handleSelectSession(session);
+    } else {
+      // Completed session - show in center pane's SessionDetail
+      setSelectedSessionId(session.session_id);
+      setSelectedIssue(null);
+      setSelectedPR(null);
+      setSelectedSchedule(null);
+    }
+  }, [handleSelectSession]);
+
   const handleContinueSession = useCallback(
     async (session: SessionSummary, prompt?: string) => {
       // Use the continue endpoint - creates a new process resuming the conversation
@@ -709,8 +728,8 @@ export default function App() {
       // Add the new process to state immediately
       addProcess(process);
 
-      // Refresh active sessions to show the session as active
-      refreshActiveSessions();
+      // Refresh sessions to show the session as active
+      refreshSessions();
 
       // Ensure session is in open tabs and active
       setOpenSessionIds(prev => prev.includes(session.session_id) ? prev : [...prev, session.session_id]);
@@ -720,7 +739,7 @@ export default function App() {
       setViewingSessionId(null);
       setActiveProcessId(process.id);
     },
-    [continueSession, addProcess, refreshActiveSessions]
+    [continueSession, addProcess, refreshSessions]
   );
 
   const handleToggleStar = useCallback(
@@ -730,22 +749,13 @@ export default function App() {
     [updateSessionMetadata]
   );
 
-  const handleKillSession = useCallback(
-    async (session: SessionSummary) => {
-      await killSession(session.session_id);
-      // Refresh active sessions to update the list
-      refreshActiveSessions();
-    },
-    [killSession, refreshActiveSessions]
-  );
-
   // Handler for killing a session by ID (for SessionPanel)
   const handleKillSessionById = useCallback(
     async (sessionId: string) => {
       await killSession(sessionId);
-      refreshActiveSessions();
+      refreshSessions();
     },
-    [killSession, refreshActiveSessions]
+    [killSession, refreshSessions]
   );
 
   // Handler for closing a session tab (not deleting the session)
@@ -816,6 +826,11 @@ export default function App() {
 
   const viewingSession = viewingSessionId
     ? (sessionsById.get(viewingSessionId) ?? getCachedSession(viewingSessionId))
+    : null;
+
+  // Find the selected session for center pane detail view (from History tab)
+  const selectedSession = selectedSessionId
+    ? (sessionsById.get(selectedSessionId) ?? getCachedSession(selectedSessionId) ?? null)
     : null;
 
   // Cache active/viewing sessions so they persist across pagination changes
@@ -964,17 +979,20 @@ export default function App() {
     setSelectedIssue(issueNumber);
     setSelectedPR(null);
     setSelectedSchedule(null);
+    setSelectedSessionId(null);
   }, []);
 
   const handleShowPR = useCallback((prNumber: number) => {
     setSelectedPR(prNumber);
     setSelectedIssue(null);
     setSelectedSchedule(null);
+    setSelectedSessionId(null);
   }, []);
 
   const handleShowSchedule = useCallback((scheduleId: number) => {
     setSelectedSchedule(scheduleId);
     setSelectedIssue(null);
+    setSelectedSessionId(null);
     setSelectedPR(null);
     setActiveTab('schedules');
   }, []);
@@ -1378,26 +1396,8 @@ export default function App() {
             sessionCounts={sessionCounts}
           />
 
-          {/* Split sidebar with Sessions at top, Tabs below */}
-          <Group orientation="vertical" className="flex-1 min-h-0">
-            {/* Top: Always-visible sessions (uses separate API call for active/recent) */}
-            {selectedRepo && (
-              <Panel defaultSize="30%" minSize="80px" maxSize="60%">
-                <CompactSessionList
-                  sessions={activeSessions}
-                  onSelectSession={handleSelectSession}
-                  onContinueSession={handleContinueSession}
-                  onKillSession={handleKillSession}
-                  onViewAll={() => setActiveTab('history')}
-                  activeSessionId={activeTabSessionId}
-                />
-              </Panel>
-            )}
-
-            {selectedRepo && <ResizeHandle orientation="horizontal" />}
-
-            {/* Bottom: Tabs for Issues/PRs/History/Schedules */}
-            <Panel minSize="200px" className="flex flex-col">
+          {/* Tabs for Issues/PRs/History/Schedules */}
+          <div className="flex-1 min-h-0 flex flex-col">
               {/* Tabs with sliding indicator */}
               <div
                 ref={tabsContainerRef}
@@ -1566,7 +1566,7 @@ export default function App() {
                   <SessionList
                     sessions={sessions}
                     processes={processes}
-                    onSelectSession={handleSelectSession}
+                    onSelectSession={handleSelectHistorySession}
                     onContinueSession={handleContinueSession}
                     onToggleStar={handleToggleStar}
                     onRefresh={refreshSessions}
@@ -1579,7 +1579,7 @@ export default function App() {
                     page={sessionsPage}
                     totalPages={sessionsTotalPages}
                     onPageChange={goToSessionsPage}
-                    activeSessionId={activeTabSessionId}
+                    activeSessionId={selectedSessionId}
                   />
                 )}
                 {activeTab === 'prs' && selectedRepo && (
@@ -1629,8 +1629,7 @@ export default function App() {
                   </div>
                 )}
               </div>
-            </Panel>
-          </Group>
+          </div>
         </Panel>
 
         <ResizeHandle />
@@ -1642,6 +1641,7 @@ export default function App() {
             selectedIssue={selectedIssue}
             selectedPR={selectedPR}
             selectedSchedule={selectedSchedule}
+            selectedSession={selectedSession}
             isCreatingIssue={isCreatingIssue}
             activeTab={activeTab}
             sessions={sessions}
@@ -1660,6 +1660,12 @@ export default function App() {
             onStartPRSession={handleStartPRSession}
             onScheduleDeleted={() => setSelectedSchedule(null)}
             onScheduleUpdated={() => scheduleListRefreshRef.current?.()}
+            onDeleteSession={deleteSession}
+            onUpdateSessionTitle={async (sessionId, title) => { await updateSessionMetadata(sessionId, { title }); }}
+            onShowIssue={handleShowIssue}
+            onShowPR={handleShowPR}
+            onShowSchedule={handleShowSchedule}
+            onSessionClosed={() => setSelectedSessionId(null)}
             onCancelIssueCreate={() => setIsCreatingIssue(false)}
             onIssueCreated={(issue) => {
               setIsCreatingIssue(false);
