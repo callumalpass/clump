@@ -26,6 +26,14 @@ const DIFFICULTY_COLORS: Record<string, { bg: string; text: string }> = {
   complex: { bg: 'bg-red-500/20', text: 'text-red-400' },
 };
 
+// Local status badge color mapping
+const STATUS_COLORS: Record<string, { bg: string; text: string; icon: string }> = {
+  open: { bg: 'bg-gray-500/20', text: 'text-gray-400', icon: '○' },
+  in_progress: { bg: 'bg-blurple-500/20', text: 'text-blurple-400', icon: '◐' },
+  completed: { bg: 'bg-mint-400/20', text: 'text-mint-400', icon: '✓' },
+  wontfix: { bg: 'bg-red-500/20', text: 'text-red-400', icon: '✗' },
+};
+
 // Memoized list item component to prevent unnecessary re-renders
 interface IssueListItemProps {
   issue: Issue;
@@ -51,6 +59,7 @@ const IssueListItem = memo(function IssueListItem({
   onStartSession,
 }: IssueListItemProps) {
   const { hasRunning, hasCompleted } = useSessionStatus(issueSessions);
+  const statusStyle = issueMetadata?.status ? STATUS_COLORS[issueMetadata.status] : null;
   const priorityStyle = issueMetadata?.priority ? PRIORITY_COLORS[issueMetadata.priority] : null;
   const difficultyStyle = issueMetadata?.difficulty ? DIFFICULTY_COLORS[issueMetadata.difficulty] : null;
 
@@ -103,9 +112,17 @@ const IssueListItem = memo(function IssueListItem({
               </span>
             )}
           </div>
-          {(issue.labels.length > 0 || issueTags.length > 0 || priorityStyle || difficultyStyle) && (
+          {(issue.labels.length > 0 || issueTags.length > 0 || (issueMetadata?.tags?.length ?? 0) > 0 || statusStyle || priorityStyle || difficultyStyle) && (
             <div className="flex items-center gap-2 mt-2 flex-wrap">
-              {/* Priority and difficulty badges from AI analysis */}
+              {/* Status, priority and difficulty badges from AI analysis */}
+              {statusStyle && (
+                <span
+                  className={`px-2.5 py-1 text-xs font-medium rounded-stoody-lg ${statusStyle.bg} ${statusStyle.text}`}
+                  title={`Local status: ${issueMetadata?.status}`}
+                >
+                  {statusStyle.icon} {issueMetadata?.status?.replace('_', ' ')}
+                </span>
+              )}
               {priorityStyle && (
                 <span
                   className={`px-2.5 py-1 text-xs font-medium rounded-stoody-lg ${priorityStyle.bg} ${priorityStyle.text}`}
@@ -131,7 +148,7 @@ const IssueListItem = memo(function IssueListItem({
                   {label}
                 </span>
               ))}
-              {/* Custom tags */}
+              {/* Custom tags from database */}
               {issueTags.map((tag) => {
                 const bgColor = tag.color || '#374151';
                 return (
@@ -144,6 +161,16 @@ const IssueListItem = memo(function IssueListItem({
                   </span>
                 );
               })}
+              {/* Tags from sidecar metadata (written by Claude) */}
+              {issueMetadata?.tags?.filter(t => !issueTags.some(dbTag => dbTag.name === t)).map((tag) => (
+                <span
+                  key={`meta-${tag}`}
+                  className="px-2.5 py-1 text-xs rounded-stoody-lg bg-blurple-500/20 text-blurple-300 border border-blurple-500/30"
+                  title="Tag from AI analysis"
+                >
+                  {tag}
+                </span>
+              ))}
             </div>
           )}
           <div className="list-item-metadata text-xs text-gray-400 mt-2">
