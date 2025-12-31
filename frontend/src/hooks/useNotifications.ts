@@ -32,6 +32,14 @@ export interface SessionNotification {
   timestamp: string;
 }
 
+/** Details about a pending notification for a session */
+export interface NotificationDetails {
+  notification_type: NotificationType;
+  tool_name?: string;
+  message?: string;
+  timestamp: string;
+}
+
 export interface SessionCreatedEvent {
   session_id: string;
   repo_path: string;
@@ -117,6 +125,8 @@ interface UseNotificationsReturn {
   sessionsNeedingAttention: Set<string>;
   /** Check if a specific session needs attention */
   needsAttention: (sessionId: string) => boolean;
+  /** Get notification details for a session (tool name, message, etc.) */
+  getNotificationDetails: (sessionId: string) => NotificationDetails | undefined;
   /** Clear attention state for a session (user has seen it) */
   clearAttention: (sessionId: string) => void;
   /** Whether the WebSocket is connected */
@@ -199,6 +209,7 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
   };
 
   const [sessionsNeedingAttention, setSessionsNeedingAttention] = useState<Set<string>>(new Set());
+  const [notificationDetailsMap, setNotificationDetailsMap] = useState<Map<string, NotificationDetails>>(new Map());
   const [isConnected, setIsConnected] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
     typeof Notification !== 'undefined' ? Notification.permission : 'denied'
@@ -249,6 +260,18 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
     }
   }, [enableDesktopNotifications]);
 
+  // Store notification-related options in a ref to avoid WebSocket reconnection
+  const notificationOptionsRef = useRef({
+    enableSound,
+    showDesktopNotification,
+    onAttentionNeeded,
+  });
+  notificationOptionsRef.current = {
+    enableSound,
+    showDesktopNotification,
+    onAttentionNeeded,
+  };
+
   // Handle incoming notification
   const handleNotification = useCallback((notification: SessionNotification) => {
     if (notification.notification_type === 'permission_needed' || notification.notification_type === 'idle') {
@@ -258,18 +281,30 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
         return next;
       });
 
+      // Store notification details for tooltip display
+      setNotificationDetailsMap(prev => {
+        const next = new Map(prev);
+        next.set(notification.session_id, {
+          notification_type: notification.notification_type,
+          tool_name: notification.data.tool_name as string | undefined,
+          message: notification.data.message as string | undefined,
+          timestamp: notification.timestamp,
+        });
+        return next;
+      });
+
       // Play sound
-      if (enableSound) {
+      if (notificationOptionsRef.current.enableSound) {
         playNotificationSound();
       }
 
       // Show desktop notification
-      showDesktopNotification(notification);
+      notificationOptionsRef.current.showDesktopNotification(notification);
 
       // Callback
-      onAttentionNeeded?.(notification);
+      notificationOptionsRef.current.onAttentionNeeded?.(notification);
     }
-  }, [enableSound, showDesktopNotification, onAttentionNeeded]);
+  }, []);
 
   // Connect to WebSocket
   useEffect(() => {
@@ -372,6 +407,13 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
       return next;
     });
 
+    // Also clear notification details
+    setNotificationDetailsMap(prev => {
+      const next = new Map(prev);
+      next.delete(sessionId);
+      return next;
+    });
+
     // Notify backend
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
@@ -385,6 +427,11 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
   const needsAttention = useCallback((sessionId: string) => {
     return sessionsNeedingAttention.has(sessionId);
   }, [sessionsNeedingAttention]);
+
+  // Get notification details for a session
+  const getNotificationDetails = useCallback((sessionId: string) => {
+    return notificationDetailsMap.get(sessionId);
+  }, [notificationDetailsMap]);
 
   // Request notification permission
   const requestNotificationPermission = useCallback(async () => {
@@ -400,6 +447,7 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
   return {
     sessionsNeedingAttention,
     needsAttention,
+    getNotificationDetails,
     clearAttention,
     isConnected,
     requestNotificationPermission,
