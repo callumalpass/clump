@@ -51,6 +51,7 @@ export interface DetailPaneProps {
   onAddTagToIssue: (issueNumber: number, tagId: number) => void;
   onRemoveTagFromIssue: (issueNumber: number, tagId: number) => void;
   onCreateTag: (name: string, color?: string) => Promise<Tag | undefined>;
+  onUpdateIssueMetadata: (issueNumber: number, update: Partial<import('../types').IssueMetadata>) => Promise<import('../types').IssueMetadata | undefined>;
 
   // PR actions
   onStartPRSession: (pr: { number: number; title: string; body: string; author: string; head_ref: string; base_ref: string }, command: CommandMetadata) => void;
@@ -253,6 +254,7 @@ export function DetailPane(props: DetailPaneProps) {
     onAddTagToIssue,
     onRemoveTagFromIssue,
     onCreateTag,
+    onUpdateIssueMetadata,
     onStartPRSession,
     onScheduleDeleted,
     onScheduleUpdated,
@@ -356,6 +358,7 @@ export function DetailPane(props: DetailPaneProps) {
           onAddTag={(tagId) => onAddTagToIssue(selectedIssue, tagId)}
           onRemoveTag={(tagId) => onRemoveTagFromIssue(selectedIssue, tagId)}
           onCreateTag={onCreateTag}
+          onUpdateMetadata={(update) => onUpdateIssueMetadata(selectedIssue, update)}
         />
       </div>
     );

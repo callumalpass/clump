@@ -22,7 +22,16 @@ interface IssueDetailProps {
   onAddTag?: (tagId: number) => void;
   onRemoveTag?: (tagId: number) => void;
   onCreateTag?: (name: string, color?: string) => Promise<Tag | undefined>;
+  onUpdateMetadata?: (update: Partial<IssueMetadata>) => Promise<IssueMetadata | undefined | void>;
 }
+
+// Status options for the dropdown
+const STATUS_OPTIONS: { value: string; label: string; icon: string; color: string }[] = [
+  { value: 'open', label: 'Open', icon: '○', color: 'text-gray-400' },
+  { value: 'in_progress', label: 'In Progress', icon: '◐', color: 'text-blurple-400' },
+  { value: 'completed', label: 'Completed', icon: '✓', color: 'text-mint-400' },
+  { value: 'wontfix', label: "Won't Fix", icon: '✗', color: 'text-red-400' },
+];
 
 export function IssueDetail({
   repoId,
@@ -39,14 +48,31 @@ export function IssueDetail({
   onAddTag,
   onRemoveTag,
   onCreateTag,
+  onUpdateMetadata,
 }: IssueDetailProps) {
   const [issue, setIssue] = useState<IssueDetailType | null>(null);
   const [loading, setLoading] = useState(true);
   const [showTagDropdown, setShowTagDropdown] = useState(false);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0]);
   const [creatingTag, setCreatingTag] = useState(false);
   const [continuingSessionId, setContinuingSessionId] = useState<string | null>(null);
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!onUpdateMetadata) return;
+    setUpdatingStatus(true);
+    try {
+      await onUpdateMetadata({ status: newStatus as IssueMetadata['status'] });
+    } finally {
+      setUpdatingStatus(false);
+      setShowStatusDropdown(false);
+    }
+  };
+
+  // Default to 'open' if no status set - STATUS_OPTIONS always has at least one element
+  const currentStatus = STATUS_OPTIONS.find(s => s.value === issueMetadata?.status) ?? STATUS_OPTIONS[0]!;
 
   const handleCreateTag = async () => {
     if (!newTagName.trim() || !onCreateTag) return;
@@ -250,6 +276,66 @@ export function IssueDetail({
           {issueActionError && (
             <div className="text-red-400 text-xs mt-1">{issueActionError}</div>
           )}
+
+          {/* Local Status selector */}
+          <div className="flex items-center gap-2 mt-3">
+            <span className="text-xs text-gray-400">Local Status:</span>
+            <div className="relative">
+              <button
+                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                disabled={updatingStatus || !onUpdateMetadata}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-stoody-lg transition-colors ${
+                  currentStatus.value === 'open' ? 'bg-gray-500/20 text-gray-400' :
+                  currentStatus.value === 'in_progress' ? 'bg-blurple-500/20 text-blurple-400' :
+                  currentStatus.value === 'completed' ? 'bg-mint-400/20 text-mint-400' :
+                  'bg-red-500/20 text-red-400'
+                } ${onUpdateMetadata ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'}`}
+              >
+                {updatingStatus ? (
+                  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : (
+                  <span>{currentStatus.icon}</span>
+                )}
+                {currentStatus.label}
+                {onUpdateMetadata && (
+                  <svg className="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                )}
+              </button>
+
+              {showStatusDropdown && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setShowStatusDropdown(false)}
+                  />
+                  <div className="absolute top-full left-0 mt-1 w-40 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-20 py-1">
+                    {STATUS_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        onClick={() => handleStatusChange(option.value)}
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left hover:bg-gray-750 transition-colors ${
+                          option.value === currentStatus.value ? 'bg-gray-750' : ''
+                        }`}
+                      >
+                        <span className={option.color}>{option.icon}</span>
+                        <span className="text-gray-300">{option.label}</span>
+                        {option.value === currentStatus.value && (
+                          <svg className="w-3 h-3 ml-auto text-blurple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
 
           {/* Tags section */}
           <div className="flex items-center gap-2 mt-3 flex-wrap">

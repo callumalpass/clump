@@ -293,7 +293,7 @@ export default function App() {
 
   const { tags, createTag } = useTags(selectedRepo?.id ?? null);
   const { issueTagsMap, addTagToIssue, removeTagFromIssue } = useIssueTags(selectedRepo?.id ?? null);
-  const { metadataMap: issueMetadataMap, refreshSingle: refreshIssueMetadata } = useIssueMetadata(selectedRepo?.id ?? null);
+  const { metadataMap: issueMetadataMap, refreshSingle: refreshIssueMetadata, updateMetadata: updateIssueMetadata } = useIssueMetadata(selectedRepo?.id ?? null);
   const { metadataMap: prMetadataMap, refreshSingle: refreshPRMetadata } = usePRMetadata(selectedRepo?.id ?? null);
   // Lazy-load PRs only when the PRs tab is active (perf optimization)
   const { prs, loading: prsLoading, error: prsError, refresh: refreshPRs, page: prsPage, totalPages: prsTotalPages, total: prsTotal, goToPage: goToPRsPage } = usePRs(selectedRepo?.id ?? null, prFilters, activeTab === 'prs');
@@ -1670,6 +1670,7 @@ export default function App() {
             onAddTagToIssue={addTagToIssue}
             onRemoveTagFromIssue={removeTagFromIssue}
             onCreateTag={createTag}
+            onUpdateIssueMetadata={updateIssueMetadata}
             onStartPRSession={handleStartPRSession}
             onScheduleDeleted={() => setSelectedSchedule(null)}
             onScheduleUpdated={() => scheduleListRefreshRef.current?.()}
