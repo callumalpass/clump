@@ -107,6 +107,12 @@ class IssueMetadata:
     """
     issue_number: int
 
+    # Local status (track issue progress without GitHub)
+    status: Optional[str] = None        # "open" | "in_progress" | "completed" | "wontfix"
+
+    # Tags (synced from database for Claude visibility)
+    tags: list[str] = field(default_factory=list)  # e.g., ["backend", "urgent"]
+
     # Assessments (independent per-issue evaluations)
     priority: Optional[str] = None      # "critical" | "high" | "medium" | "low"
     difficulty: Optional[str] = None    # "trivial" | "easy" | "medium" | "hard" | "complex"
@@ -129,6 +135,8 @@ class IssueMetadata:
     def to_dict(self) -> dict:
         return {
             "issue_number": self.issue_number,
+            "status": self.status,
+            "tags": self.tags,
             "priority": self.priority,
             "difficulty": self.difficulty,
             "risk": self.risk,
@@ -146,6 +154,8 @@ class IssueMetadata:
     def from_dict(cls, data: dict) -> "IssueMetadata":
         return cls(
             issue_number=data.get("issue_number", 0),
+            status=data.get("status"),
+            tags=data.get("tags", []),
             priority=data.get("priority"),
             difficulty=data.get("difficulty"),
             risk=data.get("risk"),
@@ -171,6 +181,12 @@ class PRMetadata:
     This allows Claude to directly write PR analysis and metadata.
     """
     pr_number: int
+
+    # Local status (track PR progress without GitHub)
+    status: Optional[str] = None            # "open" | "reviewing" | "approved" | "merged" | "closed"
+
+    # Tags (synced from database for Claude visibility)
+    tags: list[str] = field(default_factory=list)  # e.g., ["needs-review", "urgent"]
 
     # Assessments
     risk: Optional[str] = None              # "low" | "medium" | "high"
@@ -198,6 +214,8 @@ class PRMetadata:
     def to_dict(self) -> dict:
         return {
             "pr_number": self.pr_number,
+            "status": self.status,
+            "tags": self.tags,
             "risk": self.risk,
             "complexity": self.complexity,
             "review_priority": self.review_priority,
@@ -217,6 +235,8 @@ class PRMetadata:
     def from_dict(cls, data: dict) -> "PRMetadata":
         return cls(
             pr_number=data.get("pr_number", 0),
+            status=data.get("status"),
+            tags=data.get("tags", []),
             risk=data.get("risk"),
             complexity=data.get("complexity"),
             review_priority=data.get("review_priority"),

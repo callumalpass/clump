@@ -60,9 +60,16 @@ export type IssuePriority = 'critical' | 'high' | 'medium' | 'low';
 export type IssueDifficulty = 'trivial' | 'easy' | 'medium' | 'hard' | 'complex';
 export type IssueRisk = 'low' | 'medium' | 'high';
 export type IssueType = 'bug' | 'feature' | 'refactor' | 'docs' | 'chore' | 'question';
+export type IssueStatus = 'open' | 'in_progress' | 'completed' | 'wontfix';
 
 export interface IssueMetadata {
   issue_number: number;
+
+  // Local status
+  status?: IssueStatus | null;
+
+  // Tags (synced from database)
+  tags?: string[];
 
   // Assessments
   priority?: IssuePriority | null;
@@ -121,9 +128,16 @@ export type PRComplexity = 'trivial' | 'simple' | 'moderate' | 'complex';
 export type PRReviewPriority = 'critical' | 'high' | 'medium' | 'low';
 export type PRTestCoverage = 'good' | 'partial' | 'missing';
 export type PRChangeType = 'feature' | 'bugfix' | 'refactor' | 'docs' | 'chore';
+export type PRStatus = 'open' | 'reviewing' | 'approved' | 'merged' | 'closed';
 
 export interface PRMetadata {
   pr_number: number;
+
+  // Local status
+  status?: PRStatus | null;
+
+  // Tags (synced from database)
+  tags?: string[];
 
   // Assessments
   risk?: PRRisk | null;

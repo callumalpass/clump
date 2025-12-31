@@ -59,6 +59,12 @@ class IssueMetadataResponse(BaseModel):
     """Sidecar metadata for a GitHub issue (written by Claude)."""
     issue_number: int
 
+    # Local status
+    status: Optional[str] = None        # "open" | "in_progress" | "completed" | "wontfix"
+
+    # Tags (synced from database)
+    tags: list[str] = []                # e.g., ["backend", "urgent"]
+
     # Assessments
     priority: Optional[str] = None      # "critical" | "high" | "medium" | "low"
     difficulty: Optional[str] = None    # "trivial" | "easy" | "medium" | "hard" | "complex"
@@ -81,6 +87,8 @@ class IssueMetadataResponse(BaseModel):
 
 class IssueMetadataUpdate(BaseModel):
     """Request to update issue metadata (for manual edits)."""
+    status: Optional[str] = None
+    tags: Optional[list[str]] = None
     priority: Optional[str] = None
     difficulty: Optional[str] = None
     risk: Optional[str] = None
@@ -95,6 +103,12 @@ class IssueMetadataUpdate(BaseModel):
 class PRMetadataResponse(BaseModel):
     """Sidecar metadata for a GitHub PR (written by Claude)."""
     pr_number: int
+
+    # Local status
+    status: Optional[str] = None            # "open" | "reviewing" | "approved" | "merged" | "closed"
+
+    # Tags (synced from database)
+    tags: list[str] = []                    # e.g., ["needs-review", "urgent"]
 
     # Assessments
     risk: Optional[str] = None              # "low" | "medium" | "high"

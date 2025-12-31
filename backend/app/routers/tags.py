@@ -2,17 +2,51 @@
 Tag management routes for organizing issues.
 
 Tags are stored in per-repo databases at ~/.clump/projects/{hash}/data.db.
+Tag names are also synced to issue sidecar files for Claude visibility.
 """
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select, and_
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_repo_db
 from app.db_helpers import get_repo_or_404
 from app.models import Tag, IssueTag
+from app.storage import encode_path, get_issue_metadata, save_issue_metadata, IssueMetadata
 
 router = APIRouter()
+
+
+async def sync_tags_to_sidecar(
+    db: AsyncSession, repo_id: int, local_path: str, issue_number: int
+) -> None:
+    """
+    Sync the current tags for an issue to its sidecar file.
+
+    This ensures Claude can see the tags when analyzing an issue.
+    """
+    # Get all current tags for this issue
+    result = await db.execute(
+        select(Tag.name)
+        .join(IssueTag, IssueTag.tag_id == Tag.id)
+        .where(and_(IssueTag.repo_id == repo_id, IssueTag.issue_number == issue_number))
+        .order_by(Tag.name)
+    )
+    tag_names = [row[0] for row in result.all()]
+
+    # Update or create sidecar with tags
+    encoded_path = encode_path(local_path)
+    metadata = get_issue_metadata(encoded_path, issue_number)
+
+    if metadata:
+        # Update existing metadata
+        metadata.tags = tag_names
+    else:
+        # Create new metadata with just tags
+        metadata = IssueMetadata(issue_number=issue_number, tags=tag_names)
+
+    save_issue_metadata(encoded_path, issue_number, metadata)
 
 
 class TagResponse(BaseModel):
@@ -114,6 +148,7 @@ async def update_tag(repo_id: int, tag_id: int, data: TagUpdate):
         if not tag:
             raise HTTPException(status_code=404, detail="Tag not found")
 
+        name_changed = False
         if data.name is not None:
             # Check for duplicate name
             existing = await db.execute(
@@ -123,6 +158,7 @@ async def update_tag(repo_id: int, tag_id: int, data: TagUpdate):
             )
             if existing.scalar_one_or_none():
                 raise HTTPException(status_code=400, detail="Tag with this name already exists")
+            name_changed = tag.name != data.name
             tag.name = data.name
 
         if data.color is not None:
@@ -131,12 +167,22 @@ async def update_tag(repo_id: int, tag_id: int, data: TagUpdate):
         await db.commit()
         await db.refresh(tag)
 
+        # If name changed, update sidecar files for all issues with this tag
+        if name_changed:
+            issue_result = await db.execute(
+                select(IssueTag.issue_number).where(
+                    and_(IssueTag.tag_id == tag_id, IssueTag.repo_id == repo_id)
+                )
+            )
+            for row in issue_result.all():
+                await sync_tags_to_sidecar(db, repo_id, repo["local_path"], row[0])
+
         return _tag_to_response(tag)
 
 
 @router.delete("/repos/{repo_id}/tags/{tag_id}", response_model=DeleteResponse)
 async def delete_tag(repo_id: int, tag_id: int) -> DeleteResponse:
-    """Delete a tag (also removes it from all issues)."""
+    """Delete a tag (also removes it from all issues and updates sidecar files)."""
     repo = get_repo_or_404(repo_id)
 
     async with get_repo_db(repo["local_path"]) as db:
@@ -147,8 +193,21 @@ async def delete_tag(repo_id: int, tag_id: int) -> DeleteResponse:
         if not tag:
             raise HTTPException(status_code=404, detail="Tag not found")
 
+        # Find all issues that have this tag (before deletion)
+        issue_result = await db.execute(
+            select(IssueTag.issue_number).where(
+                and_(IssueTag.tag_id == tag_id, IssueTag.repo_id == repo_id)
+            )
+        )
+        affected_issues = [row[0] for row in issue_result.all()]
+
         await db.delete(tag)
         await db.commit()
+
+        # Update sidecar files for all affected issues
+        for issue_number in affected_issues:
+            await sync_tags_to_sidecar(db, repo_id, repo["local_path"], issue_number)
+
         return DeleteResponse(status="deleted")
 
 
@@ -201,6 +260,9 @@ async def add_tag_to_issue(repo_id: int, issue_number: int, tag_id: int):
             db.add(issue_tag)
             await db.commit()
 
+        # Sync tags to sidecar file for Claude visibility
+        await sync_tags_to_sidecar(db, repo_id, repo["local_path"], issue_number)
+
         # Return updated tags for this issue
         result = await db.execute(
             select(IssueTag, Tag)
@@ -234,6 +296,9 @@ async def remove_tag_from_issue(repo_id: int, issue_number: int, tag_id: int):
         if issue_tag:
             await db.delete(issue_tag)
             await db.commit()
+
+        # Sync tags to sidecar file for Claude visibility
+        await sync_tags_to_sidecar(db, repo_id, repo["local_path"], issue_number)
 
         # Return updated tags for this issue
         result = await db.execute(
