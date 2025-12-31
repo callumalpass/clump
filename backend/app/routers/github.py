@@ -432,6 +432,8 @@ async def list_all_issue_metadata(repo_id: int) -> dict[int, IssueMetadataRespon
     return {
         m.issue_number: IssueMetadataResponse(
             issue_number=m.issue_number,
+            status=m.status,
+            tags=m.tags,
             priority=m.priority,
             difficulty=m.difficulty,
             risk=m.risk,
@@ -463,6 +465,8 @@ async def get_single_issue_metadata(
 
     return IssueMetadataResponse(
         issue_number=metadata.issue_number,
+        status=metadata.status,
+        tags=metadata.tags,
         priority=metadata.priority,
         difficulty=metadata.difficulty,
         risk=metadata.risk,
@@ -498,6 +502,10 @@ async def update_issue_metadata(
         existing = IssueMetadata(issue_number=issue_number)
 
     # Apply updates (only non-None fields)
+    if update.status is not None:
+        existing.status = update.status
+    if update.tags is not None:
+        existing.tags = update.tags
     if update.priority is not None:
         existing.priority = update.priority
     if update.difficulty is not None:
@@ -522,6 +530,8 @@ async def update_issue_metadata(
 
     return IssueMetadataResponse(
         issue_number=existing.issue_number,
+        status=existing.status,
+        tags=existing.tags,
         priority=existing.priority,
         difficulty=existing.difficulty,
         risk=existing.risk,
@@ -564,6 +574,8 @@ async def list_all_pr_metadata(repo_id: int) -> dict[int, PRMetadataResponse]:
     return {
         m.pr_number: PRMetadataResponse(
             pr_number=m.pr_number,
+            status=m.status,
+            tags=m.tags,
             risk=m.risk,
             complexity=m.complexity,
             review_priority=m.review_priority,
@@ -597,6 +609,8 @@ async def get_single_pr_metadata(
 
     return PRMetadataResponse(
         pr_number=metadata.pr_number,
+        status=metadata.status,
+        tags=metadata.tags,
         risk=metadata.risk,
         complexity=metadata.complexity,
         review_priority=metadata.review_priority,
