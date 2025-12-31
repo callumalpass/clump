@@ -114,6 +114,54 @@ export function Terminal({ processId, onClose, relatedEntity, onShowRelated, sho
     onConnectionChange?.(isConnected);
   }, [isConnected, onConnectionChange]);
 
+  // Force terminal viewport recalculation when component mounts or reconnects.
+  // This is a workaround for an xterm.js quirk where the terminal doesn't properly
+  // calculate dimensions when mounted in a complex layout (resizable panels).
+  // We resize by 1 column to force the backend PTY to re-render its TUI output.
+  useEffect(() => {
+    const forceViewportRecalc = () => {
+      const terminal = terminalRef.current;
+      const fitAddon = fitAddonRef.current;
+      const container = containerRef.current;
+      if (!terminal || !fitAddon || !container) return;
+
+      const rect = container.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+
+      try {
+        // Fit to get current dimensions
+        fitAddon.fit();
+        const realCols = terminal.cols;
+        const realRows = terminal.rows;
+
+        // Resize to 1 less column - this triggers backend PTY re-render
+        terminal.resize(realCols - 1, realRows);
+        sendResizeRef.current(realRows, realCols - 1);
+
+        // After a brief delay, restore real size
+        setTimeout(() => {
+          if (terminalRef.current && fitAddonRef.current) {
+            fitAddonRef.current.fit();
+            sendResizeRef.current(terminalRef.current.rows, terminalRef.current.cols);
+            // Multiple scroll attempts as data arrives from backend
+            [100, 250, 500].forEach(delay => {
+              setTimeout(() => {
+                terminalRef.current?.scrollToBottom();
+              }, delay);
+            });
+          }
+        }, 50);
+      } catch {
+        // Ignore errors (can happen during unmount race)
+      }
+    };
+
+    // Run after terminal is set up and data starts flowing
+    const timeout = setTimeout(forceViewportRecalc, 200);
+
+    return () => clearTimeout(timeout);
+  }, [processId]); // Run when processId changes (i.e., when switching sessions)
+
   // Initialize terminal once on mount (or when processId changes)
   // Theme changes are handled separately to avoid destroying terminal history
   useEffect(() => {
@@ -165,9 +213,10 @@ export function Terminal({ processId, onClose, relatedEntity, onShowRelated, sho
 
     // Track if we're disposing to prevent resize during cleanup
     let isDisposing = false;
-    // Track if we've ever had a valid (non-zero) size - used to detect
-    // transition from hidden (display:none) to visible
-    let hadValidSize = false;
+    // Track the last known size state - used to detect transitions from
+    // hidden (display:none) to visible. Unlike a one-way flag, this tracks
+    // every transition so re-showing a hidden terminal triggers scrollToBottom.
+    let lastHadValidSize = false;
 
     // Handle resize - use ResizeObserver for more reliable detection
     const handleResize = () => {
@@ -182,14 +231,17 @@ export function Terminal({ processId, onClose, relatedEntity, onShowRelated, sho
             fitAddon.fit();
             sendResizeRef.current(terminal.rows, terminal.cols);
 
-            // If this is the first time we have valid dimensions (transitioning
-            // from hidden to visible), scroll to bottom to ensure the terminal
-            // viewport is correctly positioned
-            if (!hadValidSize) {
-              hadValidSize = true;
+            // If transitioning from hidden (0x0) to visible (valid dimensions),
+            // scroll to bottom to ensure the terminal viewport is correctly
+            // positioned. This handles both initial mount AND re-showing after
+            // being hidden (e.g., switching from transcript back to terminal view).
+            if (!lastHadValidSize) {
               terminal.scrollToBottom();
             }
           }
+
+          // Update the tracking state for next time
+          lastHadValidSize = hasValidSize;
         } catch {
           // Ignore errors during resize (can happen during mount/unmount)
         }
