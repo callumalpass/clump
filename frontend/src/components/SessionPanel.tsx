@@ -3,6 +3,7 @@ import { SessionView } from './SessionView';
 import { Terminal } from './Terminal';
 import { TypewriterText } from './EmptyState';
 import type { SessionSummary, Process, Issue, PR } from '../types';
+import type { NotificationDetails } from '../hooks/useNotifications';
 
 type ViewMode = 'transcript' | 'terminal';
 
@@ -44,6 +45,7 @@ interface SessionPanelProps {
 
   // Attention state
   needsAttention?: (sessionId: string) => boolean;
+  getNotificationDetails?: (sessionId: string) => NotificationDetails | undefined;
 
   // Whether new session button should be disabled
   newSessionDisabled?: boolean;
@@ -126,6 +128,7 @@ export function SessionPanel({
   prs,
   onEntitiesChange,
   needsAttention,
+  getNotificationDetails,
   newSessionDisabled,
   emptyStateVariant = 'select-session',
 }: SessionPanelProps) {
@@ -155,6 +158,7 @@ export function SessionPanel({
           onCloseSession={onCloseSessionTab}
           onNewSession={onNewSession}
           needsAttention={needsAttention}
+          getNotificationDetails={getNotificationDetails}
           newSessionDisabled={newSessionDisabled}
         />
       )}

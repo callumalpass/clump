@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import type { SessionSummary, Process } from '../types';
+import type { NotificationDetails } from '../hooks/useNotifications';
 import { useTabIndicator } from '../hooks/useTabIndicator';
 import { ElapsedTimer } from './ElapsedTimer';
 import { formatRelativeTime } from '../utils/time';
@@ -80,10 +81,21 @@ function getStatusIndicatorClassName(status: SessionStatus): string {
 }
 
 /** Returns the title attribute for status indicator */
-function getStatusTitle(status: SessionStatus): string {
+function getStatusTitle(status: SessionStatus, notificationDetails?: NotificationDetails): string {
   switch (status) {
-    case 'needs-attention':
+    case 'needs-attention': {
+      // Include tool name or message in the tooltip if available
+      if (notificationDetails?.tool_name) {
+        return `Awaiting permission: ${notificationDetails.tool_name}`;
+      }
+      if (notificationDetails?.message) {
+        return `Awaiting input: ${notificationDetails.message}`;
+      }
+      if (notificationDetails?.notification_type === 'idle') {
+        return 'Waiting for input';
+      }
       return 'Needs attention - permission request pending';
+    }
     case 'running':
       return 'Session is running';
     case 'completed':
@@ -118,6 +130,8 @@ interface SessionTabsProps {
   onNewSession: () => void;
   /** Check if a session needs user attention (e.g., permission request) */
   needsAttention?: (sessionId: string) => boolean;
+  /** Get notification details for a session (tool name, message, etc.) */
+  getNotificationDetails?: (sessionId: string) => NotificationDetails | undefined;
   /** Whether the new session button should be disabled (e.g., no repo selected) */
   newSessionDisabled?: boolean;
 }
@@ -139,6 +153,7 @@ export function SessionTabs({
   onCloseSession,
   onNewSession,
   needsAttention,
+  getNotificationDetails,
   newSessionDisabled,
 }: SessionTabsProps) {
   // Ref for wrapper element
@@ -189,6 +204,8 @@ export function SessionTabs({
           : null;
         // Check if session needs attention (permission request, idle)
         const sessionNeedsAttention = needsAttention?.(session.session_id) ?? false;
+        // Get notification details for tooltip
+        const notificationDetails = sessionNeedsAttention ? getNotificationDetails?.(session.session_id) : undefined;
         const isActiveTab = activeSessionId === session.session_id;
 
         const sessionStatus = getSessionStatus(sessionNeedsAttention, isRunning);
@@ -209,13 +226,15 @@ export function SessionTabs({
                 onSelectSession(session.session_id);
               }
             }}
-            title={session.title || 'Untitled'}
+            title={sessionNeedsAttention && notificationDetails
+              ? `${session.title || 'Untitled'}\n${getStatusTitle(sessionStatus, notificationDetails)}`
+              : session.title || 'Untitled'}
             aria-selected={isActiveTab}
           >
             {/* Status indicator */}
             <span
               className={`w-2.5 h-2.5 rounded-full shrink-0 ${getStatusIndicatorClassName(sessionStatus)}`}
-              title={getStatusTitle(sessionStatus)}
+              title={getStatusTitle(sessionStatus, notificationDetails)}
               aria-label={getStatusAriaLabel(sessionStatus)}
             />
             {/* Entity badges - show linked issues/PRs */}
