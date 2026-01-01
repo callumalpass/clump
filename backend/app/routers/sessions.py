@@ -677,12 +677,12 @@ def _extract_text_from_content(content: list | str, max_length: int = TITLE_PREV
     if isinstance(content, list):
         for part in content:
             if isinstance(part, dict):
-                # Handle different content types
-                text = part.get('text', '')
-                if part.get('type') in ('text', 'input_text', 'output_text'):
+                # Only extract text from recognized text content types
+                part_type = part.get('type')
+                if part_type in ('text', 'input_text', 'output_text'):
                     text = part.get('text', '')
-                if text and not text.startswith('<environment_context>'):
-                    return text[:max_length]
+                    if text and not text.startswith('<environment_context>'):
+                        return text[:max_length]
             elif isinstance(part, str) and part:
                 return part[:max_length]
 

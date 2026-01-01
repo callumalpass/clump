@@ -31,6 +31,7 @@ from app.routers.sessions import (
     _format_glob_tool,
     _format_task_tool,
     _format_tool_use_markdown,
+    _extract_text_from_content,
 )
 from app.storage import (
     DiscoveredSession,
@@ -768,6 +769,142 @@ class TestQuickScanTranscript:
         assert result["message_count"] == 1
         assert result["start_time"] is None
         assert result["end_time"] is None
+
+
+class TestExtractTextFromContent:
+    """Tests for the _extract_text_from_content helper function."""
+
+    def test_extracts_from_plain_string(self):
+        """Extracts text from plain string content."""
+        result = _extract_text_from_content("Hello world")
+        assert result == "Hello world"
+
+    def test_extracts_from_empty_string_returns_none(self):
+        """Returns None for empty string."""
+        result = _extract_text_from_content("")
+        assert result is None
+
+    def test_truncates_long_string(self):
+        """Truncates string content to max_length."""
+        long_text = "a" * 200
+        result = _extract_text_from_content(long_text, max_length=50)
+        assert len(result) == 50
+        assert result == "a" * 50
+
+    def test_extracts_from_text_type_block(self):
+        """Extracts text from content block with type='text'."""
+        content = [{"type": "text", "text": "Hello from text block"}]
+        result = _extract_text_from_content(content)
+        assert result == "Hello from text block"
+
+    def test_extracts_from_input_text_type_block(self):
+        """Extracts text from content block with type='input_text' (Codex format)."""
+        content = [{"type": "input_text", "text": "Hello from input_text block"}]
+        result = _extract_text_from_content(content)
+        assert result == "Hello from input_text block"
+
+    def test_extracts_from_output_text_type_block(self):
+        """Extracts text from content block with type='output_text' (Codex format)."""
+        content = [{"type": "output_text", "text": "Hello from output_text block"}]
+        result = _extract_text_from_content(content)
+        assert result == "Hello from output_text block"
+
+    def test_ignores_tool_use_blocks(self):
+        """Does not extract text from tool_use blocks."""
+        content = [
+            {"type": "tool_use", "id": "123", "name": "Read", "input": {"file": "test.py"}},
+            {"type": "text", "text": "Real text here"}
+        ]
+        result = _extract_text_from_content(content)
+        assert result == "Real text here"
+
+    def test_ignores_tool_use_blocks_with_text_key(self):
+        """Does not extract from tool_use blocks even if they have a 'text' key."""
+        # This tests the bug fix - tool_use blocks shouldn't have text extracted
+        content = [
+            {"type": "tool_use", "text": "Should not be extracted", "id": "123"},
+        ]
+        result = _extract_text_from_content(content)
+        assert result is None
+
+    def test_ignores_thinking_blocks(self):
+        """Does not extract text from thinking blocks."""
+        content = [
+            {"type": "thinking", "thinking": "Let me think about this..."},
+            {"type": "text", "text": "Actual response"}
+        ]
+        result = _extract_text_from_content(content)
+        assert result == "Actual response"
+
+    def test_skips_environment_context(self):
+        """Skips text that starts with environment context marker."""
+        content = [
+            {"type": "text", "text": "<environment_context>System info here</environment_context>"},
+            {"type": "text", "text": "User's actual message"}
+        ]
+        result = _extract_text_from_content(content)
+        assert result == "User's actual message"
+
+    def test_returns_first_valid_text_block(self):
+        """Returns the first valid text content found."""
+        content = [
+            {"type": "text", "text": "First message"},
+            {"type": "text", "text": "Second message"}
+        ]
+        result = _extract_text_from_content(content)
+        assert result == "First message"
+
+    def test_extracts_from_plain_string_in_list(self):
+        """Extracts text from list containing plain strings."""
+        content = ["Plain string content"]
+        result = _extract_text_from_content(content)
+        assert result == "Plain string content"
+
+    def test_skips_empty_strings_in_list(self):
+        """Skips empty strings in list content."""
+        content = ["", "Non-empty content"]
+        result = _extract_text_from_content(content)
+        assert result == "Non-empty content"
+
+    def test_returns_none_for_empty_list(self):
+        """Returns None for empty list."""
+        result = _extract_text_from_content([])
+        assert result is None
+
+    def test_returns_none_for_list_with_only_non_text_blocks(self):
+        """Returns None when list contains no text blocks."""
+        content = [
+            {"type": "tool_use", "id": "123", "name": "Bash"},
+            {"type": "tool_result", "tool_use_id": "123", "content": "output"}
+        ]
+        result = _extract_text_from_content(content)
+        assert result is None
+
+    def test_handles_text_block_with_empty_text(self):
+        """Handles text block with empty text value."""
+        content = [
+            {"type": "text", "text": ""},
+            {"type": "text", "text": "Non-empty text"}
+        ]
+        result = _extract_text_from_content(content)
+        assert result == "Non-empty text"
+
+    def test_handles_text_block_without_text_key(self):
+        """Handles text block missing the 'text' key gracefully."""
+        content = [
+            {"type": "text"},  # Missing 'text' key
+            {"type": "text", "text": "Valid text"}
+        ]
+        result = _extract_text_from_content(content)
+        assert result == "Valid text"
+
+    def test_truncates_text_from_block(self):
+        """Truncates text from content block to max_length."""
+        long_text = "b" * 200
+        content = [{"type": "text", "text": long_text}]
+        result = _extract_text_from_content(content, max_length=75)
+        assert len(result) == 75
+        assert result == "b" * 75
 
 
 class TestGetPendingSessions:
