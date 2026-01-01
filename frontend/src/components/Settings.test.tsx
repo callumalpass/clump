@@ -43,7 +43,6 @@ function createMockSettings(overrides: Partial<ClaudeCodeSettings> = {}): Claude
     model: 'sonnet',
     headless_mode: false,
     output_format: 'text',
-    mcp_github: false,
     default_allowed_tools: ['Read', 'Glob', 'Grep'],
     ...overrides,
   };
@@ -654,26 +653,7 @@ describe('Settings', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'advanced' }));
 
-      expect(screen.getByText('Enable GitHub MCP Server')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Reset to Defaults' })).toBeInTheDocument();
-    });
-
-    it('toggles MCP GitHub setting', async () => {
-      render(<Settings {...defaultProps} />);
-
-      // Wait for token fetch to complete before switching tabs
-      await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalled();
-      });
-
-      fireEvent.click(screen.getByRole('button', { name: 'advanced' }));
-
-      const checkbox = screen.getByRole('checkbox');
-      fireEvent.click(checkbox);
-
-      await waitFor(() => {
-        expect(mockUpdateSettings).toHaveBeenCalledWith({ mcp_github: true });
-      });
     });
 
     it('shows confirmation and resets settings when reset button is clicked', async () => {
@@ -940,7 +920,7 @@ describe('Settings', () => {
 
       // Switch to advanced
       fireEvent.click(screen.getByRole('button', { name: 'advanced' }));
-      expect(screen.getByText('Enable GitHub MCP Server')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Reset to Defaults' })).toBeInTheDocument();
     });
 
     it('highlights the active tab', async () => {
@@ -1001,7 +981,7 @@ describe('Settings', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'advanced' }));
 
-      // Should have dividers between Theme, MCP GitHub, and Reset sections
+      // Should have dividers between Theme and Reset sections
       const dividers = container.querySelectorAll('.border-t');
       expect(dividers.length).toBeGreaterThan(0);
     });

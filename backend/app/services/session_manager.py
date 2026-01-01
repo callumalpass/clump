@@ -139,7 +139,6 @@ class ProcessManager:
         max_turns: int | None = None,
         model: str | None = None,
         resume_session: str | None = None,
-        mcp_config: dict[str, Any] | None = None,
     ) -> Process:
         """
         Create a new PTY process running an AI coding CLI.
@@ -155,7 +154,6 @@ class ProcessManager:
             max_turns: Max agentic turns (overrides config)
             model: Model to use (overrides config)
             resume_session: Session ID to resume
-            mcp_config: MCP server configuration
         """
         process_id = str(uuid4())[:8]
 
@@ -193,7 +191,6 @@ class ProcessManager:
             permission_mode=permission_mode,
             max_turns=max_turns,
             model=model,
-            mcp_config=mcp_config,
         )
 
         # Validate working directory exists before forking

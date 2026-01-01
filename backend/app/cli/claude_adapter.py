@@ -55,7 +55,6 @@ class ClaudeAdapter(CLIAdapter):
             supports_tool_allowlist=True,
             supports_permission_modes=True,
             supports_max_turns=True,
-            supports_mcp=True,
             output_format="stream-json",
         )
 
@@ -80,7 +79,6 @@ class ClaudeAdapter(CLIAdapter):
         permission_mode: Optional[str] = None,
         max_turns: Optional[int] = None,
         model: Optional[str] = None,
-        mcp_config: Optional[dict[str, Any]] = None,
     ) -> list[str]:
         """Build Claude Code interactive command."""
         args = [self.command_name]
@@ -120,11 +118,6 @@ class ClaudeAdapter(CLIAdapter):
         if m:
             args.extend(["--model", m])
 
-        # MCP configuration
-        mcp = mcp_config or settings.get_mcp_config()
-        if mcp:
-            args.extend(["--mcp-config", json.dumps(mcp)])
-
         return args
 
     def build_headless_command(
@@ -141,7 +134,6 @@ class ClaudeAdapter(CLIAdapter):
         model: Optional[str] = None,
         system_prompt: Optional[str] = None,
         output_format: Optional[str] = None,
-        mcp_config: Optional[dict[str, Any]] = None,
     ) -> list[str]:
         """Build Claude Code headless command."""
         args = [self.command_name, "-p", prompt]
@@ -191,11 +183,6 @@ class ClaudeAdapter(CLIAdapter):
         # System prompt
         if system_prompt:
             args.extend(["--append-system-prompt", system_prompt])
-
-        # MCP configuration
-        mcp = mcp_config or settings.get_mcp_config()
-        if mcp:
-            args.extend(["--mcp-config", json.dumps(mcp)])
 
         return args
 

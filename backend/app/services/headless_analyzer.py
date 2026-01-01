@@ -15,7 +15,7 @@ import asyncio.subprocess
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Any, AsyncGenerator
+from typing import AsyncGenerator
 from uuid import uuid4
 
 from app.cli import CLIType, get_adapter
@@ -92,7 +92,6 @@ class HeadlessAnalyzer:
         permission_mode: str | None = None,
         model: str | None = None,
         system_prompt: str | None = None,
-        mcp_config: dict[str, Any] | None = None,
     ) -> SessionResult:
         """
         Run a headless session and return the complete result.
@@ -109,7 +108,6 @@ class HeadlessAnalyzer:
             permission_mode: Permission mode (overrides config)
             model: Model to use (overrides config)
             system_prompt: Additional system prompt to append
-            mcp_config: MCP server configuration
 
         Returns:
             SessionResult with complete session data
@@ -127,7 +125,6 @@ class HeadlessAnalyzer:
             permission_mode=permission_mode,
             model=model,
             system_prompt=system_prompt,
-            mcp_config=mcp_config,
         ):
             messages.append(msg)
 
@@ -174,7 +171,6 @@ class HeadlessAnalyzer:
         model: str | None = None,
         system_prompt: str | None = None,
         output_format: str | None = None,
-        mcp_config: dict[str, Any] | None = None,
     ) -> AsyncGenerator[SessionMessage, None]:
         """
         Run a headless session and stream results as they arrive.
@@ -210,7 +206,6 @@ class HeadlessAnalyzer:
             model=model,
             system_prompt=system_prompt,
             output_format=fmt,
-            mcp_config=mcp_config,
         )
 
         process = await asyncio.create_subprocess_exec(

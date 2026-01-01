@@ -14,7 +14,6 @@ export type CLIType = 'claude' | 'gemini' | 'codex';
 export interface CLICapabilities {
   supports_headless: boolean;
   supports_resume: boolean;
-  supports_mcp: boolean;
   supports_permission_mode: boolean;
   supports_tool_control: boolean;
   supports_model_selection: boolean;
@@ -358,7 +357,6 @@ export interface ClaudeCodeSettings {
   model: string;
   headless_mode: boolean;
   output_format: OutputFormat;
-  mcp_github: boolean;
   default_allowed_tools: string[];
 }
 

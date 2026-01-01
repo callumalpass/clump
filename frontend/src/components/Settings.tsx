@@ -201,10 +201,6 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
     await updateSettings({ output_format: format });
   };
 
-  const handleMcpGithubChange = async (enabled: boolean) => {
-    await updateSettings({ mcp_github: enabled });
-  };
-
   const handleReset = async () => {
     if (confirm('Reset all Claude Code settings to defaults?')) {
       await resetSettings();
@@ -706,28 +702,6 @@ export function Settings({ isOpen, onClose, commands, repoPath, onRefreshCommand
                     System
                   </button>
                 </div>
-              </div>
-
-              {/* Section divider */}
-              <div className="border-t border-gray-750/50" />
-
-              {/* MCP GitHub */}
-              <div className="bg-gray-800 rounded-stoody p-4">
-                <label className="flex items-center gap-4 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={settings.mcp_github}
-                    onChange={(e) => handleMcpGithubChange(e.target.checked)}
-                    disabled={saving}
-                    className="w-5 h-5 rounded-stoody-sm border-gray-600 bg-gray-750 focus-visible:ring-2 focus-visible:ring-blurple-500 focus-visible:ring-offset-0 accent-blurple-500"
-                  />
-                  <div>
-                    <div className="text-sm font-medium">Enable GitHub MCP Server</div>
-                    <div className="text-xs text-gray-400 mt-0.5">
-                      Allows Claude to interact with GitHub directly via MCP
-                    </div>
-                  </div>
-                </label>
               </div>
 
               {/* Reset - has its own divider styling with pt-5 border-t */}

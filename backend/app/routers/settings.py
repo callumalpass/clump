@@ -50,7 +50,6 @@ class ClaudeCodeSettings(BaseModel):
     model: str = "sonnet"
     headless_mode: bool = False
     output_format: Literal["text", "json", "stream-json"] = "stream-json"
-    mcp_github: bool = False
 
 
 class ClaudeCodeSettingsResponse(BaseModel):
@@ -63,7 +62,6 @@ class ClaudeCodeSettingsResponse(BaseModel):
     model: str
     headless_mode: bool
     output_format: str
-    mcp_github: bool
     default_allowed_tools: list[str]  # For UI to show defaults
 
 
@@ -145,7 +143,6 @@ async def get_claude_settings():
         model=settings.claude_model,
         headless_mode=settings.claude_headless_mode,
         output_format=settings.claude_output_format,
-        mcp_github=settings.claude_mcp_github,
         default_allowed_tools=DEFAULT_ALLOWED_TOOLS,
     )
 
@@ -161,7 +158,6 @@ async def update_claude_settings(new_settings: ClaudeCodeSettings):
     config["claude_model"] = new_settings.model
     config["claude_headless_mode"] = new_settings.headless_mode
     config["claude_output_format"] = new_settings.output_format
-    config["claude_mcp_github"] = new_settings.mcp_github
 
     # Handle tools lists
     if new_settings.allowed_tools:
@@ -187,7 +183,6 @@ async def update_claude_settings(new_settings: ClaudeCodeSettings):
         model=new_settings.model,
         headless_mode=new_settings.headless_mode,
         output_format=new_settings.output_format,
-        mcp_github=new_settings.mcp_github,
         default_allowed_tools=DEFAULT_ALLOWED_TOOLS,
     )
 
@@ -206,7 +201,6 @@ async def reset_claude_settings():
         "claude_model",
         "claude_headless_mode",
         "claude_output_format",
-        "claude_mcp_github",
     ]
 
     for key in keys_to_remove:
@@ -223,7 +217,6 @@ async def reset_claude_settings():
         "CLAUDE_MODEL",
         "CLAUDE_HEADLESS_MODE",
         "CLAUDE_OUTPUT_FORMAT",
-        "CLAUDE_MCP_GITHUB",
     ]
     for key in env_keys:
         os.environ.pop(key, None)

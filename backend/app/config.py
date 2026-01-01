@@ -186,14 +186,6 @@ class Settings:
             return fmt  # type: ignore
         return "stream-json"
 
-    @property
-    def claude_mcp_github(self) -> bool:
-        return self._get_bool("claude_mcp_github", False, "CLAUDE_MCP_GITHUB")
-
-    @property
-    def claude_mcp_servers(self) -> str:
-        return self._get("claude_mcp_servers", "", "CLAUDE_MCP_SERVERS") or ""
-
     # ==========================================
     # Gemini CLI Settings
     # ==========================================
@@ -245,30 +237,6 @@ class Settings:
         if self.claude_disallowed_tools:
             return [t.strip() for t in self.claude_disallowed_tools.split(",")]
         return []
-
-    def get_mcp_config(self) -> dict | None:
-        """Get MCP server configuration for Claude Code."""
-        servers = {}
-
-        # Add GitHub MCP if enabled
-        if self.claude_mcp_github and self.github_token:
-            servers["github"] = {
-                "type": "http",
-                "url": "https://api.githubcopilot.com/mcp/",
-                "headers": {
-                    "Authorization": f"Bearer {self.github_token}"
-                }
-            }
-
-        # Parse additional MCP servers
-        if self.claude_mcp_servers:
-            try:
-                additional = json.loads(self.claude_mcp_servers)
-                servers.update(additional)
-            except json.JSONDecodeError:
-                pass
-
-        return servers if servers else None
 
     def reload(self) -> None:
         """Reload config from files."""
