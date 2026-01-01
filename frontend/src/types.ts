@@ -295,7 +295,7 @@ export interface SessionDetail {
   duration_seconds?: number | null;  // Session duration in seconds (null if active)
 
   // Version info
-  claude_code_version?: string | null;
+  cli_version?: string | null;
   git_branch?: string | null;
 
   // CLI type
@@ -409,7 +409,7 @@ export interface ParsedTranscript {
   total_cache_creation_tokens?: number;
   start_time?: string;
   end_time?: string;
-  claude_code_version?: string;
+  cli_version?: string;
   git_branch?: string;
 }
 

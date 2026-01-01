@@ -251,7 +251,7 @@ class SessionDetailResponse(BaseModel):
     duration_seconds: Optional[int] = None  # Session duration in seconds
 
     # Version info
-    claude_code_version: Optional[str] = None
+    cli_version: Optional[str] = None
     git_branch: Optional[str] = None
 
     # CLI type

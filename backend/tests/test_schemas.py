@@ -474,7 +474,7 @@ class TestSessionDetailResponse:
         assert detail.total_cache_creation_tokens == 0
         assert detail.start_time is None
         assert detail.end_time is None
-        assert detail.claude_code_version is None
+        assert detail.cli_version is None
         assert detail.git_branch is None
         assert detail.is_active is False
 
@@ -513,7 +513,7 @@ class TestSessionDetailResponse:
             total_cache_creation_tokens=100,
             start_time="2024-01-01T00:00:00Z",
             end_time="2024-01-01T00:01:00Z",
-            claude_code_version="1.0.0",
+            cli_version="1.0.0",
             git_branch="main",
             metadata=metadata,
             is_active=True,
@@ -522,7 +522,7 @@ class TestSessionDetailResponse:
         assert len(detail.messages) == 2
         assert detail.summary == "A test conversation"
         assert detail.total_input_tokens == 1000
-        assert detail.claude_code_version == "1.0.0"
+        assert detail.cli_version == "1.0.0"
         assert detail.is_active is True
 
     def test_missing_metadata_raises_error(self):

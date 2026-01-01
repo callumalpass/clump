@@ -128,7 +128,7 @@ function createMockDetail(overrides: Partial<SessionDetail> = {}): SessionDetail
     total_cache_creation_tokens: 25,
     start_time: '2024-01-15T10:30:00Z',
     end_time: '2024-01-15T10:35:00Z',
-    claude_code_version: '1.0.0',
+    cli_version: '1.0.0',
     git_branch: 'main',
     metadata: {
       session_id: 'session-uuid-123',

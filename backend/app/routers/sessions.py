@@ -654,17 +654,46 @@ def _quick_scan_transcript(transcript_path: Path, cli_type: str = "claude") -> Q
     return result
 
 
-def _do_quick_scan_transcript(transcript_path: Path) -> QuickScanResult:
-    """
-    Scan a Claude JSONL transcript file for summary info (uncached).
-    """
-    result: QuickScanResult = {
+def _create_empty_scan_result() -> QuickScanResult:
+    """Create an empty QuickScanResult with default values."""
+    return {
         "title": None,
         "model": None,
         "start_time": None,
         "end_time": None,
         "message_count": 0,
     }
+
+
+def _extract_text_from_content(content: list | str, max_length: int = TITLE_PREVIEW_LENGTH) -> str | None:
+    """
+    Extract text from message content, handling both string and list formats.
+
+    Shared by Claude and Codex parsers which use similar content block structures.
+    """
+    if isinstance(content, str):
+        return content[:max_length] if content else None
+
+    if isinstance(content, list):
+        for part in content:
+            if isinstance(part, dict):
+                # Handle different content types
+                text = part.get('text', '')
+                if part.get('type') in ('text', 'input_text', 'output_text'):
+                    text = part.get('text', '')
+                if text and not text.startswith('<environment_context>'):
+                    return text[:max_length]
+            elif isinstance(part, str) and part:
+                return part[:max_length]
+
+    return None
+
+
+def _do_quick_scan_transcript(transcript_path: Path) -> QuickScanResult:
+    """
+    Scan a Claude JSONL transcript file for summary info (uncached).
+    """
+    result = _create_empty_scan_result()
 
     try:
         with open(transcript_path, 'r', encoding='utf-8') as f:
@@ -697,15 +726,7 @@ def _do_quick_scan_transcript(transcript_path: Path) -> QuickScanResult:
                     if entry_type == 'user' and not first_user_message:
                         msg = entry.get('message', {})
                         content = msg.get('content', '')
-                        if isinstance(content, str):
-                            first_user_message = content[:TITLE_PREVIEW_LENGTH]
-                        elif isinstance(content, list):
-                            for part in content:
-                                if isinstance(part, dict) and part.get('type') == 'text':
-                                    text = part.get('text')
-                                    if text:  # Skip None or empty text blocks
-                                        first_user_message = text[:TITLE_PREVIEW_LENGTH]
-                                        break
+                        first_user_message = _extract_text_from_content(content)
 
                     # Capture model
                     if entry_type == 'assistant' and not result["model"]:
@@ -733,13 +754,7 @@ def _do_quick_scan_gemini_transcript(transcript_path: Path) -> QuickScanResult:
     - messages: Array of message objects
     - startTime/lastUpdated: Timestamps
     """
-    result: QuickScanResult = {
-        "title": None,
-        "model": None,
-        "start_time": None,
-        "end_time": None,
-        "message_count": 0,
-    }
+    result = _create_empty_scan_result()
 
     try:
         with open(transcript_path, 'r', encoding='utf-8') as f:
@@ -752,7 +767,7 @@ def _do_quick_scan_gemini_transcript(transcript_path: Path) -> QuickScanResult:
         result["start_time"] = data.get("startTime")
         result["end_time"] = data.get("lastUpdated")
 
-        # Count messages
+        # Count messages and extract model
         messages = data.get("messages", [])
         for msg in messages:
             msg_type = msg.get("type")
@@ -768,8 +783,8 @@ def _do_quick_scan_gemini_transcript(transcript_path: Path) -> QuickScanResult:
             for msg in messages:
                 if msg.get("type") == "user":
                     content = msg.get("content", "")
-                    if isinstance(content, str) and content:
-                        result["title"] = content[:TITLE_PREVIEW_LENGTH]
+                    result["title"] = _extract_text_from_content(content)
+                    if result["title"]:
                         break
 
     except (OSError, json.JSONDecodeError):
@@ -789,13 +804,7 @@ def _do_quick_scan_codex_transcript(transcript_path: Path) -> QuickScanResult:
     - response_item with role=assistant: Assistant messages
     - turn_context: Contains model info
     """
-    result: QuickScanResult = {
-        "title": None,
-        "model": None,
-        "start_time": None,
-        "end_time": None,
-        "message_count": 0,
-    }
+    result = _create_empty_scan_result()
 
     try:
         with open(transcript_path, 'r', encoding='utf-8') as f:
@@ -834,14 +843,10 @@ def _do_quick_scan_codex_transcript(transcript_path: Path) -> QuickScanResult:
                         # Capture first real user message (skip environment context)
                         if role == 'user':
                             user_message_count += 1
+                            # Skip first user message (environment context)
                             if user_message_count >= 2 and not first_real_user_message:
                                 content = payload.get('content', [])
-                                for c in content:
-                                    if isinstance(c, dict):
-                                        text = c.get('text', '')
-                                        if text and not text.startswith('<environment_context>'):
-                                            first_real_user_message = text[:TITLE_PREVIEW_LENGTH]
-                                            break
+                                first_real_user_message = _extract_text_from_content(content)
 
                 # Get model from turn_context
                 if entry_type == 'turn_context' and not result["model"]:
@@ -948,7 +953,7 @@ def _parsed_to_detail(
         start_time=parsed.start_time,
         end_time=parsed.end_time,
         duration_seconds=duration_seconds,
-        claude_code_version=parsed.claude_code_version,
+        cli_version=parsed.cli_version,
         git_branch=parsed.git_branch,
         cli_type=cli_type,
         metadata=_build_metadata_response(session_id, metadata),
@@ -1311,7 +1316,7 @@ async def get_session(session_id: str):
             total_cache_creation_tokens=0,
             start_time=active_process.created_at.isoformat(),
             end_time=None,
-            claude_code_version=None,
+            cli_version=None,
             git_branch=None,
             cli_type=active_process.cli_type.value if hasattr(active_process.cli_type, 'value') else active_process.cli_type,
             metadata=_build_metadata_response(session_id, metadata),

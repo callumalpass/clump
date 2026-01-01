@@ -121,7 +121,7 @@ def mock_parsed_transcript():
         total_cache_creation_tokens=5,
         start_time="2024-01-15T10:30:00Z",
         end_time="2024-01-15T10:30:05Z",
-        claude_code_version="1.0.0",
+        cli_version="1.0.0",
         git_branch="main",
     )
 

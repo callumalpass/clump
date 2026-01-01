@@ -116,7 +116,7 @@ class TestParsedTranscript:
             total_output_tokens=500,
             start_time="2025-01-01T00:00:00Z",
             end_time="2025-01-01T01:00:00Z",
-            claude_code_version="1.0.0",
+            cli_version="1.0.0",
             git_branch="main"
         )
         assert transcript.summary == "Test session"
@@ -775,7 +775,7 @@ class TestParseTranscript:
 
         result = parse_transcript("session-meta", "/test/project")
         assert result is not None
-        assert result.claude_code_version == "1.2.3"
+        assert result.cli_version == "1.2.3"
         assert result.git_branch == "feature/new-stuff"
 
     def test_captures_primary_model(self, tmp_path, monkeypatch):
@@ -1063,7 +1063,7 @@ class TestTranscriptToDictComplete:
             total_cache_creation_tokens=50,
             start_time="2025-01-01T00:00:00Z",
             end_time="2025-01-01T01:00:00Z",
-            claude_code_version="1.2.3",
+            cli_version="1.2.3",
             git_branch="main"
         )
         result = transcript_to_dict(transcript)
@@ -1076,5 +1076,459 @@ class TestTranscriptToDictComplete:
         assert result["total_cache_creation_tokens"] == 50
         assert result["start_time"] == "2025-01-01T00:00:00Z"
         assert result["end_time"] == "2025-01-01T01:00:00Z"
-        assert result["claude_code_version"] == "1.2.3"
+        assert result["cli_version"] == "1.2.3"
         assert result["git_branch"] == "main"
+
+
+# ==========================================
+# Gemini Transcript Parsing Tests
+# ==========================================
+
+class TestParseGeminiTranscript:
+    """Tests for parsing Gemini CLI JSON transcripts."""
+
+    def test_parses_empty_gemini_session(self, tmp_path, monkeypatch):
+        """Parses an empty Gemini session file."""
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        # Create Gemini session structure
+        gemini_dir = tmp_path / ".gemini" / "tmp" / "abc123" / "chats"
+        gemini_dir.mkdir(parents=True)
+
+        session_file = gemini_dir / "session-empty.json"
+        session_file.write_text(json.dumps({
+            "sessionId": "session-empty",
+            "messages": [],
+            "startTime": "2025-01-01T10:00:00Z"
+        }))
+
+        result = parse_transcript_file(session_file, "session-empty", cli_type=CLIType.GEMINI.value)
+        assert result is not None
+        assert result.session_id == "session-empty"
+        assert result.messages == []
+
+    def test_parses_gemini_user_message(self, tmp_path):
+        """Parses Gemini user messages."""
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        gemini_dir = tmp_path / ".gemini" / "tmp" / "abc123" / "chats"
+        gemini_dir.mkdir(parents=True)
+
+        session_file = gemini_dir / "session-user.json"
+        session_file.write_text(json.dumps({
+            "sessionId": "session-user",
+            "messages": [
+                {
+                    "type": "user",
+                    "content": "Hello, Gemini!",
+                    "timestamp": "2025-01-01T10:00:00Z"
+                }
+            ],
+            "startTime": "2025-01-01T10:00:00Z"
+        }))
+
+        result = parse_transcript_file(session_file, "session-user", cli_type=CLIType.GEMINI.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].role == "user"
+        assert result.messages[0].content == "Hello, Gemini!"
+
+    def test_parses_gemini_assistant_message(self, tmp_path):
+        """Parses Gemini assistant messages (type='gemini')."""
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        gemini_dir = tmp_path / ".gemini" / "tmp" / "abc123" / "chats"
+        gemini_dir.mkdir(parents=True)
+
+        session_file = gemini_dir / "session-assistant.json"
+        session_file.write_text(json.dumps({
+            "sessionId": "session-assistant",
+            "messages": [
+                {
+                    "type": "gemini",
+                    "content": [{"type": "text", "text": "Hello! How can I help?"}],
+                    "model": "gemini-2.0-flash",
+                    "timestamp": "2025-01-01T10:00:00Z"
+                }
+            ],
+            "startTime": "2025-01-01T10:00:00Z"
+        }))
+
+        result = parse_transcript_file(session_file, "session-assistant", cli_type=CLIType.GEMINI.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].role == "assistant"
+        assert "Hello! How can I help?" in result.messages[0].content
+        assert result.model == "gemini-2.0-flash"
+
+    def test_parses_gemini_function_calls(self, tmp_path):
+        """Parses Gemini function calls (tool uses)."""
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        gemini_dir = tmp_path / ".gemini" / "tmp" / "abc123" / "chats"
+        gemini_dir.mkdir(parents=True)
+
+        session_file = gemini_dir / "session-tools.json"
+        session_file.write_text(json.dumps({
+            "sessionId": "session-tools",
+            "messages": [
+                {
+                    "type": "gemini",
+                    "content": [
+                        {"type": "text", "text": "Let me read that file."},
+                        {
+                            "type": "functionCall",
+                            "id": "call-123",
+                            "name": "read_file",
+                            "args": {"path": "/test.py"}
+                        }
+                    ],
+                    "model": "gemini-2.0-flash",
+                    "timestamp": "2025-01-01T10:00:00Z"
+                }
+            ],
+            "startTime": "2025-01-01T10:00:00Z"
+        }))
+
+        result = parse_transcript_file(session_file, "session-tools", cli_type=CLIType.GEMINI.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert len(result.messages[0].tool_uses) == 1
+        assert result.messages[0].tool_uses[0].name == "read_file"
+        assert result.messages[0].tool_uses[0].input == {"path": "/test.py"}
+
+    def test_parses_gemini_summary(self, tmp_path):
+        """Parses Gemini session summary."""
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        gemini_dir = tmp_path / ".gemini" / "tmp" / "abc123" / "chats"
+        gemini_dir.mkdir(parents=True)
+
+        session_file = gemini_dir / "session-summary.json"
+        session_file.write_text(json.dumps({
+            "sessionId": "session-summary",
+            "summary": "Debugging a Python script",
+            "messages": [
+                {
+                    "type": "user",
+                    "content": "Help me fix this bug",
+                    "timestamp": "2025-01-01T10:00:00Z"
+                }
+            ],
+            "startTime": "2025-01-01T10:00:00Z"
+        }))
+
+        result = parse_transcript_file(session_file, "session-summary", cli_type=CLIType.GEMINI.value)
+        assert result is not None
+        assert result.summary == "Debugging a Python script"
+
+    def test_parses_gemini_timestamps(self, tmp_path):
+        """Parses Gemini session timestamps."""
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        gemini_dir = tmp_path / ".gemini" / "tmp" / "abc123" / "chats"
+        gemini_dir.mkdir(parents=True)
+
+        session_file = gemini_dir / "session-times.json"
+        session_file.write_text(json.dumps({
+            "sessionId": "session-times",
+            "startTime": "2025-01-01T10:00:00Z",
+            "lastUpdated": "2025-01-01T11:30:00Z",
+            "messages": []
+        }))
+
+        result = parse_transcript_file(session_file, "session-times", cli_type=CLIType.GEMINI.value)
+        assert result is not None
+        assert result.start_time == "2025-01-01T10:00:00Z"
+        assert result.end_time == "2025-01-01T11:30:00Z"
+
+
+# ==========================================
+# Codex Transcript Parsing Tests
+# ==========================================
+
+class TestParseCodexTranscript:
+    """Tests for parsing Codex CLI JSONL transcripts."""
+
+    def test_parses_empty_codex_session(self, tmp_path):
+        """Parses an empty Codex session file."""
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-empty.jsonl"
+        session_file.write_text(json.dumps({
+            "type": "session_meta",
+            "payload": {"timestamp": "2025-01-15T10:00:00Z"}
+        }) + "\n")
+
+        result = parse_transcript_file(session_file, "session-empty", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        assert result.session_id == "session-empty"
+        assert result.messages == []
+
+    def test_parses_codex_user_message(self, tmp_path):
+        """Parses Codex user messages (skipping environment context)."""
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-user.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            # First user message is environment context (skipped)
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:00Z",
+                "payload": {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "<environment_context>...</environment_context>"}]
+                }
+            }),
+            # Real user message
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:01Z",
+                "payload": {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Hello, Codex!"}]
+                }
+            })
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(session_file, "session-user", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].role == "user"
+        assert "Hello, Codex!" in result.messages[0].content
+
+    def test_parses_codex_assistant_message(self, tmp_path):
+        """Parses Codex assistant messages."""
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-assistant.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:01Z",
+                "payload": {
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "I can help with that!"}]
+                }
+            }),
+            json.dumps({
+                "type": "turn_context",
+                "payload": {"model": "o3-mini"}
+            })
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(session_file, "session-assistant", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].role == "assistant"
+        assert "I can help with that!" in result.messages[0].content
+        assert result.model == "o3-mini"
+
+    def test_parses_codex_function_calls(self, tmp_path):
+        """Parses Codex function calls (tool uses)."""
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-tools.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:01Z",
+                "payload": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "output_text", "text": "Let me read the file."},
+                        {
+                            "type": "function_call",
+                            "id": "call-456",
+                            "name": "shell",
+                            "arguments": "{\"command\": \"cat /test.py\"}"
+                        }
+                    ]
+                }
+            })
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(session_file, "session-tools", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert len(result.messages[0].tool_uses) == 1
+        assert result.messages[0].tool_uses[0].name == "shell"
+
+    def test_parses_codex_session_meta(self, tmp_path):
+        """Parses Codex session metadata."""
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-meta.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {
+                    "timestamp": "2025-01-15T10:00:00Z",
+                    "cwd": "/home/user/project",
+                    "codexVersion": "0.5.0"
+                }
+            })
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(session_file, "session-meta", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        assert result.start_time == "2025-01-15T10:00:00Z"
+
+    def test_skips_codex_environment_context(self, tmp_path):
+        """Skips Codex environment context messages."""
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-env.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            # Environment context (should be skipped for title extraction)
+            json.dumps({
+                "type": "response_item",
+                "payload": {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "<environment_context>...</environment_context>"}]
+                }
+            }),
+            # Real user message
+            json.dumps({
+                "type": "response_item",
+                "payload": {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Help me with this code"}]
+                }
+            })
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(session_file, "session-env", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        # Should have both messages (we parse all, title extraction skips env context)
+        assert len(result.messages) >= 1
+
+    def test_handles_codex_multiple_turns(self, tmp_path):
+        """Parses Codex session with multiple conversation turns."""
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-multi.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            # Environment context (first user message, skipped)
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:00Z",
+                "payload": {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "<environment_context>...</environment_context>"}]
+                }
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:01Z",
+                "payload": {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "First message"}]
+                }
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:02Z",
+                "payload": {
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "First response"}]
+                }
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:03Z",
+                "payload": {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Second message"}]
+                }
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:04Z",
+                "payload": {
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "Second response"}]
+                }
+            })
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(session_file, "session-multi", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        assert len(result.messages) == 4
+        assert result.messages[0].role == "user"
+        assert result.messages[1].role == "assistant"
+        assert result.messages[2].role == "user"
+        assert result.messages[3].role == "assistant"

@@ -1,8 +1,13 @@
 """
-Parse Claude Code JSONL transcripts into structured conversation data.
+Parse AI coding CLI transcripts into structured conversation data.
 
-Claude Code stores session transcripts in ~/.claude/projects/<project-path>/<session-id>.jsonl
-Each line is a JSON object representing a message or event.
+Supports multiple CLI tools:
+- Claude Code: ~/.claude/projects/<encoded-path>/<session-id>.jsonl (JSONL format)
+- Gemini CLI: ~/.gemini/tmp/<project-hash>/chats/<session-id>.json (JSON format)
+- Codex CLI: ~/.codex/sessions/<year>/<month>/<day>/<session-id>.jsonl (JSONL format)
+
+Each CLI has a different transcript format, but all are normalized to the same
+ParsedTranscript structure for consistent handling in the application.
 """
 
 import json
@@ -71,7 +76,7 @@ class ParsedTranscript:
     total_cache_creation_tokens: int = 0
     start_time: str | None = None
     end_time: str | None = None
-    claude_code_version: str | None = None
+    cli_version: str | None = None
     git_branch: str | None = None
 
 
@@ -201,7 +206,7 @@ def _parse_claude_transcript(transcript_path: Path, session_id: str) -> ParsedTr
     primary_model = None
     start_time = None
     end_time = None
-    claude_code_version = None
+    cli_version = None
     git_branch = None
 
     try:
@@ -228,8 +233,8 @@ def _parse_claude_transcript(transcript_path: Path, session_id: str) -> ParsedTr
                     continue
 
                 # Capture metadata from first message
-                if not claude_code_version:
-                    claude_code_version = entry.get('version')
+                if not cli_version:
+                    cli_version = entry.get('version')
                 if not git_branch:
                     git_branch = entry.get('gitBranch')
 
@@ -389,7 +394,7 @@ def _parse_claude_transcript(transcript_path: Path, session_id: str) -> ParsedTr
         total_cache_creation_tokens=total_cache_creation,
         start_time=start_time,
         end_time=end_time,
-        claude_code_version=claude_code_version,
+        cli_version=cli_version,
         git_branch=git_branch,
     )
 
@@ -562,7 +567,7 @@ def _parse_gemini_transcript(transcript_path: Path, session_id: str) -> ParsedTr
         total_cache_creation_tokens=0,
         start_time=start_time,
         end_time=end_time,
-        claude_code_version=None,
+        cli_version=None,
         git_branch=None,
     )
 
@@ -782,7 +787,7 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
         total_cache_creation_tokens=0,
         start_time=start_time,
         end_time=end_time,
-        claude_code_version=None,
+        cli_version=None,
         git_branch=git_branch,
     )
 
@@ -835,6 +840,6 @@ def transcript_to_dict(transcript: ParsedTranscript) -> dict:
         'total_cache_creation_tokens': transcript.total_cache_creation_tokens,
         'start_time': transcript.start_time,
         'end_time': transcript.end_time,
-        'claude_code_version': transcript.claude_code_version,
+        'cli_version': transcript.cli_version,
         'git_branch': transcript.git_branch,
     }

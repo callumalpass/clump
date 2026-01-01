@@ -720,7 +720,7 @@ export function SessionView({
     total_cache_creation_tokens: detail.total_cache_creation_tokens,
     start_time: detail.start_time || undefined,
     end_time: detail.end_time || undefined,
-    claude_code_version: detail.claude_code_version || undefined,
+    cli_version: detail.cli_version || undefined,
     git_branch: detail.git_branch || undefined,
   } : null;
 

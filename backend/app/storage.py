@@ -552,6 +552,26 @@ def _scan_gemini_project_dir(
     return sessions
 
 
+def _extract_gemini_session_path(session_file: Path) -> Optional[str]:
+    """
+    Extract the working directory from a Gemini session file.
+
+    Gemini stores projectPath in the session JSON file, which can be used
+    to identify the original project directory even when the hash-based
+    directory name cannot be reversed.
+
+    Returns:
+        The project path if found, None otherwise.
+    """
+    try:
+        with open(session_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            # Gemini may store the path as projectPath or cwd
+            return data.get("projectPath") or data.get("cwd")
+    except (json.JSONDecodeError, IOError, OSError):
+        return None
+
+
 def discover_gemini_sessions(
     repo_path: Optional[str] = None,
 ) -> list[DiscoveredSession]:
@@ -559,7 +579,10 @@ def discover_gemini_sessions(
     Discover Gemini sessions from ~/.gemini/tmp/.
 
     Gemini uses SHA256 hashes of repo paths as directory names. Since hashes
-    are one-way, we build a mapping from known repos to their hashes.
+    are one-way, we use multiple strategies to discover sessions:
+    1. Match known repos to their hashed directories
+    2. Read projectPath from session files to identify unknown repos
+    3. Check sidecar metadata for path information
 
     Args:
         repo_path: Optional path to filter sessions by repo.
@@ -595,15 +618,24 @@ def discover_gemini_sessions(
             sessions = _scan_gemini_project_dir(project_dir, clump_projects_dir, normalized)
             all_sessions.extend(sessions)
     else:
-        # Scan all project directories that match known repos
+        # Scan ALL project directories, not just known ones
+        # This allows discovery of sessions for repos not yet added to clump
         try:
             for project_dir in gemini_projects.iterdir():
                 if not project_dir.is_dir():
                     continue
                 dir_hash = project_dir.name
+
+                # First, check if this matches a known repo
                 if dir_hash in hash_to_repo:
                     sessions = _scan_gemini_project_dir(
                         project_dir, clump_projects_dir, hash_to_repo[dir_hash]
+                    )
+                    all_sessions.extend(sessions)
+                else:
+                    # Unknown repo - scan anyway and try to extract path from sessions
+                    sessions = _scan_gemini_unknown_project_dir(
+                        project_dir, clump_projects_dir, dir_hash
                     )
                     all_sessions.extend(sessions)
         except OSError:
@@ -611,6 +643,79 @@ def discover_gemini_sessions(
 
     all_sessions.sort(key=lambda s: s.modified_at, reverse=True)
     return all_sessions
+
+
+def _scan_gemini_unknown_project_dir(
+    project_dir: Path,
+    clump_projects_dir: Path,
+    dir_hash: str,
+) -> list[DiscoveredSession]:
+    """
+    Scan a Gemini project directory for sessions when the original path is unknown.
+
+    Attempts to extract the project path from individual session files.
+    Uses the hash as a fallback encoded_path if the path cannot be determined.
+
+    Args:
+        project_dir: The project directory (hash-named)
+        clump_projects_dir: Path to clump's projects directory for sidecars
+        dir_hash: The directory hash (used as fallback encoded path)
+
+    Returns:
+        List of DiscoveredSession objects.
+    """
+    chats_dir = project_dir / "chats"
+    if not chats_dir.exists():
+        return []
+
+    sessions: list[DiscoveredSession] = []
+
+    for json_file in chats_dir.glob("*.json"):
+        session_id = json_file.stem
+
+        try:
+            stat = json_file.stat()
+            modified_at = datetime.fromtimestamp(stat.st_mtime)
+            file_size = stat.st_size
+        except OSError:
+            continue
+
+        # Try to extract the project path from the session file
+        project_path = _extract_gemini_session_path(json_file)
+
+        if project_path:
+            # Convert path to encoded format for sidecar lookup
+            encoded_path = project_path.replace('/', '-').lstrip('-')
+            if encoded_path.startswith('-'):
+                encoded_path = encoded_path[1:]
+            encoded_path = f"-{encoded_path.replace('/', '-')}"
+        else:
+            # Fallback to using the hash as the encoded path
+            # This won't match sidecars, but allows the session to be discovered
+            encoded_path = f"gemini-unknown-{dir_hash[:12]}"
+
+        # Try to load sidecar metadata
+        metadata = None
+        sidecar_path = clump_projects_dir / encoded_path / f"{session_id}.json"
+        if sidecar_path.exists():
+            try:
+                with open(sidecar_path, 'r', encoding='utf-8') as f:
+                    sidecar_data = json.load(f)
+                    metadata = SessionMetadata.from_dict(sidecar_data)
+            except (json.JSONDecodeError, IOError, KeyError):
+                pass
+
+        sessions.append(DiscoveredSession(
+            session_id=session_id,
+            encoded_path=encoded_path,
+            transcript_path=json_file,
+            modified_at=modified_at,
+            file_size=file_size,
+            metadata=metadata,
+            cli_type="gemini",
+        ))
+
+    return sessions
 
 
 def discover_codex_sessions(

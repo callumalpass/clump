@@ -139,7 +139,6 @@ def get_cli_info() -> list[dict]:
                     "tool_allowlist": caps.supports_tool_allowlist,
                     "permission_modes": caps.supports_permission_modes,
                     "max_turns": caps.supports_max_turns,
-                    "mcp": caps.supports_mcp,
                 },
             }
         )
