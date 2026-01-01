@@ -340,8 +340,13 @@ class TestGetCommandsEndpoint:
         """Test getting commands without repo path returns builtin only."""
         (temp_commands_dir / "issue" / "builtin-cmd.md").write_text(sample_command_content)
 
-        with patch('app.routers.commands.get_builtin_commands_dir', return_value=temp_commands_dir):
-            response = client.get("/commands")
+        # Create empty user dir to avoid loading real ~/.clump/commands/
+        with tempfile.TemporaryDirectory() as user_tmpdir:
+            user_dir = Path(user_tmpdir) / ".clump" / "commands"
+            user_dir.mkdir(parents=True)
+            with patch('app.routers.commands.get_builtin_commands_dir', return_value=temp_commands_dir), \
+                 patch('app.routers.commands.get_user_commands_dir', return_value=user_dir):
+                response = client.get("/commands")
 
         assert response.status_code == 200
         data = response.json()
@@ -354,10 +359,13 @@ class TestGetCommandsEndpoint:
     def test_get_commands_with_repo_path(self, client, temp_commands_dir, sample_command_content):
         """Test getting commands with repo path merges repo commands."""
         # Create builtin commands directory
-        with tempfile.TemporaryDirectory() as builtin_tmpdir:
+        with tempfile.TemporaryDirectory() as builtin_tmpdir, \
+             tempfile.TemporaryDirectory() as user_tmpdir:
             builtin_dir = Path(builtin_tmpdir) / ".claude" / "commands"
+            user_dir = Path(user_tmpdir) / ".clump" / "commands"
             (builtin_dir / "issue").mkdir(parents=True)
             (builtin_dir / "pr").mkdir(parents=True)
+            user_dir.mkdir(parents=True)
             (builtin_dir / "issue" / "builtin.md").write_text("""---
 name: Builtin Command
 shortName: BC
@@ -371,6 +379,7 @@ Builtin template
             (temp_commands_dir / "issue" / "repo-cmd.md").write_text(sample_command_content)
 
             with patch('app.routers.commands.get_builtin_commands_dir', return_value=builtin_dir), \
+                 patch('app.routers.commands.get_user_commands_dir', return_value=user_dir), \
                  patch('app.routers.commands.get_repo_commands_dir', return_value=temp_commands_dir):
                 response = client.get("/commands", params={"repo_path": "/some/repo"})
 
@@ -381,14 +390,17 @@ Builtin template
     def test_get_commands_repo_overrides_builtin(self, client):
         """Test that repo commands with same ID override builtin."""
         with tempfile.TemporaryDirectory() as builtin_tmpdir, \
-             tempfile.TemporaryDirectory() as repo_tmpdir:
+             tempfile.TemporaryDirectory() as repo_tmpdir, \
+             tempfile.TemporaryDirectory() as user_tmpdir:
             builtin_dir = Path(builtin_tmpdir) / ".claude" / "commands"
             repo_dir = Path(repo_tmpdir) / ".claude" / "commands"
+            user_dir = Path(user_tmpdir) / ".clump" / "commands"
 
             (builtin_dir / "issue").mkdir(parents=True)
             (builtin_dir / "pr").mkdir(parents=True)
             (repo_dir / "issue").mkdir(parents=True)
             (repo_dir / "pr").mkdir(parents=True)
+            user_dir.mkdir(parents=True)
 
             # Same ID in both
             (builtin_dir / "issue" / "shared.md").write_text("""---
@@ -409,6 +421,7 @@ Repo template
 """)
 
             with patch('app.routers.commands.get_builtin_commands_dir', return_value=builtin_dir), \
+                 patch('app.routers.commands.get_user_commands_dir', return_value=user_dir), \
                  patch('app.routers.commands.get_repo_commands_dir', return_value=repo_dir):
                 response = client.get("/commands", params={"repo_path": "/some/repo"})
 
@@ -767,8 +780,12 @@ Template with 日本語 and العربية and Ελληνικά.
 
     def test_empty_commands_directories(self, client, temp_commands_dir):
         """Test endpoint with empty commands directories."""
-        with patch('app.routers.commands.get_builtin_commands_dir', return_value=temp_commands_dir):
-            response = client.get("/commands")
+        with tempfile.TemporaryDirectory() as user_tmpdir:
+            user_dir = Path(user_tmpdir) / ".clump" / "commands"
+            user_dir.mkdir(parents=True)
+            with patch('app.routers.commands.get_builtin_commands_dir', return_value=temp_commands_dir), \
+                 patch('app.routers.commands.get_user_commands_dir', return_value=user_dir):
+                response = client.get("/commands")
 
         assert response.status_code == 200
         data = response.json()

@@ -6,7 +6,7 @@ Tag names are also synced to issue sidecar files for Claude visibility.
 """
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -50,14 +50,13 @@ async def sync_tags_to_sidecar(
 
 
 class TagResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     repo_id: int
     name: str
     color: str | None
     created_at: str
-
-    class Config:
-        from_attributes = True
 
 
 def _tag_to_response(tag: Tag) -> TagResponse:

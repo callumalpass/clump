@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 from croniter import croniter
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 import pytz
 from sqlalchemy import select, desc
 
@@ -149,6 +149,8 @@ class ScheduledJobUpdate(BaseModel):
 
 class ScheduledJobResponse(BaseModel):
     """Response model for a scheduled job."""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     description: Optional[str]
@@ -172,12 +174,11 @@ class ScheduledJobResponse(BaseModel):
     created_at: str
     updated_at: str
 
-    class Config:
-        from_attributes = True
-
 
 class ScheduledJobRunResponse(BaseModel):
     """Response model for a job run."""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     job_id: int
     status: str
@@ -189,9 +190,6 @@ class ScheduledJobRunResponse(BaseModel):
     items_failed: int
     error_message: Optional[str]
     session_ids: Optional[list[str]]
-
-    class Config:
-        from_attributes = True
 
 
 class ScheduledJobRunsResponse(BaseModel):
