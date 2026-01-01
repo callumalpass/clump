@@ -310,6 +310,7 @@ async def list_issues(
     order: str = "desc",
     page: int = 1,
     per_page: int = 30,
+    fetch_all: bool = False,
 ):
     """List issues for a repository with pagination and filtering.
 
@@ -319,33 +320,57 @@ async def list_issues(
         labels: Filter by label names (can specify multiple)
         sort: Sort field - "created", "updated", or "comments"
         order: Sort order - "asc" or "desc"
+        fetch_all: If true, fetch all issues (for client-side filtering)
     """
     repo = get_repo_or_404(repo_id)
 
     # Check cache first
     labels_key = ",".join(sorted(labels)) if labels else ""
-    cache_key = f"issues:{repo_id}:{state}:{search or ''}:{labels_key}:{sort}:{order}:{page}:{per_page}"
+    cache_key = f"issues:{repo_id}:{state}:{search or ''}:{labels_key}:{sort}:{order}:{page}:{per_page}:{fetch_all}"
     cached = _get_cached_response(cache_key)
     if cached is not None:
         return cached
 
-    issues, total = github_client.list_issues(
-        repo["owner"],
-        repo["name"],
-        state=state,
-        labels=labels if labels else None,
-        search_query=search,
-        sort=sort,
-        order=order,
-        page=page,
-        per_page=per_page,
-    )
-    response = IssueListResponse(
-        issues=[_issue_to_response(i) for i in issues],
-        total=total,
-        page=page,
-        per_page=per_page,
-    )
+    if fetch_all:
+        # Fetch all issues for client-side filtering
+        all_issues = github_client.list_all_issues(
+            repo["owner"],
+            repo["name"],
+            state=state,
+            labels=labels if labels else None,
+        )
+        # Apply search filter if provided
+        if search:
+            search_lower = search.lower()
+            all_issues = [
+                i for i in all_issues
+                if search_lower in (i.title or "").lower() or search_lower in (i.body or "").lower()
+            ]
+        total = len(all_issues)
+        response = IssueListResponse(
+            issues=[_issue_to_response(i) for i in all_issues],
+            total=total,
+            page=1,
+            per_page=total,  # All items in one "page"
+        )
+    else:
+        issues, total = github_client.list_issues(
+            repo["owner"],
+            repo["name"],
+            state=state,
+            labels=labels if labels else None,
+            search_query=search,
+            sort=sort,
+            order=order,
+            page=page,
+            per_page=per_page,
+        )
+        response = IssueListResponse(
+            issues=[_issue_to_response(i) for i in issues],
+            total=total,
+            page=page,
+            per_page=per_page,
+        )
     _cache_response(cache_key, response)
     return response
 

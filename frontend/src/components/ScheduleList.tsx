@@ -567,12 +567,24 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
                 type="text"
                 value={form.filter_query}
                 onChange={(e) => setForm((f) => ({ ...f, filter_query: e.target.value }))}
-                placeholder="state:open label:needs-triage"
+                placeholder="state:open label:bug priority:high"
                 className="w-full bg-gray-800 border border-gray-750 rounded-stoody px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blurple-500 transition-colors"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                GitHub-style filter: state:open, label:bug, -label:wontfix
-              </p>
+              <details className="mt-1">
+                <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-400">
+                  Available filter options
+                </summary>
+                <div className="mt-1 p-2 bg-gray-850 rounded-stoody-sm text-xs text-gray-400 space-y-1">
+                  <div><span className="text-blurple-400">GitHub:</span> state:open|closed, label:name, -label:name</div>
+                  <div><span className="text-blurple-400">Priority:</span> priority:critical|high|medium|low</div>
+                  <div><span className="text-blurple-400">Difficulty:</span> difficulty:trivial|easy|medium|hard|complex</div>
+                  <div><span className="text-blurple-400">Risk:</span> risk:low|medium|high</div>
+                  <div><span className="text-blurple-400">Type:</span> type:bug|feature|refactor|docs|chore|question</div>
+                  <div><span className="text-blurple-400">Status:</span> sidecar-status:open|in_progress|completed|wontfix</div>
+                  <div><span className="text-blurple-400">Areas:</span> affected-area:name</div>
+                  <div className="text-gray-500 mt-1">Use comma for OR (priority:high,critical), prefix with - to exclude (-type:docs)</div>
+                </div>
+              </details>
             </div>
           )}
 

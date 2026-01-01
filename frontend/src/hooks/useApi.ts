@@ -6,7 +6,8 @@ import type {
   CommandsResponse, CommandMetadata, SubsessionDetail,
   RepoSessionCount, SessionCountsResponse, StatsResponse, BulkOperationResult,
   IssueMetadataMap, IssueMetadata, PRMetadataMap, PRMetadata,
-  CLIType, CLIInfo, AvailableCLIsResponse, CLISettings
+  CLIType, CLIInfo, AvailableCLIsResponse, CLISettings,
+  IssuePriority, IssueDifficulty, IssueRisk, IssueType, IssueStatus
 } from '../types';
 import { formatLocalDate } from '../utils/time';
 
@@ -262,6 +263,13 @@ export interface IssueFilters {
   order?: 'asc' | 'desc';
   sessionStatus?: SessionStatusFilter;  // Client-side filter for issues with/without sessions
   localStatus?: LocalStatusFilter;  // Client-side filter for local status from sidecar metadata
+  // Sidecar metadata filters (client-side)
+  priority?: IssuePriority[];
+  difficulty?: IssueDifficulty[];
+  risk?: IssueRisk[];
+  issueType?: IssueType[];  // Named 'issueType' to avoid conflict with TypeScript 'type' keyword
+  sidecarStatus?: IssueStatus[];
+  affectedAreas?: string[];
 }
 
 interface IssueListResponse extends PaginatedResponse {
@@ -269,6 +277,17 @@ interface IssueListResponse extends PaginatedResponse {
 }
 
 const ISSUE_FILTER_DEFAULTS = { state: 'open', sort: 'created', order: 'desc' as const };
+
+/** Check if any sidecar metadata filters are active */
+export function hasSidecarFilters(filters: IssueFilters): boolean {
+  return Boolean(
+    filters.priority?.length ||
+    filters.difficulty?.length ||
+    filters.risk?.length ||
+    filters.issueType?.length ||
+    filters.sidecarStatus?.length
+  );
+}
 
 const issuesConfig: PaginatedListConfig<Issue, IssueFilters> = {
   buildUrl: (repoId) => `/repos/${repoId}/issues`,
@@ -279,12 +298,25 @@ const issuesConfig: PaginatedListConfig<Issue, IssueFilters> = {
     if (filters.labels && filters.labels.length > 0) {
       filters.labels.forEach(label => params.append('labels', label));
     }
+    // When sidecar filters are active, fetch all issues for client-side filtering
+    if (hasSidecarFilters(filters)) {
+      params.set('fetch_all', 'true');
+      // Remove pagination params since we're fetching all
+      params.delete('page');
+      params.delete('per_page');
+    }
     return params;
   },
   errorMessage: 'Failed to fetch issues',
   getFilterDeps: (filters) => [
     ...getEntityFilterDeps(filters, ISSUE_FILTER_DEFAULTS),
     filters.labels?.join(',') ?? '',
+    // Include sidecar filters in deps so refetch happens when they change
+    filters.priority?.join(',') ?? '',
+    filters.difficulty?.join(',') ?? '',
+    filters.risk?.join(',') ?? '',
+    filters.issueType?.join(',') ?? '',
+    filters.sidecarStatus?.join(',') ?? '',
   ],
 };
 

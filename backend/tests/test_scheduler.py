@@ -149,6 +149,285 @@ class TestParseFilterQuery:
         assert "feature" in result["labels"]
         assert "wontfix" in result["exclude_labels"]
 
+    # ==============================================
+    # Sidecar metadata filter tests
+    # ==============================================
+
+    def test_parses_priority_filter(self):
+        """Parses priority filter correctly."""
+        result = parse_filter_query("priority:high")
+        assert result["priority"] == ["high"]
+
+    def test_parses_priority_multiple_values(self):
+        """Parses comma-separated priority values."""
+        result = parse_filter_query("priority:high,critical")
+        assert "high" in result["priority"]
+        assert "critical" in result["priority"]
+
+    def test_parses_priority_exclude(self):
+        """Parses -priority exclude filter."""
+        result = parse_filter_query("-priority:low")
+        assert result["exclude_priority"] == ["low"]
+
+    def test_parses_difficulty_filter(self):
+        """Parses difficulty filter correctly."""
+        result = parse_filter_query("difficulty:easy,medium")
+        assert "easy" in result["difficulty"]
+        assert "medium" in result["difficulty"]
+
+    def test_parses_difficulty_exclude(self):
+        """Parses -difficulty exclude filter."""
+        result = parse_filter_query("-difficulty:complex")
+        assert result["exclude_difficulty"] == ["complex"]
+
+    def test_parses_risk_filter(self):
+        """Parses risk filter correctly."""
+        result = parse_filter_query("risk:low,medium")
+        assert "low" in result["risk"]
+        assert "medium" in result["risk"]
+
+    def test_parses_risk_exclude(self):
+        """Parses -risk exclude filter."""
+        result = parse_filter_query("-risk:high")
+        assert result["exclude_risk"] == ["high"]
+
+    def test_parses_type_filter(self):
+        """Parses type filter correctly."""
+        result = parse_filter_query("type:bug,feature")
+        assert "bug" in result["type"]
+        assert "feature" in result["type"]
+
+    def test_parses_type_exclude(self):
+        """Parses -type exclude filter."""
+        result = parse_filter_query("-type:docs")
+        assert result["exclude_type"] == ["docs"]
+
+    def test_parses_sidecar_status_filter(self):
+        """Parses sidecar-status filter correctly."""
+        result = parse_filter_query("sidecar-status:open,in_progress")
+        assert "open" in result["sidecar_status"]
+        assert "in_progress" in result["sidecar_status"]
+
+    def test_parses_sidecar_status_exclude(self):
+        """Parses -sidecar-status exclude filter."""
+        result = parse_filter_query("-sidecar-status:completed")
+        assert result["exclude_sidecar_status"] == ["completed"]
+
+    def test_parses_affected_area_filter(self):
+        """Parses affected-area filter correctly."""
+        result = parse_filter_query("affected-area:backend,frontend")
+        assert "backend" in result["affected_areas"]
+        assert "frontend" in result["affected_areas"]
+
+    def test_parses_affected_area_exclude(self):
+        """Parses -affected-area exclude filter."""
+        result = parse_filter_query("-affected-area:docs")
+        assert result["exclude_affected_areas"] == ["docs"]
+
+    def test_parses_combined_github_and_sidecar_filters(self):
+        """Parses combined GitHub and sidecar filters."""
+        result = parse_filter_query("state:open label:bug priority:high -type:docs")
+        assert result["state"] == "open"
+        assert result["labels"] == ["bug"]
+        assert result["priority"] == ["high"]
+        assert result["exclude_type"] == ["docs"]
+
+    def test_sidecar_filters_default_to_empty_lists(self):
+        """All sidecar filters default to empty lists."""
+        result = parse_filter_query(None)
+        assert result["priority"] == []
+        assert result["exclude_priority"] == []
+        assert result["difficulty"] == []
+        assert result["exclude_difficulty"] == []
+        assert result["risk"] == []
+        assert result["exclude_risk"] == []
+        assert result["type"] == []
+        assert result["exclude_type"] == []
+        assert result["sidecar_status"] == []
+        assert result["exclude_sidecar_status"] == []
+        assert result["affected_areas"] == []
+        assert result["exclude_affected_areas"] == []
+
+
+class TestHasSidecarFilters:
+    """Tests for has_sidecar_filters function."""
+
+    def test_returns_false_for_empty_filters(self):
+        """Returns False when no sidecar filters are set."""
+        from app.services.scheduler import has_sidecar_filters
+        filters = parse_filter_query(None)
+        assert has_sidecar_filters(filters) is False
+
+    def test_returns_false_for_github_only_filters(self):
+        """Returns False when only GitHub filters are set."""
+        from app.services.scheduler import has_sidecar_filters
+        filters = parse_filter_query("state:open label:bug -label:wontfix")
+        assert has_sidecar_filters(filters) is False
+
+    def test_returns_true_for_priority_filter(self):
+        """Returns True when priority filter is set."""
+        from app.services.scheduler import has_sidecar_filters
+        filters = parse_filter_query("priority:high")
+        assert has_sidecar_filters(filters) is True
+
+    def test_returns_true_for_difficulty_filter(self):
+        """Returns True when difficulty filter is set."""
+        from app.services.scheduler import has_sidecar_filters
+        filters = parse_filter_query("difficulty:easy")
+        assert has_sidecar_filters(filters) is True
+
+    def test_returns_true_for_exclude_sidecar_filter(self):
+        """Returns True when an exclude sidecar filter is set."""
+        from app.services.scheduler import has_sidecar_filters
+        filters = parse_filter_query("-type:docs")
+        assert has_sidecar_filters(filters) is True
+
+
+class TestFilterIssuesBySidecar:
+    """Tests for filter_issues_by_sidecar function."""
+
+    def test_returns_all_issues_when_no_sidecar_filters(self):
+        """Returns all issues when no sidecar filters are active."""
+        from app.services.scheduler import filter_issues_by_sidecar
+        filters = parse_filter_query("state:open label:bug")
+        issues = [{"number": 1}, {"number": 2}, {"number": 3}]
+        result = filter_issues_by_sidecar(issues, filters, "encoded_path")
+        assert result == issues
+
+    def test_excludes_issues_without_sidecar_when_filters_active(self):
+        """Excludes issues without sidecar data when sidecar filters are active."""
+        from app.services.scheduler import filter_issues_by_sidecar
+        filters = parse_filter_query("priority:high")
+        issues = [{"number": 1}, {"number": 2}]
+
+        with patch("app.services.scheduler.get_issue_metadata", return_value=None):
+            result = filter_issues_by_sidecar(issues, filters, "encoded_path")
+
+        assert result == []
+
+    def test_filters_by_priority_include(self):
+        """Filters issues by priority include filter."""
+        from app.services.scheduler import filter_issues_by_sidecar
+        from app.storage import IssueMetadata
+        filters = parse_filter_query("priority:high,critical")
+        issues = [{"number": 1}, {"number": 2}, {"number": 3}]
+
+        def mock_get_metadata(encoded_path, issue_number):
+            metadata_map = {
+                1: IssueMetadata(issue_number=1, priority="high"),
+                2: IssueMetadata(issue_number=2, priority="low"),
+                3: IssueMetadata(issue_number=3, priority="critical"),
+            }
+            return metadata_map.get(issue_number)
+
+        with patch("app.services.scheduler.get_issue_metadata", side_effect=mock_get_metadata):
+            result = filter_issues_by_sidecar(issues, filters, "encoded_path")
+
+        assert len(result) == 2
+        assert result[0]["number"] == 1
+        assert result[1]["number"] == 3
+
+    def test_filters_by_priority_exclude(self):
+        """Filters issues by priority exclude filter."""
+        from app.services.scheduler import filter_issues_by_sidecar
+        from app.storage import IssueMetadata
+        filters = parse_filter_query("-priority:low")
+        issues = [{"number": 1}, {"number": 2}]
+
+        def mock_get_metadata(encoded_path, issue_number):
+            metadata_map = {
+                1: IssueMetadata(issue_number=1, priority="high"),
+                2: IssueMetadata(issue_number=2, priority="low"),
+            }
+            return metadata_map.get(issue_number)
+
+        with patch("app.services.scheduler.get_issue_metadata", side_effect=mock_get_metadata):
+            result = filter_issues_by_sidecar(issues, filters, "encoded_path")
+
+        assert len(result) == 1
+        assert result[0]["number"] == 1
+
+    def test_filters_by_type(self):
+        """Filters issues by type filter."""
+        from app.services.scheduler import filter_issues_by_sidecar
+        from app.storage import IssueMetadata
+        filters = parse_filter_query("type:bug")
+        issues = [{"number": 1}, {"number": 2}]
+
+        def mock_get_metadata(encoded_path, issue_number):
+            metadata_map = {
+                1: IssueMetadata(issue_number=1, type="bug"),
+                2: IssueMetadata(issue_number=2, type="feature"),
+            }
+            return metadata_map.get(issue_number)
+
+        with patch("app.services.scheduler.get_issue_metadata", side_effect=mock_get_metadata):
+            result = filter_issues_by_sidecar(issues, filters, "encoded_path")
+
+        assert len(result) == 1
+        assert result[0]["number"] == 1
+
+    def test_filters_by_affected_areas(self):
+        """Filters issues by affected areas (OR logic - any match)."""
+        from app.services.scheduler import filter_issues_by_sidecar
+        from app.storage import IssueMetadata
+        filters = parse_filter_query("affected-area:backend")
+        issues = [{"number": 1}, {"number": 2}]
+
+        def mock_get_metadata(encoded_path, issue_number):
+            metadata_map = {
+                1: IssueMetadata(issue_number=1, affected_areas=["backend", "api"]),
+                2: IssueMetadata(issue_number=2, affected_areas=["frontend"]),
+            }
+            return metadata_map.get(issue_number)
+
+        with patch("app.services.scheduler.get_issue_metadata", side_effect=mock_get_metadata):
+            result = filter_issues_by_sidecar(issues, filters, "encoded_path")
+
+        assert len(result) == 1
+        assert result[0]["number"] == 1
+
+    def test_filters_by_multiple_sidecar_properties(self):
+        """Filters issues by multiple sidecar properties (AND logic)."""
+        from app.services.scheduler import filter_issues_by_sidecar
+        from app.storage import IssueMetadata
+        filters = parse_filter_query("priority:high type:bug")
+        issues = [{"number": 1}, {"number": 2}, {"number": 3}]
+
+        def mock_get_metadata(encoded_path, issue_number):
+            metadata_map = {
+                1: IssueMetadata(issue_number=1, priority="high", type="bug"),
+                2: IssueMetadata(issue_number=2, priority="high", type="feature"),
+                3: IssueMetadata(issue_number=3, priority="low", type="bug"),
+            }
+            return metadata_map.get(issue_number)
+
+        with patch("app.services.scheduler.get_issue_metadata", side_effect=mock_get_metadata):
+            result = filter_issues_by_sidecar(issues, filters, "encoded_path")
+
+        assert len(result) == 1
+        assert result[0]["number"] == 1
+
+    def test_filters_by_sidecar_status(self):
+        """Filters issues by sidecar status filter."""
+        from app.services.scheduler import filter_issues_by_sidecar
+        from app.storage import IssueMetadata
+        filters = parse_filter_query("sidecar-status:open,in_progress")
+        issues = [{"number": 1}, {"number": 2}]
+
+        def mock_get_metadata(encoded_path, issue_number):
+            metadata_map = {
+                1: IssueMetadata(issue_number=1, status="open"),
+                2: IssueMetadata(issue_number=2, status="completed"),
+            }
+            return metadata_map.get(issue_number)
+
+        with patch("app.services.scheduler.get_issue_metadata", side_effect=mock_get_metadata):
+            result = filter_issues_by_sidecar(issues, filters, "encoded_path")
+
+        assert len(result) == 1
+        assert result[0]["number"] == 1
+
 
 class TestBuildPromptFromTemplate:
     """Tests for build_prompt_from_template function."""

@@ -310,6 +310,140 @@ export function LabelSelect({ selectedLabels, availableLabels, onChange }: Label
   );
 }
 
+// Metadata filter multi-select (for sidecar properties like priority, difficulty, etc.)
+interface MetadataFilterSelectOption {
+  value: string;
+  label: string;
+}
+
+interface MetadataFilterSelectProps {
+  label: string;
+  options: MetadataFilterSelectOption[];
+  selectedValues: string[];
+  onChange: (values: string[]) => void;
+  /** Optional compact mode - shows count instead of all selected values */
+  compact?: boolean;
+}
+
+export function MetadataFilterSelect({
+  label,
+  options,
+  selectedValues,
+  onChange,
+  compact = true,
+}: MetadataFilterSelectProps) {
+  const [showDropdown, setShowDropdown] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggleValue = (value: string) => {
+    if (selectedValues.includes(value)) {
+      onChange(selectedValues.filter((v) => v !== value));
+    } else {
+      onChange([...selectedValues, value]);
+    }
+  };
+
+  const hasSelection = selectedValues.length > 0;
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        onClick={() => setShowDropdown(!showDropdown)}
+        className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-stoody transition-all active:scale-95 ${focusRing} ${
+          hasSelection
+            ? 'bg-blurple-500/20 text-blurple-400 border border-blurple-500/30'
+            : 'bg-gray-750 text-gray-400 border border-gray-750 hover:bg-gray-700 hover:text-gray-300'
+        }`}
+        aria-expanded={showDropdown}
+        aria-haspopup="listbox"
+      >
+        <span>{label}</span>
+        {hasSelection && compact && (
+          <span className="px-1 py-0.5 text-[10px] bg-blurple-500 text-white rounded-full min-w-[16px] text-center">
+            {selectedValues.length}
+          </span>
+        )}
+        <svg
+          className={`w-3 h-3 transition-transform ${showDropdown ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {showDropdown && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setShowDropdown(false)}
+          />
+          <div className="absolute top-full left-0 mt-1 w-44 bg-gray-800 border border-gray-750 rounded-stoody shadow-xl z-20 max-h-56 overflow-auto dropdown-menu-enter py-1">
+            {/* Clear selection option */}
+            {hasSelection && (
+              <button
+                onClick={() => {
+                  onChange([]);
+                  setShowDropdown(false);
+                }}
+                className={`w-full px-3 py-1.5 text-left text-xs text-gray-400 hover:bg-gray-750 hover:text-pink-400 border-b border-gray-750 mb-1 transition-colors ${focusRingInset}`}
+              >
+                Clear selection
+              </button>
+            )}
+            {options.map((option, index) => {
+              const isSelected = selectedValues.includes(option.value);
+              return (
+                <button
+                  key={option.value}
+                  onClick={() => toggleValue(option.value)}
+                  className={`dropdown-item-enter w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 transition-colors ${focusRingInset} ${
+                    isSelected
+                      ? 'bg-blurple-500/20 text-blurple-400'
+                      : 'text-gray-300 hover:bg-gray-750 hover:text-white'
+                  }`}
+                  style={{ '--item-index': index } as React.CSSProperties}
+                  role="option"
+                  aria-selected={isSelected}
+                >
+                  <span
+                    className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${
+                      isSelected
+                        ? 'bg-blurple-500 border-blurple-500'
+                        : 'border-gray-600'
+                    }`}
+                  >
+                    {isSelected && (
+                      <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </span>
+                  <span className="capitalize">{option.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // Filter bar container
 interface FilterBarProps {
   children: ReactNode;

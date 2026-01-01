@@ -17,7 +17,7 @@ from sqlalchemy import select
 
 from app.database import get_repo_db
 from app.models import ScheduledJob, ScheduledJobRun, ScheduledJobStatus, JobRunStatus, Session, SessionStatus, SessionEntity
-from app.storage import load_repos, get_repo_by_id, encode_path, SessionMetadata, EntityLink, save_session_metadata
+from app.storage import load_repos, get_repo_by_id, encode_path, SessionMetadata, EntityLink, save_session_metadata, get_issue_metadata
 from app.services.headless_analyzer import headless_analyzer
 from app.services.github_client import GitHubClient
 from app.services.event_manager import event_manager, EventType
@@ -32,9 +32,23 @@ SCHEDULER_CHECK_INTERVAL_SECONDS = 60  # How often to check for due jobs
 class FilterParams(TypedDict):
     """Typed dictionary for parsed filter query parameters."""
 
+    # GitHub filters
     state: str
     labels: list[str]
     exclude_labels: list[str]
+    # Sidecar metadata filters
+    priority: list[str]
+    exclude_priority: list[str]
+    difficulty: list[str]
+    exclude_difficulty: list[str]
+    risk: list[str]
+    exclude_risk: list[str]
+    type: list[str]
+    exclude_type: list[str]
+    sidecar_status: list[str]
+    exclude_sidecar_status: list[str]
+    affected_areas: list[str]
+    exclude_affected_areas: list[str]
 
 
 def calculate_next_run(cron_expression: str, timezone_str: str) -> datetime:
@@ -64,46 +78,183 @@ def parse_filter_query(filter_query: str | None) -> FilterParams:
     """
     Parse a GitHub-style filter query into parameters.
 
-    Supports:
+    Supports GitHub filters:
         state:open
         label:bug
         label:bug,enhancement (multiple labels OR)
         -label:wontfix (exclude)
 
+    Supports sidecar metadata filters:
+        priority:high,critical
+        difficulty:easy,medium
+        risk:low,medium
+        type:bug,feature
+        sidecar-status:open,in_progress
+        affected-area:backend,frontend
+        -priority:low (exclude)
+        -difficulty:complex (exclude)
+        etc.
+
     Returns:
-        FilterParams with state, labels, and exclude_labels.
+        FilterParams with all filter fields.
         Returns default values (state="open", empty lists) if filter_query is None,
         empty, or whitespace-only.
     """
     filters: FilterParams = {
+        # GitHub filters
         "state": "open",
         "labels": [],
         "exclude_labels": [],
+        # Sidecar metadata filters
+        "priority": [],
+        "exclude_priority": [],
+        "difficulty": [],
+        "exclude_difficulty": [],
+        "risk": [],
+        "exclude_risk": [],
+        "type": [],
+        "exclude_type": [],
+        "sidecar_status": [],
+        "exclude_sidecar_status": [],
+        "affected_areas": [],
+        "exclude_affected_areas": [],
     }
 
     if not filter_query or not filter_query.strip():
         return filters
 
-    state_prefix = "state:"
-    label_prefix = "label:"
-    exclude_label_prefix = "-label:"
+    # Define prefix mappings: (prefix, filter_key, is_exclude)
+    prefix_mappings = [
+        # GitHub filters
+        ("state:", "state", False),
+        ("-label:", "exclude_labels", True),
+        ("label:", "labels", True),
+        # Sidecar filters (check exclude prefixes first)
+        ("-priority:", "exclude_priority", True),
+        ("priority:", "priority", True),
+        ("-difficulty:", "exclude_difficulty", True),
+        ("difficulty:", "difficulty", True),
+        ("-risk:", "exclude_risk", True),
+        ("risk:", "risk", True),
+        ("-type:", "exclude_type", True),
+        ("type:", "type", True),
+        ("-sidecar-status:", "exclude_sidecar_status", True),
+        ("sidecar-status:", "sidecar_status", True),
+        ("-affected-area:", "exclude_affected_areas", True),
+        ("affected-area:", "affected_areas", True),
+    ]
 
     parts = filter_query.split()
     for part in parts:
-        if part.startswith(state_prefix):
-            value = part[len(state_prefix) :]
-            if value:  # Only set if non-empty
-                filters["state"] = value
-        elif part.startswith(label_prefix):
-            labels = [label for label in part[len(label_prefix) :].split(",") if label]
-            filters["labels"].extend(labels)
-        elif part.startswith(exclude_label_prefix):
-            labels = [
-                label for label in part[len(exclude_label_prefix) :].split(",") if label
-            ]
-            filters["exclude_labels"].extend(labels)
+        for prefix, key, is_list in prefix_mappings:
+            if part.startswith(prefix):
+                value = part[len(prefix):]
+                if value:
+                    if is_list:
+                        values = [v for v in value.split(",") if v]
+                        filters[key].extend(values)
+                    else:
+                        filters[key] = value
+                break  # Stop checking prefixes once matched
 
     return filters
+
+
+def has_sidecar_filters(filters: FilterParams) -> bool:
+    """Check if any sidecar metadata filters are active."""
+    sidecar_keys = [
+        "priority", "exclude_priority",
+        "difficulty", "exclude_difficulty",
+        "risk", "exclude_risk",
+        "type", "exclude_type",
+        "sidecar_status", "exclude_sidecar_status",
+        "affected_areas", "exclude_affected_areas",
+    ]
+    return any(filters.get(key) for key in sidecar_keys)
+
+
+def filter_issues_by_sidecar(
+    issues: list[dict],
+    filters: FilterParams,
+    encoded_path: str,
+) -> list[dict]:
+    """
+    Filter issues by sidecar metadata.
+
+    Args:
+        issues: List of issue dicts with 'number' key
+        filters: Parsed filter parameters
+        encoded_path: Encoded repo path for loading sidecar metadata
+
+    Returns:
+        Filtered list of issues. Issues without sidecar data are excluded
+        when any sidecar filter is active.
+    """
+    if not has_sidecar_filters(filters):
+        return issues
+
+    filtered = []
+    for issue in issues:
+        metadata = get_issue_metadata(encoded_path, issue["number"])
+
+        # Exclude issues without sidecar data when sidecar filters are active
+        if metadata is None:
+            continue
+
+        # Check each sidecar filter
+        # Priority filter
+        if filters["priority"]:
+            if not metadata.priority or metadata.priority not in filters["priority"]:
+                continue
+        if filters["exclude_priority"]:
+            if metadata.priority and metadata.priority in filters["exclude_priority"]:
+                continue
+
+        # Difficulty filter
+        if filters["difficulty"]:
+            if not metadata.difficulty or metadata.difficulty not in filters["difficulty"]:
+                continue
+        if filters["exclude_difficulty"]:
+            if metadata.difficulty and metadata.difficulty in filters["exclude_difficulty"]:
+                continue
+
+        # Risk filter
+        if filters["risk"]:
+            if not metadata.risk or metadata.risk not in filters["risk"]:
+                continue
+        if filters["exclude_risk"]:
+            if metadata.risk and metadata.risk in filters["exclude_risk"]:
+                continue
+
+        # Type filter
+        if filters["type"]:
+            if not metadata.type or metadata.type not in filters["type"]:
+                continue
+        if filters["exclude_type"]:
+            if metadata.type and metadata.type in filters["exclude_type"]:
+                continue
+
+        # Sidecar status filter
+        if filters["sidecar_status"]:
+            if not metadata.status or metadata.status not in filters["sidecar_status"]:
+                continue
+        if filters["exclude_sidecar_status"]:
+            if metadata.status and metadata.status in filters["exclude_sidecar_status"]:
+                continue
+
+        # Affected areas filter (check if any filter value matches any affected area)
+        if filters["affected_areas"]:
+            issue_areas = metadata.affected_areas or []
+            if not any(area in issue_areas for area in filters["affected_areas"]):
+                continue
+        if filters["exclude_affected_areas"]:
+            issue_areas = metadata.affected_areas or []
+            if any(area in issue_areas for area in filters["exclude_affected_areas"]):
+                continue
+
+        filtered.append(issue)
+
+    return filtered
 
 
 def get_command_template(command_id: str, category: str, repo_path: str | None) -> str | None:
@@ -350,7 +501,7 @@ class SchedulerService:
         return []
 
     async def _get_issues(self, job: ScheduledJob, repo: dict) -> list:
-        """Get all issues matching the filter query."""
+        """Get all issues matching the filter query (GitHub + sidecar filters)."""
         filters = parse_filter_query(job.filter_query)
 
         client = GitHubClient()
@@ -369,7 +520,8 @@ class SchedulerService:
                 if not any(label in i.labels for label in exclude_labels)
             ]
 
-        return [
+        # Convert to dicts for further processing
+        issue_dicts = [
             {
                 "type": "issue",
                 "number": issue.number,
@@ -378,6 +530,12 @@ class SchedulerService:
             }
             for issue in issues
         ]
+
+        # Apply sidecar metadata filters
+        encoded_path = encode_path(repo["local_path"])
+        issue_dicts = filter_issues_by_sidecar(issue_dicts, filters, encoded_path)
+
+        return issue_dicts
 
     async def _get_prs(self, job: ScheduledJob, repo: dict) -> list:
         """Get all PRs matching the filter query."""

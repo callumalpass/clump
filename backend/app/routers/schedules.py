@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 from croniter import croniter
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 import pytz
 from sqlalchemy import select, desc
 
@@ -44,7 +44,20 @@ class ScheduledJobCreate(BaseModel):
     cron_expression: str
     timezone: str = "UTC"
     target_type: str  # "issues", "prs", "codebase", "custom"
-    filter_query: Optional[str] = None
+    filter_query: Optional[str] = Field(
+        default=None,
+        description=(
+            "GitHub-style filter query for selecting issues/PRs. "
+            "GitHub filters: state:open|closed, label:name, -label:name. "
+            "Sidecar metadata filters: priority:critical|high|medium|low, "
+            "difficulty:trivial|easy|medium|hard|complex, risk:low|medium|high, "
+            "type:bug|feature|refactor|docs|chore|question, "
+            "sidecar-status:open|in_progress|completed|wontfix, "
+            "affected-area:name. "
+            "All filters support comma-separated values (OR logic) and negation (-prefix). "
+            "Example: 'state:open priority:high,critical -type:docs'"
+        )
+    )
     command_id: Optional[str] = None
     custom_prompt: Optional[str] = None
     max_items: int = 10
@@ -88,7 +101,20 @@ class ScheduledJobUpdate(BaseModel):
     cron_expression: Optional[str] = None
     timezone: Optional[str] = None
     target_type: Optional[str] = None
-    filter_query: Optional[str] = None
+    filter_query: Optional[str] = Field(
+        default=None,
+        description=(
+            "GitHub-style filter query for selecting issues/PRs. "
+            "GitHub filters: state:open|closed, label:name, -label:name. "
+            "Sidecar metadata filters: priority:critical|high|medium|low, "
+            "difficulty:trivial|easy|medium|hard|complex, risk:low|medium|high, "
+            "type:bug|feature|refactor|docs|chore|question, "
+            "sidecar-status:open|in_progress|completed|wontfix, "
+            "affected-area:name. "
+            "All filters support comma-separated values (OR logic) and negation (-prefix). "
+            "Example: 'state:open priority:high,critical -type:docs'"
+        )
+    )
     command_id: Optional[str] = None
     custom_prompt: Optional[str] = None
     max_items: Optional[int] = None

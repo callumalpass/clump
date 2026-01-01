@@ -1,6 +1,7 @@
-import { useMemo, memo } from 'react';
+import { useMemo, memo, useState, useEffect } from 'react';
 import type { Issue, SessionSummary, Tag, IssueTagsMap, IssueMetadataMap, IssueMetadata, Process, CommandMetadata } from '../types';
 import type { IssueFilters as IssueFiltersType } from '../hooks/useApi';
+import { hasSidecarFilters } from '../hooks/useApi';
 import { useSessionStatus } from '../hooks/useSessionStatus';
 import { IssueFilters } from './IssueFilters';
 import { StartSessionButton } from './StartSessionButton';
@@ -258,6 +259,18 @@ export function IssueList({
     }, {} as Record<string, SessionSummary[]>);
   }, [sessions]);
 
+  // Check if any sidecar metadata filters are active (use imported function)
+  const sidecarFiltersActive = hasSidecarFilters(filters);
+
+  // Client-side pagination state for when sidecar filters are active
+  const [clientPage, setClientPage] = useState(1);
+  const ITEMS_PER_PAGE = 30;
+
+  // Reset client page when filters change
+  useEffect(() => {
+    setClientPage(1);
+  }, [filters.priority, filters.difficulty, filters.risk, filters.issueType, filters.sidecarStatus]);
+
   // Memoize filtered issues to avoid recalculation on every render
   const filteredIssues = useMemo(() => {
     return issues.filter((issue) => {
@@ -274,9 +287,62 @@ export function IssueList({
         if (filters.sessionStatus === 'analyzed' && !hasSessions) return false;
         if (filters.sessionStatus === 'unanalyzed' && hasSessions) return false;
       }
+
+      // Sidecar metadata filters
+      if (sidecarFiltersActive) {
+        const metadata = issueMetadataMap[issue.number];
+        // Exclude issues without sidecar data when sidecar filters are active
+        if (!metadata) return false;
+
+        // Priority filter
+        if (filters.priority?.length) {
+          if (!metadata.priority || !filters.priority.includes(metadata.priority)) {
+            return false;
+          }
+        }
+
+        // Difficulty filter
+        if (filters.difficulty?.length) {
+          if (!metadata.difficulty || !filters.difficulty.includes(metadata.difficulty)) {
+            return false;
+          }
+        }
+
+        // Risk filter
+        if (filters.risk?.length) {
+          if (!metadata.risk || !filters.risk.includes(metadata.risk)) {
+            return false;
+          }
+        }
+
+        // Type filter
+        if (filters.issueType?.length) {
+          if (!metadata.type || !filters.issueType.includes(metadata.type)) {
+            return false;
+          }
+        }
+
+        // Status filter
+        if (filters.sidecarStatus?.length) {
+          if (!metadata.status || !filters.sidecarStatus.includes(metadata.status)) {
+            return false;
+          }
+        }
+      }
+
       return true;
     });
-  }, [issues, selectedTagId, issueTagsMap, filters.sessionStatus, sessionsByIssue]);
+  }, [issues, selectedTagId, issueTagsMap, filters.sessionStatus, filters.priority, filters.difficulty, filters.risk, filters.issueType, filters.sidecarStatus, sessionsByIssue, issueMetadataMap, sidecarFiltersActive]);
+
+  // When sidecar filters are active, we fetch all issues and paginate client-side
+  const clientTotalPages = Math.ceil(filteredIssues.length / ITEMS_PER_PAGE);
+  const paginatedIssues = useMemo(() => {
+    if (!sidecarFiltersActive) {
+      return filteredIssues;
+    }
+    const startIndex = (clientPage - 1) * ITEMS_PER_PAGE;
+    return filteredIssues.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredIssues, sidecarFiltersActive, clientPage]);
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
@@ -453,7 +519,7 @@ export function IssueList({
       {/* Issue list */}
       {!loading && filteredIssues.length > 0 && (
         <div className="flex-1 overflow-auto min-h-0 flex flex-col">
-          {filteredIssues.map((issue, index) => (
+          {paginatedIssues.map((issue, index) => (
             <IssueListItem
               key={issue.number}
               issue={issue}
@@ -481,7 +547,7 @@ export function IssueList({
           <>
             <div className="flex items-center gap-2">
               <span className="text-gray-400">
-                {total} issues
+                {sidecarFiltersActive ? `${filteredIssues.length} matching` : `${total} issues`}
               </span>
               {onCreateIssue && (
                 <button
@@ -494,9 +560,9 @@ export function IssueList({
               )}
             </div>
             <Pagination
-              page={page}
-              totalPages={totalPages}
-              onPageChange={onPageChange}
+              page={sidecarFiltersActive ? clientPage : page}
+              totalPages={sidecarFiltersActive ? clientTotalPages : totalPages}
+              onPageChange={sidecarFiltersActive ? setClientPage : onPageChange}
             />
           </>
         )}

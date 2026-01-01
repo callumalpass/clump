@@ -390,9 +390,24 @@ export function ScheduleDetail({
                   type="text"
                   value={editForm.filter_query || ''}
                   onChange={(e) => setEditForm({ ...editForm, filter_query: e.target.value })}
-                  placeholder="e.g., state:open label:bug"
+                  placeholder="e.g., state:open label:bug priority:high"
                   className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-gray-200"
                 />
+                <details className="mt-1">
+                  <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-400">
+                    Available filter options
+                  </summary>
+                  <div className="mt-1 p-2 bg-gray-800 rounded text-xs text-gray-400 space-y-1">
+                    <div><span className="text-blurple-400">GitHub:</span> state:open|closed, label:name, -label:name</div>
+                    <div><span className="text-blurple-400">Priority:</span> priority:critical|high|medium|low</div>
+                    <div><span className="text-blurple-400">Difficulty:</span> difficulty:trivial|easy|medium|hard|complex</div>
+                    <div><span className="text-blurple-400">Risk:</span> risk:low|medium|high</div>
+                    <div><span className="text-blurple-400">Type:</span> type:bug|feature|refactor|docs|chore|question</div>
+                    <div><span className="text-blurple-400">Status:</span> sidecar-status:open|in_progress|completed|wontfix</div>
+                    <div><span className="text-blurple-400">Areas:</span> affected-area:name</div>
+                    <div className="text-gray-500 mt-1">Use comma for OR (priority:high,critical), prefix with - to exclude (-type:docs)</div>
+                  </div>
+                </details>
               </div>
               {(editForm.target_type === 'issues' || editForm.target_type === 'prs') && (
                 <div className="flex items-center">

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { Issue } from '../types';
+import type { Issue, IssuePriority, IssueDifficulty, IssueRisk, IssueType, IssueStatus } from '../types';
 import type { IssueFilters as IssueFiltersType, SessionStatusFilter } from '../hooks/useApi';
 import {
   FilterBar,
@@ -9,10 +9,49 @@ import {
   SessionStatusToggle,
   SortControl,
   LabelSelect,
+  MetadataFilterSelect,
   ItemCount,
   RefreshButton,
   ActiveFiltersIndicator,
 } from './FilterBar';
+
+// Sidecar metadata filter options
+const PRIORITY_OPTIONS = [
+  { value: 'critical', label: 'Critical' },
+  { value: 'high', label: 'High' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'low', label: 'Low' },
+];
+
+const DIFFICULTY_OPTIONS = [
+  { value: 'trivial', label: 'Trivial' },
+  { value: 'easy', label: 'Easy' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'hard', label: 'Hard' },
+  { value: 'complex', label: 'Complex' },
+];
+
+const RISK_OPTIONS = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+];
+
+const TYPE_OPTIONS = [
+  { value: 'bug', label: 'Bug' },
+  { value: 'feature', label: 'Feature' },
+  { value: 'refactor', label: 'Refactor' },
+  { value: 'docs', label: 'Docs' },
+  { value: 'chore', label: 'Chore' },
+  { value: 'question', label: 'Question' },
+];
+
+const STATUS_OPTIONS = [
+  { value: 'open', label: 'Open' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'wontfix', label: "Won't Fix" },
+];
 
 interface IssueFiltersProps {
   filters: IssueFiltersType;
@@ -63,6 +102,27 @@ export function IssueFilters({ filters, onFiltersChange, issues, total, onRefres
     onFiltersChange({ ...filters, sessionStatus: sessionStatus === 'all' ? undefined : sessionStatus });
   };
 
+  // Sidecar metadata filter setters
+  const setPriority = (priority: IssuePriority[]) => {
+    onFiltersChange({ ...filters, priority: priority.length > 0 ? priority : undefined });
+  };
+
+  const setDifficulty = (difficulty: IssueDifficulty[]) => {
+    onFiltersChange({ ...filters, difficulty: difficulty.length > 0 ? difficulty : undefined });
+  };
+
+  const setRisk = (risk: IssueRisk[]) => {
+    onFiltersChange({ ...filters, risk: risk.length > 0 ? risk : undefined });
+  };
+
+  const setIssueType = (issueType: IssueType[]) => {
+    onFiltersChange({ ...filters, issueType: issueType.length > 0 ? issueType : undefined });
+  };
+
+  const setSidecarStatus = (sidecarStatus: IssueStatus[]) => {
+    onFiltersChange({ ...filters, sidecarStatus: sidecarStatus.length > 0 ? sidecarStatus : undefined });
+  };
+
   const clearFilters = () => {
     onFiltersChange({ state: 'open' });
   };
@@ -77,6 +137,12 @@ export function IssueFilters({ filters, onFiltersChange, issues, total, onRefres
     filters.sort && filters.sort !== 'created' ? 1 : 0,  // 'created' is default
     filters.order && filters.order !== 'desc' ? 1 : 0,  // 'desc' is default
     filters.sessionStatus ? 1 : 0,  // undefined/'all' is default
+    // Sidecar metadata filters
+    filters.priority && filters.priority.length > 0 ? 1 : 0,
+    filters.difficulty && filters.difficulty.length > 0 ? 1 : 0,
+    filters.risk && filters.risk.length > 0 ? 1 : 0,
+    filters.issueType && filters.issueType.length > 0 ? 1 : 0,
+    filters.sidecarStatus && filters.sidecarStatus.length > 0 ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
   return (
@@ -115,6 +181,41 @@ export function IssueFilters({ filters, onFiltersChange, issues, total, onRefres
           onChange={setLabels}
         />
       )}
+
+      {/* Sidecar metadata filters */}
+      <FilterBarRow className="flex-wrap gap-1.5">
+        <span className="text-xs text-gray-500 mr-1">Metadata:</span>
+        <MetadataFilterSelect
+          label="Priority"
+          options={PRIORITY_OPTIONS}
+          selectedValues={filters.priority || []}
+          onChange={(values) => setPriority(values as IssuePriority[])}
+        />
+        <MetadataFilterSelect
+          label="Difficulty"
+          options={DIFFICULTY_OPTIONS}
+          selectedValues={filters.difficulty || []}
+          onChange={(values) => setDifficulty(values as IssueDifficulty[])}
+        />
+        <MetadataFilterSelect
+          label="Risk"
+          options={RISK_OPTIONS}
+          selectedValues={filters.risk || []}
+          onChange={(values) => setRisk(values as IssueRisk[])}
+        />
+        <MetadataFilterSelect
+          label="Type"
+          options={TYPE_OPTIONS}
+          selectedValues={filters.issueType || []}
+          onChange={(values) => setIssueType(values as IssueType[])}
+        />
+        <MetadataFilterSelect
+          label="Status"
+          options={STATUS_OPTIONS}
+          selectedValues={filters.sidecarStatus || []}
+          onChange={(values) => setSidecarStatus(values as IssueStatus[])}
+        />
+      </FilterBarRow>
 
       {/* Active filters indicator */}
       <ActiveFiltersIndicator onClick={clearFilters} filterCount={activeFilterCount} />
