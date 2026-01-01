@@ -21,6 +21,7 @@ from datetime import datetime
 from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
+from github import UnknownObjectException
 
 from app.routers.github import (
     router,
@@ -279,7 +280,10 @@ class TestCreateRepo:
     def test_create_repo_github_not_found(self, client):
         """Test error when repo doesn't exist on GitHub."""
         with patch("app.routers.github.github_client") as mock_client:
-            mock_client.get_repo.side_effect = Exception("Not found")
+            # UnknownObjectException is what GitHub API raises for 404s
+            mock_client.get_repo.side_effect = UnknownObjectException(
+                status=404, data={"message": "Not Found"}, headers={}
+            )
 
             response = client.post(
                 "/repos",
@@ -504,32 +508,39 @@ class TestListPRs:
         with patch("app.routers.github.get_repo_or_404") as mock_get, \
              patch("app.routers.github.github_client") as mock_client:
             mock_get.return_value = mock_repo_info
-            mock_client.list_prs.return_value = [mock_pr_data]
+            # list_prs returns (prs, total) tuple
+            mock_client.list_prs.return_value = ([mock_pr_data], 1)
 
             response = client.get("/repos/1/prs")
 
         assert response.status_code == 200
         data = response.json()
-        assert len(data) == 1
-        assert data[0]["number"] == 123
-        assert data[0]["head_ref"] == "feature/test"
-        assert data[0]["base_ref"] == "main"
+        assert data["total"] == 1
+        assert len(data["prs"]) == 1
+        assert data["prs"][0]["number"] == 123
+        assert data["prs"][0]["head_ref"] == "feature/test"
+        assert data["prs"][0]["base_ref"] == "main"
 
     def test_list_prs_with_state_filter(self, client, mock_repo_info, mock_pr_data):
         """Test listing PRs with state filter."""
         with patch("app.routers.github.get_repo_or_404") as mock_get, \
              patch("app.routers.github.github_client") as mock_client:
             mock_get.return_value = mock_repo_info
-            mock_client.list_prs.return_value = [mock_pr_data]
+            # list_prs returns (prs, total) tuple
+            mock_client.list_prs.return_value = ([mock_pr_data], 1)
 
-            response = client.get("/repos/1/prs?state=closed&limit=50")
+            response = client.get("/repos/1/prs?state=closed")
 
         assert response.status_code == 200
         mock_client.list_prs.assert_called_once_with(
             "test-owner",
             "test-repo",
             state="closed",
-            limit=50,
+            search_query=None,
+            sort="created",
+            order="desc",
+            page=1,
+            per_page=30,
         )
 
 

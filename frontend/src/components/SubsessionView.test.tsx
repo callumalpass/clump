@@ -595,8 +595,8 @@ describe('SubsessionView', () => {
       render(<SubsessionView {...defaultProps} />);
 
       await waitFor(() => {
-        // Assistant role indicator should have green color
-        expect(screen.getByText('Claude')).toHaveClass('text-green-400');
+        // Assistant role indicator should have orange color (from CLI_DISPLAY['claude'])
+        expect(screen.getByText('Claude')).toHaveClass('text-orange-300');
       });
     });
   });

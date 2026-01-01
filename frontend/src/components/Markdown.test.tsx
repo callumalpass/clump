@@ -161,7 +161,7 @@ describe('Markdown', () => {
 
       const pre = document.querySelector('pre');
       expect(pre).toBeInTheDocument();
-      expect(pre).toHaveClass('bg-gray-900', 'rounded-lg');
+      expect(pre).toHaveClass('bg-gray-700', 'rounded-lg');
     });
   });
 
