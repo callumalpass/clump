@@ -130,6 +130,22 @@ def _run_migrations(conn) -> None:
     except Exception:
         pass  # Column already exists
 
+    # Migration: Add cli_type column to sessions (for multi-CLI support)
+    try:
+        conn.execute(text(
+            "ALTER TABLE sessions ADD COLUMN cli_type VARCHAR(20) DEFAULT 'claude'"
+        ))
+    except Exception:
+        pass  # Column already exists
+
+    # Create index on cli_type for filtering
+    try:
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_sessions_cli_type ON sessions(cli_type)"
+        ))
+    except Exception:
+        pass  # Index already exists
+
 
 async def init_repo_db(local_path: str) -> None:
     """

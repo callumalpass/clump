@@ -31,6 +31,13 @@ class SessionStatus(str, Enum):
     FAILED = "failed"
 
 
+class CLITypeEnum(str, Enum):
+    """CLI tool type for sessions."""
+    CLAUDE = "claude"
+    GEMINI = "gemini"
+    CODEX = "codex"
+
+
 class ActionType(str, Enum):
     COMMENT = "comment"
     LABEL = "label"
@@ -40,7 +47,7 @@ class ActionType(str, Enum):
 
 
 class Session(Base):
-    """A Claude Code session (formerly Analysis)."""
+    """An AI coding CLI session (Claude Code, Gemini, Codex)."""
     __tablename__ = "sessions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -53,6 +60,9 @@ class Session(Base):
     status: Mapped[str] = mapped_column(String(50), default=SessionStatus.RUNNING.value, index=True)
     process_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     claude_session_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    cli_type: Mapped[str] = mapped_column(
+        String(20), default=CLITypeEnum.CLAUDE.value, index=True
+    )  # Which CLI tool created this session
     scheduled_job_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # ID of schedule that created this
     cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)  # Total cost from headless sessions
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Duration from headless sessions

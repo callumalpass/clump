@@ -195,6 +195,34 @@ class Settings:
         return self._get("claude_mcp_servers", "", "CLAUDE_MCP_SERVERS") or ""
 
     # ==========================================
+    # Gemini CLI Settings
+    # ==========================================
+
+    @property
+    def gemini_command(self) -> str:
+        return self._get("gemini_command", "gemini", "GEMINI_COMMAND") or "gemini"
+
+    # ==========================================
+    # Codex CLI Settings
+    # ==========================================
+
+    @property
+    def codex_command(self) -> str:
+        return self._get("codex_command", "codex", "CODEX_COMMAND") or "codex"
+
+    # ==========================================
+    # Multi-CLI Settings
+    # ==========================================
+
+    @property
+    def default_cli(self) -> str:
+        """Get the default CLI type (claude, gemini, or codex)."""
+        cli = self._get("default_cli", "claude", "DEFAULT_CLI")
+        if cli in ("claude", "gemini", "codex"):
+            return cli
+        return "claude"
+
+    # ==========================================
     # Paths
     # ==========================================
 

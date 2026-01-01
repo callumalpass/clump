@@ -5,7 +5,8 @@ import type {
   ClaudeCodeSettings, ProcessCreateOptions, Tag, IssueTagsMap, GitHubLabel,
   CommandsResponse, CommandMetadata, SubsessionDetail,
   RepoSessionCount, SessionCountsResponse, StatsResponse, BulkOperationResult,
-  IssueMetadataMap, IssueMetadata, PRMetadataMap, PRMetadata
+  IssueMetadataMap, IssueMetadata, PRMetadataMap, PRMetadata,
+  CLIType, CLIInfo, AvailableCLIsResponse, CLISettings
 } from '../types';
 import { formatLocalDate } from '../utils/time';
 
@@ -384,7 +385,9 @@ export function useProcesses() {
         kind,
         entities,
         title,
-        // Claude Code options
+        // CLI selection
+        cli_type: options?.cli_type,
+        // CLI configuration options
         permission_mode: options?.permission_mode,
         allowed_tools: options?.allowed_tools,
         disallowed_tools: options?.disallowed_tools,
@@ -1370,4 +1373,48 @@ export function useStats() {
   }, [refresh]);
 
   return { stats, loading, error, refresh: () => refresh() };
+}
+
+// CLI Management (Multi-CLI support)
+export function useAvailableCLIs() {
+  const [clis, setCLIs] = useState<CLIInfo[]>([]);
+  const [defaultCLI, setDefaultCLI] = useState<CLIType>('claude');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await fetchJson<AvailableCLIsResponse>(`${API_BASE}/cli/available`);
+      setCLIs(data.clis);
+      setDefaultCLI(data.default_cli);
+      setError(null);
+    } catch (e) {
+      setError(getErrorMessage(e, 'Failed to fetch available CLIs'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  // Get installed CLIs only
+  const installedCLIs = clis.filter(cli => cli.installed);
+
+  return { clis, installedCLIs, defaultCLI, loading, error, refresh };
+}
+
+// Fetch CLI settings
+export async function fetchCLISettings(): Promise<CLISettings> {
+  return fetchJson<CLISettings>(`${API_BASE}/cli/settings`);
+}
+
+// Check if a specific CLI is installed
+export async function checkCLIInstalled(cliType: CLIType): Promise<boolean> {
+  const data = await fetchJson<{ cli_type: string; installed: boolean }>(
+    `${API_BASE}/cli/${cliType}/installed`
+  );
+  return data.installed;
 }

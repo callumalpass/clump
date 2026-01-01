@@ -23,8 +23,9 @@ from sqlalchemy import select
 
 from app.database import get_repo_db
 from app.db_helpers import get_repo_or_404
-from app.models import Session, SessionStatus, SessionEntity
+from app.models import Session, SessionStatus, SessionEntity, CLITypeEnum
 from app.services.session_manager import process_manager
+from app.cli import CLIType, get_adapter
 from app.services.event_manager import event_manager, EventType
 from app.services.headless_analyzer import headless_analyzer
 from app.storage import (
@@ -82,6 +83,7 @@ async def _run_headless_background(
     permission_mode: str | None,
     max_turns: int | None,
     model: str | None,
+    cli_type: CLIType = CLIType.CLAUDE,
 ):
     """Background task to run headless analysis and update session on completion."""
     try:
@@ -94,6 +96,7 @@ async def _run_headless_background(
             permission_mode=permission_mode,
             max_turns=max_turns,
             model=model,
+            cli_type=cli_type,
         )
 
         # Update session with results
@@ -151,6 +154,17 @@ async def _create_headless_session(data: "ProcessCreate", repo: dict) -> "Proces
     claude_session_id = str(uuid4())
     created_at = datetime.now(timezone.utc)
 
+    # Parse CLI type
+    cli_type = CLIType(data.cli_type) if data.cli_type else CLIType.CLAUDE
+
+    # Check if CLI supports headless mode
+    adapter = get_adapter(cli_type)
+    if not adapter.capabilities.supports_headless:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{cli_type.value} CLI does not support headless mode"
+        )
+
     async with get_repo_db(repo["local_path"]) as db:
         # Create session record
         session = Session(
@@ -160,6 +174,7 @@ async def _create_headless_session(data: "ProcessCreate", repo: dict) -> "Proces
             prompt=data.prompt or "",
             status=SessionStatus.RUNNING.value,
             claude_session_id=claude_session_id,
+            cli_type=cli_type.value,
         )
         db.add(session)
         await db.flush()
@@ -205,6 +220,7 @@ async def _create_headless_session(data: "ProcessCreate", repo: dict) -> "Proces
         permission_mode=data.permission_mode,
         max_turns=data.max_turns,
         model=data.model,
+        cli_type=cli_type,
     ))
 
     # Emit session created event
@@ -223,6 +239,7 @@ async def _create_headless_session(data: "ProcessCreate", repo: dict) -> "Proces
         session_id=session_db_id,
         claude_session_id=claude_session_id,
         mode="headless",
+        cli_type=cli_type.value,
     )
 
 
@@ -238,7 +255,10 @@ class ProcessCreate(BaseModel):
     entities: list[EntityInput] = []  # Linked issues/PRs
     title: str = "New Session"
 
-    # Claude Code configuration overrides
+    # CLI selection
+    cli_type: str | None = None  # "claude", "gemini", or "codex" - defaults to settings
+
+    # CLI configuration overrides
     permission_mode: str | None = None
     allowed_tools: list[str] | None = None
     disallowed_tools: list[str] | None = None
@@ -254,6 +274,7 @@ class ProcessResponse(BaseModel):
     session_id: int | None
     claude_session_id: str | None = None
     mode: str = "pty"  # "pty" or "headless"
+    cli_type: str = "claude"  # "claude", "gemini", or "codex"
 
 
 class ProcessListResponse(BaseModel):
@@ -269,6 +290,9 @@ async def create_process(data: ProcessCreate):
     if data.kind in ("issue", "pr"):
         return await _create_headless_session(data, repo)
 
+    # Parse CLI type
+    cli_type = CLIType(data.cli_type) if data.cli_type else CLIType.CLAUDE
+
     # Custom sessions use PTY mode
     async with get_repo_db(repo["local_path"]) as db:
         # Create session record - need to commit to get auto-generated ID
@@ -278,6 +302,7 @@ async def create_process(data: ProcessCreate):
             title=data.title,
             prompt=data.prompt or "",
             status=SessionStatus.RUNNING.value,
+            cli_type=cli_type.value,
         )
         db.add(session)
         await db.flush()  # Get session.id without full commit
@@ -292,7 +317,7 @@ async def create_process(data: ProcessCreate):
             )
             db.add(session_entity)
 
-        # Create PTY process with Claude Code configuration
+        # Create PTY process with CLI configuration
         try:
             process = await process_manager.create_process(
                 working_dir=repo["local_path"],
@@ -304,6 +329,7 @@ async def create_process(data: ProcessCreate):
                 max_turns=data.max_turns,
                 model=data.model,
                 resume_session=data.resume_session,
+                cli_type=cli_type,
             )
         except ValueError as e:
             # Working directory doesn't exist or other validation error
@@ -337,6 +363,7 @@ async def create_process(data: ProcessCreate):
             created_at=process.created_at.isoformat(),
             session_id=session.id,
             claude_session_id=process.claude_session_id,
+            cli_type=cli_type.value,
         )
 
         # Emit WebSocket events for real-time updates
@@ -364,7 +391,7 @@ async def list_processes():
     dead_process_info = await process_manager.get_dead_process_info()
     had_dead_processes = False
 
-    for session_id, transcript, claude_session_id, working_dir in dead_process_info:
+    for session_id, transcript, claude_session_id, working_dir, cli_type in dead_process_info:
         repo = get_repo_by_path(working_dir)
 
         if repo and session_id:
@@ -407,6 +434,7 @@ async def list_processes():
                 created_at=p.created_at.isoformat(),
                 session_id=p.session_id,
                 claude_session_id=p.claude_session_id,
+                cli_type=p.cli_type.value,
             )
             for p in processes
         ]

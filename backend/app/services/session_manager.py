@@ -1,20 +1,14 @@
 """
-PTY Process Manager for Claude Code terminals.
+PTY Process Manager for AI coding assistant CLI terminals.
 
-Manages multiple pseudo-terminal processes running Claude Code,
-with WebSocket streaming for real-time output.
+Manages multiple pseudo-terminal processes running AI coding CLIs
+(Claude Code, Gemini CLI, Codex CLI) with WebSocket streaming for real-time output.
 
-Uses Claude Code CLI flags for fine-grained permission control:
-- --allowedTools: Auto-approve specific tools
-- --permission-mode: Control permission behavior (plan, acceptEdits, etc.)
-- --max-turns: Limit agentic execution depth
-- --model: Select Claude model
-- --resume: Continue previous session
+Supports multiple CLI tools through the adapter pattern defined in app.cli.
 """
 
 import asyncio
 import fcntl
-import json
 import logging
 import os
 import pty
@@ -23,11 +17,12 @@ import struct
 import termios
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Callable, TypedDict
+from typing import Any, Callable
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
+from app.cli import CLIType, get_adapter
 from app.config import Settings
 
 # Initial PTY dimensions (larger default for modern displays)
@@ -44,51 +39,34 @@ PROMPT_ENTER_DELAY_SECS = 0.1  # Delay between typing prompt and pressing Enter
 READ_LOOP_POLL_INTERVAL_SECS = 0.01  # Polling interval for read loop to prevent busy waiting
 SIGTERM_SIGKILL_DELAY_SECS = 0.1  # Grace period between SIGTERM and SIGKILL
 
-# Patterns that indicate Claude Code is ready for input
-# These appear in the terminal output when Claude has finished initializing
-CLAUDE_READY_PATTERNS = [
+# Patterns that indicate a CLI is ready for input
+# These appear in the terminal output when the CLI has finished initializing
+CLI_READY_PATTERNS = [
     "│",  # Box drawing character from Claude's UI
     "╭",  # Top corner of Claude's prompt box
     ">",  # Simple prompt indicator
     "?",  # Query prompt
+    "❯",  # Gemini/Codex prompt indicator
+    "→",  # Arrow prompt
 ]
 
 # Buffer size for reading from PTY file descriptor
 PTY_READ_BUFFER_SIZE = 4096
 
 
-class McpServerConfig(TypedDict, total=False):
-    """Configuration for a single MCP server.
-
-    Attributes:
-        type: Transport type (e.g., "http", "stdio").
-        url: Server URL for HTTP transport.
-        headers: HTTP headers (e.g., for authorization).
-        command: Command to run for stdio transport.
-        args: Command arguments for stdio transport.
-    """
-
-    type: str
-    url: str
-    headers: dict[str, str]
-    command: str
-    args: list[str]
-
-
-# Type alias for MCP configuration dict mapping server names to their configs
-McpConfig = dict[str, McpServerConfig]
-
-
 @dataclass
 class Process:
-    """Represents an active PTY process running Claude Code."""
+    """Represents an active PTY process running an AI coding CLI."""
 
     id: str
     pid: int
     fd: int
     working_dir: str
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    session_id: int | None = None  # Links to Session (formerly Analysis) record
+    session_id: int | None = None  # Links to Session record
+
+    # CLI type (claude, gemini, codex)
+    cli_type: CLIType = CLIType.CLAUDE
 
     # Transcript stored as list of chunks for O(1) append instead of O(n) string concat
     _transcript_chunks: list[str] = field(default_factory=list)
@@ -99,7 +77,7 @@ class Process:
     subscribers: list[Callable[[bytes], None]] = field(default_factory=list)
     _read_task: asyncio.Task | None = field(default=None, repr=False)
 
-    # Claude Code session ID (extracted from output for resume support)
+    # CLI session ID (used for resume support)
     claude_session_id: str | None = None
 
     # Process configuration
@@ -154,46 +132,68 @@ class ProcessManager:
         initial_prompt: str | None = None,
         session_id: int | None = None,
         *,
+        cli_type: CLIType | str = CLIType.CLAUDE,
         allowed_tools: list[str] | None = None,
         disallowed_tools: list[str] | None = None,
         permission_mode: str | None = None,
         max_turns: int | None = None,
         model: str | None = None,
         resume_session: str | None = None,
+        mcp_config: dict[str, Any] | None = None,
     ) -> Process:
         """
-        Create a new PTY process running Claude Code.
+        Create a new PTY process running an AI coding CLI.
 
         Args:
-            working_dir: Directory to run Claude Code in
+            working_dir: Directory to run the CLI in
             initial_prompt: Optional prompt to send after startup
             session_id: Optional linked Session ID
+            cli_type: Which CLI to use (claude, gemini, codex)
             allowed_tools: Tools to auto-approve (overrides config)
             disallowed_tools: Tools to disable (overrides config)
             permission_mode: Permission mode (overrides config)
             max_turns: Max agentic turns (overrides config)
             model: Model to use (overrides config)
-            resume_session: Claude Code session ID to resume
+            resume_session: Session ID to resume
+            mcp_config: MCP server configuration
         """
         process_id = str(uuid4())[:8]
 
-        # Generate a Claude Code session ID (full UUID) that we can use to resume later
-        # We pass this to Claude Code via --session-id so we know it from the start
-        claude_session_id = str(uuid4()) if not resume_session else None
+        # Convert string to CLIType if needed
+        if isinstance(cli_type, str):
+            cli_type = CLIType(cli_type)
+
+        # Get the appropriate adapter for this CLI
+        adapter = get_adapter(cli_type)
+
+        # Always generate a session ID for our own tracking purposes
+        # This ID is used for:
+        # - Session tab tracking in the frontend
+        # - Database records
+        # - CLI session resume (if the CLI supports --session-id)
+        if resume_session:
+            # Resuming an existing session - use that ID
+            cli_session_id = resume_session
+        else:
+            # New session - generate a fresh ID
+            cli_session_id = str(uuid4())
 
         # Import here to avoid circular imports
         from app.config import settings
 
-        # Build command args with proper flags
-        args = self._build_command_args(
-            settings,
+        # Build command args using the adapter
+        # Pass session_id only if the CLI supports it and we're not resuming
+        # Pass resume_session only if we're actually resuming
+        args = adapter.build_interactive_command(
+            working_dir,
+            session_id=cli_session_id if adapter.capabilities.supports_session_id and not resume_session else None,
+            resume_session=resume_session,
             allowed_tools=allowed_tools,
             disallowed_tools=disallowed_tools,
             permission_mode=permission_mode,
             max_turns=max_turns,
             model=model,
-            resume_session=resume_session,
-            claude_session_id=claude_session_id,
+            mcp_config=mcp_config,
         )
 
         # Validate working directory exists before forking
@@ -207,23 +207,31 @@ class ProcessManager:
             # Child process - wrap in try/except to capture errors
             try:
                 os.chdir(working_dir)
-                # Set terminal environment for Claude Code compatibility
+                # Set terminal environment for CLI compatibility
                 os.environ["TERM"] = "xterm-256color"
                 os.environ["COLORTERM"] = "truecolor"
                 os.environ["LANG"] = os.environ.get("LANG", "en_US.UTF-8")
                 os.environ["LC_ALL"] = os.environ.get("LC_ALL", "en_US.UTF-8")
                 # Force color and interactive mode detection
                 os.environ["FORCE_COLOR"] = "1"
-                os.environ["CI"] = ""  # Unset CI to prevent non-interactive detection
+                # Remove CI-related environment variables to prevent non-interactive mode.
+                # The `is-in-ci` package (used by Ink/Gemini) checks for ANY variable
+                # starting with CI_ or the CI/CONTINUOUS_INTEGRATION variables.
+                # Setting to empty string doesn't work - must delete entirely.
+                # See: https://github.com/google-gemini/gemini-cli/issues/1563
+                for key in list(os.environ.keys()):
+                    if key == "CI" or key == "CONTINUOUS_INTEGRATION" or key.startswith("CI_"):
+                        del os.environ[key]
                 os.environ["TERM_PROGRAM"] = "xterm"
                 # Ensure proper columns/lines are set (using module constants)
                 os.environ["COLUMNS"] = str(INITIAL_PTY_COLS)
                 os.environ["LINES"] = str(INITIAL_PTY_ROWS)
-                os.execvp("claude", args)
+                os.execvp(adapter.command_name, args)
             except Exception as e:
                 # Write error to stderr so it can be captured
                 import sys
-                sys.stderr.write(f"Failed to start claude: {e}\n")
+
+                sys.stderr.write(f"Failed to start {adapter.command_name}: {e}\n")
                 sys.stderr.flush()
                 os._exit(1)
         else:
@@ -241,12 +249,13 @@ class ProcessManager:
                 fd=fd,
                 working_dir=working_dir,
                 session_id=session_id,
+                cli_type=cli_type,
                 allowed_tools=allowed_tools or settings.get_allowed_tools(),
                 permission_mode=permission_mode or settings.claude_permission_mode,
                 max_turns=max_turns if max_turns is not None else settings.claude_max_turns,
                 model=model or settings.claude_model,
-                # Set Claude session ID - either our generated one or the one being resumed
-                claude_session_id=claude_session_id or resume_session,
+                # Session ID for tracking (always set for all CLI types)
+                claude_session_id=cli_session_id,
             )
 
             async with self._lock:
@@ -255,74 +264,16 @@ class ProcessManager:
             # Start reading output
             process._read_task = asyncio.create_task(self._read_loop(process))
 
-            # Send initial prompt after Claude starts
+            # Send initial prompt after CLI starts
             if initial_prompt:
                 asyncio.create_task(self._send_initial_prompt(process, initial_prompt))
 
             return process
 
-    def _build_command_args(
-        self,
-        settings: Settings,
-        *,
-        allowed_tools: list[str] | None = None,
-        disallowed_tools: list[str] | None = None,
-        permission_mode: str | None = None,
-        max_turns: int | None = None,
-        model: str | None = None,
-        resume_session: str | None = None,
-        claude_session_id: str | None = None,
-        mcp_config: McpConfig | None = None,
-    ) -> list[str]:
-        """Build Claude Code command arguments with proper flags."""
-        args = [settings.claude_command]
-
-        # Resume session if specified
-        if resume_session:
-            args.extend(["--resume", resume_session])
-        elif claude_session_id:
-            # Set a known session ID for new sessions so we can resume later
-            args.extend(["--session-id", claude_session_id])
-
-        # Permission mode
-        mode = permission_mode or settings.claude_permission_mode
-        if mode == "bypassPermissions":
-            args.append("--dangerously-skip-permissions")
-        elif mode in ("plan", "acceptEdits"):
-            args.extend(["--permission-mode", mode])
-
-        # Allowed tools (only if not bypassing permissions)
-        if mode != "bypassPermissions":
-            tools = allowed_tools or settings.get_allowed_tools()
-            if tools:
-                args.extend(["--allowedTools", ",".join(tools)])
-
-            # Disallowed tools
-            disabled = disallowed_tools or settings.get_disallowed_tools()
-            if disabled:
-                args.extend(["--disallowedTools", ",".join(disabled)])
-
-        # Max turns
-        turns = max_turns if max_turns is not None else settings.claude_max_turns
-        if turns > 0:
-            args.extend(["--max-turns", str(turns)])
-
-        # Model
-        m = model or settings.claude_model
-        if m:
-            args.extend(["--model", m])
-
-        # MCP configuration
-        mcp = mcp_config or settings.get_mcp_config()
-        if mcp:
-            args.extend(["--mcp-config", json.dumps(mcp)])
-
-        return args
-
     async def _send_initial_prompt(self, process: Process, prompt: str):
-        """Send initial prompt after Claude Code starts and is ready."""
-        # Wait for Claude to initialize by detecting ready patterns in output
-        await self._wait_for_claude_ready(process)
+        """Send initial prompt after CLI starts and is ready."""
+        # Wait for CLI to initialize by detecting ready patterns in output
+        await self._wait_for_cli_ready(process)
 
         # Send the prompt as if user typed it, then press Enter
         # Use \r (carriage return) like a real terminal Enter key, not \n (line feed)
@@ -330,9 +281,9 @@ class ProcessManager:
         await asyncio.sleep(PROMPT_ENTER_DELAY_SECS)
         await self.write(process.id, "\r")
 
-    async def _wait_for_claude_ready(self, process: Process):
+    async def _wait_for_cli_ready(self, process: Process):
         """
-        Wait for Claude Code to be ready for input by detecting UI patterns.
+        Wait for CLI to be ready for input by detecting UI patterns.
 
         Uses pattern matching on the terminal output instead of a fixed delay.
         Falls back to a short delay if patterns aren't detected within timeout.
@@ -346,8 +297,9 @@ class ProcessManager:
             # Check if we've exceeded max wait time
             if elapsed >= CLAUDE_INIT_MAX_WAIT_SECS:
                 logger.warning(
-                    "Claude ready detection timed out after %.1fs for process %s",
-                    elapsed, process.id
+                    "CLI ready detection timed out after %.1fs for process %s",
+                    elapsed,
+                    process.id,
                 )
                 break
 
@@ -355,11 +307,13 @@ class ProcessManager:
             current_transcript = process.transcript
             if current_transcript:
                 # Look for any ready pattern in the output
-                for pattern in CLAUDE_READY_PATTERNS:
+                for pattern in CLI_READY_PATTERNS:
                     if pattern in current_transcript:
                         logger.debug(
-                            "Claude ready detected after %.2fs for process %s (pattern: %r)",
-                            elapsed, process.id, pattern
+                            "CLI ready detected after %.2fs for process %s (pattern: %r)",
+                            elapsed,
+                            process.id,
+                            pattern,
                         )
                         # Small additional delay to ensure UI is fully rendered
                         await asyncio.sleep(CLAUDE_UI_RENDER_DELAY_SECS)
@@ -370,8 +324,9 @@ class ProcessManager:
             if elapsed >= CLAUDE_INIT_FALLBACK_SECS and current_len == last_transcript_len:
                 # No new output for a while, assume ready
                 logger.debug(
-                    "Claude ready (no new output) after %.2fs for process %s",
-                    elapsed, process.id
+                    "CLI ready (no new output) after %.2fs for process %s",
+                    elapsed,
+                    process.id,
                 )
                 return
 
@@ -554,22 +509,29 @@ class ProcessManager:
         except OSError:
             pass
 
-    async def get_dead_process_info(self) -> list[tuple[int | None, str, str | None, str]]:
+    async def get_dead_process_info(
+        self,
+    ) -> list[tuple[int | None, str, str | None, str, CLIType]]:
         """
         Check for and return info about dead processes for database cleanup.
-        Returns list of (session_id, transcript, claude_session_id, working_dir) for dead processes.
+
+        Returns list of (session_id, transcript, claude_session_id, working_dir, cli_type)
+        for dead processes.
         """
         dead_info = []
         dead_processes = []
 
         for process_id, process in self._processes.items():
             if not self._is_process_alive(process.pid):
-                dead_info.append((
-                    process.session_id,
-                    process.transcript,
-                    process.claude_session_id,
-                    process.working_dir,
-                ))
+                dead_info.append(
+                    (
+                        process.session_id,
+                        process.transcript,
+                        process.claude_session_id,
+                        process.working_dir,
+                        process.cli_type,
+                    )
+                )
                 dead_processes.append(process_id)
 
         # Clean up dead processes

@@ -5,6 +5,50 @@ export interface Repo {
   local_path: string;
 }
 
+// ==========================================
+// CLI Types (Multi-CLI support)
+// ==========================================
+
+export type CLIType = 'claude' | 'gemini' | 'codex';
+
+export interface CLICapabilities {
+  supports_headless: boolean;
+  supports_resume: boolean;
+  supports_mcp: boolean;
+  supports_permission_mode: boolean;
+  supports_tool_control: boolean;
+  supports_model_selection: boolean;
+  default_output_format: string;
+}
+
+export interface CLIInfo {
+  type: CLIType;
+  command: string;
+  capabilities: CLICapabilities;
+  installed: boolean;
+}
+
+export interface AvailableCLIsResponse {
+  clis: CLIInfo[];
+  default_cli: CLIType;
+}
+
+export interface CLISettings {
+  default_cli: CLIType;
+  claude: {
+    command: string;
+    permission_mode: string;
+    model: string;
+    max_turns: number;
+  };
+  gemini: {
+    command: string;
+  };
+  codex: {
+    command: string;
+  };
+}
+
 export interface RepoSessionCount {
   repo_id: number;
   total: number;
@@ -172,6 +216,7 @@ export interface Process {
   session_id: number | null;  // Legacy - may be null in new model
   claude_session_id: string | null;
   mode: 'pty' | 'headless';  // PTY for interactive, headless for issue/PR sessions
+  cli_type: CLIType;  // Which CLI tool this process uses
 }
 
 // ==========================================
@@ -221,6 +266,9 @@ export interface SessionSummary {
   starred: boolean;
   scheduled_job_id?: number | null;  // ID of schedule that created this session
 
+  // CLI type
+  cli_type: CLIType;  // Which CLI tool created this session
+
   // Status
   is_active: boolean;
 }
@@ -250,6 +298,9 @@ export interface SessionDetail {
   // Version info
   claude_code_version?: string | null;
   git_branch?: string | null;
+
+  // CLI type
+  cli_type: CLIType;  // Which CLI tool created this session
 
   // Sidecar metadata
   metadata: SessionMetadata;
@@ -312,6 +363,7 @@ export interface ClaudeCodeSettings {
 }
 
 export interface ProcessCreateOptions {
+  cli_type?: CLIType;
   permission_mode?: PermissionMode;
   allowed_tools?: string[];
   disallowed_tools?: string[];

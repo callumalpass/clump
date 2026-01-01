@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import { Group, Panel } from 'react-resizable-panels';
-import { useRepos, useIssues, usePRs, useProcesses, useSessions, useTags, useIssueTags, useIssueMetadata, usePRMetadata, useCommands, useSessionCounts, useStats, buildPromptFromTemplate, exportSession, downloadExport } from './hooks/useApi';
+import { useRepos, useIssues, usePRs, useProcesses, useSessions, useTags, useIssueTags, useIssueMetadata, usePRMetadata, useCommands, useSessionCounts, useStats, useAvailableCLIs, buildPromptFromTemplate, exportSession, downloadExport } from './hooks/useApi';
 import { useNotifications } from './hooks/useNotifications';
 import { useWebSocketManager } from './contexts/WebSocketContext';
 import type { IssueFilters, SessionFilters, PRFilters } from './hooks/useApi';
@@ -16,7 +16,8 @@ import { Settings } from './components/Settings';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { CommandPalette, type Command } from './components/CommandPalette';
 import { ResizeHandle } from './components/ResizeHandle';
-import type { Repo, SessionSummary, CommandMetadata, EntityLink } from './types';
+import { CLISelector } from './components/CLISelector';
+import type { Repo, SessionSummary, CommandMetadata, EntityLink, CLIType } from './types';
 import type { SessionListFilters } from './components/SessionList';
 import { LRUCache } from './utils/cache';
 import { pluralize } from './utils/text';
@@ -245,6 +246,18 @@ export default function App() {
   }, [openSessionIds, activeTabSessionId, selectedRepo?.id]);
 
   const { repos, addRepo, deleteRepo } = useRepos();
+
+  // CLI selection state and available CLIs
+  const { clis, defaultCLI, loading: clisLoading } = useAvailableCLIs();
+  const [selectedCLI, setSelectedCLI] = useState<CLIType>('claude');
+
+  // Update selectedCLI when defaultCLI changes (after initial load)
+  useEffect(() => {
+    if (!clisLoading && defaultCLI) {
+      setSelectedCLI(defaultCLI);
+    }
+  }, [clisLoading, defaultCLI]);
+
   // Lazy-load issues only when the Issues tab is active (perf optimization)
   const {
     issues,
@@ -391,7 +404,7 @@ export default function App() {
   }, [updateCounts]);
 
   // Handle initial state from WebSocket
-  const handleInitialState = useCallback((event: { processes: Array<{ id: string; session_id: number | null; working_dir: string; created_at: string; claude_session_id?: string | null }> }) => {
+  const handleInitialState = useCallback((event: { processes: Array<{ id: string; session_id: number | null; working_dir: string; created_at: string; claude_session_id?: string | null; cli_type?: CLIType }> }) => {
     // Update processes from WebSocket initial state
     // These are all PTY processes (headless sessions don't appear in this list)
     setProcesses(event.processes.map(p => ({
@@ -401,6 +414,7 @@ export default function App() {
       created_at: p.created_at,
       claude_session_id: p.claude_session_id ?? null,
       mode: 'pty' as const,
+      cli_type: p.cli_type ?? 'claude',
     })));
   }, [setProcesses]);
 
@@ -584,7 +598,8 @@ export default function App() {
         prompt,
         'issue',
         entities,
-        title
+        title,
+        { cli_type: selectedCLI }
       );
 
       // Store pending session data for optimistic UI
@@ -606,7 +621,7 @@ export default function App() {
       // Trigger debounced refresh to get session data sooner
       refreshSessionsDebounced();
     },
-    [selectedRepo, createProcess, refreshSessionsDebounced]
+    [selectedRepo, selectedCLI, createProcess, refreshSessionsDebounced]
   );
 
   const handleStartPRSession = useCallback(
@@ -632,7 +647,8 @@ export default function App() {
         prompt,
         'pr',
         entities,
-        title
+        title,
+        { cli_type: selectedCLI }
       );
 
       // Store pending session data for optimistic UI
@@ -654,7 +670,7 @@ export default function App() {
       // Trigger debounced refresh to get analysis data sooner
       refreshSessionsDebounced();
     },
-    [selectedRepo, createProcess, refreshSessionsDebounced]
+    [selectedRepo, selectedCLI, createProcess, refreshSessionsDebounced]
   );
 
   const handleNewProcess = useCallback(async () => {
@@ -668,7 +684,8 @@ export default function App() {
       undefined,
       'custom',
       entities,
-      title
+      title,
+      { cli_type: selectedCLI }
     );
 
     // Store pending session data for optimistic UI
@@ -686,7 +703,7 @@ export default function App() {
 
     // Trigger debounced refresh to get session data sooner
     refreshSessionsDebounced();
-  }, [selectedRepo, createProcess, refreshSessionsDebounced]);
+  }, [selectedRepo, selectedCLI, createProcess, refreshSessionsDebounced]);
 
   const handleSelectSession = useCallback((session: SessionSummary) => {
     // Check if this session is active (has a running process)
@@ -889,6 +906,7 @@ export default function App() {
             entities: pendingData?.entities || [],
             tags: [],
             starred: false,
+            cli_type: process.cli_type,
             is_active: true,
           } as SessionSummary;
         }
@@ -1332,6 +1350,13 @@ export default function App() {
               </span>
             </button>
           )}
+          {/* CLI Selector - shows which AI CLI tool to use */}
+          <CLISelector
+            selectedCLI={selectedCLI}
+            onSelectCLI={setSelectedCLI}
+            availableCLIs={clis}
+            loading={clisLoading}
+          />
           {/* New Session button */}
           <button
             onClick={handleNewProcess}
@@ -1341,7 +1366,7 @@ export default function App() {
                 ? 'bg-blurple-500 hover:bg-blurple-400 text-white shadow-stoody'
                 : 'bg-gray-750 text-gray-500 cursor-not-allowed'
             }`}
-            title={selectedRepo ? 'Start a new Claude session (Alt+N)' : 'Select a repository first'}
+            title={selectedRepo ? 'Start a new session (Alt+N)' : 'Select a repository first'}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

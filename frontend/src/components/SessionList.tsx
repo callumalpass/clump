@@ -1,5 +1,5 @@
 import { memo, useCallback, useState, useRef, useEffect } from 'react';
-import type { SessionSummary, Process, BulkOperationResult } from '../types';
+import type { SessionSummary, Process, BulkOperationResult, CLIType } from '../types';
 import { getModelShortName, getModelTextColor } from '../utils/models';
 import { formatRelativeTime, formatDuration, isRecentlyModified } from '../utils/time';
 import { ElapsedTimer } from './ElapsedTimer';
@@ -16,6 +16,7 @@ import {
 } from './FilterBar';
 import { ConfirmDialog } from './ConfirmDialog';
 import { pluralize } from '../utils/text';
+import { CLIBadge } from './CLISelector';
 
 // Memoized list item component to prevent unnecessary re-renders
 interface SessionListItemProps {
@@ -192,6 +193,11 @@ const SessionListItem = memo(function SessionListItem({
       </div>
 
       <div className="list-item-metadata flex items-center gap-2 text-xs mt-2 flex-wrap">
+        {/* CLI badge - show which CLI tool was used */}
+        {session.cli_type && session.cli_type !== 'claude' && (
+          <CLIBadge cliType={session.cli_type} small />
+        )}
+
         {/* Model - color-coded badge for quick identification (most important) */}
         {session.model && (
           <span className={`px-2 py-0.5 rounded-stoody font-medium ${getModelTextColor(session.model)} bg-gray-750/80`}>
@@ -268,10 +274,12 @@ const SessionListItem = memo(function SessionListItem({
 export type SessionFilter = 'all' | 'active' | 'completed' | 'starred' | 'with-entities';
 export type ModelFilter = 'all' | 'sonnet' | 'opus' | 'haiku';
 export type DateRangePreset = 'all' | 'today' | 'yesterday' | 'week' | 'month';
+export type CLIFilter = 'all' | CLIType;
 
 export interface SessionListFilters {
   category: SessionFilter;
   model?: ModelFilter;
+  cliType?: CLIFilter;
   search?: string;
   sort?: 'created' | 'updated' | 'messages';
   order?: 'asc' | 'desc';
@@ -321,6 +329,13 @@ const DATE_RANGE_FILTERS: { value: DateRangePreset; label: string }[] = [
   { value: 'yesterday', label: 'Yesterday' },
   { value: 'week', label: 'This Week' },
   { value: 'month', label: 'This Month' },
+];
+
+const CLI_FILTERS: { value: CLIFilter; label: string }[] = [
+  { value: 'all', label: 'All CLIs' },
+  { value: 'claude', label: 'Claude' },
+  { value: 'gemini', label: 'Gemini' },
+  { value: 'codex', label: 'Codex' },
 ];
 
 export function SessionList({
@@ -445,6 +460,10 @@ export function SessionList({
     onFiltersChange({ ...filters, dateRange: dateRange === 'all' ? undefined : dateRange });
   };
 
+  const setCLIType = (cliType: CLIFilter) => {
+    onFiltersChange({ ...filters, cliType: cliType === 'all' ? undefined : cliType });
+  };
+
   const clearFilters = () => {
     onFiltersChange({ category: 'all' });
   };
@@ -454,6 +473,7 @@ export function SessionList({
     filters.search ? 1 : 0,
     filters.category !== 'all' ? 1 : 0,
     filters.model && filters.model !== 'all' ? 1 : 0,
+    filters.cliType && filters.cliType !== 'all' ? 1 : 0,
     filters.dateRange && filters.dateRange !== 'all' ? 1 : 0,
     filters.sort && filters.sort !== 'created' ? 1 : 0,
     filters.order && filters.order !== 'desc' ? 1 : 0,
@@ -601,6 +621,20 @@ export function SessionList({
           aria-label="Filter by model"
         >
           {MODEL_FILTERS.map((f) => (
+            <option key={f.value} value={f.value}>
+              {f.label}
+            </option>
+          ))}
+        </select>
+
+        {/* CLI filter - compact dropdown */}
+        <select
+          value={filters.cliType || 'all'}
+          onChange={(e) => setCLIType(e.target.value as CLIFilter)}
+          className={filterBarStyles.select}
+          aria-label="Filter by CLI"
+        >
+          {CLI_FILTERS.map((f) => (
             <option key={f.value} value={f.value}>
               {f.label}
             </option>

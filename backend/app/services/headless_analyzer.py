@@ -1,8 +1,13 @@
 """
-Headless Claude Code Analyzer.
+Headless AI Coding CLI Analyzer.
 
-Uses Claude Code's non-interactive mode (-p flag) with structured JSON output
+Uses AI coding CLIs' non-interactive modes with structured JSON output
 for programmatic analysis of issues, PRs, and code.
+
+Supports:
+- Claude Code (-p flag with --output-format stream-json)
+- Gemini CLI (positional prompt with -o stream-json)
+- Codex CLI (exec subcommand with --json)
 """
 
 import asyncio
@@ -10,10 +15,10 @@ import asyncio.subprocess
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import AsyncGenerator, Callable
+from typing import Any, AsyncGenerator
 from uuid import uuid4
 
+from app.cli import CLIType, get_adapter
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -52,10 +57,10 @@ class SessionResult:
 
 class HeadlessAnalyzer:
     """
-    Runs Claude Code in headless mode for programmatic sessions.
+    Runs AI coding CLIs in headless mode for programmatic sessions.
 
-    Uses -p flag with --output-format stream-json for real-time
-    structured output that can be parsed and displayed progressively.
+    Supports multiple CLI tools through the adapter pattern.
+    Uses real-time structured output that can be parsed and displayed progressively.
     """
 
     def __init__(self):
@@ -73,76 +78,12 @@ class HeadlessAnalyzer:
         logger.info("Unregistering session (completed): %s", session_id)
         self._active_session_ids.discard(session_id)
 
-    def _build_command(
-        self,
-        prompt: str,
-        working_dir: str,
-        *,
-        session_id: str | None = None,
-        resume_session: str | None = None,
-        allowed_tools: list[str] | None = None,
-        disallowed_tools: list[str] | None = None,
-        max_turns: int | None = None,
-        permission_mode: str | None = None,
-        model: str | None = None,
-        system_prompt: str | None = None,
-        output_format: str | None = None,
-    ) -> list[str]:
-        """Build the Claude Code command with all options."""
-        cmd = [settings.claude_command, "-p", prompt]
-
-        # Output format
-        fmt = output_format or settings.claude_output_format
-        cmd.extend(["--output-format", fmt])
-
-        # stream-json requires --verbose when using -p (print mode)
-        if fmt == "stream-json":
-            cmd.append("--verbose")
-
-        # Session management
-        if session_id:
-            cmd.extend(["--session-id", session_id])
-        if resume_session:
-            cmd.extend(["--resume", resume_session])
-
-        # Permission mode
-        mode = permission_mode or settings.claude_permission_mode
-        if mode == "bypassPermissions":
-            cmd.append("--dangerously-skip-permissions")
-        elif mode in ("plan", "acceptEdits"):
-            cmd.extend(["--permission-mode", mode])
-
-        # Allowed tools
-        tools = allowed_tools or settings.get_allowed_tools()
-        if tools:
-            cmd.extend(["--allowedTools", ",".join(tools)])
-
-        # Disallowed tools
-        disabled = disallowed_tools or settings.get_disallowed_tools()
-        if disabled:
-            cmd.extend(["--disallowedTools", ",".join(disabled)])
-
-        # Max turns
-        turns = max_turns if max_turns is not None else settings.claude_max_turns
-        if turns > 0:
-            cmd.extend(["--max-turns", str(turns)])
-
-        # Model
-        m = model or settings.claude_model
-        if m:
-            cmd.extend(["--model", m])
-
-        # System prompt
-        if system_prompt:
-            cmd.extend(["--append-system-prompt", system_prompt])
-
-        return cmd
-
     async def analyze(
         self,
         prompt: str,
         working_dir: str,
         *,
+        cli_type: CLIType | str = CLIType.CLAUDE,
         session_id: str | None = None,
         resume_session: str | None = None,
         allowed_tools: list[str] | None = None,
@@ -151,13 +92,15 @@ class HeadlessAnalyzer:
         permission_mode: str | None = None,
         model: str | None = None,
         system_prompt: str | None = None,
+        mcp_config: dict[str, Any] | None = None,
     ) -> SessionResult:
         """
         Run a headless session and return the complete result.
 
         Args:
             prompt: The session prompt
-            working_dir: Directory to run Claude Code in
+            working_dir: Directory to run the CLI in
+            cli_type: Which CLI to use (claude, gemini, codex)
             session_id: Specific UUID to use for this session
             resume_session: Session ID to resume from
             allowed_tools: Tools to auto-approve (overrides config)
@@ -166,6 +109,7 @@ class HeadlessAnalyzer:
             permission_mode: Permission mode (overrides config)
             model: Model to use (overrides config)
             system_prompt: Additional system prompt to append
+            mcp_config: MCP server configuration
 
         Returns:
             SessionResult with complete session data
@@ -174,6 +118,7 @@ class HeadlessAnalyzer:
         async for msg in self.analyze_stream(
             prompt,
             working_dir,
+            cli_type=cli_type,
             session_id=session_id,
             resume_session=resume_session,
             allowed_tools=allowed_tools,
@@ -182,6 +127,7 @@ class HeadlessAnalyzer:
             permission_mode=permission_mode,
             model=model,
             system_prompt=system_prompt,
+            mcp_config=mcp_config,
         ):
             messages.append(msg)
 
@@ -218,6 +164,7 @@ class HeadlessAnalyzer:
         prompt: str,
         working_dir: str,
         *,
+        cli_type: CLIType | str = CLIType.CLAUDE,
         session_id: str | None = None,
         resume_session: str | None = None,
         allowed_tools: list[str] | None = None,
@@ -226,14 +173,32 @@ class HeadlessAnalyzer:
         permission_mode: str | None = None,
         model: str | None = None,
         system_prompt: str | None = None,
-        output_format: str = "stream-json",
+        output_format: str | None = None,
+        mcp_config: dict[str, Any] | None = None,
     ) -> AsyncGenerator[SessionMessage, None]:
         """
         Run a headless session and stream results as they arrive.
 
-        Yields SessionMessage objects parsed from stream-json output.
+        Yields SessionMessage objects parsed from JSON output.
         """
-        cmd = self._build_command(
+        # Convert string to CLIType if needed
+        if isinstance(cli_type, str):
+            cli_type = CLIType(cli_type)
+
+        # Get the appropriate adapter for this CLI
+        adapter = get_adapter(cli_type)
+
+        # Check if headless is supported
+        if not adapter.capabilities.supports_headless:
+            yield SessionMessage(
+                type="error",
+                content=f"{adapter.display_name} does not support headless mode",
+            )
+            return
+
+        # Build command using the adapter
+        fmt = output_format or adapter.capabilities.output_format
+        cmd = adapter.build_headless_command(
             prompt,
             working_dir,
             session_id=session_id,
@@ -244,7 +209,8 @@ class HeadlessAnalyzer:
             permission_mode=permission_mode,
             model=model,
             system_prompt=system_prompt,
-            output_format=output_format,
+            output_format=fmt,
+            mcp_config=mcp_config,
         )
 
         process = await asyncio.create_subprocess_exec(

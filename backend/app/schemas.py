@@ -168,6 +168,9 @@ class SessionSummaryResponse(BaseModel):
     starred: bool = False
     scheduled_job_id: Optional[int] = None  # ID of schedule that created this session
 
+    # CLI type
+    cli_type: str = "claude"  # "claude", "gemini", or "codex"
+
     # Status (derived from file or active process)
     is_active: bool = False
 
@@ -250,6 +253,9 @@ class SessionDetailResponse(BaseModel):
     # Version info
     claude_code_version: Optional[str] = None
     git_branch: Optional[str] = None
+
+    # CLI type
+    cli_type: str = "claude"  # "claude", "gemini", or "codex"
 
     # Sidecar metadata
     metadata: SessionMetadataResponse
