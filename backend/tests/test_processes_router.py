@@ -47,6 +47,7 @@ def mock_repo():
 @pytest.fixture
 def mock_process():
     """Create a mock Process object."""
+    from app.cli import CLIType
     process = MagicMock()
     process.id = "abc12345"
     process.pid = 12345
@@ -56,6 +57,7 @@ def mock_process():
     process.session_id = 1
     process.transcript = "Test transcript output"
     process.claude_session_id = "test-claude-session-uuid"
+    process.cli_type = CLIType.CLAUDE
     return process
 
 
@@ -67,7 +69,9 @@ class TestCreateProcess:
         with patch("app.routers.processes.get_repo_or_404", return_value=mock_repo), \
              patch("app.routers.processes.get_repo_db") as mock_db_ctx, \
              patch("app.routers.processes.process_manager") as mock_pm, \
-             patch("app.routers.processes.encode_path", return_value="-home-user-projects-testrepo"):
+             patch("app.routers.processes.encode_path", return_value="-home-user-projects-testrepo"), \
+             patch("app.routers.processes.event_manager") as mock_em, \
+             patch("app.routers.processes.load_repos", return_value=[]):
 
             # Mock database context manager
             mock_db = AsyncMock()
@@ -81,8 +85,13 @@ class TestCreateProcess:
             mock_db.commit = AsyncMock()
             mock_db.refresh = AsyncMock(side_effect=lambda s: setattr(s, 'id', 1))
 
-            # Mock process creation
+            # Mock process creation and list_processes (for _emit_counts_changed)
             mock_pm.create_process = AsyncMock(return_value=mock_process)
+            mock_pm.list_processes = AsyncMock(return_value=[])
+
+            # Mock event manager
+            mock_em.emit = AsyncMock()
+            mock_em.emit_counts_changed = AsyncMock()
 
             response = client.post(
                 "/processes",
@@ -106,7 +115,9 @@ class TestCreateProcess:
              patch("app.routers.processes.get_repo_db") as mock_db_ctx, \
              patch("app.routers.processes.process_manager") as mock_pm, \
              patch("app.routers.processes.encode_path", return_value="-home-user-projects-testrepo"), \
-             patch("app.routers.processes.save_session_metadata") as mock_save_meta:
+             patch("app.routers.processes.save_session_metadata") as mock_save_meta, \
+             patch("app.routers.processes.event_manager") as mock_em, \
+             patch("app.routers.processes.load_repos", return_value=[]):
 
             mock_db = AsyncMock()
             mock_db_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
@@ -116,6 +127,9 @@ class TestCreateProcess:
             mock_db.refresh = AsyncMock(side_effect=lambda s: setattr(s, 'id', 1))
 
             mock_pm.create_process = AsyncMock(return_value=mock_process)
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_em.emit = AsyncMock()
+            mock_em.emit_counts_changed = AsyncMock()
 
             response = client.post(
                 "/processes",
@@ -186,7 +200,9 @@ class TestCreateProcess:
         """Test creating a process with Claude Code configuration overrides."""
         with patch("app.routers.processes.get_repo_or_404", return_value=mock_repo), \
              patch("app.routers.processes.get_repo_db") as mock_db_ctx, \
-             patch("app.routers.processes.process_manager") as mock_pm:
+             patch("app.routers.processes.process_manager") as mock_pm, \
+             patch("app.routers.processes.event_manager") as mock_em, \
+             patch("app.routers.processes.load_repos", return_value=[]):
 
             mock_db = AsyncMock()
             mock_db_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
@@ -196,6 +212,9 @@ class TestCreateProcess:
             mock_db.refresh = AsyncMock(side_effect=lambda s: setattr(s, 'id', 1))
 
             mock_pm.create_process = AsyncMock(return_value=mock_process)
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_em.emit = AsyncMock()
+            mock_em.emit_counts_changed = AsyncMock()
 
             response = client.post(
                 "/processes",
@@ -222,7 +241,9 @@ class TestCreateProcess:
         """Test creating a process that resumes an existing session."""
         with patch("app.routers.processes.get_repo_or_404", return_value=mock_repo), \
              patch("app.routers.processes.get_repo_db") as mock_db_ctx, \
-             patch("app.routers.processes.process_manager") as mock_pm:
+             patch("app.routers.processes.process_manager") as mock_pm, \
+             patch("app.routers.processes.event_manager") as mock_em, \
+             patch("app.routers.processes.load_repos", return_value=[]):
 
             mock_db = AsyncMock()
             mock_db_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
@@ -232,6 +253,9 @@ class TestCreateProcess:
             mock_db.refresh = AsyncMock(side_effect=lambda s: setattr(s, 'id', 1))
 
             mock_pm.create_process = AsyncMock(return_value=mock_process)
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_em.emit = AsyncMock()
+            mock_em.emit_counts_changed = AsyncMock()
 
             response = client.post(
                 "/processes",
@@ -279,7 +303,7 @@ class TestListProcesses:
     def test_list_processes_cleans_up_dead(self, client, mock_repo):
         """Test that listing processes cleans up dead processes and updates sessions."""
         dead_process_info = [
-            (1, "transcript content", "claude-session-id", "/home/user/projects/testrepo")
+            (1, "transcript content", "claude-session-id", "/home/user/projects/testrepo", "claude")
         ]
 
         mock_session = MagicMock()
@@ -287,10 +311,14 @@ class TestListProcesses:
 
         with patch("app.routers.processes.process_manager") as mock_pm, \
              patch("app.routers.processes.get_repo_by_path", return_value=mock_repo), \
-             patch("app.routers.processes.get_repo_db") as mock_db_ctx:
+             patch("app.routers.processes.get_repo_db") as mock_db_ctx, \
+             patch("app.routers.processes.event_manager") as mock_em, \
+             patch("app.routers.processes.load_repos", return_value=[]):
 
             mock_pm.get_dead_process_info = AsyncMock(return_value=dead_process_info)
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_em.emit = AsyncMock()
+            mock_em.emit_counts_changed = AsyncMock()
 
             mock_db = AsyncMock()
             mock_db_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
@@ -318,10 +346,15 @@ class TestKillProcess:
         """Test killing a process successfully."""
         with patch("app.routers.processes.process_manager") as mock_pm, \
              patch("app.routers.processes.get_repo_by_path", return_value=mock_repo), \
-             patch("app.routers.processes.get_repo_db") as mock_db_ctx:
+             patch("app.routers.processes.get_repo_db") as mock_db_ctx, \
+             patch("app.routers.processes.event_manager") as mock_em, \
+             patch("app.routers.processes.load_repos", return_value=[]):
 
             mock_pm.get_process = AsyncMock(return_value=mock_process)
             mock_pm.kill = AsyncMock(return_value=True)
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_em.emit = AsyncMock()
+            mock_em.emit_counts_changed = AsyncMock()
 
             mock_db = AsyncMock()
             mock_db_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
@@ -353,10 +386,15 @@ class TestKillProcess:
         """Test that killing updates the linked session."""
         with patch("app.routers.processes.process_manager") as mock_pm, \
              patch("app.routers.processes.get_repo_by_path", return_value=mock_repo), \
-             patch("app.routers.processes.get_repo_db") as mock_db_ctx:
+             patch("app.routers.processes.get_repo_db") as mock_db_ctx, \
+             patch("app.routers.processes.event_manager") as mock_em, \
+             patch("app.routers.processes.load_repos", return_value=[]):
 
             mock_pm.get_process = AsyncMock(return_value=mock_process)
             mock_pm.kill = AsyncMock(return_value=True)
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_em.emit = AsyncMock()
+            mock_em.emit_counts_changed = AsyncMock()
 
             mock_db = AsyncMock()
             mock_db_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_db)
