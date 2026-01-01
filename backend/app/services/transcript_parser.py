@@ -402,12 +402,23 @@ def _parse_gemini_transcript(transcript_path: Path, session_id: str) -> ParsedTr
     - summary: Session summary/title
     - messages: Array of message objects with type, content, timestamp
     - startTime/lastUpdated: Timestamps
+
+    Gemini message content can include:
+    - text: Plain text content
+    - functionCall: Tool invocation with name and args
+    - functionResponse: Tool results
+    - usage: Token usage metadata
     """
     messages: list[TranscriptMessage] = []
     summary = None
     primary_model = None
     start_time = None
     end_time = None
+    total_input = 0
+    total_output = 0
+
+    # Map tool_use_id to ToolUse for attaching results
+    pending_tool_uses: dict[str, ToolUse] = {}
 
     try:
         with open(transcript_path, 'r', encoding='utf-8') as f:
@@ -423,39 +434,117 @@ def _parse_gemini_transcript(transcript_path: Path, session_id: str) -> ParsedTr
 
             if msg_type == "user":
                 content = msg.get("content", "")
-                if isinstance(content, str) and content.strip():
+                tool_results_in_msg = []
+
+                # Handle both string and list content
+                if isinstance(content, str):
+                    text_content = content
+                elif isinstance(content, list):
+                    text_parts = []
+                    for part in content:
+                        if isinstance(part, dict):
+                            part_type = part.get("type", "")
+                            if part_type == "text":
+                                text_parts.append(part.get("text", ""))
+                            elif part_type == "functionResponse" or "functionResponse" in part:
+                                # Tool result - extract and attach to pending tool_use
+                                func_resp = part.get("functionResponse", part)
+                                func_name = func_resp.get("name", "")
+                                response = func_resp.get("response", {})
+                                result_text = response.get("output", str(response))
+
+                                # Try to find matching tool_use by name
+                                for tool_id, tool_use in pending_tool_uses.items():
+                                    if tool_use.name == func_name and tool_use.result is None:
+                                        tool_use.result = result_text
+                                        tool_use.result_is_error = response.get("error", False)
+                                        break
+
+                                tool_results_in_msg.append(ToolResult(
+                                    tool_use_id=func_name,  # Gemini uses function name
+                                    content=result_text,
+                                    is_error=response.get("error", False),
+                                ))
+                        elif isinstance(part, str):
+                            text_parts.append(part)
+                    text_content = "\n".join(text_parts)
+                else:
+                    text_content = str(content) if content else ""
+
+                if text_content.strip():
                     messages.append(TranscriptMessage(
                         uuid=msg.get("id", ""),
                         role="user",
-                        content=content,
+                        content=text_content,
                         timestamp=timestamp,
+                        tool_results=tool_results_in_msg,
                     ))
+
             elif msg_type == "gemini":
                 content = msg.get("content", "")
                 model = msg.get("model")
                 if model and not primary_model:
                     primary_model = model
 
+                # Extract usage data
+                usage_data = msg.get("usage", {})
+                usage = None
+                if usage_data:
+                    input_tokens = usage_data.get("promptTokenCount", 0) or usage_data.get("input_tokens", 0)
+                    output_tokens = usage_data.get("candidatesTokenCount", 0) or usage_data.get("output_tokens", 0)
+                    usage = TokenUsage(
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                    )
+                    total_input += input_tokens
+                    total_output += output_tokens
+
                 # Handle content that could be string or list
                 text_content = ""
+                thinking_content = ""
+                tool_uses = []
+
                 if isinstance(content, str):
                     text_content = content
                 elif isinstance(content, list):
                     text_parts = []
                     for part in content:
-                        if isinstance(part, dict) and part.get("type") == "text":
-                            text_parts.append(part.get("text", ""))
+                        if isinstance(part, dict):
+                            part_type = part.get("type", "")
+
+                            if part_type == "text":
+                                text_parts.append(part.get("text", ""))
+
+                            elif part_type == "thinking" or "thinking" in part:
+                                # Gemini thinking/reasoning
+                                thinking_content += part.get("thinking", part.get("text", ""))
+
+                            elif part_type == "functionCall" or "functionCall" in part:
+                                # Tool invocation
+                                func_call = part.get("functionCall", part)
+                                tool_id = func_call.get("id", func_call.get("name", ""))
+                                tool_use = ToolUse(
+                                    id=tool_id,
+                                    name=func_call.get("name", ""),
+                                    input=func_call.get("args", {}),
+                                )
+                                tool_uses.append(tool_use)
+                                pending_tool_uses[tool_id] = tool_use
+
                         elif isinstance(part, str):
                             text_parts.append(part)
                     text_content = "\n".join(text_parts)
 
-                if text_content.strip():
+                if text_content.strip() or tool_uses:
                     messages.append(TranscriptMessage(
                         uuid=msg.get("id", ""),
                         role="assistant",
                         content=text_content,
                         timestamp=timestamp,
+                        thinking=thinking_content if thinking_content else None,
+                        tool_uses=tool_uses,
                         model=model,
+                        usage=usage,
                     ))
 
     except (OSError, json.JSONDecodeError) as e:
@@ -467,8 +556,8 @@ def _parse_gemini_transcript(transcript_path: Path, session_id: str) -> ParsedTr
         messages=messages,
         summary=summary,
         model=primary_model,
-        total_input_tokens=0,
-        total_output_tokens=0,
+        total_input_tokens=total_input,
+        total_output_tokens=total_output,
         total_cache_read_tokens=0,
         total_cache_creation_tokens=0,
         start_time=start_time,
@@ -484,8 +573,15 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
 
     Codex uses JSONL format with different entry types:
     - session_meta: Session metadata (cwd, timestamp, git info)
-    - response_item: User/assistant messages
+    - response_item: User/assistant messages and function calls
     - turn_context: Model info for the turn
+    - usage: Token usage data
+
+    Codex response_item content can include:
+    - input_text: User text input
+    - output_text: Assistant text output
+    - function_call: Tool invocation
+    - function_call_output: Tool results
     """
     messages: list[TranscriptMessage] = []
     primary_model = None
@@ -493,6 +589,11 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
     end_time = None
     git_branch = None
     user_message_count = 0
+    total_input = 0
+    total_output = 0
+
+    # Map tool call IDs to ToolUse objects for attaching results
+    pending_tool_uses: dict[str, ToolUse] = {}
 
     try:
         with open(transcript_path, 'r', encoding='utf-8') as f:
@@ -522,12 +623,60 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
                     if model and not primary_model:
                         primary_model = model
 
+                    # Token usage may be in turn_context
+                    usage_data = payload.get('usage', {})
+                    if usage_data:
+                        total_input += usage_data.get('input_tokens', 0) or usage_data.get('prompt_tokens', 0)
+                        total_output += usage_data.get('output_tokens', 0) or usage_data.get('completion_tokens', 0)
+
+                elif entry_type == 'usage':
+                    # Standalone usage entry
+                    payload = entry.get('payload', {})
+                    total_input += payload.get('input_tokens', 0) or payload.get('prompt_tokens', 0)
+                    total_output += payload.get('output_tokens', 0) or payload.get('completion_tokens', 0)
+
                 elif entry_type == 'response_item':
                     payload = entry.get('payload', {})
                     role = payload.get('role')
+                    item_type = payload.get('type', '')
 
                     if timestamp:
                         end_time = timestamp
+
+                    # Handle function_call entries (tool invocations)
+                    if item_type == 'function_call':
+                        tool_id = payload.get('call_id', payload.get('id', ''))
+                        tool_use = ToolUse(
+                            id=tool_id,
+                            name=payload.get('name', ''),
+                            input=payload.get('arguments', {}),
+                        )
+                        pending_tool_uses[tool_id] = tool_use
+
+                        # Add to most recent assistant message or create one
+                        if messages and messages[-1].role == 'assistant':
+                            messages[-1].tool_uses.append(tool_use)
+                        else:
+                            messages.append(TranscriptMessage(
+                                uuid=payload.get('id', ''),
+                                role='assistant',
+                                content='',
+                                timestamp=timestamp,
+                                tool_uses=[tool_use],
+                                model=primary_model,
+                            ))
+                        continue
+
+                    # Handle function_call_output entries (tool results)
+                    if item_type == 'function_call_output':
+                        call_id = payload.get('call_id', '')
+                        output = payload.get('output', '')
+
+                        # Attach result to the matching tool_use
+                        if call_id in pending_tool_uses:
+                            pending_tool_uses[call_id].result = output
+                            pending_tool_uses[call_id].result_is_error = payload.get('is_error', False)
+                        continue
 
                     if role == 'user':
                         user_message_count += 1
@@ -537,36 +686,85 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
 
                         content_parts = payload.get('content', [])
                         text_parts = []
+                        tool_results = []
+
                         for c in content_parts:
-                            if isinstance(c, dict) and c.get('type') == 'input_text':
-                                text = c.get('text', '')
-                                if text and not text.startswith('<environment_context>'):
-                                    text_parts.append(text)
+                            if isinstance(c, dict):
+                                c_type = c.get('type', '')
+                                if c_type == 'input_text':
+                                    text = c.get('text', '')
+                                    if text and not text.startswith('<environment_context>'):
+                                        text_parts.append(text)
+                                elif c_type == 'function_call_output':
+                                    # Tool result in user message
+                                    call_id = c.get('call_id', '')
+                                    output = c.get('output', '')
+                                    if call_id in pending_tool_uses:
+                                        pending_tool_uses[call_id].result = output
+                                        pending_tool_uses[call_id].result_is_error = c.get('is_error', False)
+                                    tool_results.append(ToolResult(
+                                        tool_use_id=call_id,
+                                        content=output,
+                                        is_error=c.get('is_error', False),
+                                    ))
+
                         text_content = '\n'.join(text_parts)
 
-                        if text_content.strip():
+                        if text_content.strip() or tool_results:
                             messages.append(TranscriptMessage(
                                 uuid=payload.get('id', ''),
                                 role='user',
                                 content=text_content,
                                 timestamp=timestamp,
+                                tool_results=tool_results,
                             ))
 
                     elif role == 'assistant':
                         content_parts = payload.get('content', [])
                         text_parts = []
+                        thinking_content = ""
+                        tool_uses = []
+
                         for c in content_parts:
-                            if isinstance(c, dict) and c.get('type') == 'output_text':
-                                text_parts.append(c.get('text', ''))
+                            if isinstance(c, dict):
+                                c_type = c.get('type', '')
+                                if c_type == 'output_text':
+                                    text_parts.append(c.get('text', ''))
+                                elif c_type == 'thinking' or c_type == 'reasoning':
+                                    thinking_content += c.get('text', c.get('thinking', ''))
+                                elif c_type == 'function_call':
+                                    tool_id = c.get('call_id', c.get('id', ''))
+                                    tool_use = ToolUse(
+                                        id=tool_id,
+                                        name=c.get('name', ''),
+                                        input=c.get('arguments', {}),
+                                    )
+                                    tool_uses.append(tool_use)
+                                    pending_tool_uses[tool_id] = tool_use
+
                         text_content = '\n'.join(text_parts)
 
-                        if text_content.strip():
+                        # Get per-message usage if available
+                        usage = None
+                        msg_usage = payload.get('usage', {})
+                        if msg_usage:
+                            input_tokens = msg_usage.get('input_tokens', 0) or msg_usage.get('prompt_tokens', 0)
+                            output_tokens = msg_usage.get('output_tokens', 0) or msg_usage.get('completion_tokens', 0)
+                            usage = TokenUsage(
+                                input_tokens=input_tokens,
+                                output_tokens=output_tokens,
+                            )
+
+                        if text_content.strip() or tool_uses:
                             messages.append(TranscriptMessage(
                                 uuid=payload.get('id', ''),
                                 role='assistant',
                                 content=text_content,
                                 timestamp=timestamp,
+                                thinking=thinking_content if thinking_content else None,
+                                tool_uses=tool_uses,
                                 model=primary_model,
+                                usage=usage,
                             ))
 
     except OSError as e:
@@ -578,8 +776,8 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
         messages=messages,
         summary=None,  # Codex doesn't have session summaries
         model=primary_model,
-        total_input_tokens=0,
-        total_output_tokens=0,
+        total_input_tokens=total_input,
+        total_output_tokens=total_output,
         total_cache_read_tokens=0,
         total_cache_creation_tokens=0,
         start_time=start_time,
