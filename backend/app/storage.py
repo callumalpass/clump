@@ -684,11 +684,8 @@ def _scan_gemini_unknown_project_dir(
         project_path = _extract_gemini_session_path(json_file)
 
         if project_path:
-            # Convert path to encoded format for sidecar lookup
-            encoded_path = project_path.replace('/', '-').lstrip('-')
-            if encoded_path.startswith('-'):
-                encoded_path = encoded_path[1:]
-            encoded_path = f"-{encoded_path.replace('/', '-')}"
+            # Use encode_path() for consistent path encoding
+            encoded_path = encode_path(project_path)
         else:
             # Fallback to using the hash as the encoded path
             # This won't match sidecars, but allows the session to be discovered

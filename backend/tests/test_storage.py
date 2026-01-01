@@ -17,6 +17,8 @@ from app.storage import (
     get_claude_projects_dir,
     get_clump_session_dir,
     get_repo_db_path,
+    get_gemini_projects_dir,
+    get_codex_sessions_dir,
     # Session types and metadata
     RepoInfo,
     EntityLink,
@@ -25,6 +27,11 @@ from app.storage import (
     # Session discovery
     is_subsession,
     discover_sessions,
+    discover_gemini_sessions,
+    discover_codex_sessions,
+    discover_all_sessions,
+    _extract_gemini_session_path,
+    _scan_gemini_unknown_project_dir,
     get_session_metadata,
     save_session_metadata,
     delete_session_metadata,
@@ -1012,3 +1019,436 @@ class TestGetPaths:
         with patch("app.storage.Path.home", return_value=tmp_path):
             path = get_config_json_path()
             assert path == tmp_path / ".clump" / "config.json"
+
+
+class TestGeminiSessionDiscovery:
+    """Tests for Gemini session discovery functionality."""
+
+    def test_get_gemini_projects_dir(self, tmp_path):
+        """Test getting Gemini projects directory path."""
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            gemini_dir = get_gemini_projects_dir()
+            assert gemini_dir == tmp_path / ".gemini" / "tmp"
+
+    def test_extract_gemini_session_path_with_project_path(self, tmp_path):
+        """Test extracting project path from Gemini session file."""
+        session_file = tmp_path / "session.json"
+        session_data = {
+            "projectPath": "/home/user/my-project",
+            "messages": []
+        }
+        session_file.write_text(json.dumps(session_data))
+
+        result = _extract_gemini_session_path(session_file)
+        assert result == "/home/user/my-project"
+
+    def test_extract_gemini_session_path_with_cwd(self, tmp_path):
+        """Test extracting cwd from Gemini session file when projectPath is missing."""
+        session_file = tmp_path / "session.json"
+        session_data = {
+            "cwd": "/home/user/another-project",
+            "messages": []
+        }
+        session_file.write_text(json.dumps(session_data))
+
+        result = _extract_gemini_session_path(session_file)
+        assert result == "/home/user/another-project"
+
+    def test_extract_gemini_session_path_prefers_project_path(self, tmp_path):
+        """Test that projectPath is preferred over cwd."""
+        session_file = tmp_path / "session.json"
+        session_data = {
+            "projectPath": "/preferred/path",
+            "cwd": "/fallback/path",
+            "messages": []
+        }
+        session_file.write_text(json.dumps(session_data))
+
+        result = _extract_gemini_session_path(session_file)
+        assert result == "/preferred/path"
+
+    def test_extract_gemini_session_path_missing_both(self, tmp_path):
+        """Test extracting path when neither projectPath nor cwd exists."""
+        session_file = tmp_path / "session.json"
+        session_data = {"messages": []}
+        session_file.write_text(json.dumps(session_data))
+
+        result = _extract_gemini_session_path(session_file)
+        assert result is None
+
+    def test_extract_gemini_session_path_invalid_json(self, tmp_path):
+        """Test extracting path from invalid JSON file."""
+        session_file = tmp_path / "session.json"
+        session_file.write_text("not valid json {{{")
+
+        result = _extract_gemini_session_path(session_file)
+        assert result is None
+
+    def test_extract_gemini_session_path_file_not_found(self, tmp_path):
+        """Test extracting path from non-existent file."""
+        session_file = tmp_path / "nonexistent.json"
+
+        result = _extract_gemini_session_path(session_file)
+        assert result is None
+
+    def test_discover_gemini_sessions_no_gemini_dir(self, tmp_path):
+        """Test discovering sessions when Gemini directory doesn't exist."""
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            sessions = discover_gemini_sessions()
+            assert sessions == []
+
+    def test_discover_gemini_sessions_empty_dir(self, tmp_path):
+        """Test discovering sessions from empty Gemini directory."""
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            gemini_dir = tmp_path / ".gemini" / "tmp"
+            gemini_dir.mkdir(parents=True)
+
+            sessions = discover_gemini_sessions()
+            assert sessions == []
+
+    def test_scan_gemini_unknown_project_dir_uses_encode_path(self, tmp_path):
+        """Test that _scan_gemini_unknown_project_dir uses encode_path correctly.
+
+        This is a regression test for the bug where path encoding was done
+        with duplicated and incorrect logic instead of using encode_path().
+        """
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            # Create Gemini project structure
+            project_hash = "abc123def456"
+            project_dir = tmp_path / ".gemini" / "tmp" / project_hash
+            chats_dir = project_dir / "chats"
+            chats_dir.mkdir(parents=True)
+
+            # Create a session file with projectPath
+            session_file = chats_dir / "session-123.json"
+            session_data = {
+                "projectPath": "/home/user/my_project",  # Note: contains underscore
+                "messages": []
+            }
+            session_file.write_text(json.dumps(session_data))
+
+            # Create clump projects dir
+            clump_projects_dir = tmp_path / ".clump" / "projects"
+            clump_projects_dir.mkdir(parents=True)
+
+            # Scan the project directory
+            sessions = _scan_gemini_unknown_project_dir(
+                project_dir, clump_projects_dir, project_hash
+            )
+
+            assert len(sessions) == 1
+            # The encoded path should match what encode_path() produces
+            expected_encoded = encode_path("/home/user/my_project")
+            assert sessions[0].encoded_path == expected_encoded
+            # Verify it handles underscores correctly (they become dashes)
+            assert "-my-project" in sessions[0].encoded_path
+
+    def test_scan_gemini_unknown_project_dir_fallback_to_hash(self, tmp_path):
+        """Test fallback to hash when project path cannot be extracted."""
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            # Create Gemini project structure
+            project_hash = "abc123def456789"
+            project_dir = tmp_path / ".gemini" / "tmp" / project_hash
+            chats_dir = project_dir / "chats"
+            chats_dir.mkdir(parents=True)
+
+            # Create a session file WITHOUT projectPath or cwd
+            session_file = chats_dir / "session-456.json"
+            session_data = {"messages": []}
+            session_file.write_text(json.dumps(session_data))
+
+            # Create clump projects dir
+            clump_projects_dir = tmp_path / ".clump" / "projects"
+            clump_projects_dir.mkdir(parents=True)
+
+            # Scan the project directory
+            sessions = _scan_gemini_unknown_project_dir(
+                project_dir, clump_projects_dir, project_hash
+            )
+
+            assert len(sessions) == 1
+            # Should use fallback format with first 12 chars of hash
+            assert sessions[0].encoded_path == f"gemini-unknown-{project_hash[:12]}"
+
+    def test_scan_gemini_unknown_project_dir_loads_metadata(self, tmp_path):
+        """Test that sidecar metadata is loaded when available."""
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            # Create Gemini project structure
+            project_hash = "abc123"
+            project_dir = tmp_path / ".gemini" / "tmp" / project_hash
+            chats_dir = project_dir / "chats"
+            chats_dir.mkdir(parents=True)
+
+            # Create a session file
+            session_file = chats_dir / "session-with-meta.json"
+            session_data = {
+                "projectPath": "/home/user/project",
+                "messages": []
+            }
+            session_file.write_text(json.dumps(session_data))
+
+            # Create clump projects dir with metadata
+            encoded_path = encode_path("/home/user/project")
+            clump_session_dir = tmp_path / ".clump" / "projects" / encoded_path
+            clump_session_dir.mkdir(parents=True)
+
+            metadata_file = clump_session_dir / "session-with-meta.json"
+            metadata = {
+                "session_id": "session-with-meta",
+                "title": "Test Session",
+                "starred": True,
+            }
+            metadata_file.write_text(json.dumps(metadata))
+
+            clump_projects_dir = tmp_path / ".clump" / "projects"
+
+            # Scan the project directory
+            sessions = _scan_gemini_unknown_project_dir(
+                project_dir, clump_projects_dir, project_hash
+            )
+
+            assert len(sessions) == 1
+            assert sessions[0].metadata is not None
+            assert sessions[0].metadata.title == "Test Session"
+            assert sessions[0].metadata.starred is True
+
+    def test_scan_gemini_unknown_project_dir_no_chats_dir(self, tmp_path):
+        """Test handling when chats directory doesn't exist."""
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            # Create Gemini project structure WITHOUT chats dir
+            project_hash = "nochats123"
+            project_dir = tmp_path / ".gemini" / "tmp" / project_hash
+            project_dir.mkdir(parents=True)
+
+            clump_projects_dir = tmp_path / ".clump" / "projects"
+            clump_projects_dir.mkdir(parents=True)
+
+            # Scan the project directory
+            sessions = _scan_gemini_unknown_project_dir(
+                project_dir, clump_projects_dir, project_hash
+            )
+
+            assert sessions == []
+
+    def test_discover_gemini_sessions_with_known_repo(self, tmp_path):
+        """Test discovering sessions for a known repo using hash mapping."""
+        import hashlib
+
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            # Setup known repo
+            repo_path = str(tmp_path / "known-repo")
+            (tmp_path / "known-repo").mkdir()
+
+            # Save the repo
+            add_repo("owner", "known-repo", repo_path)
+
+            # Compute hash the same way Gemini does
+            normalized = str(Path(repo_path).resolve())
+            project_hash = hashlib.sha256(normalized.encode()).hexdigest()
+
+            # Create Gemini project structure with the computed hash
+            project_dir = tmp_path / ".gemini" / "tmp" / project_hash
+            chats_dir = project_dir / "chats"
+            chats_dir.mkdir(parents=True)
+
+            session_file = chats_dir / "known-session.json"
+            session_file.write_text(json.dumps({"messages": []}))
+
+            sessions = discover_gemini_sessions()
+
+            assert len(sessions) == 1
+            assert sessions[0].session_id == "known-session"
+            # Should use the proper encoded path from the known repo
+            expected_encoded = encode_path(repo_path)
+            assert sessions[0].encoded_path == expected_encoded
+
+    def test_discover_gemini_sessions_filters_by_repo_path(self, tmp_path):
+        """Test filtering Gemini sessions by repo path."""
+        import hashlib
+
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            # Create two repos
+            repo1_path = str(tmp_path / "repo1")
+            repo2_path = str(tmp_path / "repo2")
+            (tmp_path / "repo1").mkdir()
+            (tmp_path / "repo2").mkdir()
+
+            # Create Gemini project structures for both
+            for repo_path in [repo1_path, repo2_path]:
+                normalized = str(Path(repo_path).resolve())
+                project_hash = hashlib.sha256(normalized.encode()).hexdigest()
+
+                project_dir = tmp_path / ".gemini" / "tmp" / project_hash
+                chats_dir = project_dir / "chats"
+                chats_dir.mkdir(parents=True)
+
+                session_file = chats_dir / f"session-{Path(repo_path).name}.json"
+                session_file.write_text(json.dumps({"messages": []}))
+
+            # Filter by repo1
+            sessions = discover_gemini_sessions(repo_path=repo1_path)
+
+            assert len(sessions) == 1
+            assert sessions[0].session_id == "session-repo1"
+
+
+class TestCodexSessionDiscovery:
+    """Tests for Codex session discovery functionality."""
+
+    def test_get_codex_sessions_dir(self, tmp_path):
+        """Test getting Codex sessions directory path."""
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            codex_dir = get_codex_sessions_dir()
+            assert codex_dir == tmp_path / ".codex" / "sessions"
+
+    def test_discover_codex_sessions_no_codex_dir(self, tmp_path):
+        """Test discovering sessions when Codex directory doesn't exist."""
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            sessions = discover_codex_sessions()
+            assert sessions == []
+
+    def test_discover_codex_sessions_finds_sessions(self, tmp_path):
+        """Test discovering Codex sessions from date-based directory structure."""
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            # Create Codex directory structure: ~/.codex/sessions/2024/01/15/session.jsonl
+            session_dir = tmp_path / ".codex" / "sessions" / "2024" / "01" / "15"
+            session_dir.mkdir(parents=True)
+
+            # Create a session file with session_meta entry
+            session_file = session_dir / "test-session.jsonl"
+            session_meta = {
+                "type": "session_meta",
+                "payload": {"cwd": "/home/user/my-project"}
+            }
+            session_file.write_text(json.dumps(session_meta) + "\n")
+
+            sessions = discover_codex_sessions()
+
+            assert len(sessions) == 1
+            assert sessions[0].session_id == "test-session"
+            assert sessions[0].cli_type == "codex"
+            assert sessions[0].encoded_path == encode_path("/home/user/my-project")
+
+    def test_discover_codex_sessions_filters_by_repo_path(self, tmp_path):
+        """Test filtering Codex sessions by repo path."""
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            # Create session for repo1
+            session_dir1 = tmp_path / ".codex" / "sessions" / "2024" / "01" / "15"
+            session_dir1.mkdir(parents=True)
+            session_file1 = session_dir1 / "session1.jsonl"
+            session_file1.write_text(json.dumps({
+                "type": "session_meta",
+                "payload": {"cwd": "/home/user/repo1"}
+            }) + "\n")
+
+            # Create session for repo2
+            session_dir2 = tmp_path / ".codex" / "sessions" / "2024" / "01" / "16"
+            session_dir2.mkdir(parents=True)
+            session_file2 = session_dir2 / "session2.jsonl"
+            session_file2.write_text(json.dumps({
+                "type": "session_meta",
+                "payload": {"cwd": "/home/user/repo2"}
+            }) + "\n")
+
+            # Filter by repo1 path
+            sessions = discover_codex_sessions(repo_path="/home/user/repo1")
+
+            assert len(sessions) == 1
+            assert sessions[0].session_id == "session1"
+
+    def test_discover_codex_sessions_skips_sessions_without_cwd(self, tmp_path):
+        """Test that sessions without cwd in session_meta are skipped."""
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            session_dir = tmp_path / ".codex" / "sessions" / "2024" / "01" / "15"
+            session_dir.mkdir(parents=True)
+
+            # Create a session file WITHOUT cwd
+            session_file = session_dir / "no-cwd-session.jsonl"
+            session_file.write_text(json.dumps({
+                "type": "session_meta",
+                "payload": {}  # No cwd
+            }) + "\n")
+
+            sessions = discover_codex_sessions()
+
+            assert sessions == []
+
+
+class TestDiscoverAllSessions:
+    """Tests for discover_all_sessions which combines all CLI sources."""
+
+    def test_discover_all_sessions_combines_cli_sources(self, tmp_path):
+        """Test that discover_all_sessions combines sessions from all CLIs."""
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            # Create Claude session
+            claude_dir = tmp_path / ".claude" / "projects" / "-test-project"
+            claude_dir.mkdir(parents=True)
+            (claude_dir / "claude-session.jsonl").write_text("{}\n")
+
+            # Create Codex session
+            codex_dir = tmp_path / ".codex" / "sessions" / "2024" / "01" / "15"
+            codex_dir.mkdir(parents=True)
+            codex_session = codex_dir / "codex-session.jsonl"
+            codex_session.write_text(json.dumps({
+                "type": "session_meta",
+                "payload": {"cwd": "/test/project"}
+            }) + "\n")
+
+            sessions = discover_all_sessions()
+
+            assert len(sessions) == 2
+            cli_types = {s.cli_type for s in sessions}
+            assert "claude" in cli_types
+            assert "codex" in cli_types
+
+    def test_discover_all_sessions_filters_by_cli_type(self, tmp_path):
+        """Test filtering by CLI type."""
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            # Create Claude session
+            claude_dir = tmp_path / ".claude" / "projects" / "-test-project"
+            claude_dir.mkdir(parents=True)
+            (claude_dir / "claude-session.jsonl").write_text("{}\n")
+
+            # Create Codex session
+            codex_dir = tmp_path / ".codex" / "sessions" / "2024" / "01" / "15"
+            codex_dir.mkdir(parents=True)
+            codex_session = codex_dir / "codex-session.jsonl"
+            codex_session.write_text(json.dumps({
+                "type": "session_meta",
+                "payload": {"cwd": "/test/project"}
+            }) + "\n")
+
+            # Only get Claude sessions
+            sessions = discover_all_sessions(cli_types=["claude"])
+
+            assert len(sessions) == 1
+            assert sessions[0].cli_type == "claude"
+
+    def test_discover_all_sessions_sorted_by_modification_time(self, tmp_path):
+        """Test that combined sessions are sorted by modification time."""
+        import time
+
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            # Create older Claude session
+            claude_dir = tmp_path / ".claude" / "projects" / "-test-project"
+            claude_dir.mkdir(parents=True)
+            old_session = claude_dir / "old-session.jsonl"
+            old_session.write_text("{}\n")
+            old_time = time.time() - 3600
+            os.utime(old_session, (old_time, old_time))
+
+            # Create newer Codex session
+            codex_dir = tmp_path / ".codex" / "sessions" / "2024" / "01" / "15"
+            codex_dir.mkdir(parents=True)
+            new_session = codex_dir / "new-session.jsonl"
+            new_session.write_text(json.dumps({
+                "type": "session_meta",
+                "payload": {"cwd": "/test/project"}
+            }) + "\n")
+
+            sessions = discover_all_sessions()
+
+            assert len(sessions) == 2
+            # Newest first
+            assert sessions[0].session_id == "new-session"
+            assert sessions[1].session_id == "old-session"
