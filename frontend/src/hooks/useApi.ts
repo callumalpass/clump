@@ -252,6 +252,7 @@ export function useRepos() {
 
 // Issues
 export type SessionStatusFilter = 'all' | 'analyzed' | 'unanalyzed';
+export type LocalStatusFilter = 'all' | 'open' | 'in_progress' | 'completed' | 'wontfix' | 'unset';
 
 export interface IssueFilters {
   state?: 'open' | 'closed' | 'all';
@@ -260,6 +261,7 @@ export interface IssueFilters {
   sort?: 'created' | 'updated' | 'comments';
   order?: 'asc' | 'desc';
   sessionStatus?: SessionStatusFilter;  // Client-side filter for issues with/without sessions
+  localStatus?: LocalStatusFilter;  // Client-side filter for local status from sidecar metadata
 }
 
 interface IssueListResponse extends PaginatedResponse {
@@ -766,7 +768,6 @@ export function useClaudeSettings() {
           model: merged.model,
           headless_mode: merged.headless_mode,
           output_format: merged.output_format,
-          mcp_github: merged.mcp_github,
         }),
       });
       setSettings(data);

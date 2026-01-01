@@ -341,9 +341,9 @@ async def create_process(data: ProcessCreate):
         session.process_id = process.id
         await db.commit()
 
-        # Create sidecar metadata with entity links for transcript-first architecture
-        # This ensures the session is linked to issues/PRs immediately
-        if data.entities and process.claude_session_id:
+        # Always create sidecar metadata for transcript-first architecture
+        # This ensures session has title and entity links immediately available
+        if process.claude_session_id:
             encoded = encode_path(repo["local_path"])
             metadata = SessionMetadata(
                 session_id=process.claude_session_id,

@@ -40,6 +40,7 @@ from app.schemas import (
 )
 from app.storage import (
     discover_sessions,
+    discover_all_sessions,
     get_session_metadata,
     save_session_metadata,
     delete_session_metadata,
@@ -52,7 +53,7 @@ from app.storage import (
     DiscoveredSession,
     get_claude_projects_dir,
 )
-from app.services.transcript_parser import parse_transcript, ParsedTranscript, TranscriptMessage
+from app.services.transcript_parser import parse_transcript, parse_transcript_file, ParsedTranscript, TranscriptMessage
 from app.services.session_manager import process_manager
 from app.services.event_manager import event_manager, EventType
 
@@ -338,7 +339,7 @@ def _get_cached_sessions(repo_path: Optional[str] = None) -> list[DiscoveredSess
 
     # Cache miss, expired, or directory changed - fetch fresh data
     current_mtime = _get_projects_dir_mtime(repo_path)
-    sessions = discover_sessions(repo_path=repo_path)
+    sessions = discover_all_sessions(repo_path=repo_path)
 
     # Update cache with new data and current mtime
     _session_cache.set(cache_key, sessions, current_mtime)
@@ -597,7 +598,7 @@ def _find_session_by_id(
     return next((s for s in sessions if s.session_id == session_id), None)
 
 
-def _quick_scan_transcript(transcript_path: Path) -> QuickScanResult:
+def _quick_scan_transcript(transcript_path: Path, cli_type: str = "claude") -> QuickScanResult:
     """
     Quickly scan a transcript file for summary info without full parsing.
 
@@ -628,7 +629,13 @@ def _quick_scan_transcript(transcript_path: Path) -> QuickScanResult:
             return cached_result
 
     # Cache miss or file modified - scan the file
-    result = _do_quick_scan_transcript(transcript_path)
+    # Use CLI-specific parsing based on file extension or CLI type
+    if cli_type == "gemini" or transcript_path.suffix == ".json":
+        result = _do_quick_scan_gemini_transcript(transcript_path)
+    elif cli_type == "codex":
+        result = _do_quick_scan_codex_transcript(transcript_path)
+    else:
+        result = _do_quick_scan_transcript(transcript_path)
 
     # Update cache
     _transcript_scan_cache[cache_key] = (result, current_mtime)
@@ -649,7 +656,7 @@ def _quick_scan_transcript(transcript_path: Path) -> QuickScanResult:
 
 def _do_quick_scan_transcript(transcript_path: Path) -> QuickScanResult:
     """
-    Actually scan a transcript file for summary info (uncached).
+    Scan a Claude JSONL transcript file for summary info (uncached).
     """
     result: QuickScanResult = {
         "title": None,
@@ -717,6 +724,140 @@ def _do_quick_scan_transcript(transcript_path: Path) -> QuickScanResult:
     return result
 
 
+def _do_quick_scan_gemini_transcript(transcript_path: Path) -> QuickScanResult:
+    """
+    Scan a Gemini JSON transcript file for summary info (uncached).
+
+    Gemini stores sessions as single JSON files with a different structure:
+    - summary: Session summary/title
+    - messages: Array of message objects
+    - startTime/lastUpdated: Timestamps
+    """
+    result: QuickScanResult = {
+        "title": None,
+        "model": None,
+        "start_time": None,
+        "end_time": None,
+        "message_count": 0,
+    }
+
+    try:
+        with open(transcript_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        # Extract summary/title
+        result["title"] = data.get("summary")
+
+        # Extract timestamps
+        result["start_time"] = data.get("startTime")
+        result["end_time"] = data.get("lastUpdated")
+
+        # Count messages
+        messages = data.get("messages", [])
+        for msg in messages:
+            msg_type = msg.get("type")
+            if msg_type in ("user", "gemini"):
+                result["message_count"] += 1
+
+            # Try to get model from gemini messages
+            if msg_type == "gemini" and not result["model"]:
+                result["model"] = msg.get("model")
+
+        # Fallback to first user message for title
+        if not result["title"]:
+            for msg in messages:
+                if msg.get("type") == "user":
+                    content = msg.get("content", "")
+                    if isinstance(content, str) and content:
+                        result["title"] = content[:TITLE_PREVIEW_LENGTH]
+                        break
+
+    except (OSError, json.JSONDecodeError):
+        # File access issues or invalid JSON
+        pass
+
+    return result
+
+
+def _do_quick_scan_codex_transcript(transcript_path: Path) -> QuickScanResult:
+    """
+    Scan a Codex JSONL transcript file for summary info (uncached).
+
+    Codex uses JSONL format with:
+    - session_meta: Contains cwd, timestamp, etc.
+    - response_item with role=user: User messages (first one is environment context)
+    - response_item with role=assistant: Assistant messages
+    - turn_context: Contains model info
+    """
+    result: QuickScanResult = {
+        "title": None,
+        "model": None,
+        "start_time": None,
+        "end_time": None,
+        "message_count": 0,
+    }
+
+    try:
+        with open(transcript_path, 'r', encoding='utf-8') as f:
+            first_real_user_message = None
+            user_message_count = 0
+
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                entry_type = entry.get('type')
+                timestamp = entry.get('timestamp')
+
+                # Extract start time from session_meta
+                if entry_type == 'session_meta':
+                    payload = entry.get('payload', {})
+                    result["start_time"] = payload.get('timestamp')
+
+                # Count messages from response_item entries
+                if entry_type == 'response_item':
+                    payload = entry.get('payload', {})
+                    role = payload.get('role')
+
+                    if role in ('user', 'assistant'):
+                        result["message_count"] += 1
+
+                        if timestamp:
+                            result["end_time"] = timestamp
+
+                        # Capture first real user message (skip environment context)
+                        if role == 'user':
+                            user_message_count += 1
+                            if user_message_count >= 2 and not first_real_user_message:
+                                content = payload.get('content', [])
+                                for c in content:
+                                    if isinstance(c, dict):
+                                        text = c.get('text', '')
+                                        if text and not text.startswith('<environment_context>'):
+                                            first_real_user_message = text[:TITLE_PREVIEW_LENGTH]
+                                            break
+
+                # Get model from turn_context
+                if entry_type == 'turn_context' and not result["model"]:
+                    payload = entry.get('payload', {})
+                    result["model"] = payload.get('model')
+
+            # Use first real user message as title
+            if first_real_user_message:
+                result["title"] = first_real_user_message
+
+    except OSError:
+        pass
+
+    return result
+
+
 def _session_to_summary(
     session: DiscoveredSession,
     active_session_ids: set[str]
@@ -725,8 +866,8 @@ def _session_to_summary(
     repo_path = session.repo_path
     repo_name = _get_repo_name(session.encoded_path)
 
-    # Quick scan for transcript info
-    scan = _quick_scan_transcript(session.transcript_path)
+    # Quick scan for transcript info (use CLI-specific parsing)
+    scan = _quick_scan_transcript(session.transcript_path, cli_type=session.cli_type)
 
     # Check if this session is currently active
     is_active = session.session_id in active_session_ids
@@ -767,6 +908,7 @@ def _session_to_summary(
         tags=tags,
         starred=starred,
         scheduled_job_id=scheduled_job_id,
+        cli_type=session.cli_type,
         is_active=is_active,
     )
 
@@ -777,6 +919,7 @@ def _parsed_to_detail(
     parsed: ParsedTranscript,
     metadata: Optional[SessionMetadata],
     is_active: bool,
+    cli_type: str = "claude",
 ) -> SessionDetailResponse:
     """Convert ParsedTranscript to SessionDetailResponse."""
     repo_path = decode_path(encoded_path)
@@ -807,6 +950,7 @@ def _parsed_to_detail(
         duration_seconds=duration_seconds,
         claude_code_version=parsed.claude_code_version,
         git_branch=parsed.git_branch,
+        cli_type=cli_type,
         metadata=_build_metadata_response(session_id, metadata),
         is_active=is_active,
     )
@@ -1169,12 +1313,17 @@ async def get_session(session_id: str):
             end_time=None,
             claude_code_version=None,
             git_branch=None,
+            cli_type=active_process.cli_type.value if hasattr(active_process.cli_type, 'value') else active_process.cli_type,
             metadata=_build_metadata_response(session_id, metadata),
             is_active=True,
         )
 
-    # Parse the full transcript
-    parsed = parse_transcript(session_id, session.repo_path)
+    # Parse the full transcript using CLI-specific parser
+    parsed = parse_transcript_file(
+        session.transcript_path,
+        session_id,
+        cli_type=session.cli_type,
+    )
 
     if not parsed:
         raise HTTPException(status_code=500, detail="Failed to parse transcript")
@@ -1187,6 +1336,7 @@ async def get_session(session_id: str):
         parsed=parsed,
         metadata=session.metadata,
         is_active=is_active,
+        cli_type=session.cli_type,
     )
 
 
@@ -1385,6 +1535,8 @@ async def continue_session(session_id: str, data: ContinueSessionRequest = None)
     Creates a new PTY process that resumes the Claude conversation.
     Optionally sends a new message to Claude after resuming.
     """
+    from app.cli import get_adapter
+
     # Find the session (use cached for performance)
     sessions = _get_cached_sessions()
     session = _find_session_by_id(sessions, session_id)
@@ -1400,16 +1552,22 @@ async def continue_session(session_id: str, data: ContinueSessionRequest = None)
     else:
         repo_path = session.repo_path
 
+    # Get the proper resume ID from the session file
+    # Different CLIs need different ID formats (e.g., Gemini needs full UUID from file)
+    adapter = get_adapter(session.cli_type)
+    resume_id = adapter.get_resume_id_from_file(session.transcript_path, session_id)
+
     # Get prompt from request if provided
     initial_prompt = data.prompt if data else None
 
-    # Create new PTY process that resumes the Claude conversation
+    # Create new PTY process that resumes the conversation with the correct CLI
     try:
         process = await process_manager.create_process(
             working_dir=repo_path,
             initial_prompt=initial_prompt,
             session_id=None,  # No DB session ID in new model
-            resume_session=session_id,
+            resume_session=resume_id,
+            cli_type=session.cli_type,  # Use the CLI that created the original session
         )
     except ValueError as e:
         raise HTTPException(
@@ -1422,6 +1580,7 @@ async def continue_session(session_id: str, data: ContinueSessionRequest = None)
         "working_dir": process.working_dir,
         "created_at": process.created_at.isoformat(),
         "claude_session_id": process.claude_session_id,
+        "cli_type": process.cli_type.value if hasattr(process.cli_type, 'value') else process.cli_type,
     }
 
 
@@ -1689,8 +1848,12 @@ async def export_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Parse the full transcript
-    parsed = parse_transcript(session_id, session.repo_path)
+    # Parse the full transcript using CLI-specific parser
+    parsed = parse_transcript_file(
+        session.transcript_path,
+        session_id,
+        cli_type=session.cli_type,
+    )
 
     if not parsed:
         raise HTTPException(status_code=500, detail="Failed to parse transcript")
