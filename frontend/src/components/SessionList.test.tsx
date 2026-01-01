@@ -241,15 +241,15 @@ describe('SessionList', () => {
 
       render(<SessionList {...defaultProps} sessions={sessions} total={1} />);
 
-      expect(screen.getByText('15 msgs')).toBeInTheDocument();
+      expect(screen.getByText('15')).toBeInTheDocument();
     });
 
-    it('displays singular "msg" for single message', () => {
+    it('displays singular message count', () => {
       const sessions = [createMockSession({ message_count: 1 })];
 
       render(<SessionList {...defaultProps} sessions={sessions} total={1} />);
 
-      expect(screen.getByText('1 msg')).toBeInTheDocument();
+      expect(screen.getByText('1')).toBeInTheDocument();
     });
 
     it('displays model name for sonnet', () => {

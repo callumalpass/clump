@@ -99,93 +99,105 @@ def mock_pr_data():
 class TestParseGitHubRemote:
     """Tests for the parse_github_remote helper function."""
 
-    def test_parse_ssh_url(self, tmp_path):
+    @pytest.fixture
+    def mock_subprocess(self):
+        """Create a mock async subprocess result."""
+        async def create_mock(stdout: str, returncode: int = 0):
+            mock_proc = MagicMock()
+            mock_proc.returncode = returncode
+
+            async def communicate():
+                return (stdout.encode(), b"")
+
+            mock_proc.communicate = communicate
+            return mock_proc
+
+        return create_mock
+
+    @pytest.mark.asyncio
+    async def test_parse_ssh_url(self, tmp_path, mock_subprocess):
         """Test parsing SSH remote URL."""
         # Create a mock git repo
         git_dir = tmp_path / ".git"
         git_dir.mkdir()
-        config_file = git_dir / "config"
-        config_file.write_text(
-            "[remote \"origin\"]\n"
-            "    url = git@github.com:owner/repo.git\n"
-        )
 
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout="git@github.com:owner/repo.git\n",
-            )
-            owner, name = parse_github_remote(str(tmp_path))
+        async def mock_create(*args, **kwargs):
+            return await mock_subprocess("git@github.com:owner/repo.git\n")
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_create):
+            owner, name = await parse_github_remote(str(tmp_path))
 
         assert owner == "owner"
         assert name == "repo"
 
-    def test_parse_https_url(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_parse_https_url(self, tmp_path, mock_subprocess):
         """Test parsing HTTPS remote URL."""
         git_dir = tmp_path / ".git"
         git_dir.mkdir()
 
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout="https://github.com/owner/repo.git\n",
-            )
-            owner, name = parse_github_remote(str(tmp_path))
+        async def mock_create(*args, **kwargs):
+            return await mock_subprocess("https://github.com/owner/repo.git\n")
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_create):
+            owner, name = await parse_github_remote(str(tmp_path))
 
         assert owner == "owner"
         assert name == "repo"
 
-    def test_parse_https_url_without_git_extension(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_parse_https_url_without_git_extension(self, tmp_path, mock_subprocess):
         """Test parsing HTTPS URL without .git extension."""
         git_dir = tmp_path / ".git"
         git_dir.mkdir()
 
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout="https://github.com/owner/repo\n",
-            )
-            owner, name = parse_github_remote(str(tmp_path))
+        async def mock_create(*args, **kwargs):
+            return await mock_subprocess("https://github.com/owner/repo\n")
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_create):
+            owner, name = await parse_github_remote(str(tmp_path))
 
         assert owner == "owner"
         assert name == "repo"
 
-    def test_path_not_exists(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_path_not_exists(self, tmp_path):
         """Test error when path doesn't exist."""
         nonexistent = tmp_path / "nonexistent"
         with pytest.raises(ValueError, match="Path does not exist"):
-            parse_github_remote(str(nonexistent))
+            await parse_github_remote(str(nonexistent))
 
-    def test_not_git_repo(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_not_git_repo(self, tmp_path):
         """Test error when path is not a git repository."""
         with pytest.raises(ValueError, match="Not a git repository"):
-            parse_github_remote(str(tmp_path))
+            await parse_github_remote(str(tmp_path))
 
-    def test_no_origin_remote(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_no_origin_remote(self, tmp_path, mock_subprocess):
         """Test error when no origin remote exists."""
         git_dir = tmp_path / ".git"
         git_dir.mkdir()
 
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=1,
-                stdout="",
-            )
-            with pytest.raises(ValueError, match="No 'origin' remote found"):
-                parse_github_remote(str(tmp_path))
+        async def mock_create(*args, **kwargs):
+            return await mock_subprocess("", returncode=1)
 
-    def test_unparseable_remote(self, tmp_path):
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_create):
+            with pytest.raises(ValueError, match="No 'origin' remote found"):
+                await parse_github_remote(str(tmp_path))
+
+    @pytest.mark.asyncio
+    async def test_unparseable_remote(self, tmp_path, mock_subprocess):
         """Test error when remote URL can't be parsed."""
         git_dir = tmp_path / ".git"
         git_dir.mkdir()
 
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout="git@gitlab.com:owner/repo.git\n",
-            )
+        async def mock_create(*args, **kwargs):
+            return await mock_subprocess("git@gitlab.com:owner/repo.git\n")
+
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_create):
             with pytest.raises(ValueError, match="Could not parse GitHub remote URL"):
-                parse_github_remote(str(tmp_path))
+                await parse_github_remote(str(tmp_path))
 
 
 class TestListRepos:
