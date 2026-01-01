@@ -509,8 +509,8 @@ class TestSchedulerServiceGetPrs:
         }
 
     @pytest.mark.asyncio
-    async def test_get_prs_unpacks_tuple_correctly(self, scheduler, mock_job, mock_repo):
-        """Verifies _get_prs correctly unpacks the (prs, total) tuple from list_prs."""
+    async def test_get_prs_returns_formatted_list(self, scheduler, mock_job, mock_repo):
+        """Verifies _get_prs returns properly formatted PR list."""
         with patch("app.services.scheduler.GitHubClient") as MockClient:
             mock_client = MockClient.return_value
             mock_pr = MagicMock()
@@ -519,8 +519,8 @@ class TestSchedulerServiceGetPrs:
             mock_pr.body = "PR body"
             mock_pr.head_ref = "feature/test"
             mock_pr.base_ref = "main"
-            # list_prs returns a tuple of (prs_list, total_count)
-            mock_client.list_prs.return_value = ([mock_pr], 1)
+            # list_all_prs returns a list directly
+            mock_client.list_all_prs.return_value = [mock_pr]
 
             result = await scheduler._get_prs(mock_job, mock_repo)
 
@@ -537,7 +537,7 @@ class TestSchedulerServiceGetPrs:
         """Handles empty PR list correctly."""
         with patch("app.services.scheduler.GitHubClient") as MockClient:
             mock_client = MockClient.return_value
-            mock_client.list_prs.return_value = ([], 0)
+            mock_client.list_all_prs.return_value = []
 
             result = await scheduler._get_prs(mock_job, mock_repo)
 
@@ -550,11 +550,11 @@ class TestSchedulerServiceGetPrs:
 
         with patch("app.services.scheduler.GitHubClient") as MockClient:
             mock_client = MockClient.return_value
-            mock_client.list_prs.return_value = ([], 0)
+            mock_client.list_all_prs.return_value = []
 
             await scheduler._get_prs(mock_job, mock_repo)
 
-            mock_client.list_prs.assert_called_once_with(
+            mock_client.list_all_prs.assert_called_once_with(
                 owner="testowner",
                 name="testrepo",
                 state="closed",
@@ -567,11 +567,11 @@ class TestSchedulerServiceGetPrs:
 
         with patch("app.services.scheduler.GitHubClient") as MockClient:
             mock_client = MockClient.return_value
-            mock_client.list_prs.return_value = ([], 0)
+            mock_client.list_all_prs.return_value = []
 
             await scheduler._get_prs(mock_job, mock_repo)
 
-            mock_client.list_prs.assert_called_once_with(
+            mock_client.list_all_prs.assert_called_once_with(
                 owner="testowner",
                 name="testrepo",
                 state="open",
@@ -591,7 +591,7 @@ class TestSchedulerServiceGetPrs:
                 mock_pr.head_ref = f"feature/{i + 1}"
                 mock_pr.base_ref = "main"
                 mock_prs.append(mock_pr)
-            mock_client.list_prs.return_value = (mock_prs, 3)
+            mock_client.list_all_prs.return_value = mock_prs
 
             result = await scheduler._get_prs(mock_job, mock_repo)
 
@@ -630,14 +630,15 @@ class TestSchedulerServiceGetIssues:
     @pytest.mark.asyncio
     async def test_get_issues_returns_formatted_list(self, scheduler, mock_job, mock_repo):
         """Returns properly formatted issue list."""
-        with patch("app.services.scheduler.GitHubClient") as MockClient:
+        with patch("app.services.scheduler.GitHubClient") as MockClient, \
+             patch("app.services.scheduler.filter_issues_by_sidecar", side_effect=lambda issues, *args: issues):
             mock_client = MockClient.return_value
             mock_issue = MagicMock()
             mock_issue.number = 42
             mock_issue.title = "Test Issue"
             mock_issue.body = "Issue body"
             mock_issue.labels = ["bug"]
-            mock_client.list_issues.return_value = ([mock_issue], 1)
+            mock_client.list_all_issues.return_value = [mock_issue]
 
             result = await scheduler._get_issues(mock_job, mock_repo)
 
@@ -649,16 +650,17 @@ class TestSchedulerServiceGetIssues:
 
     @pytest.mark.asyncio
     async def test_get_issues_filters_by_labels(self, scheduler, mock_job, mock_repo):
-        """Passes labels to list_issues."""
+        """Passes labels to list_all_issues."""
         mock_job.filter_query = "label:bug,feature"
 
-        with patch("app.services.scheduler.GitHubClient") as MockClient:
+        with patch("app.services.scheduler.GitHubClient") as MockClient, \
+             patch("app.services.scheduler.filter_issues_by_sidecar", side_effect=lambda issues, *args: issues):
             mock_client = MockClient.return_value
-            mock_client.list_issues.return_value = ([], 0)
+            mock_client.list_all_issues.return_value = []
 
             await scheduler._get_issues(mock_job, mock_repo)
 
-            call_kwargs = mock_client.list_issues.call_args[1]
+            call_kwargs = mock_client.list_all_issues.call_args[1]
             assert "bug" in call_kwargs["labels"]
             assert "feature" in call_kwargs["labels"]
 
@@ -667,7 +669,8 @@ class TestSchedulerServiceGetIssues:
         """Filters out issues with excluded labels."""
         mock_job.filter_query = "-label:wontfix"
 
-        with patch("app.services.scheduler.GitHubClient") as MockClient:
+        with patch("app.services.scheduler.GitHubClient") as MockClient, \
+             patch("app.services.scheduler.filter_issues_by_sidecar", side_effect=lambda issues, *args: issues):
             mock_client = MockClient.return_value
             # Return two issues, one with excluded label
             issue1 = MagicMock()
@@ -682,7 +685,7 @@ class TestSchedulerServiceGetIssues:
             issue2.body = "body"
             issue2.labels = ["wontfix"]
 
-            mock_client.list_issues.return_value = ([issue1, issue2], 2)
+            mock_client.list_all_issues.return_value = [issue1, issue2]
 
             result = await scheduler._get_issues(mock_job, mock_repo)
 
@@ -716,6 +719,7 @@ class TestSchedulerServiceGetTargetItems:
         mock_job = MagicMock()
         mock_job.target_type = "issues"
         mock_job.filter_query = None
+        mock_job.only_new = False  # Prevents database call for processed entities
 
         with patch.object(scheduler, "_get_issues", new_callable=AsyncMock) as mock_get_issues:
             mock_get_issues.return_value = [{"type": "issue", "number": 1}]
@@ -731,6 +735,7 @@ class TestSchedulerServiceGetTargetItems:
         mock_job = MagicMock()
         mock_job.target_type = "prs"
         mock_job.filter_query = None
+        mock_job.only_new = False  # Prevents database call for processed entities
 
         with patch.object(scheduler, "_get_prs", new_callable=AsyncMock) as mock_get_prs:
             mock_get_prs.return_value = [{"type": "pr", "number": 1}]

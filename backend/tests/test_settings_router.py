@@ -52,7 +52,6 @@ def mock_settings():
     mock.claude_model = "sonnet"
     mock.claude_headless_mode = False
     mock.claude_output_format = "stream-json"
-    mock.claude_mcp_github = False
     mock.get_allowed_tools.return_value = DEFAULT_ALLOWED_TOOLS
     mock.get_disallowed_tools.return_value = []
     return mock
@@ -276,7 +275,6 @@ class TestClaudeSettingsEndpoints:
             assert data["model"] == "sonnet"
             assert data["headless_mode"] is False
             assert data["output_format"] == "stream-json"
-            assert data["mcp_github"] is False
             assert data["allowed_tools"] == DEFAULT_ALLOWED_TOOLS
             assert data["disallowed_tools"] == []
             assert data["default_allowed_tools"] == DEFAULT_ALLOWED_TOOLS
@@ -289,7 +287,6 @@ class TestClaudeSettingsEndpoints:
         mock_settings.claude_model = "opus"
         mock_settings.claude_headless_mode = True
         mock_settings.claude_output_format = "json"
-        mock_settings.claude_mcp_github = True
         mock_settings.get_allowed_tools.return_value = ["Read", "Write"]
         mock_settings.get_disallowed_tools.return_value = ["Bash"]
 
@@ -303,7 +300,6 @@ class TestClaudeSettingsEndpoints:
             assert data["model"] == "opus"
             assert data["headless_mode"] is True
             assert data["output_format"] == "json"
-            assert data["mcp_github"] is True
             assert data["allowed_tools"] == ["Read", "Write"]
             assert data["disallowed_tools"] == ["Bash"]
 
@@ -324,7 +320,6 @@ class TestClaudeSettingsEndpoints:
                     "model": "opus",
                     "headless_mode": True,
                     "output_format": "json",
-                    "mcp_github": True,
                 }
             )
 
@@ -337,7 +332,6 @@ class TestClaudeSettingsEndpoints:
             assert data["model"] == "opus"
             assert data["headless_mode"] is True
             assert data["output_format"] == "json"
-            assert data["mcp_github"] is True
 
             # Verify config was saved
             mock_save.assert_called_once()
@@ -347,7 +341,6 @@ class TestClaudeSettingsEndpoints:
             assert saved_config["claude_model"] == "opus"
             assert saved_config["claude_headless_mode"] is True
             assert saved_config["claude_output_format"] == "json"
-            assert saved_config["claude_mcp_github"] is True
             assert saved_config["claude_allowed_tools"] == "Read,Glob,Grep"
             assert saved_config["claude_disallowed_tools"] == "Bash"
 
@@ -478,7 +471,6 @@ class TestClaudeSettingsEndpoints:
             "claude_model": "opus",
             "claude_headless_mode": True,
             "claude_output_format": "json",
-            "claude_mcp_github": True,
             "other_setting": "preserved",
         }), \
              patch('app.routers.settings.save_config') as mock_save, \
@@ -503,7 +495,6 @@ class TestClaudeSettingsEndpoints:
             assert "claude_model" not in saved_config
             assert "claude_headless_mode" not in saved_config
             assert "claude_output_format" not in saved_config
-            assert "claude_mcp_github" not in saved_config
             # Other settings should be preserved
             assert saved_config["other_setting"] == "preserved"
 
@@ -517,7 +508,6 @@ class TestClaudeSettingsEndpoints:
             "CLAUDE_MODEL": "opus",
             "CLAUDE_HEADLESS_MODE": "true",
             "CLAUDE_OUTPUT_FORMAT": "json",
-            "CLAUDE_MCP_GITHUB": "true",
         }
 
         with patch('app.routers.settings.load_config', return_value={}), \
