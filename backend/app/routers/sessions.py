@@ -125,10 +125,20 @@ class SessionCache:
         if len(self.entries) > max_entries:
             now = time.time()
             cutoff = now - SESSION_CACHE_TTL * 10
+            # Get keys to remove (entries older than cutoff)
+            keys_to_remove = {
+                k for k, v in self.entries.items()
+                if v.cached_at <= cutoff
+            }
+            # Clean up entries
             self.entries = {
                 k: v for k, v in self.entries.items()
-                if v.cached_at > cutoff
+                if k not in keys_to_remove
             }
+            # Also clean up corresponding mtime tracking to prevent memory leak
+            for key in keys_to_remove:
+                self.last_mtime_check.pop(key, None)
+                self.cached_mtimes.pop(key, None)
 
     def clear(self) -> None:
         """Clear all cache state. Alias for invalidate() with no arguments."""

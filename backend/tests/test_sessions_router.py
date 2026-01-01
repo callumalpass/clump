@@ -2662,3 +2662,202 @@ class TestTranscriptScanCache:
         assert result1["title"] == "Summary One"
         assert result2["title"] == "Summary Two"
         assert len(sessions_module._transcript_scan_cache) == 2
+
+
+class TestSessionCache:
+    """Tests for SessionCache class."""
+
+    @pytest.fixture
+    def cache(self):
+        """Create a fresh SessionCache instance for testing."""
+        from app.routers.sessions import SessionCache
+        return SessionCache()
+
+    def test_initial_state(self, cache):
+        """Test that a new cache is empty."""
+        assert len(cache) == 0
+        assert cache.get("any_key") is None
+        assert "any_key" not in cache
+
+    def test_set_and_get(self, cache):
+        """Test setting and getting cache entries."""
+        sessions = [{"id": "session-1"}, {"id": "session-2"}]
+        cache.set("test_key", sessions, mtime=1000.0)
+
+        entry = cache.get("test_key")
+        assert entry is not None
+        assert entry.sessions == sessions
+        assert entry.dir_mtime == 1000.0
+        assert entry.cached_at > 0
+
+    def test_contains(self, cache):
+        """Test __contains__ for checking key existence."""
+        cache.set("existing_key", [], mtime=100.0)
+
+        assert "existing_key" in cache
+        assert "nonexistent_key" not in cache
+
+    def test_len(self, cache):
+        """Test __len__ for counting entries."""
+        assert len(cache) == 0
+
+        cache.set("key1", [], mtime=100.0)
+        assert len(cache) == 1
+
+        cache.set("key2", [], mtime=200.0)
+        assert len(cache) == 2
+
+    def test_invalidate_specific_key(self, cache):
+        """Test invalidating a specific cache key."""
+        cache.set("key1", [], mtime=100.0)
+        cache.set("key2", [], mtime=200.0)
+        cache.set("__all__", [], mtime=300.0)
+
+        # Also set up mtime tracking
+        cache.last_mtime_check["key1"] = 100.0
+        cache.last_mtime_check["__all__"] = 300.0
+        cache.cached_mtimes["key1"] = 100.0
+        cache.cached_mtimes["__all__"] = 300.0
+
+        cache.invalidate("key1")
+
+        # key1 and __all__ should be invalidated
+        assert "key1" not in cache
+        assert "__all__" not in cache
+        # key2 should remain
+        assert "key2" in cache
+
+        # Mtime tracking should also be cleared for invalidated keys
+        assert "key1" not in cache.last_mtime_check
+        assert "__all__" not in cache.last_mtime_check
+        assert "key1" not in cache.cached_mtimes
+        assert "__all__" not in cache.cached_mtimes
+
+    def test_invalidate_all(self, cache):
+        """Test invalidating all cache entries."""
+        cache.set("key1", [], mtime=100.0)
+        cache.set("key2", [], mtime=200.0)
+        cache.last_mtime_check["key1"] = 100.0
+        cache.cached_mtimes["key1"] = 100.0
+
+        cache.invalidate()
+
+        assert len(cache) == 0
+        assert len(cache.last_mtime_check) == 0
+        assert len(cache.cached_mtimes) == 0
+
+    def test_clear_is_alias_for_invalidate(self, cache):
+        """Test that clear() is an alias for invalidate()."""
+        cache.set("key1", [], mtime=100.0)
+        cache.last_mtime_check["key1"] = 100.0
+        cache.cached_mtimes["key1"] = 100.0
+
+        cache.clear()
+
+        assert len(cache) == 0
+        assert len(cache.last_mtime_check) == 0
+        assert len(cache.cached_mtimes) == 0
+
+    def test_cleanup_old_entries_when_under_limit(self, cache):
+        """Test that cleanup does nothing when under the limit."""
+        cache.set("key1", [], mtime=100.0)
+        cache.set("key2", [], mtime=200.0)
+        cache.last_mtime_check["key1"] = 100.0
+        cache.cached_mtimes["key1"] = 100.0
+
+        # Should not clean up when under the limit
+        cache.cleanup_old_entries(max_entries=10)
+
+        assert len(cache) == 2
+        assert "key1" in cache.last_mtime_check
+        assert "key1" in cache.cached_mtimes
+
+    def test_cleanup_old_entries_removes_old_entries(self, cache):
+        """Test that cleanup removes entries older than cutoff."""
+        import time
+
+        # Create an old entry (with cached_at in the past)
+        from app.routers.sessions import SessionCacheEntry, SESSION_CACHE_TTL
+
+        old_time = time.time() - SESSION_CACHE_TTL * 20  # Very old
+        cache.entries["old_key"] = SessionCacheEntry(
+            sessions=[],
+            cached_at=old_time,
+            dir_mtime=100.0,
+        )
+        cache.last_mtime_check["old_key"] = old_time
+        cache.cached_mtimes["old_key"] = 100.0
+
+        # Create a recent entry
+        cache.set("recent_key", [], mtime=200.0)
+        cache.last_mtime_check["recent_key"] = time.time()
+        cache.cached_mtimes["recent_key"] = 200.0
+
+        # Trigger cleanup (set max_entries to 1 to force cleanup)
+        cache.cleanup_old_entries(max_entries=1)
+
+        # Old key should be removed along with its mtime tracking
+        assert "old_key" not in cache
+        assert "old_key" not in cache.last_mtime_check
+        assert "old_key" not in cache.cached_mtimes
+
+        # Recent key should remain
+        assert "recent_key" in cache
+        assert "recent_key" in cache.last_mtime_check
+        assert "recent_key" in cache.cached_mtimes
+
+    def test_cleanup_old_entries_prevents_memory_leak(self, cache):
+        """Test that cleanup clears mtime tracking for removed entries.
+
+        This is a regression test for the memory leak bug where
+        last_mtime_check and cached_mtimes were not being cleaned up.
+        """
+        import time
+        from app.routers.sessions import SessionCacheEntry, SESSION_CACHE_TTL
+
+        # Create multiple old entries with mtime tracking
+        old_time = time.time() - SESSION_CACHE_TTL * 20
+        for i in range(10):
+            key = f"old_key_{i}"
+            cache.entries[key] = SessionCacheEntry(
+                sessions=[],
+                cached_at=old_time,
+                dir_mtime=100.0 + i,
+            )
+            cache.last_mtime_check[key] = old_time
+            cache.cached_mtimes[key] = 100.0 + i
+
+        # Create one recent entry
+        cache.set("recent_key", [], mtime=500.0)
+        cache.last_mtime_check["recent_key"] = time.time()
+        cache.cached_mtimes["recent_key"] = 500.0
+
+        # Before cleanup, all tracking dicts should have 11 entries
+        assert len(cache.entries) == 11
+        assert len(cache.last_mtime_check) == 11
+        assert len(cache.cached_mtimes) == 11
+
+        # Trigger cleanup
+        cache.cleanup_old_entries(max_entries=1)
+
+        # After cleanup, only recent entry should remain in ALL dicts
+        # This tests the memory leak fix
+        assert len(cache.entries) == 1
+        assert len(cache.last_mtime_check) == 1
+        assert len(cache.cached_mtimes) == 1
+        assert "recent_key" in cache.entries
+        assert "recent_key" in cache.last_mtime_check
+        assert "recent_key" in cache.cached_mtimes
+
+    def test_set_updates_existing_entry(self, cache):
+        """Test that setting a key updates an existing entry."""
+        cache.set("key1", ["old_session"], mtime=100.0)
+        cache.set("key1", ["new_session"], mtime=200.0)
+
+        entry = cache.get("key1")
+        assert entry.sessions == ["new_session"]
+        assert entry.dir_mtime == 200.0
+
+    def test_get_returns_none_for_missing_key(self, cache):
+        """Test that get returns None for missing keys."""
+        assert cache.get("nonexistent") is None
