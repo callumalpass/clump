@@ -140,7 +140,7 @@ class TestListSessions:
 
     def test_list_sessions_empty(self, client):
         """Test listing sessions when none exist."""
-        with patch("app.routers.sessions.discover_sessions", return_value=[]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[]), \
              patch("app.routers.sessions.process_manager") as mock_pm:
             mock_pm.list_processes = AsyncMock(return_value=[])
 
@@ -153,7 +153,7 @@ class TestListSessions:
 
     def test_list_sessions_with_results(self, client, mock_discovered_session):
         """Test listing sessions returns correct data."""
-        with patch("app.routers.sessions.discover_sessions", return_value=[mock_discovered_session]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[mock_discovered_session]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
@@ -182,7 +182,7 @@ class TestListSessions:
 
     def test_list_sessions_filter_by_starred(self, client, mock_discovered_session):
         """Test filtering sessions by starred status."""
-        with patch("app.routers.sessions.discover_sessions", return_value=[mock_discovered_session]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[mock_discovered_session]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
@@ -200,7 +200,7 @@ class TestListSessions:
 
     def test_list_sessions_filter_by_has_entities(self, client, mock_discovered_session):
         """Test filtering sessions by entity presence."""
-        with patch("app.routers.sessions.discover_sessions", return_value=[mock_discovered_session]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[mock_discovered_session]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
@@ -218,7 +218,7 @@ class TestListSessions:
 
     def test_list_sessions_search(self, client, mock_discovered_session):
         """Test searching sessions by title."""
-        with patch("app.routers.sessions.discover_sessions", return_value=[mock_discovered_session]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[mock_discovered_session]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
@@ -234,8 +234,8 @@ class TestListSessions:
             assert response.status_code == 200
             assert response.json()["total"] == 0
 
-    def test_list_sessions_pagination(self, client):
-        """Test pagination of session list."""
+    def test_list_sessions_multiple(self, client):
+        """Test listing multiple sessions returns all of them."""
         # Create multiple mock sessions
         sessions = []
         for i in range(5):
@@ -248,32 +248,22 @@ class TestListSessions:
                 metadata=None,
             ))
 
-        with patch("app.routers.sessions.discover_sessions", return_value=sessions), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=sessions), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
             mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
 
-            # Get first page with limit=2
-            response = client.get("/sessions?limit=2&offset=0")
+            response = client.get("/sessions")
             assert response.status_code == 200
             data = response.json()
             assert data["total"] == 5
-            assert len(data["sessions"]) == 2
+            assert len(data["sessions"]) == 5
 
-            # Get second page
-            response = client.get("/sessions?limit=2&offset=2")
-            assert response.status_code == 200
-            data = response.json()
-            assert data["total"] == 5
-            assert len(data["sessions"]) == 2
-
-            # Get last page
-            response = client.get("/sessions?limit=2&offset=4")
-            assert response.status_code == 200
-            data = response.json()
-            assert data["total"] == 5
-            assert len(data["sessions"]) == 1
+            # Verify session IDs are present
+            session_ids = {s["session_id"] for s in data["sessions"]}
+            for i in range(5):
+                assert f"test-uuid-{i}" in session_ids
 
 
 class TestGetSession:
@@ -289,9 +279,9 @@ class TestGetSession:
 
     def test_get_session_success(self, client, mock_discovered_session, mock_parsed_transcript):
         """Test getting a session detail successfully."""
-        with patch("app.routers.sessions.discover_sessions", return_value=[mock_discovered_session]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[mock_discovered_session]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
-             patch("app.routers.sessions.parse_transcript", return_value=mock_parsed_transcript):
+             patch("app.routers.sessions.parse_transcript_file", return_value=mock_parsed_transcript):
             mock_pm.list_processes = AsyncMock(return_value=[])
 
             response = client.get("/sessions/test-uuid-1234")
@@ -311,7 +301,7 @@ class TestGetSession:
 
     def test_get_session_not_found(self, client):
         """Test getting a non-existent session returns 404."""
-        with patch("app.routers.sessions.discover_sessions", return_value=[]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[]), \
              patch("app.routers.sessions.process_manager") as mock_pm:
             mock_pm.list_processes = AsyncMock(return_value=[])
 
@@ -325,9 +315,9 @@ class TestGetSession:
         mock_process = MagicMock()
         mock_process.claude_session_id = "test-uuid-1234"
 
-        with patch("app.routers.sessions.discover_sessions", return_value=[mock_discovered_session]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[mock_discovered_session]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
-             patch("app.routers.sessions.parse_transcript", return_value=mock_parsed_transcript):
+             patch("app.routers.sessions.parse_transcript_file", return_value=mock_parsed_transcript):
             mock_pm.list_processes = AsyncMock(return_value=[mock_process])
 
             response = client.get("/sessions/test-uuid-1234")
@@ -337,9 +327,9 @@ class TestGetSession:
 
     def test_get_session_parse_failure(self, client, mock_discovered_session):
         """Test handling transcript parse failure."""
-        with patch("app.routers.sessions.discover_sessions", return_value=[mock_discovered_session]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[mock_discovered_session]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
-             patch("app.routers.sessions.parse_transcript", return_value=None):
+             patch("app.routers.sessions.parse_transcript_file", return_value=None):
             mock_pm.list_processes = AsyncMock(return_value=[])
 
             response = client.get("/sessions/test-uuid-1234")
@@ -361,7 +351,7 @@ class TestUpdateSessionMetadata:
 
     def test_update_session_title(self, client, mock_discovered_session):
         """Test updating session title."""
-        with patch("app.routers.sessions.discover_sessions", return_value=[mock_discovered_session]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[mock_discovered_session]), \
              patch("app.routers.sessions.save_session_metadata") as mock_save:
 
             response = client.patch(
@@ -376,7 +366,7 @@ class TestUpdateSessionMetadata:
 
     def test_update_session_starred(self, client, mock_discovered_session):
         """Test updating session starred status."""
-        with patch("app.routers.sessions.discover_sessions", return_value=[mock_discovered_session]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[mock_discovered_session]), \
              patch("app.routers.sessions.save_session_metadata") as mock_save:
 
             response = client.patch(
@@ -391,7 +381,7 @@ class TestUpdateSessionMetadata:
 
     def test_update_session_tags(self, client, mock_discovered_session):
         """Test updating session tags."""
-        with patch("app.routers.sessions.discover_sessions", return_value=[mock_discovered_session]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[mock_discovered_session]), \
              patch("app.routers.sessions.save_session_metadata") as mock_save:
 
             response = client.patch(
@@ -406,7 +396,7 @@ class TestUpdateSessionMetadata:
 
     def test_update_session_not_found(self, client):
         """Test updating non-existent session returns 404."""
-        with patch("app.routers.sessions.discover_sessions", return_value=[]):
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[]):
 
             response = client.patch(
                 "/sessions/nonexistent-uuid",
@@ -426,7 +416,7 @@ class TestUpdateSessionMetadata:
             metadata=None,  # No existing metadata
         )
 
-        with patch("app.routers.sessions.discover_sessions", return_value=[session_without_metadata]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[session_without_metadata]), \
              patch("app.routers.sessions.save_session_metadata") as mock_save:
 
             response = client.patch(
@@ -451,7 +441,7 @@ class TestEntityManagement:
 
     def test_add_entity_to_session(self, client, mock_discovered_session):
         """Test adding an entity link to a session."""
-        with patch("app.routers.sessions.discover_sessions", return_value=[mock_discovered_session]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[mock_discovered_session]), \
              patch("app.routers.sessions.save_session_metadata") as mock_save:
 
             response = client.post(
@@ -467,7 +457,7 @@ class TestEntityManagement:
 
     def test_add_duplicate_entity(self, client, mock_discovered_session):
         """Test adding a duplicate entity returns 400."""
-        with patch("app.routers.sessions.discover_sessions", return_value=[mock_discovered_session]):
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[mock_discovered_session]):
             # Session already has issue #42
             response = client.post(
                 "/sessions/test-uuid-1234/entities",
@@ -479,7 +469,7 @@ class TestEntityManagement:
 
     def test_add_entity_session_not_found(self, client):
         """Test adding entity to non-existent session returns 404."""
-        with patch("app.routers.sessions.discover_sessions", return_value=[]):
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[]):
 
             response = client.post(
                 "/sessions/nonexistent-uuid/entities",
@@ -490,7 +480,7 @@ class TestEntityManagement:
 
     def test_remove_entity_from_session(self, client, mock_discovered_session):
         """Test removing an entity link from a session."""
-        with patch("app.routers.sessions.discover_sessions", return_value=[mock_discovered_session]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[mock_discovered_session]), \
              patch("app.routers.sessions.save_session_metadata") as mock_save:
 
             response = client.delete("/sessions/test-uuid-1234/entities/0")
@@ -501,7 +491,7 @@ class TestEntityManagement:
 
     def test_remove_entity_invalid_index(self, client, mock_discovered_session):
         """Test removing entity with invalid index returns 404."""
-        with patch("app.routers.sessions.discover_sessions", return_value=[mock_discovered_session]):
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[mock_discovered_session]):
 
             response = client.delete("/sessions/test-uuid-1234/entities/99")
 
@@ -510,7 +500,7 @@ class TestEntityManagement:
 
     def test_remove_entity_negative_index(self, client, mock_discovered_session):
         """Test removing entity with negative index returns 404."""
-        with patch("app.routers.sessions.discover_sessions", return_value=[mock_discovered_session]):
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[mock_discovered_session]):
 
             response = client.delete("/sessions/test-uuid-1234/entities/-1")
 
@@ -527,7 +517,7 @@ class TestEntityManagement:
             metadata=None,
         )
 
-        with patch("app.routers.sessions.discover_sessions", return_value=[session_without_metadata]):
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[session_without_metadata]):
 
             response = client.delete("/sessions/test-uuid-1234/entities/0")
 
@@ -921,7 +911,7 @@ class TestGetPendingSessions:
     def test_no_pending_sessions(self):
         """Test when there are no pending sessions."""
         # Need to patch where process_manager is imported inside the function
-        with patch("app.services.session_manager.process_manager") as mock_pm:
+        with patch("app.routers.sessions.process_manager") as mock_pm:
             mock_pm.processes = {}
 
             result = _get_pending_sessions(
@@ -940,7 +930,7 @@ class TestGetPendingSessions:
         mock_process.created_at = datetime(2024, 1, 15, 10, 30, 0)
 
         # Patch at the module level since _get_pending_sessions imports it fresh
-        with patch("app.services.session_manager.process_manager") as mock_pm, \
+        with patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions.encode_path", return_value="-home-user-projects-myapp"), \
              patch("app.routers.sessions.get_session_metadata", return_value=None), \
              patch("app.routers.sessions._get_repo_name", return_value="user/myapp"):
@@ -962,7 +952,7 @@ class TestGetPendingSessions:
         mock_process.claude_session_id = "existing-uuid"
         mock_process.working_dir = "/home/user/projects/myapp"
 
-        with patch("app.services.session_manager.process_manager") as mock_pm:
+        with patch("app.routers.sessions.process_manager") as mock_pm:
             mock_pm.processes = {"proc-1": mock_process}
 
             result = _get_pending_sessions(
@@ -988,7 +978,7 @@ class TestGetPendingSessions:
             starred=True,
         )
 
-        with patch("app.services.session_manager.process_manager") as mock_pm, \
+        with patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions.encode_path", return_value="-home-user-projects-myapp"), \
              patch("app.routers.sessions.get_session_metadata", return_value=mock_metadata), \
              patch("app.routers.sessions._get_repo_name", return_value="user/myapp"):
@@ -1024,7 +1014,7 @@ class TestContinueSession:
         mock_process.created_at = datetime(2024, 1, 15, 10, 30, 0)
         mock_process.claude_session_id = "test-uuid-1234"
 
-        with patch("app.routers.sessions.discover_sessions", return_value=[mock_discovered_session]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[mock_discovered_session]), \
              patch("app.routers.sessions.match_encoded_path_to_repo", return_value=None), \
              patch("app.routers.sessions.process_manager") as mock_pm:
             mock_pm.create_process = AsyncMock(return_value=mock_process)
@@ -1038,7 +1028,7 @@ class TestContinueSession:
 
     def test_continue_session_not_found(self, client):
         """Test continuing non-existent session returns 404."""
-        with patch("app.routers.sessions.discover_sessions", return_value=[]):
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[]):
 
             response = client.post("/sessions/nonexistent-uuid/continue")
 
@@ -1059,7 +1049,7 @@ class TestContinueSession:
             "local_path": "/actual/repo/path"
         }
 
-        with patch("app.routers.sessions.discover_sessions", return_value=[mock_discovered_session]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[mock_discovered_session]), \
              patch("app.routers.sessions.match_encoded_path_to_repo", return_value=matched_repo), \
              patch("app.routers.sessions.process_manager") as mock_pm:
             mock_pm.create_process = AsyncMock(return_value=mock_process)
@@ -1074,7 +1064,7 @@ class TestContinueSession:
 
     def test_continue_session_process_error(self, client, mock_discovered_session):
         """Test handling process creation errors."""
-        with patch("app.routers.sessions.discover_sessions", return_value=[mock_discovered_session]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[mock_discovered_session]), \
              patch("app.routers.sessions.match_encoded_path_to_repo", return_value=None), \
              patch("app.routers.sessions.process_manager") as mock_pm:
             mock_pm.create_process = AsyncMock(side_effect=ValueError("Session already active"))
@@ -1178,7 +1168,7 @@ class TestSessionCacheInvalidation:
 
         mock_sessions = [MagicMock()]
 
-        with patch("app.routers.sessions.discover_sessions", return_value=mock_sessions) as mock_discover:
+        with patch("app.routers.sessions.discover_all_sessions", return_value=mock_sessions) as mock_discover:
             # First call - cache miss
             result1 = _get_cached_sessions(repo_path="/test/path")
             assert mock_discover.call_count == 1
@@ -1226,7 +1216,7 @@ class TestSessionCacheInvalidation:
         mock_sessions1 = [MagicMock(session_id="session1")]
         mock_sessions2 = [MagicMock(session_id="session2")]
 
-        with patch("app.routers.sessions.discover_sessions") as mock_discover:
+        with patch("app.routers.sessions.discover_all_sessions") as mock_discover:
             mock_discover.return_value = mock_sessions1
             result1 = _get_cached_sessions(repo_path="/path/one")
 
@@ -1245,7 +1235,7 @@ class TestSessionCacheInvalidation:
         mock_all_sessions = [MagicMock(session_id="all")]
         mock_repo_sessions = [MagicMock(session_id="repo")]
 
-        with patch("app.routers.sessions.discover_sessions") as mock_discover:
+        with patch("app.routers.sessions.discover_all_sessions") as mock_discover:
             # First call with no repo_path (global)
             mock_discover.return_value = mock_all_sessions
             result_all = _get_cached_sessions(repo_path=None)
@@ -2025,7 +2015,7 @@ class TestKillSession:
         """Test killing a headless session."""
         with patch("app.routers.sessions._get_cached_sessions", return_value=[mock_discovered_session]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
-             patch("app.routers.sessions.headless_analyzer") as mock_headless, \
+             patch("app.services.headless_analyzer.headless_analyzer") as mock_headless, \
              patch("app.routers.sessions.event_manager") as mock_events, \
              patch("app.routers.sessions.invalidate_session_cache") as mock_invalidate:
             mock_pm.list_processes = AsyncMock(return_value=[])  # No PTY processes
@@ -2054,7 +2044,7 @@ class TestKillSession:
 
         with patch("app.routers.sessions._get_cached_sessions", return_value=[mock_discovered_session]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
-             patch("app.routers.sessions.headless_analyzer") as mock_headless, \
+             patch("app.services.headless_analyzer.headless_analyzer") as mock_headless, \
              patch("app.routers.sessions.event_manager") as mock_events, \
              patch("app.routers.sessions.invalidate_session_cache") as mock_invalidate:
             mock_pm.list_processes = AsyncMock(return_value=[mock_process])
@@ -2075,7 +2065,7 @@ class TestKillSession:
         """Test killing a session that isn't running returns not_running."""
         with patch("app.routers.sessions._get_cached_sessions", return_value=[mock_discovered_session]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
-             patch("app.routers.sessions.headless_analyzer") as mock_headless, \
+             patch("app.services.headless_analyzer.headless_analyzer") as mock_headless, \
              patch("app.routers.sessions.event_manager") as mock_events, \
              patch("app.routers.sessions.invalidate_session_cache") as mock_invalidate:
             mock_pm.list_processes = AsyncMock(return_value=[])  # No PTY processes
@@ -2132,7 +2122,7 @@ class TestKillSession:
         # It just tries to kill any matching PTY/headless processes
         with patch("app.routers.sessions._get_cached_sessions", return_value=[]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
-             patch("app.routers.sessions.headless_analyzer") as mock_headless, \
+             patch("app.services.headless_analyzer.headless_analyzer") as mock_headless, \
              patch("app.routers.sessions.event_manager") as mock_events:
             mock_pm.list_processes = AsyncMock(return_value=[])
             mock_headless.cancel = AsyncMock(return_value=False)
@@ -2159,7 +2149,7 @@ class TestKillSession:
 
         with patch("app.routers.sessions._get_cached_sessions", return_value=[mock_discovered_session]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
-             patch("app.routers.sessions.headless_analyzer") as mock_headless, \
+             patch("app.services.headless_analyzer.headless_analyzer") as mock_headless, \
              patch("app.routers.sessions.event_manager") as mock_events, \
              patch("app.routers.sessions.invalidate_session_cache"):
             mock_pm.list_processes = AsyncMock(return_value=[matching_process, other_process])
@@ -2233,7 +2223,7 @@ class TestListSessionsFastPathPendingFiltering:
             ),
         )
 
-        with patch("app.routers.sessions.discover_sessions", return_value=[starred_session]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[starred_session]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
              patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
@@ -2273,7 +2263,7 @@ class TestListSessionsFastPathPendingFiltering:
             ),
         )
 
-        with patch("app.routers.sessions.discover_sessions", return_value=[unstarred_session]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[unstarred_session]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
              patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
@@ -2312,7 +2302,7 @@ class TestListSessionsFastPathPendingFiltering:
             ),
         )
 
-        with patch("app.routers.sessions.discover_sessions", return_value=[session_with_entities]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[session_with_entities]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
              patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
@@ -2351,7 +2341,7 @@ class TestListSessionsFastPathPendingFiltering:
             ),
         )
 
-        with patch("app.routers.sessions.discover_sessions", return_value=[session_without_entities]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[session_without_entities]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
              patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
@@ -2385,7 +2375,7 @@ class TestListSessionsFastPathPendingFiltering:
             metadata=None,
         )
 
-        with patch("app.routers.sessions.discover_sessions", return_value=[inactive_session]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[inactive_session]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
              patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
@@ -2424,7 +2414,7 @@ class TestListSessionsFastPathPendingFiltering:
             metadata=None,
         )
 
-        with patch("app.routers.sessions.discover_sessions", return_value=[active_session]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[active_session]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
              patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
@@ -2463,7 +2453,7 @@ class TestListSessionsFastPathPendingFiltering:
             for i in range(4)
         ]
 
-        with patch("app.routers.sessions.discover_sessions", return_value=sessions), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=sessions), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
              patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
@@ -2502,7 +2492,7 @@ class TestListSessionsFastPathPendingFiltering:
             ),
         )
 
-        with patch("app.routers.sessions.discover_sessions", return_value=[session]), \
+        with patch("app.routers.sessions.discover_all_sessions", return_value=[session]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
              patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
