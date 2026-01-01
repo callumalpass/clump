@@ -144,6 +144,9 @@ def parse_transcript(session_id: str, working_dir: str) -> ParsedTranscript | No
     """
     Parse a Claude Code session transcript from JSONL format.
 
+    This is a convenience function that finds the transcript file and parses it.
+    For non-Claude CLIs, use parse_transcript_file() directly with the transcript path.
+
     Args:
         session_id: The Claude session UUID
         working_dir: The working directory where the session was run
@@ -156,6 +159,39 @@ def parse_transcript(session_id: str, working_dir: str) -> ParsedTranscript | No
     if not transcript_file:
         return None
 
+    return _parse_claude_transcript(transcript_file, session_id)
+
+
+def parse_transcript_file(
+    transcript_path: Path,
+    session_id: str,
+    cli_type: str = "claude",
+) -> ParsedTranscript | None:
+    """
+    Parse a transcript file from any CLI type.
+
+    Args:
+        transcript_path: Path to the transcript file
+        session_id: The session UUID
+        cli_type: The CLI type ("claude", "gemini", "codex")
+
+    Returns:
+        ParsedTranscript with structured messages, or None if parsing fails
+    """
+    if not transcript_path.exists():
+        return None
+
+    if cli_type == "gemini":
+        return _parse_gemini_transcript(transcript_path, session_id)
+    elif cli_type == "codex":
+        return _parse_codex_transcript(transcript_path, session_id)
+    else:
+        # Default to Claude parser
+        return _parse_claude_transcript(transcript_path, session_id)
+
+
+def _parse_claude_transcript(transcript_path: Path, session_id: str) -> ParsedTranscript | None:
+    """Parse a Claude JSONL transcript file."""
     messages: list[TranscriptMessage] = []
     total_input = 0
     total_output = 0
@@ -169,7 +205,7 @@ def parse_transcript(session_id: str, working_dir: str) -> ParsedTranscript | No
     git_branch = None
 
     try:
-        with open(transcript_file, 'r', encoding='utf-8') as f:
+        with open(transcript_path, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -339,7 +375,7 @@ def parse_transcript(session_id: str, working_dir: str) -> ParsedTranscript | No
                         ))
 
     except OSError as e:
-        logger.warning("Failed to read transcript file %s: %s", transcript_file, e)
+        logger.warning("Failed to read transcript file %s: %s", transcript_path, e)
         return None
 
     return ParsedTranscript(
@@ -354,6 +390,201 @@ def parse_transcript(session_id: str, working_dir: str) -> ParsedTranscript | No
         start_time=start_time,
         end_time=end_time,
         claude_code_version=claude_code_version,
+        git_branch=git_branch,
+    )
+
+
+def _parse_gemini_transcript(transcript_path: Path, session_id: str) -> ParsedTranscript | None:
+    """
+    Parse a Gemini JSON transcript file.
+
+    Gemini stores sessions as single JSON files with structure:
+    - summary: Session summary/title
+    - messages: Array of message objects with type, content, timestamp
+    - startTime/lastUpdated: Timestamps
+    """
+    messages: list[TranscriptMessage] = []
+    summary = None
+    primary_model = None
+    start_time = None
+    end_time = None
+
+    try:
+        with open(transcript_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        summary = data.get("summary")
+        start_time = data.get("startTime")
+        end_time = data.get("lastUpdated")
+
+        for msg in data.get("messages", []):
+            msg_type = msg.get("type")
+            timestamp = msg.get("timestamp", "")
+
+            if msg_type == "user":
+                content = msg.get("content", "")
+                if isinstance(content, str) and content.strip():
+                    messages.append(TranscriptMessage(
+                        uuid=msg.get("id", ""),
+                        role="user",
+                        content=content,
+                        timestamp=timestamp,
+                    ))
+            elif msg_type == "gemini":
+                content = msg.get("content", "")
+                model = msg.get("model")
+                if model and not primary_model:
+                    primary_model = model
+
+                # Handle content that could be string or list
+                text_content = ""
+                if isinstance(content, str):
+                    text_content = content
+                elif isinstance(content, list):
+                    text_parts = []
+                    for part in content:
+                        if isinstance(part, dict) and part.get("type") == "text":
+                            text_parts.append(part.get("text", ""))
+                        elif isinstance(part, str):
+                            text_parts.append(part)
+                    text_content = "\n".join(text_parts)
+
+                if text_content.strip():
+                    messages.append(TranscriptMessage(
+                        uuid=msg.get("id", ""),
+                        role="assistant",
+                        content=text_content,
+                        timestamp=timestamp,
+                        model=model,
+                    ))
+
+    except (OSError, json.JSONDecodeError) as e:
+        logger.warning("Failed to parse Gemini transcript %s: %s", transcript_path, e)
+        return None
+
+    return ParsedTranscript(
+        session_id=session_id,
+        messages=messages,
+        summary=summary,
+        model=primary_model,
+        total_input_tokens=0,
+        total_output_tokens=0,
+        total_cache_read_tokens=0,
+        total_cache_creation_tokens=0,
+        start_time=start_time,
+        end_time=end_time,
+        claude_code_version=None,
+        git_branch=None,
+    )
+
+
+def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTranscript | None:
+    """
+    Parse a Codex JSONL transcript file.
+
+    Codex uses JSONL format with different entry types:
+    - session_meta: Session metadata (cwd, timestamp, git info)
+    - response_item: User/assistant messages
+    - turn_context: Model info for the turn
+    """
+    messages: list[TranscriptMessage] = []
+    primary_model = None
+    start_time = None
+    end_time = None
+    git_branch = None
+    user_message_count = 0
+
+    try:
+        with open(transcript_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                entry_type = entry.get('type')
+                timestamp = entry.get('timestamp', '')
+
+                if entry_type == 'session_meta':
+                    payload = entry.get('payload', {})
+                    start_time = payload.get('timestamp')
+                    git_info = payload.get('git', {})
+                    if git_info:
+                        git_branch = git_info.get('branch')
+
+                elif entry_type == 'turn_context':
+                    payload = entry.get('payload', {})
+                    model = payload.get('model')
+                    if model and not primary_model:
+                        primary_model = model
+
+                elif entry_type == 'response_item':
+                    payload = entry.get('payload', {})
+                    role = payload.get('role')
+
+                    if timestamp:
+                        end_time = timestamp
+
+                    if role == 'user':
+                        user_message_count += 1
+                        # Skip the first user message (environment context)
+                        if user_message_count == 1:
+                            continue
+
+                        content_parts = payload.get('content', [])
+                        text_parts = []
+                        for c in content_parts:
+                            if isinstance(c, dict) and c.get('type') == 'input_text':
+                                text = c.get('text', '')
+                                if text and not text.startswith('<environment_context>'):
+                                    text_parts.append(text)
+                        text_content = '\n'.join(text_parts)
+
+                        if text_content.strip():
+                            messages.append(TranscriptMessage(
+                                uuid=payload.get('id', ''),
+                                role='user',
+                                content=text_content,
+                                timestamp=timestamp,
+                            ))
+
+                    elif role == 'assistant':
+                        content_parts = payload.get('content', [])
+                        text_parts = []
+                        for c in content_parts:
+                            if isinstance(c, dict) and c.get('type') == 'output_text':
+                                text_parts.append(c.get('text', ''))
+                        text_content = '\n'.join(text_parts)
+
+                        if text_content.strip():
+                            messages.append(TranscriptMessage(
+                                uuid=payload.get('id', ''),
+                                role='assistant',
+                                content=text_content,
+                                timestamp=timestamp,
+                                model=primary_model,
+                            ))
+
+    except OSError as e:
+        logger.warning("Failed to parse Codex transcript %s: %s", transcript_path, e)
+        return None
+
+    return ParsedTranscript(
+        session_id=session_id,
+        messages=messages,
+        summary=None,  # Codex doesn't have session summaries
+        model=primary_model,
+        total_input_tokens=0,
+        total_output_tokens=0,
+        total_cache_read_tokens=0,
+        total_cache_creation_tokens=0,
+        start_time=start_time,
+        end_time=end_time,
+        claude_code_version=None,
         git_branch=git_branch,
     )
 
