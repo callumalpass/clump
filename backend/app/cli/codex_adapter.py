@@ -61,7 +61,6 @@ class CodexAdapter(CLIAdapter):
             supports_tool_allowlist=False,  # Uses sandbox modes instead
             supports_permission_modes=True,  # Via approval policies
             supports_max_turns=False,
-            supports_mcp=True,
             output_format="json",  # Codex uses --json, not stream-json
         )
 
@@ -127,12 +126,12 @@ class CodexAdapter(CLIAdapter):
         permission_mode: Optional[str] = None,
         max_turns: Optional[int] = None,
         model: Optional[str] = None,
-        mcp_config: Optional[dict[str, Any]] = None,
     ) -> list[str]:
         """Build Codex CLI interactive command."""
         args = [self.command_name]
 
         # Resume session using resume subcommand
+        # Expects the UUID from get_resume_id_from_file()
         if resume_session:
             args.extend(["resume", resume_session])
             # When resuming, we don't add other options
@@ -172,7 +171,6 @@ class CodexAdapter(CLIAdapter):
         model: Optional[str] = None,
         system_prompt: Optional[str] = None,
         output_format: Optional[str] = None,
-        mcp_config: Optional[dict[str, Any]] = None,
     ) -> list[str]:
         """
         Build Codex CLI headless command.
@@ -340,3 +338,31 @@ class CodexAdapter(CLIAdapter):
                 continue
 
         return matching
+
+    def get_resume_session_id(self, session_id: str) -> str:
+        """
+        Extract the session ID format needed for 'codex resume'.
+
+        Codex session filenames look like:
+        rollout-2026-01-01T13-20-18-019b775b-1dc2-7bf1-9681-db60a06cb4cb
+
+        The 'codex resume' command expects just the UUID:
+        019b775b-1dc2-7bf1-9681-db60a06cb4cb
+
+        Args:
+            session_id: Our session ID (usually the filename stem)
+
+        Returns:
+            The UUID suitable for 'codex resume'
+        """
+        import re
+
+        # Match UUID pattern at end of string
+        # UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+        uuid_pattern = r'([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$'
+        match = re.search(uuid_pattern, session_id, re.IGNORECASE)
+        if match:
+            return match.group(1)
+
+        # Fallback: return as-is
+        return session_id

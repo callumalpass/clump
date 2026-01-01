@@ -46,9 +46,6 @@ class CLICapabilities:
     supports_max_turns: bool = True
     """Whether max turns can be limited."""
 
-    supports_mcp: bool = False
-    """Whether MCP server configuration is supported."""
-
     output_format: str = "stream-json"
     """Default output format for headless mode."""
 
@@ -113,26 +110,6 @@ class SessionInfo:
     """Version of the CLI tool used."""
 
 
-@dataclass
-class McpServerConfig:
-    """Configuration for a single MCP server."""
-
-    type: str = "stdio"
-    """Transport type (stdio, http, etc.)."""
-
-    command: Optional[str] = None
-    """Command to run for stdio transport."""
-
-    args: list[str] = field(default_factory=list)
-    """Command arguments for stdio transport."""
-
-    url: Optional[str] = None
-    """Server URL for HTTP transport."""
-
-    headers: dict[str, str] = field(default_factory=dict)
-    """HTTP headers for HTTP transport."""
-
-
 class CLIAdapter(ABC):
     """
     Abstract base class for CLI tool adapters.
@@ -186,7 +163,6 @@ class CLIAdapter(ABC):
         permission_mode: Optional[str] = None,
         max_turns: Optional[int] = None,
         model: Optional[str] = None,
-        mcp_config: Optional[dict[str, Any]] = None,
     ) -> list[str]:
         """
         Build command arguments for interactive (PTY) mode.
@@ -200,7 +176,6 @@ class CLIAdapter(ABC):
             permission_mode: Permission handling mode.
             max_turns: Maximum number of agentic turns.
             model: Model to use.
-            mcp_config: MCP server configuration.
 
         Returns:
             List of command arguments suitable for os.execvp().
@@ -222,7 +197,6 @@ class CLIAdapter(ABC):
         model: Optional[str] = None,
         system_prompt: Optional[str] = None,
         output_format: Optional[str] = None,
-        mcp_config: Optional[dict[str, Any]] = None,
     ) -> list[str]:
         """
         Build command arguments for headless (non-interactive) mode.
@@ -239,7 +213,6 @@ class CLIAdapter(ABC):
             model: Model to use.
             system_prompt: Additional system prompt.
             output_format: Output format (json, stream-json, text).
-            mcp_config: MCP server configuration.
 
         Returns:
             List of command arguments suitable for subprocess.
@@ -334,3 +307,43 @@ class CLIAdapter(ABC):
         encoded = get_encoded_path(repo_path)
         clump_dir = Path.home() / ".clump" / "projects" / encoded
         return clump_dir / f"{session_id}.json"
+
+    def get_resume_session_id(self, session_id: str) -> str:
+        """
+        Convert a session ID to the format expected by the CLI's resume command.
+
+        Different CLIs expect different session ID formats:
+        - Claude: Full UUID
+        - Gemini: Short UUID from filename
+        - Codex: Full UUID extracted from filename
+
+        Default implementation returns the session_id unchanged.
+        Override in subclasses if the CLI expects a different format.
+
+        Args:
+            session_id: Our session ID (usually the filename stem)
+
+        Returns:
+            Session ID in the format the CLI expects for resume
+        """
+        return session_id
+
+    def get_resume_id_from_file(self, file_path: Path, session_id: str) -> str:
+        """
+        Extract the resume session ID from a session file.
+
+        Some CLIs (like Gemini) store the internal session ID inside the file,
+        which differs from the filename. This method reads the file to extract
+        the actual ID needed for resuming.
+
+        Default implementation just calls get_resume_session_id().
+        Override in subclasses that need to read the file.
+
+        Args:
+            file_path: Path to the session file
+            session_id: Our session ID (usually the filename stem)
+
+        Returns:
+            Session ID in the format the CLI expects for resume
+        """
+        return self.get_resume_session_id(session_id)

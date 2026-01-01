@@ -62,7 +62,6 @@ class GeminiAdapter(CLIAdapter):
             supports_tool_allowlist=True,
             supports_permission_modes=True,
             supports_max_turns=False,  # Gemini doesn't have --max-turns
-            supports_mcp=True,
             output_format="stream-json",
         )
 
@@ -107,12 +106,12 @@ class GeminiAdapter(CLIAdapter):
         permission_mode: Optional[str] = None,
         max_turns: Optional[int] = None,
         model: Optional[str] = None,
-        mcp_config: Optional[dict[str, Any]] = None,
     ) -> list[str]:
         """Build Gemini CLI interactive command."""
         args = [self.command_name]
 
         # Resume session if specified
+        # Expects the full UUID from get_resume_id_from_file()
         if resume_session:
             args.extend(["--resume", resume_session])
 
@@ -130,13 +129,6 @@ class GeminiAdapter(CLIAdapter):
         if model:
             args.extend(["--model", model])
 
-        # MCP servers (Gemini uses --allowed-mcp-server-names)
-        if mcp_config:
-            server_names = list(mcp_config.keys())
-            if server_names:
-                for name in server_names:
-                    args.extend(["--allowed-mcp-server-names", name])
-
         return args
 
     def build_headless_command(
@@ -153,7 +145,6 @@ class GeminiAdapter(CLIAdapter):
         model: Optional[str] = None,
         system_prompt: Optional[str] = None,
         output_format: Optional[str] = None,
-        mcp_config: Optional[dict[str, Any]] = None,
     ) -> list[str]:
         """
         Build Gemini CLI headless command.
@@ -184,13 +175,6 @@ class GeminiAdapter(CLIAdapter):
         # Model
         if model:
             args.extend(["--model", model])
-
-        # MCP servers
-        if mcp_config:
-            server_names = list(mcp_config.keys())
-            if server_names:
-                for name in server_names:
-                    args.extend(["--allowed-mcp-server-names", name])
 
         # Prompt is positional at the end
         args.append(prompt)
@@ -273,3 +257,48 @@ class GeminiAdapter(CLIAdapter):
         config = self.discovery_config
         encoded = self.encode_path(repo_path)
         return config.base_dir / "tmp" / encoded / "chats"
+
+    def get_resume_session_id(self, session_id: str) -> str:
+        """
+        Extract the session ID format needed for --resume.
+
+        Note: This method extracts the short UUID from the filename, but
+        Gemini CLI actually requires the full UUID from inside the session file.
+        Use get_resume_id_from_file() when you have access to the file path.
+
+        Args:
+            session_id: Our session ID (usually the filename stem)
+
+        Returns:
+            The short UUID from the filename (may not work for resume!)
+        """
+        # Extract the last segment after the last hyphen
+        # session-2025-12-15T21-28-a51b3ff5 -> a51b3ff5
+        if "-" in session_id:
+            return session_id.rsplit("-", 1)[-1]
+        return session_id
+
+    def get_resume_id_from_file(self, file_path: Path, session_id: str) -> str:
+        """
+        Extract the full session UUID from the Gemini session file.
+
+        Gemini stores the full UUID inside the session JSON file as 'sessionId'.
+        The --resume flag requires this full UUID, not the truncated one in the filename.
+
+        Args:
+            file_path: Path to the session JSON file
+            session_id: Our session ID (filename stem, used as fallback)
+
+        Returns:
+            The full UUID from the session file, or fallback to short UUID
+        """
+        try:
+            data = self.parse_session_file(file_path)
+            internal_id = data.get("session_id")
+            if internal_id:
+                return internal_id
+        except Exception:
+            pass
+
+        # Fallback to extracting from filename
+        return self.get_resume_session_id(session_id)
