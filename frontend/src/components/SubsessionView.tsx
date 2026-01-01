@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import type { SubsessionDetail, TranscriptMessage, ToolUse } from '../types';
+import type { SubsessionDetail, TranscriptMessage, ToolUse, CLIType } from '../types';
 import { fetchSubsession } from '../hooks/useApi';
 import { Markdown } from './Markdown';
+import { CLI_DISPLAY } from './CLISelector';
 
 // Max nesting depth for subsessions
 const MAX_DEPTH = 3;
@@ -18,9 +19,10 @@ interface SubsessionViewProps {
   agentId: string;
   parentSessionId: string;
   depth?: number;
+  cliType?: CLIType;
 }
 
-export function SubsessionView({ agentId, parentSessionId, depth = 1 }: SubsessionViewProps) {
+export function SubsessionView({ agentId, parentSessionId, depth = 1, cliType = 'claude' }: SubsessionViewProps) {
   const [detail, setDetail] = useState<SubsessionDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +90,7 @@ export function SubsessionView({ agentId, parentSessionId, depth = 1 }: Subsessi
             message={message}
             parentSessionId={parentSessionId}
             depth={depth}
+            cliType={cliType}
           />
         ))}
       </div>
@@ -99,18 +102,21 @@ interface SubsessionMessageProps {
   message: TranscriptMessage;
   parentSessionId: string;
   depth: number;
+  cliType?: CLIType;
 }
 
-function SubsessionMessage({ message, parentSessionId, depth }: SubsessionMessageProps) {
+function SubsessionMessage({ message, parentSessionId, depth, cliType = 'claude' }: SubsessionMessageProps) {
   const isUser = message.role === 'user';
+  const agentName = CLI_DISPLAY[cliType]?.name || 'Claude';
+  const agentColor = CLI_DISPLAY[cliType]?.color || 'text-green-400';
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div className={`max-w-[90%] ${isUser ? 'ml-4' : 'mr-4'}`}>
         {/* Role indicator */}
         <div className={`text-xs mb-1 flex items-center gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
-          <span className={isUser ? 'text-blue-400' : 'text-green-400'}>
-            {isUser ? 'You' : 'Claude'}
+          <span className={isUser ? 'text-blue-400' : agentColor}>
+            {isUser ? 'You' : agentName}
           </span>
           {message.timestamp && (
             <span className="text-gray-500">
@@ -148,6 +154,7 @@ function SubsessionMessage({ message, parentSessionId, depth }: SubsessionMessag
                   tool={tool}
                   parentSessionId={parentSessionId}
                   depth={depth}
+                  cliType={cliType}
                 />
               ))}
             </div>
@@ -197,9 +204,10 @@ interface SubsessionToolUseProps {
   tool: ToolUse;
   parentSessionId: string;
   depth: number;
+  cliType?: CLIType;
 }
 
-function SubsessionToolUse({ tool, parentSessionId, depth }: SubsessionToolUseProps) {
+function SubsessionToolUse({ tool, parentSessionId, depth, cliType = 'claude' }: SubsessionToolUseProps) {
   const [expanded, setExpanded] = useState(false);
   const [subsessionExpanded, setSubsessionExpanded] = useState(false);
 
@@ -271,6 +279,7 @@ function SubsessionToolUse({ tool, parentSessionId, depth }: SubsessionToolUsePr
               agentId={tool.spawned_agent_id!}
               parentSessionId={parentSessionId}
               depth={depth + 1}
+              cliType={cliType}
             />
           )}
         </div>

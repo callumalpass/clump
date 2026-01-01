@@ -3,6 +3,7 @@ import { Terminal } from './Terminal';
 import { ConversationView } from './ConversationView';
 import { Editor } from './Editor';
 import { EntityPicker } from './EntityPicker';
+import { CLI_DISPLAY } from './CLISelector';
 import type { SessionSummary, SessionDetail, EntityLink, Issue, PR, ParsedTranscript, TranscriptMessage } from '../types';
 import { fetchSessionDetail, addEntityToSession, removeEntityFromSession } from '../hooks/useApi';
 import { useProcessWebSocket } from '../hooks/useProcessWebSocket';
@@ -83,8 +84,9 @@ function formatTranscriptAsMarkdown(detail: SessionDetail): string {
   lines.push('---');
   lines.push('');
 
+  const agentName = CLI_DISPLAY[detail.cli_type]?.name || 'Claude';
   for (const message of detail.messages) {
-    const role = message.role === 'user' ? 'User' : 'Claude';
+    const role = message.role === 'user' ? 'User' : agentName;
     const timestamp = message.timestamp ? new Date(message.timestamp).toLocaleTimeString() : '';
 
     lines.push(`## ${role}${timestamp ? ` (${timestamp})` : ''}`);
@@ -136,8 +138,9 @@ function formatTranscriptAsText(detail: SessionDetail): string {
   lines.push('-'.repeat(SEPARATOR_LINE_LENGTH));
   lines.push('');
 
+  const agentName = (CLI_DISPLAY[detail.cli_type]?.name || 'Claude').toUpperCase();
   for (const message of detail.messages) {
-    const role = message.role === 'user' ? 'USER' : 'CLAUDE';
+    const role = message.role === 'user' ? 'USER' : agentName;
     const timestamp = message.timestamp ? new Date(message.timestamp).toLocaleTimeString() : '';
 
     lines.push(`[${role}]${timestamp ? ` ${timestamp}` : ''}`);
@@ -1261,6 +1264,7 @@ export function SessionView({
             onMatchesFound={handleMatchesFound}
             isActiveSession={isActiveProcess}
             onSendMessage={processId ? handleSendMessage : undefined}
+            cliType={session.cli_type}
           />
         )}
 

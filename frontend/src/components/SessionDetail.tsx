@@ -371,6 +371,7 @@ export function SessionDetail({
               end_time: detail.end_time ?? undefined,
             }}
             sessionId={session.session_id}
+            cliType={session.cli_type}
           />
         ) : null}
       </div>

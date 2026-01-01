@@ -1,9 +1,10 @@
 import { useState, useMemo, useRef, useEffect, useCallback, memo } from 'react';
 import { createPortal } from 'react-dom';
-import type { TranscriptMessage, ToolUse, ParsedTranscript } from '../types';
+import type { TranscriptMessage, ToolUse, ParsedTranscript, CLIType } from '../types';
 import { Markdown } from './Markdown';
 import { Editor } from './Editor';
 import { SubsessionView } from './SubsessionView';
+import { CLI_DISPLAY } from './CLISelector';
 import { calculateCost, formatCost } from '../utils/costs';
 import { getModelDisplayName, getModelBadgeStyle } from '../utils/models';
 import { computeLineDiff } from '../utils/diffing';
@@ -88,6 +89,7 @@ interface ConversationViewProps {
   onMatchesFound?: (count: number) => void;
   isActiveSession?: boolean;
   onSendMessage?: (message: string) => void;
+  cliType?: CLIType;  // Which CLI tool created this session (for interlocutor display)
 }
 
 // Format token count for display
@@ -300,6 +302,7 @@ function SessionStats({ transcript }: { transcript: ParsedTranscript }) {
 interface ToolDisplayProps {
   tool: ToolUse;
   parentSessionId?: string;
+  cliType?: CLIType;
 }
 
 // Helper to get just the filename from a path
@@ -932,7 +935,7 @@ function GlobToolDisplay({ tool }: ToolDisplayProps) {
 }
 
 // ============ TASK (AGENT) TOOL ============
-function TaskToolDisplay({ tool, parentSessionId }: ToolDisplayProps) {
+function TaskToolDisplay({ tool, parentSessionId, cliType }: ToolDisplayProps) {
   const [expanded, setExpanded] = useState(false);
   const [subsessionExpanded, setSubsessionExpanded] = useState(false);
 
@@ -1015,6 +1018,7 @@ function TaskToolDisplay({ tool, parentSessionId }: ToolDisplayProps) {
               agentId={tool.spawned_agent_id!}
               parentSessionId={parentSessionId}
               depth={1}
+              cliType={cliType}
             />
           )}
         </div>
@@ -1024,7 +1028,7 @@ function TaskToolDisplay({ tool, parentSessionId }: ToolDisplayProps) {
 }
 
 // ============ GENERIC TOOL DISPLAY ============
-function GenericToolDisplay({ tool, parentSessionId }: ToolDisplayProps) {
+function GenericToolDisplay({ tool, parentSessionId, cliType }: ToolDisplayProps) {
   const [expanded, setExpanded] = useState(false);
   const [subsessionExpanded, setSubsessionExpanded] = useState(false);
 
@@ -1087,6 +1091,7 @@ function GenericToolDisplay({ tool, parentSessionId }: ToolDisplayProps) {
               agentId={tool.spawned_agent_id!}
               parentSessionId={parentSessionId}
               depth={1}
+              cliType={cliType}
             />
           )}
         </div>
@@ -1099,27 +1104,28 @@ function GenericToolDisplay({ tool, parentSessionId }: ToolDisplayProps) {
 interface ToolUseDisplayProps {
   tool: ToolUse;
   parentSessionId?: string;
+  cliType?: CLIType;
 }
 
-function ToolUseDisplay({ tool, parentSessionId }: ToolUseDisplayProps) {
+function ToolUseDisplay({ tool, parentSessionId, cliType }: ToolUseDisplayProps) {
   // Route to specialized displays based on tool name
   switch (tool.name) {
     case 'Edit':
-      return <EditToolDisplay tool={tool} parentSessionId={parentSessionId} />;
+      return <EditToolDisplay tool={tool} parentSessionId={parentSessionId} cliType={cliType} />;
     case 'Read':
-      return <ReadToolDisplay tool={tool} parentSessionId={parentSessionId} />;
+      return <ReadToolDisplay tool={tool} parentSessionId={parentSessionId} cliType={cliType} />;
     case 'Bash':
-      return <BashToolDisplay tool={tool} parentSessionId={parentSessionId} />;
+      return <BashToolDisplay tool={tool} parentSessionId={parentSessionId} cliType={cliType} />;
     case 'Write':
-      return <WriteToolDisplay tool={tool} parentSessionId={parentSessionId} />;
+      return <WriteToolDisplay tool={tool} parentSessionId={parentSessionId} cliType={cliType} />;
     case 'Grep':
-      return <GrepToolDisplay tool={tool} parentSessionId={parentSessionId} />;
+      return <GrepToolDisplay tool={tool} parentSessionId={parentSessionId} cliType={cliType} />;
     case 'Glob':
-      return <GlobToolDisplay tool={tool} parentSessionId={parentSessionId} />;
+      return <GlobToolDisplay tool={tool} parentSessionId={parentSessionId} cliType={cliType} />;
     case 'Task':
-      return <TaskToolDisplay tool={tool} parentSessionId={parentSessionId} />;
+      return <TaskToolDisplay tool={tool} parentSessionId={parentSessionId} cliType={cliType} />;
     default:
-      return <GenericToolDisplay tool={tool} parentSessionId={parentSessionId} />;
+      return <GenericToolDisplay tool={tool} parentSessionId={parentSessionId} cliType={cliType} />;
   }
 }
 
@@ -1169,11 +1175,14 @@ interface MessageBubbleProps {
   matchIndices?: number[];
   currentMatchIndex?: number;
   onCopy?: (text: string) => void;
+  cliType?: CLIType;  // Which CLI tool for interlocutor display
 }
 
-function MessageBubble({ message, parentSessionId, searchQuery = '', matchIndices = [], currentMatchIndex, onCopy }: MessageBubbleProps) {
+function MessageBubble({ message, parentSessionId, searchQuery = '', matchIndices = [], currentMatchIndex, onCopy, cliType = 'claude' }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isPending = message.uuid.startsWith('optimistic-');
+  const agentName = CLI_DISPLAY[cliType]?.name || 'Claude';
+  const agentColor = CLI_DISPLAY[cliType]?.color || 'text-green-400';
   const hasMatch = matchIndices.length > 0;
   const hasCurrentMatch = currentMatchIndex !== undefined && matchIndices.includes(currentMatchIndex);
   const [showCopied, setShowCopied] = useState(false);
@@ -1199,8 +1208,8 @@ function MessageBubble({ message, parentSessionId, searchQuery = '', matchIndice
       <div className={`max-w-[85%] min-w-0 ${isUser ? 'ml-8' : 'mr-8'}`}>
         {/* Role indicator */}
         <div className={`text-xs mb-1 flex items-center gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
-          <span className={isUser ? 'text-blurple-400' : 'text-green-400'}>
-            {isUser ? 'You' : 'Claude'}
+          <span className={isUser ? 'text-blurple-400' : agentColor}>
+            {isUser ? 'You' : agentName}
           </span>
           {isPending ? (
             <span className="text-yellow-500 animate-pulse">Sending...</span>
@@ -1279,7 +1288,7 @@ function MessageBubble({ message, parentSessionId, searchQuery = '', matchIndice
           {message.tool_uses.length > 0 && (
             <div className="mt-2 space-y-1">
               {message.tool_uses.map((tool) => (
-                <ToolUseDisplay key={tool.id} tool={tool} parentSessionId={parentSessionId} />
+                <ToolUseDisplay key={tool.id} tool={tool} parentSessionId={parentSessionId} cliType={cliType} />
               ))}
             </div>
           )}
@@ -1399,6 +1408,7 @@ export function ConversationView({
   onMatchesFound,
   isActiveSession = false,
   onSendMessage,
+  cliType = 'claude',
 }: ConversationViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -1545,6 +1555,7 @@ export function ConversationView({
                 searchQuery={searchQuery}
                 matchIndices={matchMap.get(index) || []}
                 currentMatchIndex={currentMatchIndex}
+                cliType={cliType}
               />
             </div>
           );
@@ -1556,7 +1567,7 @@ export function ConversationView({
           <Editor
             value={inputMessage}
             onChange={setInputMessage}
-            placeholder="Send a message to Claude..."
+            placeholder={`Send a message to ${CLI_DISPLAY[cliType]?.name || 'Claude'}...`}
             minHeight="60px"
             maxHeight="200px"
             onSubmit={handleSend}
