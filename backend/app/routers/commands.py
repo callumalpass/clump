@@ -1,9 +1,13 @@
 """
-Router for reading and managing custom slash commands from .claude/commands/
+Router for reading and managing custom slash commands.
 
-Commands are loaded from two locations:
+Commands are loaded from multiple locations (in order of increasing priority):
 1. Clump's built-in commands (this project's .claude/commands/)
-2. Target repo's commands (repo's .claude/commands/) - these take precedence
+2. User's global commands (~/.clump/commands/)
+3. Target repo's commands (repo's .clump/commands/) - highest precedence
+
+Note: Global and repo commands are stored in .clump/ (not .claude/) to support
+multiple CLI agents (Claude, Gemini, Codex, etc.).
 """
 
 import logging
@@ -49,8 +53,8 @@ class CommandCreate(BaseModel):
 
 
 def get_user_commands_dir() -> Path:
-    """Get user's global ~/.claude/commands directory (Claude Code user commands)"""
-    return Path.home() / ".claude" / "commands"
+    """Get user's global ~/.clump/commands directory for scheduled job prompts."""
+    return Path.home() / ".clump" / "commands"
 
 
 def get_builtin_commands_dir() -> Path:
@@ -61,8 +65,8 @@ def get_builtin_commands_dir() -> Path:
 
 
 def get_repo_commands_dir(repo_path: str) -> Path:
-    """Get a repo's .claude/commands directory"""
-    return Path(repo_path) / ".claude" / "commands"
+    """Get a repo's .clump/commands directory for project-specific scheduled job prompts."""
+    return Path(repo_path) / ".clump" / "commands"
 
 
 def find_command_file(
@@ -72,9 +76,9 @@ def find_command_file(
     Find a command file by searching the 3-tier hierarchy.
 
     Search order (highest to lowest priority):
-    1. Repo-specific commands (if repo_path provided)
-    2. User's global commands (~/.claude/commands/)
-    3. Built-in commands
+    1. Repo-specific commands ({repo}/.clump/commands/) - if repo_path provided
+    2. User's global commands (~/.clump/commands/)
+    3. Built-in commands (clump project's .claude/commands/)
 
     Args:
         command_id: The command filename without extension
@@ -93,7 +97,7 @@ def find_command_file(
         if repo_file.exists():
             return repo_file, "repo"
 
-    # Try user's global commands (~/.claude/commands/)
+    # Try user's global commands (~/.clump/commands/)
     user_file = get_user_commands_dir() / category / filename
     if user_file.exists():
         return user_file, "user"
@@ -197,8 +201,8 @@ async def get_commands(
 
     Loads from (in priority order, later sources override earlier):
     1. Clump's built-in commands (.claude/commands/)
-    2. User's global commands (~/.claude/commands/)
-    3. Target repo's commands (if repo_path provided) - highest precedence
+    2. User's global commands (~/.clump/commands/)
+    3. Target repo's commands ({repo}/.clump/commands/) - highest precedence
     """
     builtin_dir = get_builtin_commands_dir()
     user_dir = get_user_commands_dir()
@@ -208,7 +212,7 @@ async def get_commands(
     builtin_pr = load_commands_from_dir(builtin_dir, "pr", "builtin")
     builtin_general = load_commands_from_dir(builtin_dir, "general", "builtin")
 
-    # Load user's global commands from ~/.claude/commands/
+    # Load user's global commands from ~/.clump/commands/
     user_issue = load_commands_from_dir(user_dir, "issue", "user")
     user_pr = load_commands_from_dir(user_dir, "pr", "user")
     user_general = load_commands_from_dir(user_dir, "general", "user")

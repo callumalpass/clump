@@ -1,0 +1,15 @@
+{
+  "issue_number": 2,
+  "status": "completed",
+  "tags": ["backend", "refactor"],
+  "priority": "medium",
+  "difficulty": "easy",
+  "risk": "low",
+  "type": "feature",
+  "affected_areas": ["backend", "scheduled-jobs", "commands"],
+  "ai_summary": "Migrate scheduled job commands from .claude/ to .clump/ directory for multi-CLI support",
+  "notes": "Changed command storage paths to use .clump/ instead of .claude/ directories:\n\n1. User global commands: ~/.clump/commands/ (was ~/.claude/commands/)\n2. Repo-specific commands: {repo}/.clump/commands/ (was {repo}/.claude/commands/)\n3. Built-in commands remain in clump's .claude/commands/ as defaults\n\nThis change enables scheduled job prompts to work with multiple CLI agents (Claude, Gemini, Codex) instead of being tied to Claude Code's directory structure.",
+  "suggested_fix": "Update get_user_commands_dir() and get_repo_commands_dir() in backend/app/routers/commands.py to return .clump paths",
+  "analyzed_at": "2026-01-01T00:00:00Z",
+  "analyzed_by": "claude-opus-4-5"
+}

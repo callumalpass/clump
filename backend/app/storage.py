@@ -11,6 +11,11 @@ Issue metadata is stored in (checked in order):
 1. {repo-path}/.clump/issues/{issue-number}.json  (primary - works with Claude sandbox)
 2. ~/.clump/projects/{encoded-path}/issues/{issue-number}.json  (fallback)
 
+Scheduled job commands/prompts are stored in (checked in order):
+1. {repo-path}/.clump/commands/{category}/{command}.md  (project-specific)
+2. ~/.clump/commands/{category}/{command}.md  (user global)
+3. clump's built-in .claude/commands/ (defaults)
+
 The encoded-path uses Claude's format: path with slashes replaced by dashes.
 e.g., /home/user/projects/myapp -> -home-user-projects-myapp
 
@@ -255,13 +260,14 @@ class PRMetadata:
 
 @dataclass
 class DiscoveredSession:
-    """A session discovered from Claude's transcript files."""
+    """A session discovered from a CLI's transcript files."""
     session_id: str  # UUID from filename
     encoded_path: str  # Directory name (encoded working directory)
-    transcript_path: Path  # Full path to JSONL file
+    transcript_path: Path  # Full path to session file
     modified_at: datetime  # File modification time
     file_size: int  # File size in bytes
     metadata: Optional[SessionMetadata] = None  # Sidecar metadata if exists
+    cli_type: str = "claude"  # CLI that created this session
 
     @property
     def repo_path(self) -> str:
@@ -290,6 +296,21 @@ def get_clump_projects_dir() -> Path:
 def get_claude_projects_dir() -> Path:
     """Get Claude's projects directory (~/.claude/projects/)."""
     return Path.home() / ".claude" / "projects"
+
+
+def get_gemini_projects_dir() -> Path:
+    """Get Gemini's projects directory (~/.gemini/tmp/)."""
+    return Path.home() / ".gemini" / "tmp"
+
+
+def get_codex_sessions_dir() -> Path:
+    """Get Codex's sessions directory (~/.codex/sessions/)."""
+    return Path.home() / ".codex" / "sessions"
+
+
+def get_encoded_path(local_path: str) -> str:
+    """Alias for encode_path for backward compatibility."""
+    return encode_path(local_path)
 
 
 def encode_path(local_path: str) -> str:
@@ -399,6 +420,7 @@ def _scan_project_dir(
             modified_at=modified_at,
             file_size=file_size,
             metadata=metadata,
+            cli_type="claude",
         ))
 
     return sessions
@@ -467,6 +489,265 @@ def discover_sessions(
             continue
 
     # Sort by modification time, newest first
+    all_sessions.sort(key=lambda s: s.modified_at, reverse=True)
+
+    return all_sessions
+
+
+def _scan_gemini_project_dir(
+    project_dir: Path,
+    clump_projects_dir: Path,
+    repo_path: str,
+) -> list[DiscoveredSession]:
+    """
+    Scan a Gemini project directory for sessions.
+
+    Gemini stores sessions in ~/.gemini/tmp/{project-hash}/chats/*.json
+    The repo_path is passed in (matched from hash-to-repo mapping).
+    """
+    sessions: list[DiscoveredSession] = []
+    chats_dir = project_dir / "chats"
+
+    if not chats_dir.exists():
+        return sessions
+
+    try:
+        json_files = list(chats_dir.glob("*.json"))
+    except OSError:
+        return sessions
+
+    encoded_path = encode_path(repo_path)
+
+    for json_file in json_files:
+        session_id = json_file.stem
+
+        try:
+            stat = json_file.stat()
+            modified_at = datetime.fromtimestamp(stat.st_mtime)
+            file_size = stat.st_size
+        except OSError:
+            continue
+
+        # Try to load sidecar metadata
+        metadata = None
+        sidecar_path = clump_projects_dir / encoded_path / f"{session_id}.json"
+        if sidecar_path.exists():
+            try:
+                with open(sidecar_path, 'r', encoding='utf-8') as f:
+                    sidecar_data = json.load(f)
+                    metadata = SessionMetadata.from_dict(sidecar_data)
+            except (json.JSONDecodeError, IOError, KeyError):
+                pass
+
+        sessions.append(DiscoveredSession(
+            session_id=session_id,
+            encoded_path=encoded_path,
+            transcript_path=json_file,
+            modified_at=modified_at,
+            file_size=file_size,
+            metadata=metadata,
+            cli_type="gemini",
+        ))
+
+    return sessions
+
+
+def discover_gemini_sessions(
+    repo_path: Optional[str] = None,
+) -> list[DiscoveredSession]:
+    """
+    Discover Gemini sessions from ~/.gemini/tmp/.
+
+    Gemini uses SHA256 hashes of repo paths as directory names. Since hashes
+    are one-way, we build a mapping from known repos to their hashes.
+
+    Args:
+        repo_path: Optional path to filter sessions by repo.
+
+    Returns:
+        List of DiscoveredSession objects for Gemini sessions.
+    """
+    import hashlib
+
+    gemini_projects = get_gemini_projects_dir()
+
+    if not gemini_projects.exists():
+        return []
+
+    known_repos = load_repos()
+    clump_projects_dir = get_clump_projects_dir()
+
+    # Build hash-to-repo mapping from known repos
+    hash_to_repo: dict[str, str] = {}
+    for repo in known_repos:
+        normalized = str(Path(repo["local_path"]).resolve())
+        project_hash = hashlib.sha256(normalized.encode()).hexdigest()
+        hash_to_repo[project_hash] = normalized
+
+    all_sessions: list[DiscoveredSession] = []
+
+    # If filtering by repo, compute the hash and only look there
+    if repo_path:
+        normalized = str(Path(repo_path).resolve())
+        project_hash = hashlib.sha256(normalized.encode()).hexdigest()
+        project_dir = gemini_projects / project_hash
+        if project_dir.exists():
+            sessions = _scan_gemini_project_dir(project_dir, clump_projects_dir, normalized)
+            all_sessions.extend(sessions)
+    else:
+        # Scan all project directories that match known repos
+        try:
+            for project_dir in gemini_projects.iterdir():
+                if not project_dir.is_dir():
+                    continue
+                dir_hash = project_dir.name
+                if dir_hash in hash_to_repo:
+                    sessions = _scan_gemini_project_dir(
+                        project_dir, clump_projects_dir, hash_to_repo[dir_hash]
+                    )
+                    all_sessions.extend(sessions)
+        except OSError:
+            pass
+
+    all_sessions.sort(key=lambda s: s.modified_at, reverse=True)
+    return all_sessions
+
+
+def discover_codex_sessions(
+    repo_path: Optional[str] = None,
+) -> list[DiscoveredSession]:
+    """
+    Discover Codex sessions from ~/.codex/sessions/.
+
+    Codex organizes sessions by date: ~/.codex/sessions/{year}/{month}/{day}/*.jsonl
+    Each session file contains a session_meta entry with cwd.
+
+    Args:
+        repo_path: Optional path to filter sessions by repo.
+
+    Returns:
+        List of DiscoveredSession objects for Codex sessions.
+    """
+    codex_sessions = get_codex_sessions_dir()
+
+    if not codex_sessions.exists():
+        return []
+
+    clump_projects_dir = get_clump_projects_dir()
+    all_sessions: list[DiscoveredSession] = []
+
+    # Normalize repo_path for comparison if provided
+    normalized_repo_path = None
+    if repo_path:
+        normalized_repo_path = str(Path(repo_path).resolve())
+
+    # Scan all JSONL files in the date-based directory structure
+    # Structure is {year}/{month}/{day}/*.jsonl
+    try:
+        for jsonl_file in codex_sessions.glob("*/*/*/*.jsonl"):
+            session_id = jsonl_file.stem
+
+            try:
+                stat = jsonl_file.stat()
+                modified_at = datetime.fromtimestamp(stat.st_mtime)
+                file_size = stat.st_size
+            except OSError:
+                continue
+
+            # Read the session_meta entry to get cwd
+            session_cwd = None
+            try:
+                with open(jsonl_file, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            entry = json.loads(line)
+                            if entry.get('type') == 'session_meta':
+                                payload = entry.get('payload', {})
+                                session_cwd = payload.get('cwd')
+                                break
+                        except json.JSONDecodeError:
+                            continue
+            except (IOError, OSError):
+                continue
+
+            if not session_cwd:
+                continue
+
+            # Filter by repo_path if specified
+            if normalized_repo_path and session_cwd != normalized_repo_path:
+                continue
+
+            encoded_path = encode_path(session_cwd)
+
+            # Try to load sidecar metadata
+            metadata = None
+            sidecar_path = clump_projects_dir / encoded_path / f"{session_id}.json"
+            if sidecar_path.exists():
+                try:
+                    with open(sidecar_path, 'r', encoding='utf-8') as f:
+                        sidecar_data = json.load(f)
+                        metadata = SessionMetadata.from_dict(sidecar_data)
+                except (json.JSONDecodeError, IOError, KeyError):
+                    pass
+
+            all_sessions.append(DiscoveredSession(
+                session_id=session_id,
+                encoded_path=encoded_path,
+                transcript_path=jsonl_file,
+                modified_at=modified_at,
+                file_size=file_size,
+                metadata=metadata,
+                cli_type="codex",
+            ))
+    except OSError:
+        pass
+
+    all_sessions.sort(key=lambda s: s.modified_at, reverse=True)
+    return all_sessions
+
+
+def discover_all_sessions(
+    repo_path: Optional[str] = None,
+    include_subsessions: bool = False,
+    cli_types: Optional[list[str]] = None,
+) -> list[DiscoveredSession]:
+    """
+    Discover sessions from all CLI tools.
+
+    Args:
+        repo_path: Optional path to filter sessions by repo.
+        include_subsessions: Whether to include agent subsessions.
+        cli_types: Optional list of CLI types to include (e.g., ["claude", "gemini"]).
+                   If None, includes all CLI types.
+
+    Returns:
+        List of DiscoveredSession objects from all CLIs, sorted by modification time.
+    """
+    all_sessions: list[DiscoveredSession] = []
+
+    # Determine which CLIs to scan
+    if cli_types is None:
+        cli_types = ["claude", "gemini", "codex"]  # Default to all CLIs
+
+    # Discover Claude sessions
+    if "claude" in cli_types:
+        claude_sessions = discover_sessions(repo_path=repo_path, include_subsessions=include_subsessions)
+        all_sessions.extend(claude_sessions)
+
+    # Discover Gemini sessions
+    if "gemini" in cli_types:
+        gemini_sessions = discover_gemini_sessions(repo_path=repo_path)
+        all_sessions.extend(gemini_sessions)
+
+    # Discover Codex sessions
+    if "codex" in cli_types:
+        codex_sessions = discover_codex_sessions(repo_path=repo_path)
+        all_sessions.extend(codex_sessions)
+
+    # Sort combined results by modification time
     all_sessions.sort(key=lambda s: s.modified_at, reverse=True)
 
     return all_sessions
