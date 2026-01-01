@@ -141,21 +141,43 @@ test.describe('Screenshots for README', () => {
       settings: mockSettings,
     });
 
-    await mockPRDetail(page, 1, {
-      ...mockPRs[0]!,
-      comments: [],
+    // Mock the session detail for the active session
+    await mockSessionDetail(page, mockSessions[1].session_id, {
+      ...mockSessions[1],
+      messages: [
+        {
+          uuid: 'msg-1',
+          role: 'user',
+          content: 'Please review this authentication PR for security issues.',
+          timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+          tool_uses: [],
+        },
+        {
+          uuid: 'msg-2',
+          role: 'assistant',
+          content: 'I\'ll review the authentication PR for security issues. Let me start by examining the OAuth2 implementation and token handling.',
+          timestamp: new Date(Date.now() - 14 * 60 * 1000).toISOString(),
+          tool_uses: [
+            { name: 'Read', input: { file_path: 'src/auth/oauth.ts' } },
+            { name: 'Grep', input: { pattern: 'token', path: 'src/' } },
+          ],
+          model: 'claude-sonnet-4-20250514',
+        },
+      ],
     });
 
     await page.goto('/');
     await expect(page.locator('h1:has-text("Clump")')).toBeVisible();
     await selectRepo(page);
 
-    // The active session should appear in the compact sessions list
-    await expect(page.getByText('Review authentication PR').first()).toBeVisible({ timeout: 10000 });
+    // Go to History tab to see sessions including the active one
+    await page.getByRole('tab', { name: /History/i }).click();
+    await expect(page.getByText('Review authentication PR')).toBeVisible({ timeout: 10000 });
 
-    // Click the active session to show it
-    await page.getByText('Review authentication PR').first().click();
+    // Click the active session to show it in the panel
+    await page.getByText('Review authentication PR').click();
     await waitForAnimations(page);
+    await page.waitForTimeout(500); // Extra wait for session to load
 
     await page.screenshot({
       path: `${SCREENSHOT_DIR}/active-sessions.png`,
