@@ -306,7 +306,11 @@ describe('PRDetail', () => {
 
       fireEvent.click(screen.getByTestId('start-session-btn'));
 
-      expect(onStartSession).toHaveBeenCalledWith(defaultProps.prCommands[0]);
+      // onStartSession is called with (pr, command) - the mock passes pr from the component
+      expect(onStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({ number: 42 }),
+        defaultProps.prCommands[0]
+      );
     });
   });
 

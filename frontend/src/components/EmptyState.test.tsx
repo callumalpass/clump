@@ -253,7 +253,8 @@ describe('EmptyStateAction', () => {
       render(<EmptyStateAction onClick={() => {}}>Click Me</EmptyStateAction>);
 
       const button = screen.getByRole('button');
-      expect(button).toHaveClass('active:scale-95');
+      // Uses btn-squish class for tactile press feedback animation
+      expect(button).toHaveClass('btn-squish');
     });
 
     it('has proper text size', () => {

@@ -691,7 +691,11 @@ describe('IssueDetail', () => {
 
       fireEvent.click(screen.getByTestId('start-session-btn'));
 
-      expect(onStartSession).toHaveBeenCalledWith(defaultProps.issueCommands[0]);
+      // onStartSession is called with (issue, command) - the mock passes issue from the component
+      expect(onStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({ number: 42 }),
+        defaultProps.issueCommands[0]
+      );
     });
   });
 

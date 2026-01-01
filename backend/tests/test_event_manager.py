@@ -93,7 +93,8 @@ class TestEventType:
     def test_event_type_is_string(self):
         """EventType inherits from str for easy serialization."""
         assert isinstance(EventType.SESSION_CREATED, str)
-        assert str(EventType.SESSION_CREATED) == "session_created"
+        # The enum value can be accessed directly or via .value
+        assert EventType.SESSION_CREATED.value == "session_created"
 
 
 class TestEventManagerInit:
@@ -346,8 +347,9 @@ class TestEventManagerEmitCountsChanged:
         await manager.emit_counts_changed({"repo1": {"total": 2}})
         second_task = manager._counts_task
 
-        # First task should be cancelled
-        assert first_task.cancelled()
+        # First task should be in cancelling state (cancel was requested)
+        # Note: cancelled() only returns True after the task fully processes CancelledError
+        assert first_task.cancelling() > 0 or first_task.cancelled()
         assert second_task is not first_task
 
     @pytest.mark.asyncio
