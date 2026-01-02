@@ -469,7 +469,7 @@ export type ScheduledJobStatus = 'active' | 'paused' | 'disabled';
 export type ScheduledJobTargetType = 'issues' | 'prs' | 'codebase' | 'custom';
 
 export interface ScheduledJob {
-  id: number;
+  id: string;  // Schedule ID (slug)
   name: string;
   description: string | null;
   status: ScheduledJobStatus;
@@ -485,17 +485,18 @@ export interface ScheduledJob {
   allowed_tools: string[] | null;
   max_turns: number | null;
   model: string | null;
+  cli_type: string | null;  // claude, gemini, codex
   next_run_at: string | null;
   last_run_at: string | null;
   last_run_status: string | null;
   run_count: number;
-  created_at: string;
-  updated_at: string;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 export interface ScheduledJobRun {
   id: number;
-  job_id: number;
+  schedule_id: string;  // Schedule ID (slug)
   status: string;
   started_at: string;
   completed_at: string | null;
@@ -527,6 +528,7 @@ export interface ScheduledJobCreate {
   allowed_tools?: string[];
   max_turns?: number;
   model?: string;
+  cli_type?: string;  // claude, gemini, codex
 }
 
 export interface ScheduledJobUpdate {
@@ -544,6 +546,7 @@ export interface ScheduledJobUpdate {
   allowed_tools?: string[];
   max_turns?: number;
   model?: string;
+  cli_type?: string;  // claude, gemini, codex
 }
 
 // ==========================================

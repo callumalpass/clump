@@ -28,7 +28,7 @@ export interface DetailPaneProps {
   // Selection state (only one should be active at a time)
   selectedIssue: number | null;
   selectedPR: number | null;
-  selectedSchedule: number | null;
+  selectedSchedule: string | null;
   selectedSession: SessionSummary | null;
   isCreatingIssue: boolean;
 
@@ -65,7 +65,7 @@ export interface DetailPaneProps {
   onUpdateSessionTitle: (sessionId: string, title: string) => Promise<void>;
   onShowIssue: (issueNumber: number) => void;
   onShowPR: (prNumber: number) => void;
-  onShowSchedule: (scheduleId: number) => void;
+  onShowSchedule: (scheduleId: string) => void;
   onSessionClosed: () => void;
 
   // Issue creation

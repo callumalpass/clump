@@ -7,8 +7,8 @@ interface ScheduleListProps {
   repoId: number;
   repoPath: string;
   commands: CommandsResponse;
-  selectedScheduleId?: number | null;
-  onSelectSchedule?: (scheduleId: number) => void;
+  selectedScheduleId?: string | null;
+  onSelectSchedule?: (scheduleId: string) => void;
   refreshRef?: MutableRefObject<(() => void) | null>;
 }
 

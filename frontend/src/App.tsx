@@ -166,7 +166,7 @@ export default function App() {
   const [prFilters, setPRFilters] = useState<PRFilters>({ state: 'open' });
   const [isCreatingIssue, setIsCreatingIssue] = useState(false);
   // Track selected schedule for center pane detail view
-  const [selectedSchedule, setSelectedSchedule] = useState<number | null>(null);
+  const [selectedSchedule, setSelectedSchedule] = useState<string | null>(null);
   // Track selected session for center pane detail view (from History tab)
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   // Track view mode (transcript vs terminal) per session
@@ -1010,7 +1010,7 @@ export default function App() {
     setSelectedSessionId(null);
   }, []);
 
-  const handleShowSchedule = useCallback((scheduleId: number) => {
+  const handleShowSchedule = useCallback((scheduleId: string) => {
     setSelectedSchedule(scheduleId);
     setSelectedIssue(null);
     setSelectedSessionId(null);

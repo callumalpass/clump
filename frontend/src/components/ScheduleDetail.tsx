@@ -4,7 +4,7 @@ import { useScheduleDetail, describeCron, formatRelativeTime, CRON_PRESETS, isVa
 
 interface ScheduleDetailProps {
   repoId: number;
-  scheduleId: number;
+  scheduleId: string;
   onShowSession?: (sessionId: string) => void;
   sessions?: SessionSummary[];
   commands?: CommandsResponse;

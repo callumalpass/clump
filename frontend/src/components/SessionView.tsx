@@ -251,7 +251,7 @@ interface SessionViewProps {
   /** Navigate to a PR */
   onShowPR?: (prNumber: number) => void;
   /** Navigate to a schedule */
-  onShowSchedule?: (scheduleId: number) => void;
+  onShowSchedule?: (scheduleId: string) => void;
   /** Available issues for linking */
   issues?: Issue[];
   /** Available PRs for linking */

@@ -79,7 +79,7 @@ export function useSchedules(repoId: number | null) {
   };
 
   const updateSchedule = async (
-    scheduleId: number,
+    scheduleId: string,
     data: ScheduledJobUpdate
   ): Promise<ScheduledJob> => {
     if (!repoId) throw new Error('No repository selected');
@@ -97,7 +97,7 @@ export function useSchedules(repoId: number | null) {
     return schedule;
   };
 
-  const deleteSchedule = async (scheduleId: number): Promise<void> => {
+  const deleteSchedule = async (scheduleId: string): Promise<void> => {
     if (!repoId) throw new Error('No repository selected');
 
     await fetchJson(`${API_BASE}/repos/${repoId}/schedules/${scheduleId}`, {
@@ -106,7 +106,7 @@ export function useSchedules(repoId: number | null) {
     setSchedules((prev) => prev.filter((s) => s.id !== scheduleId));
   };
 
-  const triggerNow = async (scheduleId: number): Promise<void> => {
+  const triggerNow = async (scheduleId: string): Promise<void> => {
     if (!repoId) throw new Error('No repository selected');
 
     await fetchJson(`${API_BASE}/repos/${repoId}/schedules/${scheduleId}/run`, {
@@ -116,7 +116,7 @@ export function useSchedules(repoId: number | null) {
     await refresh();
   };
 
-  const pauseSchedule = async (scheduleId: number): Promise<ScheduledJob> => {
+  const pauseSchedule = async (scheduleId: string): Promise<ScheduledJob> => {
     if (!repoId) throw new Error('No repository selected');
 
     const schedule = await fetchJson<ScheduledJob>(
@@ -129,7 +129,7 @@ export function useSchedules(repoId: number | null) {
     return schedule;
   };
 
-  const resumeSchedule = async (scheduleId: number): Promise<ScheduledJob> => {
+  const resumeSchedule = async (scheduleId: string): Promise<ScheduledJob> => {
     if (!repoId) throw new Error('No repository selected');
 
     const schedule = await fetchJson<ScheduledJob>(
@@ -158,7 +158,7 @@ export function useSchedules(repoId: number | null) {
 
 export async function fetchScheduleRuns(
   repoId: number,
-  scheduleId: number,
+  scheduleId: string,
   limit: number = 20,
   offset: number = 0
 ): Promise<ScheduledJobRunsResponse> {
@@ -170,7 +170,7 @@ export async function fetchScheduleRuns(
 /**
  * Hook for fetching schedule details and paginated runs.
  */
-export function useScheduleDetail(repoId: number | null, scheduleId: number | null) {
+export function useScheduleDetail(repoId: number | null, scheduleId: string | null) {
   const [schedule, setSchedule] = useState<ScheduledJob | null>(null);
   const [runs, setRuns] = useState<ScheduledJobRun[]>([]);
   const [runsTotal, setRunsTotal] = useState(0);

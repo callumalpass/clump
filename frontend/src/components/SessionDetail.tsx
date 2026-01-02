@@ -22,7 +22,7 @@ interface SessionDetailProps {
   /** Navigate to a PR */
   onShowPR?: (prNumber: number) => void;
   /** Navigate to a schedule */
-  onShowSchedule?: (scheduleId: number) => void;
+  onShowSchedule?: (scheduleId: string) => void;
   /** Available issues for context */
   issues?: Issue[];
   /** Available PRs for context */
