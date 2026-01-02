@@ -609,6 +609,22 @@ class SchedulerService:
             state=filters.get("state", "open"),
         )
 
+        # Filter by included labels if specified
+        include_labels = filters.get("labels", [])
+        if include_labels:
+            prs = [
+                pr for pr in prs
+                if any(label in pr.labels for label in include_labels)
+            ]
+
+        # Filter out excluded labels
+        exclude_labels = filters.get("exclude_labels", [])
+        if exclude_labels:
+            prs = [
+                pr for pr in prs
+                if not any(label in pr.labels for label in exclude_labels)
+            ]
+
         return [
             {
                 "type": "pr",
@@ -617,6 +633,7 @@ class SchedulerService:
                 "body": pr.body,
                 "head_ref": pr.head_ref,
                 "base_ref": pr.base_ref,
+                "labels": pr.labels,
             }
             for pr in prs
         ]

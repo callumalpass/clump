@@ -436,6 +436,28 @@ async def update_scheduled_job(
         if hasattr(definition, field):
             setattr(definition, field, value)
 
+    # Validate that the updated definition is still valid
+    if definition.target_type == "custom":
+        if not definition.custom_prompt and not definition.command_id:
+            raise HTTPException(
+                status_code=400,
+                detail="custom_prompt or command_id is required when target_type is 'custom'"
+            )
+    else:
+        if not definition.command_id:
+            raise HTTPException(
+                status_code=400,
+                detail="command_id is required when target_type is not 'custom'"
+            )
+
+    # Validate target_type
+    valid_target_types = {"issues", "prs", "codebase", "custom"}
+    if definition.target_type not in valid_target_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"target_type must be one of: {valid_target_types}"
+        )
+
     # Save updated definition
     save_schedule_definition(repo["local_path"], definition)
 

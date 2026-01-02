@@ -359,22 +359,56 @@ export const CRON_PRESETS = [
   { label: 'Custom...', value: 'custom' },
 ];
 
-// Basic cron expression validation (5 fields)
+// Validate a single cron field with min/max range
+function isValidCronField(field: string, min: number, max: number): boolean {
+  // Handle wildcards
+  if (field === '*') return true;
+
+  // Handle step values like */5
+  if (field.startsWith('*/')) {
+    const step = parseInt(field.slice(2), 10);
+    return !isNaN(step) && step >= 1 && step <= max;
+  }
+
+  // Handle comma-separated values and ranges
+  const parts = field.split(',');
+  for (const part of parts) {
+    if (part.includes('-')) {
+      // Range like 1-5
+      const [start, end] = part.split('-').map(n => parseInt(n, 10));
+      if (isNaN(start) || isNaN(end) || start < min || end > max || start > end) {
+        return false;
+      }
+    } else {
+      // Single value
+      const val = parseInt(part, 10);
+      if (isNaN(val) || val < min || val > max) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+// Basic cron expression validation (5 fields) with proper range checking
 export function isValidCronExpression(cron: string): boolean {
   if (!cron || typeof cron !== 'string') return false;
   const parts = cron.trim().split(/\s+/);
   if (parts.length !== 5) return false;
 
-  // Basic field validation patterns
-  const fieldPatterns = [
-    /^(\*|(\*\/)?[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*)$/, // minute (0-59)
-    /^(\*|(\*\/)?[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*)$/, // hour (0-23)
-    /^(\*|(\*\/)?[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*)$/, // day of month (1-31)
-    /^(\*|(\*\/)?[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*)$/, // month (1-12)
-    /^(\*|(\*\/)?[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*)$/, // day of week (0-6)
+  // Field ranges: [min, max]
+  const fieldRanges: [number, number][] = [
+    [0, 59],  // minute
+    [0, 23],  // hour
+    [1, 31],  // day of month
+    [1, 12],  // month
+    [0, 6],   // day of week (0=Sunday or 7=Sunday in some implementations)
   ];
 
-  return parts.every((part, i) => fieldPatterns[i]?.test(part));
+  return parts.every((part, i) => {
+    const [min, max] = fieldRanges[i] || [0, 59];
+    return isValidCronField(part, min, max);
+  });
 }
 
 export function describeCron(cron: string): string {

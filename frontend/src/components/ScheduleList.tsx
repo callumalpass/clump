@@ -427,6 +427,8 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
     ? commands.issue
     : form.target_type === 'prs'
     ? commands.pr
+    : form.target_type === 'codebase'
+    ? commands.general
     : [];
 
   return createPortal(
@@ -543,8 +545,9 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
                   onClick={() => setForm((f) => ({
                     ...f,
                     target_type: type,
-                    command_id: type === 'issues' ? commands.issue[0]?.id || ''
-                      : type === 'prs' ? commands.pr[0]?.id || ''
+                    command_id: type === 'issues' ? (commands.issue[0]?.id || '')
+                      : type === 'prs' ? (commands.pr[0]?.id || '')
+                      : type === 'codebase' ? (commands.general[0]?.id || '')
                       : '',
                   }))}
                   className={`px-3 py-2.5 text-sm rounded-stoody capitalize transition-all ${
@@ -725,6 +728,7 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
             Cancel
           </button>
           <button
+            type="submit"
             onClick={handleSubmit}
             disabled={saving}
             className="px-5 py-2.5 bg-blurple-500 hover:bg-blurple-600 hover:text-pink-400 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-stoody transition-all shadow-stoody-sm"

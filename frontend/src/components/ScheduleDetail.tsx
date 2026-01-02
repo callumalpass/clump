@@ -43,6 +43,8 @@ export function ScheduleDetail({
   const [actionError, setActionError] = useState<string | null>(null);
   const [expandedRunId, setExpandedRunId] = useState<number | null>(null);
   const [triggering, setTriggering] = useState(false);
+  const [togglingPause, setTogglingPause] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [isCustomCron, setIsCustomCron] = useState(false);
 
   // Get command name for display
@@ -129,6 +131,7 @@ export function ScheduleDetail({
 
   // Handle pause/resume
   const handleTogglePause = async () => {
+    setTogglingPause(true);
     setActionError(null);
     try {
       if (schedule?.status === 'paused') {
@@ -140,20 +143,29 @@ export function ScheduleDetail({
       }
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'Failed to update status');
+    } finally {
+      setTogglingPause(false);
     }
   };
 
   // Handle delete
   const handleDelete = async () => {
     if (!confirm('Are you sure you want to delete this schedule?')) return;
+    setDeleting(true);
     setActionError(null);
     try {
-      await fetch(`/api/repos/${repoId}/schedules/${scheduleId}`, {
+      const response = await fetch(`/api/repos/${repoId}/schedules/${scheduleId}`, {
         method: 'DELETE',
       });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: response.statusText }));
+        throw new Error(error.detail || `HTTP ${response.status}`);
+      }
       onScheduleDeleted?.();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'Failed to delete');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -265,21 +277,24 @@ export function ScheduleDetail({
               </button>
               <button
                 onClick={handleTogglePause}
-                className="px-3 py-1.5 text-sm bg-gray-700 text-gray-300 rounded hover:bg-gray-600 transition-colors"
+                disabled={togglingPause}
+                className="px-3 py-1.5 text-sm bg-gray-700 text-gray-300 rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {schedule.status === 'paused' ? 'Resume' : 'Pause'}
+                {togglingPause ? (schedule.status === 'paused' ? 'Resuming...' : 'Pausing...') : (schedule.status === 'paused' ? 'Resume' : 'Pause')}
               </button>
               <button
                 onClick={handleStartEdit}
-                className="px-3 py-1.5 text-sm bg-gray-700 text-gray-300 rounded hover:bg-gray-600 transition-colors"
+                disabled={togglingPause || deleting}
+                className="px-3 py-1.5 text-sm bg-gray-700 text-gray-300 rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Edit
               </button>
               <button
                 onClick={handleDelete}
-                className="px-3 py-1.5 text-sm text-red-400 hover:text-red-300 transition-colors"
+                disabled={deleting}
+                className="px-3 py-1.5 text-sm text-red-400 hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                Delete
+                {deleting ? 'Deleting...' : 'Delete'}
               </button>
             </>
           )}
@@ -340,6 +355,17 @@ export function ScheduleDetail({
                 </p>
               </div>
               <div>
+                <label className="block text-gray-500 mb-1">Timezone</label>
+                <input
+                  type="text"
+                  value={editForm.timezone || schedule?.timezone || 'UTC'}
+                  onChange={(e) => setEditForm({ ...editForm, timezone: e.target.value })}
+                  placeholder="e.g., America/New_York"
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-gray-200"
+                />
+                <p className="text-xs text-gray-500 mt-1">IANA timezone (e.g., America/New_York, Europe/London, UTC)</p>
+              </div>
+              <div>
                 <label className="block text-gray-500 mb-1">Target</label>
                 <select
                   value={editForm.target_type || 'issues'}
@@ -367,7 +393,7 @@ export function ScheduleDetail({
                   <label className="block text-gray-500 mb-1">Command</label>
                   <select
                     value={editForm.command_id || ''}
-                    onChange={(e) => setEditForm({ ...editForm, command_id: e.target.value || null })}
+                    onChange={(e) => setEditForm({ ...editForm, command_id: e.target.value || undefined })}
                     className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-gray-200"
                   >
                     {(() => {
@@ -453,7 +479,7 @@ export function ScheduleDetail({
                       const cmd = allCommands.find(c => c.id === e.target.value);
                       setEditForm({
                         ...editForm,
-                        command_id: e.target.value || null,
+                        command_id: e.target.value || undefined,
                         custom_prompt: cmd?.template || editForm.custom_prompt,
                       });
                     }}
@@ -500,7 +526,7 @@ export function ScheduleDetail({
                     ...editForm,
                     custom_prompt: e.target.value,
                     // Clear command_id if in custom mode and user is typing
-                    ...(((editForm.target_type || schedule?.target_type) === 'custom') ? { command_id: null } : {})
+                    ...(((editForm.target_type || schedule?.target_type) === 'custom') ? { command_id: undefined } : {})
                   })}
                   className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-gray-200 h-48 resize-y font-mono text-xs"
                   placeholder={(editForm.target_type || schedule?.target_type) === 'custom'

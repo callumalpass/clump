@@ -11,7 +11,7 @@ Tests cover:
 - POST /repos/{repo_id}/schedules/{job_id}/pause (pause job)
 - POST /repos/{repo_id}/schedules/{job_id}/resume (resume job)
 - GET /repos/{repo_id}/schedules/{job_id}/runs (list job runs)
-- Helper functions: safe_json_loads, safe_json_dumps, job_to_response, run_to_response
+- Helper functions: safe_json_loads, safe_json_dumps, definition_to_response, run_to_response
 """
 
 import json
@@ -25,11 +25,12 @@ from app.routers.schedules import (
     router,
     safe_json_loads,
     safe_json_dumps,
-    job_to_response,
+    definition_to_response,
     run_to_response,
     ScheduledJobCreate,
     ScheduledJobUpdate,
 )
+from app.storage import ScheduleDefinition
 from app.models import ScheduledJob, ScheduledJobRun, ScheduledJobStatus
 
 
@@ -173,17 +174,40 @@ class TestSafeJsonDumps:
         assert json.loads(result) == {"nested": {"key": ["a", "b"]}}
 
 
-class TestJobToResponse:
-    """Tests for job_to_response conversion function."""
+class TestDefinitionToResponse:
+    """Tests for definition_to_response conversion function."""
 
-    def test_converts_basic_job(self, mock_job):
-        """Converts a basic job to response correctly."""
-        result = job_to_response(mock_job)
+    @pytest.fixture
+    def mock_definition(self):
+        """Create a mock ScheduleDefinition."""
+        return ScheduleDefinition(
+            id="test-job",
+            name="Test Job",
+            description="A test scheduled job",
+            status="active",
+            cron_expression="0 9 * * *",
+            timezone="UTC",
+            target_type="issues",
+            filter_query="label:bug",
+            command_id="test-command",
+            custom_prompt=None,
+            max_items=10,
+            only_new=False,
+            permission_mode="default",
+            allowed_tools=["Read", "Grep"],
+            max_turns=5,
+            model="claude-3-sonnet",
+            cli_type=None,
+        )
 
-        assert result.id == 1
+    def test_converts_definition_without_runtime(self, mock_definition):
+        """Converts a definition without runtime state."""
+        result = definition_to_response(mock_definition, None)
+
+        assert result.id == "test-job"
         assert result.name == "Test Job"
         assert result.description == "A test scheduled job"
-        assert result.status == ScheduledJobStatus.ACTIVE.value
+        assert result.status == "active"
         assert result.cron_expression == "0 9 * * *"
         assert result.timezone == "UTC"
         assert result.target_type == "issues"
@@ -191,40 +215,55 @@ class TestJobToResponse:
         assert result.command_id == "test-command"
         assert result.max_items == 10
         assert result.model == "claude-3-sonnet"
-        assert result.run_count == 10
+        assert result.run_count == 0  # No runtime, default to 0
 
-    def test_parses_allowed_tools_json(self, mock_job):
-        """Parses allowed_tools JSON correctly."""
-        result = job_to_response(mock_job)
+    def test_converts_definition_with_runtime(self, mock_definition, mock_job):
+        """Converts a definition with runtime state."""
+        result = definition_to_response(mock_definition, mock_job)
+
+        assert result.id == "test-job"  # From definition
+        assert result.name == "Test Job"  # From definition
+        assert result.run_count == 10  # From runtime
+
+    def test_uses_allowed_tools_from_definition(self, mock_definition):
+        """Uses allowed_tools from definition directly."""
+        result = definition_to_response(mock_definition, None)
         assert result.allowed_tools == ["Read", "Grep"]
 
-    def test_handles_none_allowed_tools(self, mock_job):
+    def test_handles_none_allowed_tools(self, mock_definition):
         """Handles None allowed_tools."""
-        mock_job.allowed_tools = None
-        result = job_to_response(mock_job)
+        mock_definition.allowed_tools = None
+        result = definition_to_response(mock_definition, None)
         assert result.allowed_tools is None
 
-    def test_formats_next_run_at_with_z_suffix(self, mock_job):
-        """Formats next_run_at with Z suffix."""
-        result = job_to_response(mock_job)
+    def test_formats_next_run_at_with_z_suffix(self, mock_definition, mock_job):
+        """Formats next_run_at with Z suffix from runtime."""
+        result = definition_to_response(mock_definition, mock_job)
         assert result.next_run_at.endswith("Z")
 
-    def test_formats_last_run_at_with_z_suffix(self, mock_job):
-        """Formats last_run_at with Z suffix."""
-        result = job_to_response(mock_job)
+    def test_formats_last_run_at_with_z_suffix(self, mock_definition, mock_job):
+        """Formats last_run_at with Z suffix from runtime."""
+        result = definition_to_response(mock_definition, mock_job)
         assert result.last_run_at.endswith("Z")
 
-    def test_handles_none_next_run_at(self, mock_job):
+    def test_handles_none_next_run_at(self, mock_definition, mock_job):
         """Handles None next_run_at."""
         mock_job.next_run_at = None
-        result = job_to_response(mock_job)
+        result = definition_to_response(mock_definition, mock_job)
         assert result.next_run_at is None
 
-    def test_handles_none_last_run_at(self, mock_job):
+    def test_handles_none_last_run_at(self, mock_definition, mock_job):
         """Handles None last_run_at."""
         mock_job.last_run_at = None
-        result = job_to_response(mock_job)
+        result = definition_to_response(mock_definition, mock_job)
         assert result.last_run_at is None
+
+    def test_handles_no_runtime_dates(self, mock_definition):
+        """Handles case where there is no runtime state."""
+        result = definition_to_response(mock_definition, None)
+        assert result.next_run_at is None
+        assert result.last_run_at is None
+        assert result.last_run_status is None
 
 
 class TestRunToResponse:
@@ -232,10 +271,10 @@ class TestRunToResponse:
 
     def test_converts_basic_run(self, mock_job_run):
         """Converts a basic job run to response correctly."""
-        result = run_to_response(mock_job_run)
+        result = run_to_response(mock_job_run, "test-schedule")
 
         assert result.id == 1
-        assert result.job_id == 1
+        assert result.schedule_id == "test-schedule"
         assert result.status == "completed"
         assert result.items_found == 5
         assert result.items_processed == 4
@@ -245,24 +284,24 @@ class TestRunToResponse:
 
     def test_parses_session_ids_json(self, mock_job_run):
         """Parses session_ids JSON correctly."""
-        result = run_to_response(mock_job_run)
+        result = run_to_response(mock_job_run, "test-schedule")
         assert result.session_ids == ["session-1", "session-2"]
 
     def test_handles_none_session_ids(self, mock_job_run):
         """Handles None session_ids."""
         mock_job_run.session_ids = None
-        result = run_to_response(mock_job_run)
+        result = run_to_response(mock_job_run, "test-schedule")
         assert result.session_ids is None
 
     def test_handles_none_completed_at(self, mock_job_run):
         """Handles None completed_at for running jobs."""
         mock_job_run.completed_at = None
-        result = run_to_response(mock_job_run)
+        result = run_to_response(mock_job_run, "test-schedule")
         assert result.completed_at is None
 
     def test_formats_dates_as_isoformat(self, mock_job_run):
         """Formats dates as ISO format strings."""
-        result = run_to_response(mock_job_run)
+        result = run_to_response(mock_job_run, "test-schedule")
         assert "2024-01-14" in result.started_at
         assert "2024-01-14" in result.completed_at
 
