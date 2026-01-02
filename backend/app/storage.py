@@ -1423,3 +1423,208 @@ def set_config_value(key: str, value: Any) -> None:
     config = load_config()
     config[key] = value
     save_config(config)
+
+
+# ==========================================
+# Schedule Definition Storage
+# ==========================================
+# Schedule definitions are stored as JSON in <REPO>/.clump/schedules/{id}.json
+# Runtime state (last_run_at, run_count, etc.) stays in SQLite.
+
+
+@dataclass
+class ScheduleDefinition:
+    """
+    A scheduled job definition stored in <REPO>/.clump/schedules/{id}.json.
+
+    This contains the portable, version-controllable parts of a scheduled job.
+    Runtime state (last_run, next_run, run_count) is stored in SQLite.
+    """
+    id: str  # Unique identifier (filename without .json)
+    name: str
+    description: Optional[str] = None
+    status: str = "active"  # active, paused, disabled
+    cron_expression: str = "0 9 * * *"  # Default: 9am daily
+    timezone: str = "UTC"
+    target_type: str = "codebase"  # issues, prs, codebase, custom
+    filter_query: Optional[str] = None
+    command_id: Optional[str] = None
+    custom_prompt: Optional[str] = None
+    max_items: int = 10
+    only_new: bool = False
+    permission_mode: Optional[str] = None
+    allowed_tools: Optional[list[str]] = None
+    max_turns: Optional[int] = None
+    model: Optional[str] = None
+    cli_type: Optional[str] = None  # claude, gemini, codex (defaults to config default_cli)
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "status": self.status,
+            "cron_expression": self.cron_expression,
+            "timezone": self.timezone,
+            "target_type": self.target_type,
+            "filter_query": self.filter_query,
+            "command_id": self.command_id,
+            "custom_prompt": self.custom_prompt,
+            "max_items": self.max_items,
+            "only_new": self.only_new,
+            "permission_mode": self.permission_mode,
+            "allowed_tools": self.allowed_tools,
+            "max_turns": self.max_turns,
+            "model": self.model,
+            "cli_type": self.cli_type,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ScheduleDefinition":
+        """Create from dictionary."""
+        return cls(
+            id=data["id"],
+            name=data["name"],
+            description=data.get("description"),
+            status=data.get("status", "active"),
+            cron_expression=data.get("cron_expression", "0 9 * * *"),
+            timezone=data.get("timezone", "UTC"),
+            target_type=data.get("target_type", "codebase"),
+            filter_query=data.get("filter_query"),
+            command_id=data.get("command_id"),
+            custom_prompt=data.get("custom_prompt"),
+            max_items=data.get("max_items", 10),
+            only_new=data.get("only_new", False),
+            permission_mode=data.get("permission_mode"),
+            allowed_tools=data.get("allowed_tools"),
+            max_turns=data.get("max_turns"),
+            model=data.get("model"),
+            cli_type=data.get("cli_type"),
+        )
+
+
+def get_repo_schedules_dir(repo_path: str) -> Path:
+    """
+    Get the schedules directory for a repo.
+
+    Returns {repo_path}/.clump/schedules/ and creates it if needed.
+    """
+    schedules_dir = Path(repo_path) / ".clump" / "schedules"
+    schedules_dir.mkdir(parents=True, exist_ok=True)
+    return schedules_dir
+
+
+def get_schedule_definition(repo_path: str, schedule_id: str) -> Optional[ScheduleDefinition]:
+    """
+    Read a schedule definition from JSON.
+
+    Args:
+        repo_path: Path to the repository
+        schedule_id: The schedule ID (filename without .json)
+
+    Returns:
+        ScheduleDefinition if found, None otherwise.
+    """
+    schedule_path = get_repo_schedules_dir(repo_path) / f"{schedule_id}.json"
+    if not schedule_path.exists():
+        return None
+
+    try:
+        with open(schedule_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            # Ensure ID matches filename
+            data["id"] = schedule_id
+            return ScheduleDefinition.from_dict(data)
+    except (json.JSONDecodeError, IOError, KeyError):
+        return None
+
+
+def save_schedule_definition(repo_path: str, schedule: ScheduleDefinition) -> None:
+    """
+    Save a schedule definition to JSON.
+
+    Args:
+        repo_path: Path to the repository
+        schedule: The schedule definition to save
+    """
+    schedules_dir = get_repo_schedules_dir(repo_path)
+    schedule_path = schedules_dir / f"{schedule.id}.json"
+
+    with open(schedule_path, "w", encoding="utf-8") as f:
+        json.dump(schedule.to_dict(), f, indent=2)
+
+
+def delete_schedule_definition(repo_path: str, schedule_id: str) -> bool:
+    """
+    Delete a schedule definition.
+
+    Args:
+        repo_path: Path to the repository
+        schedule_id: The schedule ID to delete
+
+    Returns:
+        True if deleted, False if not found.
+    """
+    schedule_path = get_repo_schedules_dir(repo_path) / f"{schedule_id}.json"
+    if schedule_path.exists():
+        schedule_path.unlink()
+        return True
+    return False
+
+
+def list_schedule_definitions(repo_path: str) -> list[ScheduleDefinition]:
+    """
+    List all schedule definitions for a repo.
+
+    Args:
+        repo_path: Path to the repository
+
+    Returns:
+        List of ScheduleDefinition objects.
+    """
+    schedules_dir = Path(repo_path) / ".clump" / "schedules"
+    if not schedules_dir.exists():
+        return []
+
+    schedules = []
+    try:
+        for json_file in sorted(schedules_dir.glob("*.json")):
+            try:
+                with open(json_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    # Use filename as ID
+                    data["id"] = json_file.stem
+                    schedules.append(ScheduleDefinition.from_dict(data))
+            except (json.JSONDecodeError, IOError, KeyError):
+                continue
+    except OSError:
+        pass
+
+    return schedules
+
+
+def generate_schedule_id(name: str, repo_path: str) -> str:
+    """
+    Generate a unique schedule ID from a name.
+
+    Slugifies the name and ensures uniqueness within the repo.
+    """
+    # Slugify the name
+    slug = name.lower().replace(" ", "-")
+    slug = "".join(c for c in slug if c.isalnum() or c == "-")
+    slug = slug.strip("-")
+
+    if not slug:
+        slug = "schedule"
+
+    # Check for uniqueness
+    schedules_dir = get_repo_schedules_dir(repo_path)
+    base_slug = slug
+    counter = 1
+
+    while (schedules_dir / f"{slug}.json").exists():
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+
+    return slug
