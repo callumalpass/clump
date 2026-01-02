@@ -1,5 +1,8 @@
 """
 Router for managing scheduled jobs.
+
+Schedule definitions are stored in <REPO>/.clump/schedules/{id}.json.
+Runtime state (last_run, next_run, run_count) is stored in SQLite.
 """
 
 import json
@@ -13,8 +16,16 @@ import pytz
 from sqlalchemy import select, desc
 
 from app.database import get_repo_db
-from app.models import ScheduledJob, ScheduledJobRun, ScheduledJobStatus, ScheduledJobTargetType
-from app.storage import get_repo_by_id
+from app.models import ScheduledJob, ScheduledJobRun, ScheduledJobStatus
+from app.storage import (
+    get_repo_by_id,
+    ScheduleDefinition,
+    get_schedule_definition,
+    save_schedule_definition,
+    delete_schedule_definition,
+    list_schedule_definitions,
+    generate_schedule_id,
+)
 from app.services.scheduler import scheduler, calculate_next_run
 
 router = APIRouter()
@@ -66,6 +77,7 @@ class ScheduledJobCreate(BaseModel):
     allowed_tools: Optional[list[str]] = None
     max_turns: Optional[int] = None
     model: Optional[str] = None
+    cli_type: Optional[str] = None  # claude, gemini, codex
 
     @field_validator("cron_expression")
     @classmethod
@@ -123,6 +135,7 @@ class ScheduledJobUpdate(BaseModel):
     allowed_tools: Optional[list[str]] = None
     max_turns: Optional[int] = None
     model: Optional[str] = None
+    cli_type: Optional[str] = None  # claude, gemini, codex
 
     @field_validator("cron_expression")
     @classmethod
@@ -151,7 +164,7 @@ class ScheduledJobResponse(BaseModel):
     """Response model for a scheduled job."""
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
+    id: str  # Schedule ID (slug)
     name: str
     description: Optional[str]
     status: str
@@ -167,12 +180,13 @@ class ScheduledJobResponse(BaseModel):
     allowed_tools: Optional[list[str]]
     max_turns: Optional[int]
     model: Optional[str]
+    cli_type: Optional[str]
     next_run_at: Optional[str]
     last_run_at: Optional[str]
     last_run_status: Optional[str]
     run_count: int
-    created_at: str
-    updated_at: str
+    created_at: Optional[str]
+    updated_at: Optional[str]
 
 
 class ScheduledJobRunResponse(BaseModel):
@@ -180,7 +194,7 @@ class ScheduledJobRunResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    job_id: int
+    schedule_id: str  # Changed from job_id
     status: str
     started_at: str
     completed_at: Optional[str]
@@ -198,39 +212,43 @@ class ScheduledJobRunsResponse(BaseModel):
     total: int
 
 
-def job_to_response(job: ScheduledJob) -> ScheduledJobResponse:
-    """Convert a ScheduledJob model to response."""
+def definition_to_response(
+    definition: ScheduleDefinition,
+    runtime: Optional[ScheduledJob] = None,
+) -> ScheduledJobResponse:
+    """Merge a schedule definition with runtime state into a response."""
     return ScheduledJobResponse(
-        id=job.id,
-        name=job.name,
-        description=job.description,
-        status=job.status,
-        cron_expression=job.cron_expression,
-        timezone=job.timezone,
-        target_type=job.target_type,
-        filter_query=job.filter_query,
-        command_id=job.command_id,
-        custom_prompt=job.custom_prompt,
-        max_items=job.max_items,
-        only_new=job.only_new,
-        permission_mode=job.permission_mode,
-        allowed_tools=safe_json_loads(job.allowed_tools),
-        max_turns=job.max_turns,
-        model=job.model,
-        next_run_at=job.next_run_at.isoformat() + "Z" if job.next_run_at else None,
-        last_run_at=job.last_run_at.isoformat() + "Z" if job.last_run_at else None,
-        last_run_status=job.last_run_status,
-        run_count=job.run_count,
-        created_at=job.created_at.isoformat(),
-        updated_at=job.updated_at.isoformat(),
+        id=definition.id,
+        name=definition.name,
+        description=definition.description,
+        status=definition.status,
+        cron_expression=definition.cron_expression,
+        timezone=definition.timezone,
+        target_type=definition.target_type,
+        filter_query=definition.filter_query,
+        command_id=definition.command_id,
+        custom_prompt=definition.custom_prompt,
+        max_items=definition.max_items,
+        only_new=definition.only_new,
+        permission_mode=definition.permission_mode,
+        allowed_tools=definition.allowed_tools,
+        max_turns=definition.max_turns,
+        model=definition.model,
+        cli_type=definition.cli_type,
+        next_run_at=runtime.next_run_at.isoformat() + "Z" if runtime and runtime.next_run_at else None,
+        last_run_at=runtime.last_run_at.isoformat() + "Z" if runtime and runtime.last_run_at else None,
+        last_run_status=runtime.last_run_status if runtime else None,
+        run_count=runtime.run_count if runtime else 0,
+        created_at=runtime.created_at.isoformat() if runtime else None,
+        updated_at=runtime.updated_at.isoformat() if runtime else None,
     )
 
 
-def run_to_response(run: ScheduledJobRun) -> ScheduledJobRunResponse:
+def run_to_response(run: ScheduledJobRun, schedule_id: str) -> ScheduledJobRunResponse:
     """Convert a ScheduledJobRun model to response."""
     return ScheduledJobRunResponse(
         id=run.id,
-        job_id=run.job_id,
+        schedule_id=schedule_id,
         status=run.status,
         started_at=run.started_at.isoformat(),
         completed_at=run.completed_at.isoformat() if run.completed_at else None,
@@ -243,6 +261,52 @@ def run_to_response(run: ScheduledJobRun) -> ScheduledJobRunResponse:
     )
 
 
+async def get_or_create_runtime(
+    db,
+    repo_id: int,
+    schedule_id: str,
+    definition: ScheduleDefinition,
+) -> ScheduledJob:
+    """Get or create runtime state for a schedule."""
+    # Try to find existing runtime by schedule_id
+    result = await db.execute(
+        select(ScheduledJob).where(
+            ScheduledJob.repo_id == repo_id,
+            ScheduledJob.name == schedule_id,  # Using name field to store schedule_id for now
+        )
+    )
+    runtime = result.scalar_one_or_none()
+
+    if not runtime:
+        # Create new runtime state
+        next_run = calculate_next_run(definition.cron_expression, definition.timezone)
+        runtime = ScheduledJob(
+            repo_id=repo_id,
+            name=schedule_id,  # Store schedule_id in name field
+            description=definition.description,
+            cron_expression=definition.cron_expression,
+            timezone=definition.timezone,
+            target_type=definition.target_type,
+            filter_query=definition.filter_query,
+            command_id=definition.command_id,
+            custom_prompt=definition.custom_prompt,
+            max_items=definition.max_items,
+            only_new=definition.only_new,
+            permission_mode=definition.permission_mode,
+            allowed_tools=safe_json_dumps(definition.allowed_tools),
+            max_turns=definition.max_turns,
+            model=definition.model,
+            cli_type=definition.cli_type,
+            status=definition.status,
+            next_run_at=next_run,
+        )
+        db.add(runtime)
+        await db.commit()
+        await db.refresh(runtime)
+
+    return runtime
+
+
 @router.get("/repos/{repo_id}/schedules", response_model=list[ScheduledJobResponse])
 async def list_scheduled_jobs(repo_id: int) -> list[ScheduledJobResponse]:
     """List all scheduled jobs for a repository."""
@@ -250,15 +314,25 @@ async def list_scheduled_jobs(repo_id: int) -> list[ScheduledJobResponse]:
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
 
+    # Load definitions from JSON
+    definitions = list_schedule_definitions(repo["local_path"])
+
+    # Load runtime state from SQLite
     async with get_repo_db(repo["local_path"]) as db:
         result = await db.execute(
-            select(ScheduledJob)
-            .where(ScheduledJob.repo_id == repo_id)
-            .order_by(desc(ScheduledJob.created_at))
+            select(ScheduledJob).where(ScheduledJob.repo_id == repo_id)
         )
-        jobs = result.scalars().all()
+        runtimes = {job.name: job for job in result.scalars().all()}
 
-        return [job_to_response(job) for job in jobs]
+    # Merge definitions with runtime
+    responses = []
+    for defn in definitions:
+        runtime = runtimes.get(defn.id)
+        responses.append(definition_to_response(defn, runtime))
+
+    # Sort by name
+    responses.sort(key=lambda x: x.name)
+    return responses
 
 
 @router.post("/repos/{repo_id}/schedules", response_model=ScheduledJobResponse)
@@ -282,62 +356,68 @@ async def create_scheduled_job(repo_id: int, data: ScheduledJobCreate) -> Schedu
                 detail="command_id is required when target_type is not 'custom'"
             )
 
-    # Calculate first run time
-    next_run = calculate_next_run(data.cron_expression, data.timezone)
+    # Generate unique schedule ID
+    schedule_id = generate_schedule_id(data.name, repo["local_path"])
 
+    # Create definition
+    definition = ScheduleDefinition(
+        id=schedule_id,
+        name=data.name,
+        description=data.description,
+        status="active",
+        cron_expression=data.cron_expression,
+        timezone=data.timezone,
+        target_type=data.target_type,
+        filter_query=data.filter_query,
+        command_id=data.command_id,
+        custom_prompt=data.custom_prompt,
+        max_items=data.max_items,
+        only_new=data.only_new,
+        permission_mode=data.permission_mode,
+        allowed_tools=data.allowed_tools,
+        max_turns=data.max_turns,
+        model=data.model,
+        cli_type=data.cli_type,
+    )
+
+    # Save to JSON
+    save_schedule_definition(repo["local_path"], definition)
+
+    # Create runtime state in SQLite
     async with get_repo_db(repo["local_path"]) as db:
-        job = ScheduledJob(
-            repo_id=repo_id,
-            name=data.name,
-            description=data.description,
-            cron_expression=data.cron_expression,
-            timezone=data.timezone,
-            target_type=data.target_type,
-            filter_query=data.filter_query,
-            command_id=data.command_id,
-            custom_prompt=data.custom_prompt,
-            max_items=data.max_items,
-            only_new=data.only_new,
-            permission_mode=data.permission_mode,
-            allowed_tools=safe_json_dumps(data.allowed_tools),
-            max_turns=data.max_turns,
-            model=data.model,
-            next_run_at=next_run,
-        )
-
-        db.add(job)
-        await db.commit()
-        await db.refresh(job)
-
-        return job_to_response(job)
+        runtime = await get_or_create_runtime(db, repo_id, schedule_id, definition)
+        return definition_to_response(definition, runtime)
 
 
-@router.get("/repos/{repo_id}/schedules/{job_id}", response_model=ScheduledJobResponse)
-async def get_scheduled_job(repo_id: int, job_id: int) -> ScheduledJobResponse:
+@router.get("/repos/{repo_id}/schedules/{schedule_id}", response_model=ScheduledJobResponse)
+async def get_scheduled_job(repo_id: int, schedule_id: str) -> ScheduledJobResponse:
     """Get details of a scheduled job."""
     repo = get_repo_by_id(repo_id)
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
 
+    # Load definition from JSON
+    definition = get_schedule_definition(repo["local_path"], schedule_id)
+    if not definition:
+        raise HTTPException(status_code=404, detail="Scheduled job not found")
+
+    # Load runtime from SQLite
     async with get_repo_db(repo["local_path"]) as db:
         result = await db.execute(
             select(ScheduledJob).where(
-                ScheduledJob.id == job_id,
                 ScheduledJob.repo_id == repo_id,
+                ScheduledJob.name == schedule_id,
             )
         )
-        job = result.scalar_one_or_none()
+        runtime = result.scalar_one_or_none()
 
-        if not job:
-            raise HTTPException(status_code=404, detail="Scheduled job not found")
-
-        return job_to_response(job)
+    return definition_to_response(definition, runtime)
 
 
-@router.patch("/repos/{repo_id}/schedules/{job_id}", response_model=ScheduledJobResponse)
+@router.patch("/repos/{repo_id}/schedules/{schedule_id}", response_model=ScheduledJobResponse)
 async def update_scheduled_job(
     repo_id: int,
-    job_id: int,
+    schedule_id: str,
     data: ScheduledJobUpdate,
 ) -> ScheduledJobResponse:
     """Update a scheduled job."""
@@ -345,70 +425,104 @@ async def update_scheduled_job(
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
 
+    # Load existing definition
+    definition = get_schedule_definition(repo["local_path"], schedule_id)
+    if not definition:
+        raise HTTPException(status_code=404, detail="Scheduled job not found")
+
+    # Update definition fields
+    update_data = data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        if hasattr(definition, field):
+            setattr(definition, field, value)
+
+    # Save updated definition
+    save_schedule_definition(repo["local_path"], definition)
+
+    # Update runtime state
     async with get_repo_db(repo["local_path"]) as db:
         result = await db.execute(
             select(ScheduledJob).where(
-                ScheduledJob.id == job_id,
                 ScheduledJob.repo_id == repo_id,
+                ScheduledJob.name == schedule_id,
             )
         )
-        job = result.scalar_one_or_none()
+        runtime = result.scalar_one_or_none()
 
-        if not job:
-            raise HTTPException(status_code=404, detail="Scheduled job not found")
+        if runtime:
+            # Sync definition fields to runtime
+            runtime.description = definition.description
+            runtime.cron_expression = definition.cron_expression
+            runtime.timezone = definition.timezone
+            runtime.target_type = definition.target_type
+            runtime.filter_query = definition.filter_query
+            runtime.command_id = definition.command_id
+            runtime.custom_prompt = definition.custom_prompt
+            runtime.max_items = definition.max_items
+            runtime.only_new = definition.only_new
+            runtime.permission_mode = definition.permission_mode
+            runtime.allowed_tools = safe_json_dumps(definition.allowed_tools)
+            runtime.max_turns = definition.max_turns
+            runtime.model = definition.model
+            runtime.cli_type = definition.cli_type
+            runtime.status = definition.status
+            runtime.updated_at = datetime.now(timezone.utc)
 
-        # Update fields
-        update_data = data.model_dump(exclude_unset=True)
+            # Recalculate next run if cron or timezone changed
+            if "cron_expression" in update_data or "timezone" in update_data:
+                runtime.next_run_at = calculate_next_run(definition.cron_expression, definition.timezone)
 
-        if "allowed_tools" in update_data:
-            update_data["allowed_tools"] = safe_json_dumps(update_data["allowed_tools"])
+            await db.commit()
+            await db.refresh(runtime)
 
-        for field, value in update_data.items():
-            setattr(job, field, value)
-
-        # Recalculate next run if cron or timezone changed
-        if "cron_expression" in update_data or "timezone" in update_data:
-            job.next_run_at = calculate_next_run(job.cron_expression, job.timezone)
-
-        job.updated_at = datetime.now(timezone.utc)
-
-        await db.commit()
-        await db.refresh(job)
-
-        return job_to_response(job)
+    return definition_to_response(definition, runtime)
 
 
-@router.delete("/repos/{repo_id}/schedules/{job_id}")
-async def delete_scheduled_job(repo_id: int, job_id: int) -> dict:
+@router.delete("/repos/{repo_id}/schedules/{schedule_id}")
+async def delete_scheduled_job(repo_id: int, schedule_id: str) -> dict:
     """Delete a scheduled job."""
     repo = get_repo_by_id(repo_id)
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
 
+    # Delete JSON definition
+    deleted = delete_schedule_definition(repo["local_path"], schedule_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Scheduled job not found")
+
+    # Delete runtime state from SQLite
     async with get_repo_db(repo["local_path"]) as db:
         result = await db.execute(
             select(ScheduledJob).where(
-                ScheduledJob.id == job_id,
                 ScheduledJob.repo_id == repo_id,
+                ScheduledJob.name == schedule_id,
             )
         )
-        job = result.scalar_one_or_none()
+        runtime = result.scalar_one_or_none()
 
-        if not job:
-            raise HTTPException(status_code=404, detail="Scheduled job not found")
+        if runtime:
+            await db.delete(runtime)
+            await db.commit()
 
-        await db.delete(job)
-        await db.commit()
-
-        return {"status": "deleted", "id": job_id}
+    return {"status": "deleted", "id": schedule_id}
 
 
-@router.post("/repos/{repo_id}/schedules/{job_id}/run")
-async def trigger_job_now(repo_id: int, job_id: int) -> dict:
+@router.post("/repos/{repo_id}/schedules/{schedule_id}/run")
+async def trigger_job_now(repo_id: int, schedule_id: str) -> dict:
     """Manually trigger a job to run immediately."""
     repo = get_repo_by_id(repo_id)
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
+
+    # Verify definition exists
+    definition = get_schedule_definition(repo["local_path"], schedule_id)
+    if not definition:
+        raise HTTPException(status_code=404, detail="Scheduled job not found")
+
+    # Get runtime state (need the int ID for scheduler)
+    async with get_repo_db(repo["local_path"]) as db:
+        runtime = await get_or_create_runtime(db, repo_id, schedule_id, definition)
+        job_id = runtime.id
 
     run, error = await scheduler.trigger_job(job_id, repo_id)
 
@@ -418,70 +532,82 @@ async def trigger_job_now(repo_id: int, job_id: int) -> dict:
     if not run:
         raise HTTPException(status_code=404, detail="Scheduled job not found")
 
-    return {"status": "triggered", "job_id": job_id}
+    return {"status": "triggered", "id": schedule_id}
 
 
-@router.post("/repos/{repo_id}/schedules/{job_id}/pause")
-async def pause_job(repo_id: int, job_id: int) -> ScheduledJobResponse:
+@router.post("/repos/{repo_id}/schedules/{schedule_id}/pause")
+async def pause_job(repo_id: int, schedule_id: str) -> ScheduledJobResponse:
     """Pause a scheduled job."""
     repo = get_repo_by_id(repo_id)
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
 
+    # Load and update definition
+    definition = get_schedule_definition(repo["local_path"], schedule_id)
+    if not definition:
+        raise HTTPException(status_code=404, detail="Scheduled job not found")
+
+    definition.status = "paused"
+    save_schedule_definition(repo["local_path"], definition)
+
+    # Update runtime
     async with get_repo_db(repo["local_path"]) as db:
         result = await db.execute(
             select(ScheduledJob).where(
-                ScheduledJob.id == job_id,
                 ScheduledJob.repo_id == repo_id,
+                ScheduledJob.name == schedule_id,
             )
         )
-        job = result.scalar_one_or_none()
+        runtime = result.scalar_one_or_none()
 
-        if not job:
-            raise HTTPException(status_code=404, detail="Scheduled job not found")
+        if runtime:
+            runtime.status = ScheduledJobStatus.PAUSED.value
+            runtime.updated_at = datetime.now(timezone.utc)
+            await db.commit()
+            await db.refresh(runtime)
 
-        job.status = ScheduledJobStatus.PAUSED.value
-        job.updated_at = datetime.now(timezone.utc)
-
-        await db.commit()
-        await db.refresh(job)
-
-        return job_to_response(job)
+    return definition_to_response(definition, runtime)
 
 
-@router.post("/repos/{repo_id}/schedules/{job_id}/resume")
-async def resume_job(repo_id: int, job_id: int) -> ScheduledJobResponse:
+@router.post("/repos/{repo_id}/schedules/{schedule_id}/resume")
+async def resume_job(repo_id: int, schedule_id: str) -> ScheduledJobResponse:
     """Resume a paused job."""
     repo = get_repo_by_id(repo_id)
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
 
+    # Load and update definition
+    definition = get_schedule_definition(repo["local_path"], schedule_id)
+    if not definition:
+        raise HTTPException(status_code=404, detail="Scheduled job not found")
+
+    definition.status = "active"
+    save_schedule_definition(repo["local_path"], definition)
+
+    # Update runtime
     async with get_repo_db(repo["local_path"]) as db:
         result = await db.execute(
             select(ScheduledJob).where(
-                ScheduledJob.id == job_id,
                 ScheduledJob.repo_id == repo_id,
+                ScheduledJob.name == schedule_id,
             )
         )
-        job = result.scalar_one_or_none()
+        runtime = result.scalar_one_or_none()
 
-        if not job:
-            raise HTTPException(status_code=404, detail="Scheduled job not found")
+        if runtime:
+            runtime.status = ScheduledJobStatus.ACTIVE.value
+            runtime.next_run_at = calculate_next_run(definition.cron_expression, definition.timezone)
+            runtime.updated_at = datetime.now(timezone.utc)
+            await db.commit()
+            await db.refresh(runtime)
 
-        job.status = ScheduledJobStatus.ACTIVE.value
-        job.next_run_at = calculate_next_run(job.cron_expression, job.timezone)
-        job.updated_at = datetime.now(timezone.utc)
-
-        await db.commit()
-        await db.refresh(job)
-
-        return job_to_response(job)
+    return definition_to_response(definition, runtime)
 
 
-@router.get("/repos/{repo_id}/schedules/{job_id}/runs", response_model=ScheduledJobRunsResponse)
+@router.get("/repos/{repo_id}/schedules/{schedule_id}/runs", response_model=ScheduledJobRunsResponse)
 async def list_job_runs(
     repo_id: int,
-    job_id: int,
+    schedule_id: str,
     limit: int = Query(default=20, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> ScheduledJobRunsResponse:
@@ -492,7 +618,26 @@ async def list_job_runs(
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
 
+    # Verify definition exists
+    definition = get_schedule_definition(repo["local_path"], schedule_id)
+    if not definition:
+        raise HTTPException(status_code=404, detail="Scheduled job not found")
+
     async with get_repo_db(repo["local_path"]) as db:
+        # Get runtime to find job_id
+        result = await db.execute(
+            select(ScheduledJob).where(
+                ScheduledJob.repo_id == repo_id,
+                ScheduledJob.name == schedule_id,
+            )
+        )
+        runtime = result.scalar_one_or_none()
+
+        if not runtime:
+            return ScheduledJobRunsResponse(runs=[], total=0)
+
+        job_id = runtime.id
+
         # Get total count
         count_result = await db.execute(
             select(func.count()).select_from(ScheduledJobRun).where(ScheduledJobRun.job_id == job_id)
@@ -510,6 +655,6 @@ async def list_job_runs(
         runs = result.scalars().all()
 
         return ScheduledJobRunsResponse(
-            runs=[run_to_response(run) for run in runs],
+            runs=[run_to_response(run, schedule_id) for run in runs],
             total=total,
         )
