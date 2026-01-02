@@ -410,7 +410,7 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
         timezone: form.timezone,
         target_type: form.target_type,
         filter_query: form.filter_query || undefined,
-        command_id: form.target_type !== 'custom' ? form.command_id : undefined,
+        command_id: form.target_type !== 'custom' ? (form.command_id || undefined) : undefined,
         custom_prompt: form.target_type === 'custom' ? form.custom_prompt : undefined,
         max_items: form.max_items,
         only_new: form.only_new,
@@ -451,7 +451,7 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-auto p-5 space-y-5">
+        <form id="schedule-create-form" onSubmit={handleSubmit} className="flex-1 overflow-auto p-5 space-y-5">
           {error && (
             <div className="p-4 bg-danger-400/10 rounded-stoody text-sm text-danger-400">
               {error}
@@ -729,7 +729,7 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
           </button>
           <button
             type="submit"
-            onClick={handleSubmit}
+            form="schedule-create-form"
             disabled={saving}
             className="px-5 py-2.5 bg-blurple-500 hover:bg-blurple-600 hover:text-pink-400 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-stoody transition-all shadow-stoody-sm"
           >

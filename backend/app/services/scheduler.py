@@ -599,7 +599,7 @@ class SchedulerService:
         return issue_dicts
 
     async def _get_prs(self, job: ScheduledJob, repo: dict) -> list:
-        """Get all PRs matching the filter query."""
+        """Get all PRs matching the filter query (GitHub + sidecar filters)."""
         filters = parse_filter_query(job.filter_query)
 
         client = GitHubClient()
@@ -625,7 +625,8 @@ class SchedulerService:
                 if not any(label in pr.labels for label in exclude_labels)
             ]
 
-        return [
+        # Convert to dicts for further processing
+        pr_dicts = [
             {
                 "type": "pr",
                 "number": pr.number,
@@ -637,6 +638,12 @@ class SchedulerService:
             }
             for pr in prs
         ]
+
+        # Apply sidecar metadata filters
+        encoded_path = encode_path(repo["local_path"])
+        pr_dicts = filter_issues_by_sidecar(pr_dicts, filters, encoded_path)
+
+        return pr_dicts
 
     async def _process_item(self, job: ScheduledJob, repo: dict, item: dict) -> str | None:
         """Process a single item - create a headless session."""
