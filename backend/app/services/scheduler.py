@@ -17,7 +17,17 @@ from sqlalchemy import select
 
 from app.database import get_repo_db
 from app.models import ScheduledJob, ScheduledJobRun, ScheduledJobStatus, JobRunStatus, Session, SessionStatus, SessionEntity
-from app.storage import load_repos, get_repo_by_id, encode_path, SessionMetadata, EntityLink, save_session_metadata, get_issue_metadata
+from app.storage import (
+    load_repos,
+    get_repo_by_id,
+    encode_path,
+    SessionMetadata,
+    EntityLink,
+    save_session_metadata,
+    get_issue_metadata,
+    list_schedule_definitions,
+    ScheduleDefinition,
+)
 from app.services.headless_analyzer import headless_analyzer
 from app.services.github_client import GitHubClient
 from app.services.event_manager import event_manager, EventType
@@ -368,7 +378,59 @@ class SchedulerService:
 
     async def _check_repo_jobs(self, repo: dict, now: datetime):
         """Check and run due jobs for a specific repo."""
+        # Load schedule definitions from JSON
+        definitions = list_schedule_definitions(repo["local_path"])
+
         async with get_repo_db(repo["local_path"]) as db:
+            # Sync definitions with runtime state
+            for defn in definitions:
+                # Check if runtime exists for this schedule
+                result = await db.execute(
+                    select(ScheduledJob).where(
+                        ScheduledJob.repo_id == repo["id"],
+                        ScheduledJob.name == defn.id,  # name field stores schedule_id
+                    )
+                )
+                runtime = result.scalar_one_or_none()
+
+                if not runtime:
+                    # Create runtime state from definition
+                    next_run = calculate_next_run(defn.cron_expression, defn.timezone)
+                    runtime = ScheduledJob(
+                        repo_id=repo["id"],
+                        name=defn.id,
+                        description=defn.description,
+                        cron_expression=defn.cron_expression,
+                        timezone=defn.timezone,
+                        target_type=defn.target_type,
+                        filter_query=defn.filter_query,
+                        command_id=defn.command_id,
+                        custom_prompt=defn.custom_prompt,
+                        max_items=defn.max_items,
+                        only_new=defn.only_new,
+                        permission_mode=defn.permission_mode,
+                        allowed_tools=json.dumps(defn.allowed_tools) if defn.allowed_tools else None,
+                        max_turns=defn.max_turns,
+                        model=defn.model,
+                        cli_type=defn.cli_type,
+                        status=defn.status,
+                        next_run_at=next_run,
+                    )
+                    db.add(runtime)
+                    await db.commit()
+                    logger.info(f"Created runtime state for schedule '{defn.id}' in repo {repo['id']}")
+                else:
+                    # Sync key fields from definition (in case they were changed)
+                    changed = False
+                    if runtime.status != defn.status:
+                        runtime.status = defn.status
+                        changed = True
+                    if runtime.cli_type != defn.cli_type:
+                        runtime.cli_type = defn.cli_type
+                        changed = True
+                    if changed:
+                        await db.commit()
+
             # Query for active jobs where next_run_at <= now
             result = await db.execute(
                 select(ScheduledJob).where(
@@ -423,8 +485,7 @@ class SchedulerService:
                 status=JobRunStatus.RUNNING.value,
             )
             db.add(run)
-            await db.commit()
-            await db.refresh(run)
+            await db.flush()  # Get the ID without expiring the object
 
             try:
                 # Get items to process
@@ -584,7 +645,12 @@ class SchedulerService:
                 return None
 
             # Determine category from target_type
-            category = "issue" if job.target_type == "issues" else "pr"
+            if job.target_type == "issues":
+                category = "issue"
+            elif job.target_type == "prs":
+                category = "pr"
+            else:  # codebase
+                category = "general"
             template = get_command_template(job.command_id, category, repo["local_path"])
 
             if not template:
@@ -677,6 +743,7 @@ class SchedulerService:
                 allowed_tools=allowed_tools,
                 max_turns=job.max_turns,
                 model=job.model,
+                cli_type=job.cli_type or "claude",
             )
 
             # Update session status
