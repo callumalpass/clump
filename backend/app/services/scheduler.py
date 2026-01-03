@@ -428,6 +428,20 @@ class SchedulerService:
                     if runtime.cli_type != defn.cli_type:
                         runtime.cli_type = defn.cli_type
                         changed = True
+                    if runtime.permission_mode != defn.permission_mode:
+                        runtime.permission_mode = defn.permission_mode
+                        changed = True
+                    if runtime.model != defn.model:
+                        runtime.model = defn.model
+                        changed = True
+                    if runtime.max_turns != defn.max_turns:
+                        runtime.max_turns = defn.max_turns
+                        changed = True
+                    # Sync allowed_tools (stored as JSON string in DB)
+                    defn_tools_json = json.dumps(defn.allowed_tools) if defn.allowed_tools else None
+                    if runtime.allowed_tools != defn_tools_json:
+                        runtime.allowed_tools = defn_tools_json
+                        changed = True
                     if changed:
                         await db.commit()
 
