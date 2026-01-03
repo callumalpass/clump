@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { IssueDetail as IssueDetailType, SessionSummary, Tag, Process, CommandMetadata, IssueMetadata } from '../types';
 import { fetchIssue, closeIssue, reopenIssue } from '../hooks/useApi';
 import { Markdown } from './Markdown';
@@ -59,6 +59,15 @@ export function IssueDetail({
   const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0]);
   const [creatingTag, setCreatingTag] = useState(false);
   const [continuingSessionId, setContinuingSessionId] = useState<string | null>(null);
+
+  // Build mentions list from issue author and commenters
+  const mentions = useMemo(() => {
+    if (!issue) return [];
+    const users = new Set<string>();
+    users.add(issue.author);
+    issue.comments.forEach(comment => users.add(comment.author));
+    return Array.from(users).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+  }, [issue]);
 
   const handleStatusChange = async (newStatus: string) => {
     if (!onUpdateMetadata) return;
@@ -705,7 +714,7 @@ export function IssueDetail({
           <Editor
             value={commentBody}
             onChange={setCommentBody}
-            placeholder="Write your comment here... (Markdown supported)"
+            placeholder="Write your comment here... (Markdown supported, type @ to mention users)"
             minHeight="100px"
             onSubmit={() => {
               if (commentBody.trim() && !submitting) {
@@ -713,6 +722,7 @@ export function IssueDetail({
               }
             }}
             disabled={submitting}
+            mentions={mentions}
           />
           {commentError && (
             <div className="text-red-400 text-sm mt-2">{commentError}</div>

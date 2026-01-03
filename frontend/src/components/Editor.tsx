@@ -4,6 +4,7 @@ import { EditorView, keymap, placeholder as cmPlaceholder } from '@codemirror/vi
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { vim, Vim, getCM } from '@replit/codemirror-vim';
+import { autocompletion, CompletionContext, CompletionResult } from '@codemirror/autocomplete';
 import { useTheme } from '../hooks/useTheme';
 
 // Local storage key for vim mode preference
@@ -85,6 +86,30 @@ function createEditorTheme(colors: typeof darkColors, isDark: boolean) {
       color: colors.placeholder,
       fontStyle: 'italic',
     },
+    // Autocomplete tooltip styling
+    '.cm-tooltip.cm-tooltip-autocomplete': {
+      backgroundColor: isDark ? '#1c2128' : '#ffffff',
+      border: `1px solid ${isDark ? '#464f5b' : '#dfe6e9'}`,
+      borderRadius: '6px',
+      boxShadow: isDark
+        ? '0 4px 12px rgba(0, 0, 0, 0.4)'
+        : '0 4px 12px rgba(0, 0, 0, 0.15)',
+    },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul': {
+      fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+      fontSize: '13px',
+    },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul > li': {
+      padding: '4px 8px',
+      color: isDark ? '#e6edf3' : '#2d3436',
+    },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]': {
+      backgroundColor: isDark ? '#264f78' : 'rgba(108, 92, 231, 0.15)',
+      color: isDark ? '#ffffff' : '#2d3436',
+    },
+    '.cm-completionIcon-mention': {
+      '&:after': { content: '"@"' },
+    },
   }, { dark: isDark });
 }
 
@@ -99,6 +124,39 @@ interface EditorProps {
   autoFocus?: boolean;
   vimMode?: boolean;
   onVimModeChange?: (enabled: boolean) => void;
+  /** List of usernames for @-mention autocomplete */
+  mentions?: string[];
+}
+
+/** Creates a completion source for @-mentions */
+function createMentionCompletions(users: string[]) {
+  return (context: CompletionContext): CompletionResult | null => {
+    // Match @username pattern - look for @ followed by word characters
+    const word = context.matchBefore(/@[\w-]*/);
+    if (!word) return null;
+
+    // Don't show autocomplete if we're at just "@" with no typing yet, unless explicitly triggered
+    if (word.from === word.to && !context.explicit) return null;
+
+    const query = word.text.slice(1).toLowerCase(); // Remove @ prefix for matching
+
+    const options = users
+      .filter(user => user.toLowerCase().startsWith(query))
+      .map(user => ({
+        label: `@${user}`,
+        type: 'mention' as const,
+        apply: `@${user}`,
+        boost: user.toLowerCase() === query ? 100 : 0, // Exact matches first
+      }));
+
+    if (options.length === 0) return null;
+
+    return {
+      from: word.from,
+      options,
+      validFor: /^@[\w-]*$/,
+    };
+  };
 }
 
 export function Editor({
@@ -112,6 +170,7 @@ export function Editor({
   autoFocus = false,
   vimMode: controlledVimMode,
   onVimModeChange,
+  mentions,
 }: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -211,6 +270,17 @@ export function Editor({
       extensions.push(cmPlaceholder(placeholder));
     }
 
+    // Add mention autocomplete if users are provided
+    if (mentions && mentions.length > 0) {
+      extensions.push(
+        autocompletion({
+          override: [createMentionCompletions(mentions)],
+          activateOnTyping: true,
+          icons: false,
+        })
+      );
+    }
+
     // Add vim mode if enabled
     if (vimEnabled) {
       extensions.unshift(vim());
@@ -273,7 +343,7 @@ export function Editor({
     return () => {
       view.destroy();
     };
-  }, [vimEnabled, disabled, placeholder, autoFocus, isDark]);
+  }, [vimEnabled, disabled, placeholder, autoFocus, isDark, mentions]);
 
   // Sync external value changes
   useEffect(() => {
