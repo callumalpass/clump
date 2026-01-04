@@ -23,6 +23,7 @@ interface IssueDetailProps {
   onRemoveTag?: (tagId: number) => void;
   onCreateTag?: (name: string, color?: string) => Promise<Tag | undefined>;
   onUpdateMetadata?: (update: Partial<IssueMetadata>) => Promise<IssueMetadata | undefined | void>;
+  onIssueChange?: () => void;
 }
 
 // Status options for the dropdown
@@ -49,6 +50,7 @@ export function IssueDetail({
   onRemoveTag,
   onCreateTag,
   onUpdateMetadata,
+  onIssueChange,
 }: IssueDetailProps) {
   const [issue, setIssue] = useState<IssueDetailType | null>(null);
   const [loading, setLoading] = useState(true);
@@ -135,13 +137,22 @@ export function IssueDetail({
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.detail || 'Failed to post comment');
+        let errorMessage = 'Failed to post comment';
+        try {
+          const data = await res.json();
+          errorMessage = data.detail || errorMessage;
+        } catch {
+          // Response wasn't valid JSON, use status text
+          errorMessage = res.statusText || errorMessage;
+        }
+        throw new Error(errorMessage);
       }
 
       setCommentBody('');
       // Reload issue to get new comment
       loadIssue();
+      // Notify parent to refresh issue list (for comment count update)
+      onIssueChange?.();
     } catch (e) {
       setCommentError(e instanceof Error ? e.message : 'Failed to post comment');
     } finally {
@@ -155,6 +166,7 @@ export function IssueDetail({
     try {
       await closeIssue(repoId, issueNumber);
       loadIssue();
+      onIssueChange?.();
     } catch (e) {
       setIssueActionError(e instanceof Error ? e.message : 'Failed to close issue');
     } finally {
@@ -168,6 +180,7 @@ export function IssueDetail({
     try {
       await reopenIssue(repoId, issueNumber);
       loadIssue();
+      onIssueChange?.();
     } catch (e) {
       setIssueActionError(e instanceof Error ? e.message : 'Failed to reopen issue');
     } finally {

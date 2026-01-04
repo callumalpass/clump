@@ -436,8 +436,8 @@ export function IssueList({
                 <p className="text-gray-300 font-medium mb-1">No matching issues</p>
                 <p className="text-gray-400 text-sm mb-3">
                   {filters.search
-                    ? `No ${filters.state === 'all' ? '' : filters.state + ' '}issues match "${filters.search}"`
-                    : `No ${filters.state} issues found`}
+                    ? `No ${filters.state === 'all' ? '' : (filters.state ?? 'open') + ' '}issues match "${filters.search}"`
+                    : `No ${filters.state ?? 'open'} issues found`}
                 </p>
                 <button
                   onClick={() => onFiltersChange?.({ state: 'open', search: '', sessionStatus: undefined, sort: filters.sort, order: filters.order })}

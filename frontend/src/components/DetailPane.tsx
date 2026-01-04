@@ -359,6 +359,7 @@ export function DetailPane(props: DetailPaneProps) {
           onRemoveTag={(tagId) => onRemoveTagFromIssue(selectedIssue, tagId)}
           onCreateTag={onCreateTag}
           onUpdateMetadata={(update) => onUpdateIssueMetadata(selectedIssue, update)}
+          onIssueChange={onRefreshIssues}
         />
       </div>
     );
