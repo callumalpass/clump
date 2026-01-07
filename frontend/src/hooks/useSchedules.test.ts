@@ -358,9 +358,11 @@ describe('isValidCronExpression', () => {
       expect(isValidCronExpression('0 0 * 0 *')).toBe(false);
     });
 
-    it('validates day of week field (0-6)', () => {
-      expect(isValidCronExpression('0 0 * * 6')).toBe(true);
-      expect(isValidCronExpression('0 0 * * 7')).toBe(false);
+    it('validates day of week field (0-7, where 0 and 7 both mean Sunday)', () => {
+      expect(isValidCronExpression('0 0 * * 0')).toBe(true);  // Sunday (0)
+      expect(isValidCronExpression('0 0 * * 6')).toBe(true);  // Saturday
+      expect(isValidCronExpression('0 0 * * 7')).toBe(true);  // Sunday (7) - valid in cron standard
+      expect(isValidCronExpression('0 0 * * 8')).toBe(false); // Invalid
     });
 
     it('validates ranges are within bounds', () => {

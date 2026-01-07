@@ -402,7 +402,7 @@ export function isValidCronExpression(cron: string): boolean {
     [0, 23],  // hour
     [1, 31],  // day of month
     [1, 12],  // month
-    [0, 6],   // day of week (0=Sunday or 7=Sunday in some implementations)
+    [0, 7],   // day of week (0=Sunday, 1-6=Mon-Sat, 7=Sunday in cron standard)
   ];
 
   return parts.every((part, i) => {
