@@ -77,12 +77,12 @@ describe('IssueList', () => {
   describe('Empty State', () => {
     it('renders empty state when no issues and not loading (no filters)', () => {
       // When no filters are provided, the default filters={} results in undefined state
-      // which triggers the "No matching issues" empty state
+      // which triggers the "No matching issues" empty state with fallback to 'open'
       render(<IssueList {...defaultProps} issues={[]} loading={false} />);
 
       expect(screen.getByText('No matching issues')).toBeInTheDocument();
-      // Message says "No undefined issues found" since filters.state is undefined
-      expect(screen.getByText('No undefined issues found')).toBeInTheDocument();
+      // When filters.state is undefined, the display defaults to 'open' via nullish coalescing
+      expect(screen.getByText('No open issues found')).toBeInTheDocument();
     });
 
     it('renders empty state with default open filter', () => {
@@ -165,7 +165,7 @@ describe('IssueList', () => {
 
       const selectedItem = screen.getByText('Issue 1').closest('.p-4');
       // Selection is indicated by ring and background color classes
-      expect(selectedItem).toHaveClass('ring-2', 'bg-blurple-500/10');
+      expect(selectedItem).toHaveClass('ring-2', 'bg-blurple-500/20');
     });
   });
 
