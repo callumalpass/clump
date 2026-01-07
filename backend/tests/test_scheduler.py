@@ -429,6 +429,244 @@ class TestFilterIssuesBySidecar:
         assert result[0]["number"] == 1
 
 
+class TestFilterPrsBySidecar:
+    """Tests for filter_prs_by_sidecar function.
+
+    Tests that PR metadata fields are correctly mapped:
+    - review_priority -> priority filter
+    - complexity -> difficulty filter
+    - change_type -> type filter
+    """
+
+    def test_returns_all_prs_when_no_sidecar_filters(self):
+        """Returns all PRs when no sidecar filters are active."""
+        from app.services.scheduler import filter_prs_by_sidecar
+        filters = parse_filter_query("state:open label:bug")
+        prs = [{"number": 1}, {"number": 2}]
+
+        result = filter_prs_by_sidecar(prs, filters, "encoded_path")
+
+        assert result == prs
+
+    def test_excludes_prs_without_sidecar_when_filters_active(self):
+        """Excludes PRs without sidecar metadata when sidecar filters are active."""
+        from app.services.scheduler import filter_prs_by_sidecar
+        filters = parse_filter_query("priority:high")
+        prs = [{"number": 1}, {"number": 2}]
+
+        with patch("app.services.scheduler.get_pr_metadata", return_value=None):
+            result = filter_prs_by_sidecar(prs, filters, "encoded_path")
+
+        assert result == []
+
+    def test_filters_by_priority_maps_to_review_priority(self):
+        """Priority filter maps to PR's review_priority field."""
+        from app.services.scheduler import filter_prs_by_sidecar
+        from app.storage import PRMetadata
+        filters = parse_filter_query("priority:high,critical")
+        prs = [{"number": 1}, {"number": 2}, {"number": 3}]
+
+        def mock_get_metadata(encoded_path, pr_number):
+            metadata_map = {
+                1: PRMetadata(pr_number=1, review_priority="high"),
+                2: PRMetadata(pr_number=2, review_priority="low"),
+                3: PRMetadata(pr_number=3, review_priority="critical"),
+            }
+            return metadata_map.get(pr_number)
+
+        with patch("app.services.scheduler.get_pr_metadata", side_effect=mock_get_metadata):
+            result = filter_prs_by_sidecar(prs, filters, "encoded_path")
+
+        assert len(result) == 2
+        assert result[0]["number"] == 1
+        assert result[1]["number"] == 3
+
+    def test_filters_by_priority_exclude_maps_to_review_priority(self):
+        """Priority exclude filter maps to PR's review_priority field."""
+        from app.services.scheduler import filter_prs_by_sidecar
+        from app.storage import PRMetadata
+        filters = parse_filter_query("-priority:low")
+        prs = [{"number": 1}, {"number": 2}]
+
+        def mock_get_metadata(encoded_path, pr_number):
+            metadata_map = {
+                1: PRMetadata(pr_number=1, review_priority="high"),
+                2: PRMetadata(pr_number=2, review_priority="low"),
+            }
+            return metadata_map.get(pr_number)
+
+        with patch("app.services.scheduler.get_pr_metadata", side_effect=mock_get_metadata):
+            result = filter_prs_by_sidecar(prs, filters, "encoded_path")
+
+        assert len(result) == 1
+        assert result[0]["number"] == 1
+
+    def test_filters_by_difficulty_maps_to_complexity(self):
+        """Difficulty filter maps to PR's complexity field."""
+        from app.services.scheduler import filter_prs_by_sidecar
+        from app.storage import PRMetadata
+        filters = parse_filter_query("difficulty:complex,moderate")
+        prs = [{"number": 1}, {"number": 2}, {"number": 3}]
+
+        def mock_get_metadata(encoded_path, pr_number):
+            metadata_map = {
+                1: PRMetadata(pr_number=1, complexity="complex"),
+                2: PRMetadata(pr_number=2, complexity="simple"),
+                3: PRMetadata(pr_number=3, complexity="moderate"),
+            }
+            return metadata_map.get(pr_number)
+
+        with patch("app.services.scheduler.get_pr_metadata", side_effect=mock_get_metadata):
+            result = filter_prs_by_sidecar(prs, filters, "encoded_path")
+
+        assert len(result) == 2
+        assert result[0]["number"] == 1
+        assert result[1]["number"] == 3
+
+    def test_filters_by_difficulty_exclude_maps_to_complexity(self):
+        """Difficulty exclude filter maps to PR's complexity field."""
+        from app.services.scheduler import filter_prs_by_sidecar
+        from app.storage import PRMetadata
+        filters = parse_filter_query("-difficulty:trivial")
+        prs = [{"number": 1}, {"number": 2}]
+
+        def mock_get_metadata(encoded_path, pr_number):
+            metadata_map = {
+                1: PRMetadata(pr_number=1, complexity="complex"),
+                2: PRMetadata(pr_number=2, complexity="trivial"),
+            }
+            return metadata_map.get(pr_number)
+
+        with patch("app.services.scheduler.get_pr_metadata", side_effect=mock_get_metadata):
+            result = filter_prs_by_sidecar(prs, filters, "encoded_path")
+
+        assert len(result) == 1
+        assert result[0]["number"] == 1
+
+    def test_filters_by_type_maps_to_change_type(self):
+        """Type filter maps to PR's change_type field."""
+        from app.services.scheduler import filter_prs_by_sidecar
+        from app.storage import PRMetadata
+        filters = parse_filter_query("type:bugfix,feature")
+        prs = [{"number": 1}, {"number": 2}, {"number": 3}]
+
+        def mock_get_metadata(encoded_path, pr_number):
+            metadata_map = {
+                1: PRMetadata(pr_number=1, change_type="bugfix"),
+                2: PRMetadata(pr_number=2, change_type="docs"),
+                3: PRMetadata(pr_number=3, change_type="feature"),
+            }
+            return metadata_map.get(pr_number)
+
+        with patch("app.services.scheduler.get_pr_metadata", side_effect=mock_get_metadata):
+            result = filter_prs_by_sidecar(prs, filters, "encoded_path")
+
+        assert len(result) == 2
+        assert result[0]["number"] == 1
+        assert result[1]["number"] == 3
+
+    def test_filters_by_type_exclude_maps_to_change_type(self):
+        """Type exclude filter maps to PR's change_type field."""
+        from app.services.scheduler import filter_prs_by_sidecar
+        from app.storage import PRMetadata
+        filters = parse_filter_query("-type:docs")
+        prs = [{"number": 1}, {"number": 2}]
+
+        def mock_get_metadata(encoded_path, pr_number):
+            metadata_map = {
+                1: PRMetadata(pr_number=1, change_type="feature"),
+                2: PRMetadata(pr_number=2, change_type="docs"),
+            }
+            return metadata_map.get(pr_number)
+
+        with patch("app.services.scheduler.get_pr_metadata", side_effect=mock_get_metadata):
+            result = filter_prs_by_sidecar(prs, filters, "encoded_path")
+
+        assert len(result) == 1
+        assert result[0]["number"] == 1
+
+    def test_filters_by_risk(self):
+        """Risk filter works for PRs (same field name)."""
+        from app.services.scheduler import filter_prs_by_sidecar
+        from app.storage import PRMetadata
+        filters = parse_filter_query("risk:high")
+        prs = [{"number": 1}, {"number": 2}]
+
+        def mock_get_metadata(encoded_path, pr_number):
+            metadata_map = {
+                1: PRMetadata(pr_number=1, risk="high"),
+                2: PRMetadata(pr_number=2, risk="low"),
+            }
+            return metadata_map.get(pr_number)
+
+        with patch("app.services.scheduler.get_pr_metadata", side_effect=mock_get_metadata):
+            result = filter_prs_by_sidecar(prs, filters, "encoded_path")
+
+        assert len(result) == 1
+        assert result[0]["number"] == 1
+
+    def test_filters_by_sidecar_status(self):
+        """Sidecar status filter works for PRs."""
+        from app.services.scheduler import filter_prs_by_sidecar
+        from app.storage import PRMetadata
+        filters = parse_filter_query("sidecar-status:reviewing")
+        prs = [{"number": 1}, {"number": 2}]
+
+        def mock_get_metadata(encoded_path, pr_number):
+            metadata_map = {
+                1: PRMetadata(pr_number=1, status="reviewing"),
+                2: PRMetadata(pr_number=2, status="merged"),
+            }
+            return metadata_map.get(pr_number)
+
+        with patch("app.services.scheduler.get_pr_metadata", side_effect=mock_get_metadata):
+            result = filter_prs_by_sidecar(prs, filters, "encoded_path")
+
+        assert len(result) == 1
+        assert result[0]["number"] == 1
+
+    def test_filters_by_affected_areas(self):
+        """Affected areas filter works for PRs."""
+        from app.services.scheduler import filter_prs_by_sidecar
+        from app.storage import PRMetadata
+        filters = parse_filter_query("affected-area:api")
+        prs = [{"number": 1}, {"number": 2}]
+
+        def mock_get_metadata(encoded_path, pr_number):
+            metadata_map = {
+                1: PRMetadata(pr_number=1, affected_areas=["api", "backend"]),
+                2: PRMetadata(pr_number=2, affected_areas=["frontend"]),
+            }
+            return metadata_map.get(pr_number)
+
+        with patch("app.services.scheduler.get_pr_metadata", side_effect=mock_get_metadata):
+            result = filter_prs_by_sidecar(prs, filters, "encoded_path")
+
+        assert len(result) == 1
+        assert result[0]["number"] == 1
+
+    def test_filters_by_multiple_pr_properties(self):
+        """Filters PRs by multiple sidecar properties (AND logic)."""
+        from app.services.scheduler import filter_prs_by_sidecar
+        from app.storage import PRMetadata
+        filters = parse_filter_query("priority:high type:bugfix")
+        prs = [{"number": 1}, {"number": 2}, {"number": 3}]
+
+        def mock_get_metadata(encoded_path, pr_number):
+            metadata_map = {
+                1: PRMetadata(pr_number=1, review_priority="high", change_type="bugfix"),
+                2: PRMetadata(pr_number=2, review_priority="high", change_type="feature"),
+                3: PRMetadata(pr_number=3, review_priority="low", change_type="bugfix"),
+            }
+            return metadata_map.get(pr_number)
+
+        with patch("app.services.scheduler.get_pr_metadata", side_effect=mock_get_metadata):
+            result = filter_prs_by_sidecar(prs, filters, "encoded_path")
+
+        assert len(result) == 1
+        assert result[0]["number"] == 1
+
+
 class TestBuildPromptFromTemplate:
     """Tests for build_prompt_from_template function."""
 
@@ -1072,9 +1310,10 @@ class TestSchedulerServiceRunningJobsLock:
 
     @pytest.mark.asyncio
     async def test_execute_job_safe_removes_job_under_lock(self, scheduler):
-        """_execute_job_safe removes job ID from _running_jobs under lock."""
-        # Add a job ID to the running jobs set
-        scheduler._running_jobs.add(123)
+        """_execute_job_safe removes job key from _running_jobs under lock."""
+        # Add a job key (repo_id, job_id) to the running jobs set
+        job_key = (1, 123)
+        scheduler._running_jobs.add(job_key)
 
         # Mock _execute_job to do nothing
         async def mock_execute_job(job_id, repo):
@@ -1082,17 +1321,18 @@ class TestSchedulerServiceRunningJobsLock:
 
         scheduler._execute_job = mock_execute_job
 
-        # Execute the safe wrapper
-        await scheduler._execute_job_safe(123, {"local_path": "/test"})
+        # Execute the safe wrapper with job_key tuple
+        await scheduler._execute_job_safe(job_key, {"id": 1, "local_path": "/test"})
 
         # Job should be removed from running jobs
-        assert 123 not in scheduler._running_jobs
+        assert job_key not in scheduler._running_jobs
 
     @pytest.mark.asyncio
     async def test_execute_job_safe_removes_job_on_exception(self, scheduler):
-        """_execute_job_safe removes job ID even when _execute_job raises."""
-        # Add a job ID to the running jobs set
-        scheduler._running_jobs.add(456)
+        """_execute_job_safe removes job key even when _execute_job raises."""
+        # Add a job key (repo_id, job_id) to the running jobs set
+        job_key = (1, 456)
+        scheduler._running_jobs.add(job_key)
 
         # Mock _execute_job to raise an exception
         async def mock_execute_job(job_id, repo):
@@ -1101,20 +1341,20 @@ class TestSchedulerServiceRunningJobsLock:
         scheduler._execute_job = mock_execute_job
 
         # Execute the safe wrapper - should not raise
-        await scheduler._execute_job_safe(456, {"local_path": "/test"})
+        await scheduler._execute_job_safe(job_key, {"id": 1, "local_path": "/test"})
 
         # Job should still be removed from running jobs
-        assert 456 not in scheduler._running_jobs
+        assert job_key not in scheduler._running_jobs
 
     @pytest.mark.asyncio
     async def test_concurrent_job_removal(self, scheduler):
         """Multiple concurrent jobs can be removed without race conditions."""
         import asyncio
 
-        # Add multiple job IDs
-        job_ids = list(range(100, 110))
-        for job_id in job_ids:
-            scheduler._running_jobs.add(job_id)
+        # Add multiple job keys (repo_id, job_id)
+        job_keys = [(1, job_id) for job_id in range(100, 110)]
+        for job_key in job_keys:
+            scheduler._running_jobs.add(job_key)
 
         # Mock _execute_job to do nothing
         async def mock_execute_job(job_id, repo):
@@ -1124,8 +1364,8 @@ class TestSchedulerServiceRunningJobsLock:
 
         # Run all jobs concurrently
         await asyncio.gather(*[
-            scheduler._execute_job_safe(job_id, {"local_path": "/test"})
-            for job_id in job_ids
+            scheduler._execute_job_safe(job_key, {"id": 1, "local_path": "/test"})
+            for job_key in job_keys
         ])
 
         # All jobs should be removed
@@ -1144,8 +1384,8 @@ class TestSchedulerServiceTriggerJob:
     @pytest.mark.asyncio
     async def test_trigger_job_returns_already_running(self, scheduler):
         """trigger_job returns 'already_running' if job is in _running_jobs."""
-        # Add the job to running jobs
-        scheduler._running_jobs.add(42)
+        # Add the job key (repo_id, job_id) to running jobs
+        scheduler._running_jobs.add((1, 42))
 
         run, error = await scheduler.trigger_job(42, 1)
 
@@ -1186,7 +1426,7 @@ class TestSchedulerServiceTriggerJob:
 
     @pytest.mark.asyncio
     async def test_trigger_job_adds_job_to_running_under_lock(self, scheduler):
-        """trigger_job adds job ID to _running_jobs under lock."""
+        """trigger_job adds job key to _running_jobs under lock."""
         mock_repo = {"id": 1, "local_path": "/test/path"}
         mock_job = MagicMock()
         mock_job.id = 42
@@ -1208,8 +1448,8 @@ class TestSchedulerServiceTriggerJob:
 
                 run, error = await scheduler.trigger_job(42, 1)
 
-        # Job should be in running jobs
-        assert 42 in scheduler._running_jobs
+        # Job key (repo_id, job_id) should be in running jobs
+        assert (1, 42) in scheduler._running_jobs
         assert error is None
         assert run is not None
 
@@ -1270,8 +1510,8 @@ class TestSchedulerServiceCheckRepoJobs:
     @pytest.mark.asyncio
     async def test_check_repo_jobs_skips_running_jobs(self, scheduler):
         """_check_repo_jobs skips jobs that are already running."""
-        # Add job 42 to running jobs
-        scheduler._running_jobs.add(42)
+        # Add job key (repo_id=1, job_id=42) to running jobs
+        scheduler._running_jobs.add((1, 42))
 
         mock_job = MagicMock()
         mock_job.id = 42
@@ -1299,7 +1539,7 @@ class TestSchedulerServiceCheckRepoJobs:
 
     @pytest.mark.asyncio
     async def test_check_repo_jobs_adds_job_to_running_under_lock(self, scheduler):
-        """_check_repo_jobs adds job ID to _running_jobs under lock."""
+        """_check_repo_jobs adds job key to _running_jobs under lock."""
         mock_job = MagicMock()
         mock_job.id = 99
 
@@ -1320,5 +1560,5 @@ class TestSchedulerServiceCheckRepoJobs:
 
             await scheduler._check_repo_jobs(mock_repo, now)
 
-        # Job should be in running jobs
-        assert 99 in scheduler._running_jobs
+        # Job key (repo_id, job_id) should be in running jobs
+        assert (1, 99) in scheduler._running_jobs

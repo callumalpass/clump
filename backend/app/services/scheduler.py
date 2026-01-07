@@ -25,6 +25,7 @@ from app.storage import (
     EntityLink,
     save_session_metadata,
     get_issue_metadata,
+    get_pr_metadata,
     list_schedule_definitions,
     ScheduleDefinition,
 )
@@ -267,6 +268,95 @@ def filter_issues_by_sidecar(
     return filtered
 
 
+def filter_prs_by_sidecar(
+    prs: list[dict],
+    filters: FilterParams,
+    encoded_path: str,
+) -> list[dict]:
+    """
+    Filter PRs by sidecar metadata.
+
+    Maps PR metadata fields to issue filter keys:
+    - review_priority -> priority filter
+    - complexity -> difficulty filter
+    - change_type -> type filter
+
+    Args:
+        prs: List of PR dicts with 'number' key
+        filters: Parsed filter parameters
+        encoded_path: Encoded repo path for loading sidecar metadata
+
+    Returns:
+        Filtered list of PRs. PRs without sidecar data are excluded
+        when any sidecar filter is active.
+    """
+    if not has_sidecar_filters(filters):
+        return prs
+
+    filtered = []
+    for pr in prs:
+        metadata = get_pr_metadata(encoded_path, pr["number"])
+
+        # Exclude PRs without sidecar data when sidecar filters are active
+        if metadata is None:
+            continue
+
+        # Check each sidecar filter
+        # Priority filter (maps to review_priority for PRs)
+        if filters["priority"]:
+            if not metadata.review_priority or metadata.review_priority not in filters["priority"]:
+                continue
+        if filters["exclude_priority"]:
+            if metadata.review_priority and metadata.review_priority in filters["exclude_priority"]:
+                continue
+
+        # Difficulty filter (maps to complexity for PRs)
+        if filters["difficulty"]:
+            if not metadata.complexity or metadata.complexity not in filters["difficulty"]:
+                continue
+        if filters["exclude_difficulty"]:
+            if metadata.complexity and metadata.complexity in filters["exclude_difficulty"]:
+                continue
+
+        # Risk filter (same name for both)
+        if filters["risk"]:
+            if not metadata.risk or metadata.risk not in filters["risk"]:
+                continue
+        if filters["exclude_risk"]:
+            if metadata.risk and metadata.risk in filters["exclude_risk"]:
+                continue
+
+        # Type filter (maps to change_type for PRs)
+        if filters["type"]:
+            if not metadata.change_type or metadata.change_type not in filters["type"]:
+                continue
+        if filters["exclude_type"]:
+            if metadata.change_type and metadata.change_type in filters["exclude_type"]:
+                continue
+
+        # Sidecar status filter (same name for both)
+        if filters["sidecar_status"]:
+            if not metadata.status or metadata.status not in filters["sidecar_status"]:
+                continue
+        if filters["exclude_sidecar_status"]:
+            if metadata.status and metadata.status in filters["exclude_sidecar_status"]:
+                continue
+
+        # Affected areas filter (same name for both)
+        if filters["affected_areas"]:
+            pr_areas = metadata.affected_areas or []
+            if not any(area in pr_areas for area in filters["affected_areas"]):
+                continue
+        if filters["exclude_affected_areas"]:
+            pr_areas = metadata.affected_areas or []
+            if any(area in pr_areas for area in filters["exclude_affected_areas"]):
+                continue
+
+        filtered.append(pr)
+
+    return filtered
+
+
 def get_command_template(command_id: str, category: str, repo_path: str | None) -> str | None:
     """Get a command's template by ID and category."""
     file_path, source = find_command_file(command_id, category, repo_path)
@@ -293,7 +383,10 @@ class SchedulerService:
     def __init__(self):
         self._running = False
         self._task: asyncio.Task | None = None
-        self._running_jobs: set[int] = set()  # Track currently executing job IDs
+        # Track currently executing jobs as (repo_id, job_id) tuples.
+        # Each repo has its own SQLite database with independent job IDs,
+        # so we need both to uniquely identify a running job.
+        self._running_jobs: set[tuple[int, int]] = set()
         self._running_jobs_lock = asyncio.Lock()  # Protect access to _running_jobs
         self._check_interval = SCHEDULER_CHECK_INTERVAL_SECONDS
 
@@ -457,22 +550,30 @@ class SchedulerService:
 
             for job in due_jobs:
                 # Skip if already running (check under lock)
+                # Use (repo_id, job_id) tuple since job IDs are per-repo database
+                job_key = (repo["id"], job.id)
                 async with self._running_jobs_lock:
-                    if job.id in self._running_jobs:
+                    if job_key in self._running_jobs:
                         continue
                     # Run job in background (don't await)
-                    self._running_jobs.add(job.id)
-                asyncio.create_task(self._execute_job_safe(job.id, repo))
+                    self._running_jobs.add(job_key)
+                asyncio.create_task(self._execute_job_safe(job_key, repo))
 
-    async def _execute_job_safe(self, job_id: int, repo: dict):
-        """Execute a job with error handling."""
+    async def _execute_job_safe(self, job_key: tuple[int, int], repo: dict):
+        """Execute a job with error handling.
+
+        Args:
+            job_key: Tuple of (repo_id, job_id) uniquely identifying the job
+            repo: Repository dict
+        """
+        repo_id, job_id = job_key
         try:
             await self._execute_job(job_id, repo)
         except Exception as e:
-            logger.error(f"Job {job_id} failed: {e}", exc_info=True)
+            logger.error(f"Job {job_id} in repo {repo_id} failed: {e}", exc_info=True)
         finally:
             async with self._running_jobs_lock:
-                self._running_jobs.discard(job_id)
+                self._running_jobs.discard(job_key)
 
     async def _execute_job(self, job_id: int, repo: dict):
         """Execute a single scheduled job."""
@@ -653,9 +754,9 @@ class SchedulerService:
             for pr in prs
         ]
 
-        # Apply sidecar metadata filters
+        # Apply sidecar metadata filters (use PR-specific filtering)
         encoded_path = encode_path(repo["local_path"])
-        pr_dicts = filter_issues_by_sidecar(pr_dicts, filters, encoded_path)
+        pr_dicts = filter_prs_by_sidecar(pr_dicts, filters, encoded_path)
 
         return pr_dicts
 
@@ -838,9 +939,12 @@ class SchedulerService:
         Returns a tuple of (run_record, error_message).
         If the job is already running, returns (None, "already_running").
         """
+        # Use (repo_id, job_id) tuple since job IDs are per-repo database
+        job_key = (repo_id, job_id)
+
         # Check if already running before doing any DB work (under lock)
         async with self._running_jobs_lock:
-            if job_id in self._running_jobs:
+            if job_key in self._running_jobs:
                 return None, "already_running"
 
         repo = get_repo_by_id(repo_id)
@@ -858,12 +962,12 @@ class SchedulerService:
 
             # Check and add under lock to prevent race conditions
             async with self._running_jobs_lock:
-                if job.id in self._running_jobs:
+                if job_key in self._running_jobs:
                     return None, "already_running"
                 # Execute immediately in background
-                self._running_jobs.add(job.id)
+                self._running_jobs.add(job_key)
 
-            asyncio.create_task(self._execute_job_safe(job.id, repo))
+            asyncio.create_task(self._execute_job_safe(job_key, repo))
 
             # Return a pending run record
             return ScheduledJobRun(
