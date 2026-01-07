@@ -78,8 +78,13 @@ describe('describeCron', () => {
   });
 
   describe('specific day of week patterns', () => {
-    it('describes Sundays', () => {
+    it('describes Sundays with day 0', () => {
       expect(describeCron('0 9 * * 0')).toBe('Sundays at 9:00 AM');
+    });
+
+    it('describes Sundays with day 7 (alternate Sunday)', () => {
+      // Day 7 is an alternate representation for Sunday in cron
+      expect(describeCron('0 9 * * 7')).toBe('Sundays at 9:00 AM');
     });
 
     it('describes Mondays', () => {

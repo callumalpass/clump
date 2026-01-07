@@ -450,12 +450,15 @@ export function describeCron(cron: string): string {
   }
 
   // Weekly (specific day)
-  if (dayMonth === '*' && month === '*' && /^[0-6]$/.test(dayWeek)) {
+  // Day of week: 0 and 7 both represent Sunday, 1-6 are Mon-Sat
+  if (dayMonth === '*' && month === '*' && /^[0-7]$/.test(dayWeek)) {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const h = parseInt(hour);
     const period = h >= 12 ? 'PM' : 'AM';
     const displayHour = h > 12 ? h - 12 : h || 12;
-    return `${days[parseInt(dayWeek)]}s at ${displayHour}:${minute.padStart(2, '0')} ${period}`;
+    // Map day 7 to Sunday (index 0)
+    const dayIndex = parseInt(dayWeek) % 7;
+    return `${days[dayIndex]}s at ${displayHour}:${minute.padStart(2, '0')} ${period}`;
   }
 
   return cron;
