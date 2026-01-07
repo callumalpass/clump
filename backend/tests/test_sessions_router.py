@@ -2861,3 +2861,358 @@ class TestSessionCache:
     def test_get_returns_none_for_missing_key(self, cache):
         """Test that get returns None for missing keys."""
         assert cache.get("nonexistent") is None
+
+
+class TestParseDateFilter:
+    """Tests for the _parse_date_filter helper function."""
+
+    def test_parses_valid_date(self):
+        """Test parsing a valid ISO date string."""
+        from app.routers.sessions import _parse_date_filter
+
+        result = _parse_date_filter("2024-01-15")
+        assert result is not None
+        assert result.year == 2024
+        assert result.month == 1
+        assert result.day == 15
+        # Default is start of day
+        assert result.hour == 0
+        assert result.minute == 0
+        assert result.second == 0
+
+    def test_parses_date_start_of_day(self):
+        """Test parsing with start of day (default)."""
+        from app.routers.sessions import _parse_date_filter
+
+        result = _parse_date_filter("2024-06-20", end_of_day=False)
+        assert result.hour == 0
+        assert result.minute == 0
+        assert result.second == 0
+        assert result.microsecond == 0
+
+    def test_parses_date_end_of_day(self):
+        """Test parsing with end of day."""
+        from app.routers.sessions import _parse_date_filter
+
+        result = _parse_date_filter("2024-06-20", end_of_day=True)
+        assert result.hour == 23
+        assert result.minute == 59
+        assert result.second == 59
+        assert result.microsecond == 999999
+
+    def test_returns_none_for_none_input(self):
+        """Test that None is returned for None input."""
+        from app.routers.sessions import _parse_date_filter
+
+        result = _parse_date_filter(None)
+        assert result is None
+
+    def test_returns_none_for_empty_string(self):
+        """Test that None is returned for empty string."""
+        from app.routers.sessions import _parse_date_filter
+
+        result = _parse_date_filter("")
+        assert result is None
+
+    def test_returns_none_for_invalid_format(self):
+        """Test that None is returned for invalid format."""
+        from app.routers.sessions import _parse_date_filter
+
+        result = _parse_date_filter("not-a-date")
+        assert result is None
+
+    def test_returns_none_for_invalid_date(self):
+        """Test that None is returned for invalid date values."""
+        from app.routers.sessions import _parse_date_filter
+
+        result = _parse_date_filter("2024-02-30")  # Invalid day
+        assert result is None
+
+    def test_parses_date_with_time(self):
+        """Test parsing a date string that includes time (time is replaced)."""
+        from app.routers.sessions import _parse_date_filter
+
+        result = _parse_date_filter("2024-01-15T14:30:00")
+        assert result is not None
+        # Time should be replaced with start of day
+        assert result.hour == 0
+        assert result.minute == 0
+
+    def test_returns_naive_datetime(self):
+        """Test that result is always a naive datetime."""
+        from app.routers.sessions import _parse_date_filter
+
+        result = _parse_date_filter("2024-01-15")
+        assert result.tzinfo is None
+
+
+class TestListSessionsDateFiltering:
+    """Tests for date filtering in the list sessions endpoint."""
+
+    @pytest.fixture(autouse=True)
+    def clear_cache(self):
+        """Clear the session cache before and after each test."""
+        from app.routers.sessions import _session_cache
+        _session_cache.clear()
+        yield
+        _session_cache.clear()
+
+    @pytest.fixture
+    def create_sessions_with_dates(self):
+        """Factory fixture to create mock sessions with specific dates."""
+        def _create(dates: list[datetime]):
+            sessions = []
+            for i, dt in enumerate(dates):
+                sessions.append(DiscoveredSession(
+                    session_id=f"session-{i}",
+                    encoded_path="-home-user-projects-app",
+                    transcript_path=Path(f"/home/user/.claude/projects/app/session-{i}.jsonl"),
+                    modified_at=dt,
+                    file_size=1024,
+                    metadata=None,
+                ))
+            return sessions
+        return _create
+
+    def test_filter_by_date_from(self, client, create_sessions_with_dates):
+        """Test filtering sessions with date_from parameter."""
+        sessions = create_sessions_with_dates([
+            datetime(2024, 1, 10, 12, 0, 0),  # Before filter
+            datetime(2024, 1, 15, 12, 0, 0),  # On filter date
+            datetime(2024, 1, 20, 12, 0, 0),  # After filter date
+        ])
+
+        with patch("app.routers.sessions.discover_all_sessions", return_value=sessions), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
+
+            response = client.get("/sessions?date_from=2024-01-15")
+
+            assert response.status_code == 200
+            data = response.json()
+            # Should include sessions on or after 2024-01-15
+            assert data["total"] == 2
+            session_ids = {s["session_id"] for s in data["sessions"]}
+            assert "session-1" in session_ids  # On filter date
+            assert "session-2" in session_ids  # After filter date
+            assert "session-0" not in session_ids  # Before filter date
+
+    def test_filter_by_date_to(self, client, create_sessions_with_dates):
+        """Test filtering sessions with date_to parameter."""
+        sessions = create_sessions_with_dates([
+            datetime(2024, 1, 10, 12, 0, 0),  # Before filter
+            datetime(2024, 1, 15, 12, 0, 0),  # On filter date
+            datetime(2024, 1, 20, 12, 0, 0),  # After filter date
+        ])
+
+        with patch("app.routers.sessions.discover_all_sessions", return_value=sessions), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
+
+            response = client.get("/sessions?date_to=2024-01-15")
+
+            assert response.status_code == 200
+            data = response.json()
+            # Should include sessions on or before 2024-01-15
+            assert data["total"] == 2
+            session_ids = {s["session_id"] for s in data["sessions"]}
+            assert "session-0" in session_ids  # Before filter date
+            assert "session-1" in session_ids  # On filter date
+            assert "session-2" not in session_ids  # After filter date
+
+    def test_filter_by_date_range(self, client, create_sessions_with_dates):
+        """Test filtering sessions with both date_from and date_to."""
+        sessions = create_sessions_with_dates([
+            datetime(2024, 1, 5, 12, 0, 0),   # Before range
+            datetime(2024, 1, 10, 12, 0, 0),  # On start date
+            datetime(2024, 1, 15, 12, 0, 0),  # In range
+            datetime(2024, 1, 20, 12, 0, 0),  # On end date
+            datetime(2024, 1, 25, 12, 0, 0),  # After range
+        ])
+
+        with patch("app.routers.sessions.discover_all_sessions", return_value=sessions), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
+
+            response = client.get("/sessions?date_from=2024-01-10&date_to=2024-01-20")
+
+            assert response.status_code == 200
+            data = response.json()
+            # Should include sessions between 2024-01-10 and 2024-01-20
+            assert data["total"] == 3
+            session_ids = {s["session_id"] for s in data["sessions"]}
+            assert "session-0" not in session_ids  # Before range
+            assert "session-1" in session_ids      # On start date
+            assert "session-2" in session_ids      # In range
+            assert "session-3" in session_ids      # On end date
+            assert "session-4" not in session_ids  # After range
+
+    def test_filter_date_from_end_of_day_boundary(self, client, create_sessions_with_dates):
+        """Test that date_from starts at beginning of day (00:00:00)."""
+        sessions = create_sessions_with_dates([
+            datetime(2024, 1, 14, 23, 59, 59),  # Just before midnight on prev day
+            datetime(2024, 1, 15, 0, 0, 1),     # Just after midnight on filter day
+        ])
+
+        with patch("app.routers.sessions.discover_all_sessions", return_value=sessions), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
+
+            response = client.get("/sessions?date_from=2024-01-15")
+
+            assert response.status_code == 200
+            data = response.json()
+            # Session just before midnight should be excluded
+            assert data["total"] == 1
+            assert data["sessions"][0]["session_id"] == "session-1"
+
+    def test_filter_date_to_end_of_day_boundary(self, client, create_sessions_with_dates):
+        """Test that date_to ends at end of day (23:59:59)."""
+        sessions = create_sessions_with_dates([
+            datetime(2024, 1, 15, 23, 59, 58),  # Just before end of day
+            datetime(2024, 1, 16, 0, 0, 1),     # Just after midnight (next day)
+        ])
+
+        with patch("app.routers.sessions.discover_all_sessions", return_value=sessions), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
+
+            response = client.get("/sessions?date_to=2024-01-15")
+
+            assert response.status_code == 200
+            data = response.json()
+            # Session just before end of day should be included
+            assert data["total"] == 1
+            assert data["sessions"][0]["session_id"] == "session-0"
+
+    def test_filter_invalid_date_from_ignored(self, client, create_sessions_with_dates):
+        """Test that invalid date_from is ignored (no filtering applied)."""
+        sessions = create_sessions_with_dates([
+            datetime(2024, 1, 10, 12, 0, 0),
+            datetime(2024, 1, 15, 12, 0, 0),
+        ])
+
+        with patch("app.routers.sessions.discover_all_sessions", return_value=sessions), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
+
+            response = client.get("/sessions?date_from=invalid-date")
+
+            assert response.status_code == 200
+            data = response.json()
+            # All sessions should be returned when date is invalid
+            assert data["total"] == 2
+
+    def test_filter_invalid_date_to_ignored(self, client, create_sessions_with_dates):
+        """Test that invalid date_to is ignored (no filtering applied)."""
+        sessions = create_sessions_with_dates([
+            datetime(2024, 1, 10, 12, 0, 0),
+            datetime(2024, 1, 15, 12, 0, 0),
+        ])
+
+        with patch("app.routers.sessions.discover_all_sessions", return_value=sessions), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
+
+            response = client.get("/sessions?date_to=not-a-date")
+
+            assert response.status_code == 200
+            data = response.json()
+            # All sessions should be returned when date is invalid
+            assert data["total"] == 2
+
+    def test_filter_empty_result(self, client, create_sessions_with_dates):
+        """Test that date filter can return empty result set."""
+        sessions = create_sessions_with_dates([
+            datetime(2024, 1, 10, 12, 0, 0),
+            datetime(2024, 1, 15, 12, 0, 0),
+        ])
+
+        with patch("app.routers.sessions.discover_all_sessions", return_value=sessions), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
+
+            # Filter for dates after all sessions
+            response = client.get("/sessions?date_from=2025-01-01")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["total"] == 0
+            assert data["sessions"] == []
+
+    def test_filter_date_combined_with_starred(self, client, create_sessions_with_dates):
+        """Test date filtering combined with other filters."""
+        sessions = [
+            DiscoveredSession(
+                session_id="session-0",
+                encoded_path="-home-user-projects-app",
+                transcript_path=Path("/home/user/.claude/projects/app/session-0.jsonl"),
+                modified_at=datetime(2024, 1, 10, 12, 0, 0),
+                file_size=1024,
+                metadata=SessionMetadata(
+                    session_id="session-0",
+                    title="Old Starred",
+                    starred=True,
+                    entities=[],
+                    tags=[],
+                ),
+            ),
+            DiscoveredSession(
+                session_id="session-1",
+                encoded_path="-home-user-projects-app",
+                transcript_path=Path("/home/user/.claude/projects/app/session-1.jsonl"),
+                modified_at=datetime(2024, 1, 20, 12, 0, 0),
+                file_size=1024,
+                metadata=SessionMetadata(
+                    session_id="session-1",
+                    title="New Starred",
+                    starred=True,
+                    entities=[],
+                    tags=[],
+                ),
+            ),
+            DiscoveredSession(
+                session_id="session-2",
+                encoded_path="-home-user-projects-app",
+                transcript_path=Path("/home/user/.claude/projects/app/session-2.jsonl"),
+                modified_at=datetime(2024, 1, 20, 12, 0, 0),
+                file_size=1024,
+                metadata=SessionMetadata(
+                    session_id="session-2",
+                    title="New Not Starred",
+                    starred=False,
+                    entities=[],
+                    tags=[],
+                ),
+            ),
+        ]
+
+        with patch("app.routers.sessions.discover_all_sessions", return_value=sessions), \
+             patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
+
+            # Filter for starred sessions after 2024-01-15
+            response = client.get("/sessions?date_from=2024-01-15&starred=true")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["total"] == 1
+            assert data["sessions"][0]["session_id"] == "session-1"

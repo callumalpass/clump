@@ -1037,6 +1037,10 @@ async def list_sessions(
             sessions = list(reversed(sessions))
 
         # Apply metadata-based filters before pagination
+        # Pre-parse date filters outside the loop for efficiency
+        from_date = _parse_date_filter(date_from)
+        to_date = _parse_date_filter(date_to, end_of_day=True)
+
         filtered_sessions: list[DiscoveredSession] = []
         for s in sessions:
             # Check starred filter (from metadata)
@@ -1060,11 +1064,9 @@ async def list_sessions(
                     continue
 
             # Check date filters (use file mtime)
-            from_date = _parse_date_filter(date_from)
             if from_date and s.modified_at.replace(tzinfo=None) < from_date:
                 continue
 
-            to_date = _parse_date_filter(date_to, end_of_day=True)
             if to_date and s.modified_at.replace(tzinfo=None) > to_date:
                 continue
 
