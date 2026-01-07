@@ -875,6 +875,7 @@ class TestSchedulerServiceGetIssues:
             mock_issue.number = 42
             mock_issue.title = "Test Issue"
             mock_issue.body = "Issue body"
+            mock_issue.author = "testuser"
             mock_issue.labels = ["bug"]
             mock_client.list_all_issues.return_value = [mock_issue]
 
@@ -885,6 +886,7 @@ class TestSchedulerServiceGetIssues:
             assert result[0]["number"] == 42
             assert result[0]["title"] == "Test Issue"
             assert result[0]["body"] == "Issue body"
+            assert result[0]["author"] == "testuser"
 
     @pytest.mark.asyncio
     async def test_get_issues_filters_by_labels(self, scheduler, mock_job, mock_repo):
@@ -915,12 +917,14 @@ class TestSchedulerServiceGetIssues:
             issue1.number = 1
             issue1.title = "Keep"
             issue1.body = "body"
+            issue1.author = "user1"
             issue1.labels = ["bug"]
 
             issue2 = MagicMock()
             issue2.number = 2
             issue2.title = "Exclude"
             issue2.body = "body"
+            issue2.author = "user2"
             issue2.labels = ["wontfix"]
 
             mock_client.list_all_issues.return_value = [issue1, issue2]
@@ -930,6 +934,7 @@ class TestSchedulerServiceGetIssues:
             assert len(result) == 1
             assert result[0]["number"] == 1
             assert result[0]["title"] == "Keep"
+            assert result[0]["author"] == "user1"
 
 
 class TestSchedulerServiceGetTargetItems:
@@ -1562,3 +1567,296 @@ class TestSchedulerServiceCheckRepoJobs:
 
         # Job key (repo_id, job_id) should be in running jobs
         assert (1, 99) in scheduler._running_jobs
+
+
+class TestGetCommandTemplate:
+    """Tests for get_command_template function."""
+
+    def test_returns_none_when_command_not_found(self):
+        """Returns None when command file is not found."""
+        from app.services.scheduler import get_command_template
+
+        with patch("app.services.scheduler.find_command_file", return_value=(None, None)):
+            result = get_command_template("nonexistent", "issue", "/repo/path")
+
+        assert result is None
+
+    def test_returns_none_when_parse_fails(self):
+        """Returns None when command file parsing fails."""
+        from app.services.scheduler import get_command_template
+
+        with patch("app.services.scheduler.find_command_file", return_value=("/path/to/cmd.md", "repo")), \
+             patch("app.services.scheduler.parse_command_file", return_value=None):
+            result = get_command_template("test-cmd", "issue", "/repo/path")
+
+        assert result is None
+
+    def test_returns_template_when_command_found(self):
+        """Returns command template when command is found and parsed."""
+        from app.services.scheduler import get_command_template
+
+        mock_cmd = MagicMock()
+        mock_cmd.template = "Review issue #{{number}}"
+
+        with patch("app.services.scheduler.find_command_file", return_value=("/path/to/cmd.md", "repo")), \
+             patch("app.services.scheduler.parse_command_file", return_value=mock_cmd):
+            result = get_command_template("review", "issue", "/repo/path")
+
+        assert result == "Review issue #{{number}}"
+
+
+class TestSchedulerServiceGetIssuesAuthorField:
+    """Tests specifically for the author field in _get_issues."""
+
+    @pytest.fixture
+    def scheduler(self):
+        """Create a SchedulerService instance."""
+        from app.services.scheduler import SchedulerService
+        return SchedulerService()
+
+    @pytest.fixture
+    def mock_job(self):
+        """Create a mock ScheduledJob."""
+        job = MagicMock()
+        job.filter_query = None
+        return job
+
+    @pytest.fixture
+    def mock_repo(self):
+        """Create a mock repo dict."""
+        return {
+            "id": 1,
+            "owner": "testowner",
+            "name": "testrepo",
+            "local_path": "/path/to/repo",
+        }
+
+    @pytest.mark.asyncio
+    async def test_get_issues_includes_author_in_result(self, scheduler, mock_job, mock_repo):
+        """Verifies that author field is included in issue dicts."""
+        with patch("app.services.scheduler.GitHubClient") as MockClient, \
+             patch("app.services.scheduler.filter_issues_by_sidecar", side_effect=lambda issues, *args: issues):
+            mock_client = MockClient.return_value
+
+            mock_issue = MagicMock()
+            mock_issue.number = 1
+            mock_issue.title = "Test"
+            mock_issue.body = "Body"
+            mock_issue.author = "octocat"
+            mock_issue.labels = []
+            mock_client.list_all_issues.return_value = [mock_issue]
+
+            result = await scheduler._get_issues(mock_job, mock_repo)
+
+            assert len(result) == 1
+            assert "author" in result[0]
+            assert result[0]["author"] == "octocat"
+
+    @pytest.mark.asyncio
+    async def test_get_issues_preserves_author_through_sidecar_filter(self, scheduler, mock_job, mock_repo):
+        """Author field is preserved when sidecar filters are applied."""
+        from app.storage import IssueMetadata
+
+        mock_job.filter_query = "priority:high"
+
+        with patch("app.services.scheduler.GitHubClient") as MockClient:
+            mock_client = MockClient.return_value
+
+            mock_issue = MagicMock()
+            mock_issue.number = 42
+            mock_issue.title = "High priority issue"
+            mock_issue.body = "Description"
+            mock_issue.author = "contributor123"
+            mock_issue.labels = []
+            mock_client.list_all_issues.return_value = [mock_issue]
+
+            # Mock sidecar metadata that matches the filter
+            def mock_get_metadata(encoded_path, issue_number):
+                return IssueMetadata(issue_number=42, priority="high")
+
+            with patch("app.services.scheduler.get_issue_metadata", side_effect=mock_get_metadata):
+                result = await scheduler._get_issues(mock_job, mock_repo)
+
+            assert len(result) == 1
+            assert result[0]["author"] == "contributor123"
+
+    @pytest.mark.asyncio
+    async def test_get_issues_with_multiple_authors(self, scheduler, mock_job, mock_repo):
+        """Handles multiple issues with different authors."""
+        with patch("app.services.scheduler.GitHubClient") as MockClient, \
+             patch("app.services.scheduler.filter_issues_by_sidecar", side_effect=lambda issues, *args: issues):
+            mock_client = MockClient.return_value
+
+            issues = []
+            for i, author in enumerate(["alice", "bob", "charlie"], 1):
+                mock_issue = MagicMock()
+                mock_issue.number = i
+                mock_issue.title = f"Issue {i}"
+                mock_issue.body = "Body"
+                mock_issue.author = author
+                mock_issue.labels = []
+                issues.append(mock_issue)
+
+            mock_client.list_all_issues.return_value = issues
+
+            result = await scheduler._get_issues(mock_job, mock_repo)
+
+            assert len(result) == 3
+            assert result[0]["author"] == "alice"
+            assert result[1]["author"] == "bob"
+            assert result[2]["author"] == "charlie"
+
+
+class TestSchedulerServiceGetPrsWithLabels:
+    """Tests for _get_prs with label filtering."""
+
+    @pytest.fixture
+    def scheduler(self):
+        """Create a SchedulerService instance."""
+        from app.services.scheduler import SchedulerService
+        return SchedulerService()
+
+    @pytest.fixture
+    def mock_repo(self):
+        """Create a mock repo dict."""
+        return {
+            "id": 1,
+            "owner": "testowner",
+            "name": "testrepo",
+            "local_path": "/path/to/repo",
+        }
+
+    @pytest.mark.asyncio
+    async def test_get_prs_filters_by_include_labels(self, scheduler, mock_repo):
+        """Filters PRs to only those with specified labels."""
+        mock_job = MagicMock()
+        mock_job.filter_query = "label:urgent"
+
+        with patch("app.services.scheduler.GitHubClient") as MockClient, \
+             patch("app.services.scheduler.filter_prs_by_sidecar", side_effect=lambda prs, *args: prs):
+            mock_client = MockClient.return_value
+
+            pr1 = MagicMock()
+            pr1.number = 1
+            pr1.title = "Urgent PR"
+            pr1.body = "Body"
+            pr1.head_ref = "urgent-fix"
+            pr1.base_ref = "main"
+            pr1.labels = ["urgent", "bug"]
+
+            pr2 = MagicMock()
+            pr2.number = 2
+            pr2.title = "Regular PR"
+            pr2.body = "Body"
+            pr2.head_ref = "feature"
+            pr2.base_ref = "main"
+            pr2.labels = ["feature"]
+
+            mock_client.list_all_prs.return_value = [pr1, pr2]
+
+            result = await scheduler._get_prs(mock_job, mock_repo)
+
+            # Only PR with 'urgent' label should remain
+            assert len(result) == 1
+            assert result[0]["number"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_prs_excludes_labeled_prs(self, scheduler, mock_repo):
+        """Excludes PRs with specified exclude labels."""
+        mock_job = MagicMock()
+        mock_job.filter_query = "-label:wip"
+
+        with patch("app.services.scheduler.GitHubClient") as MockClient, \
+             patch("app.services.scheduler.filter_prs_by_sidecar", side_effect=lambda prs, *args: prs):
+            mock_client = MockClient.return_value
+
+            pr1 = MagicMock()
+            pr1.number = 1
+            pr1.title = "Ready PR"
+            pr1.body = "Body"
+            pr1.head_ref = "ready"
+            pr1.base_ref = "main"
+            pr1.labels = ["ready"]
+
+            pr2 = MagicMock()
+            pr2.number = 2
+            pr2.title = "WIP PR"
+            pr2.body = "Body"
+            pr2.head_ref = "wip"
+            pr2.base_ref = "main"
+            pr2.labels = ["wip"]
+
+            mock_client.list_all_prs.return_value = [pr1, pr2]
+
+            result = await scheduler._get_prs(mock_job, mock_repo)
+
+            # PR with 'wip' label should be excluded
+            assert len(result) == 1
+            assert result[0]["number"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_prs_include_and_exclude_combined(self, scheduler, mock_repo):
+        """Combines include and exclude label filters."""
+        mock_job = MagicMock()
+        mock_job.filter_query = "label:bug -label:wontfix"
+
+        with patch("app.services.scheduler.GitHubClient") as MockClient, \
+             patch("app.services.scheduler.filter_prs_by_sidecar", side_effect=lambda prs, *args: prs):
+            mock_client = MockClient.return_value
+
+            pr1 = MagicMock()
+            pr1.number = 1
+            pr1.title = "Good bug fix"
+            pr1.body = "Body"
+            pr1.head_ref = "bugfix"
+            pr1.base_ref = "main"
+            pr1.labels = ["bug"]
+
+            pr2 = MagicMock()
+            pr2.number = 2
+            pr2.title = "Won't fix bug"
+            pr2.body = "Body"
+            pr2.head_ref = "wontfix"
+            pr2.base_ref = "main"
+            pr2.labels = ["bug", "wontfix"]
+
+            pr3 = MagicMock()
+            pr3.number = 3
+            pr3.title = "Feature"
+            pr3.body = "Body"
+            pr3.head_ref = "feature"
+            pr3.base_ref = "main"
+            pr3.labels = ["feature"]
+
+            mock_client.list_all_prs.return_value = [pr1, pr2, pr3]
+
+            result = await scheduler._get_prs(mock_job, mock_repo)
+
+            # Only PR with 'bug' but not 'wontfix' should remain
+            assert len(result) == 1
+            assert result[0]["number"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_prs_includes_labels_in_result(self, scheduler, mock_repo):
+        """Verifies that labels field is included in PR dicts."""
+        mock_job = MagicMock()
+        mock_job.filter_query = None
+
+        with patch("app.services.scheduler.GitHubClient") as MockClient, \
+             patch("app.services.scheduler.filter_prs_by_sidecar", side_effect=lambda prs, *args: prs):
+            mock_client = MockClient.return_value
+
+            pr = MagicMock()
+            pr.number = 1
+            pr.title = "Test PR"
+            pr.body = "Body"
+            pr.head_ref = "feature"
+            pr.base_ref = "main"
+            pr.labels = ["enhancement", "v2"]
+
+            mock_client.list_all_prs.return_value = [pr]
+
+            result = await scheduler._get_prs(mock_job, mock_repo)
+
+            assert len(result) == 1
+            assert result[0]["labels"] == ["enhancement", "v2"]
