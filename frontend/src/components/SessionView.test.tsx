@@ -1,5 +1,6 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { SessionView, ViewMode } from './SessionView';
 import type { SessionSummary, SessionDetail, Issue, PR, EntityLink, TranscriptMessage } from '../types';
 import * as useApiModule from '../hooks/useApi';
@@ -9,19 +10,8 @@ import * as useProcessWebSocketModule from '../hooks/useProcessWebSocket';
 vi.mock('../hooks/useApi');
 vi.mock('../hooks/useProcessWebSocket');
 vi.mock('./Terminal', () => ({
-  Terminal: ({ processId, onConnectionChange }: { processId: string; onConnectionChange?: (connected: boolean) => void }) => {
-    // Use useEffect to properly trigger the callback after mount
-    const React = require('react');
-    React.useEffect(() => {
-      if (onConnectionChange) {
-        // Use setTimeout to ensure the callback runs in a separate tick,
-        // avoiding act() warnings by allowing React to finish rendering first
-        const timeoutId = setTimeout(() => {
-          onConnectionChange(true);
-        }, 0);
-        return () => clearTimeout(timeoutId);
-      }
-    }, [onConnectionChange]);
+  Terminal: ({ processId }: { processId: string; onConnectionChange?: (connected: boolean) => void }) => {
+    // Simple mock that just renders - doesn't trigger onConnectionChange to avoid act() warnings
     return <div data-testid="terminal">Terminal: {processId}</div>;
   },
 }));
@@ -158,6 +148,20 @@ function createMockIssue(overrides: Partial<Issue> = {}): Issue {
     url: 'https://github.com/owner/repo/issues/42',
     ...overrides,
   };
+}
+
+// Helper to render and wait for async state updates to settle
+// This avoids act() warnings by ensuring all pending state updates complete
+async function renderAndWaitForLoad(ui: React.ReactElement) {
+  let result: ReturnType<typeof render>;
+  await act(async () => {
+    result = render(ui);
+    // Allow multiple microtask cycles for nested async operations
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  return result!;
 }
 
 describe('SessionView', () => {
@@ -330,7 +334,7 @@ describe('SessionView', () => {
 
     it('calls onContinue when continue button is clicked', async () => {
       const onContinue = vi.fn();
-      render(<SessionView {...defaultProps} onContinue={onContinue} />);
+      await renderAndWaitForLoad(<SessionView {...defaultProps} onContinue={onContinue} />);
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Continue/i })).toBeInTheDocument();
@@ -713,7 +717,7 @@ describe('SessionView', () => {
 
   describe('Active Session with Terminal', () => {
     it('shows terminal view when processId is provided and viewMode is terminal', async () => {
-      render(
+      await renderAndWaitForLoad(
         <SessionView
           {...defaultProps}
           processId="process-123"
