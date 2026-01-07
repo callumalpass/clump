@@ -538,6 +538,98 @@ class TestCreateScheduledJob:
             assert response.status_code == 400
             assert "command_id is required" in response.json()["detail"]
 
+    def test_create_job_race_condition_retry(self, client, mock_repo, mock_job):
+        """Creates job with retry on race condition (FileExistsError)."""
+        call_count = 0
+
+        def save_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # First attempt fails with FileExistsError
+                raise FileExistsError("File already exists")
+            # Second attempt succeeds
+
+        with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
+             patch("app.routers.schedules.generate_schedule_id", return_value="test-job-id"), \
+             patch("app.routers.schedules.save_schedule_definition", side_effect=save_side_effect) as mock_save, \
+             patch("app.routers.schedules.get_or_create_runtime", new_callable=AsyncMock, return_value=mock_job), \
+             patch("app.routers.schedules.get_repo_db") as mock_db:
+
+            mock_session = AsyncMock()
+            mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_db.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            response = client.post("/repos/1/schedules", json={
+                "name": "Test Job",
+                "cron_expression": "0 9 * * *",
+                "target_type": "issues",
+                "command_id": "test-command",
+            })
+
+            assert response.status_code == 200
+            # Should have been called twice (first fails, second succeeds)
+            assert mock_save.call_count == 2
+            # Second call should use the suffixed ID (test-job-id-2)
+            second_call_definition = mock_save.call_args_list[1][0][1]
+            assert second_call_definition.id == "test-job-id-2"
+
+    def test_create_job_race_condition_uses_base_id_for_suffix(self, client, mock_repo, mock_job):
+        """Ensures race condition retry uses base ID, not compounding suffixes."""
+        call_count = 0
+
+        def save_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 3:
+                # First three attempts fail
+                raise FileExistsError("File already exists")
+            # Fourth attempt succeeds
+
+        with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
+             patch("app.routers.schedules.generate_schedule_id", return_value="my-schedule"), \
+             patch("app.routers.schedules.save_schedule_definition", side_effect=save_side_effect) as mock_save, \
+             patch("app.routers.schedules.get_or_create_runtime", new_callable=AsyncMock, return_value=mock_job), \
+             patch("app.routers.schedules.get_repo_db") as mock_db:
+
+            mock_session = AsyncMock()
+            mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_db.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            response = client.post("/repos/1/schedules", json={
+                "name": "My Schedule",
+                "cron_expression": "0 9 * * *",
+                "target_type": "issues",
+                "command_id": "test-command",
+            })
+
+            assert response.status_code == 200
+            assert mock_save.call_count == 4
+
+            # Verify IDs are: my-schedule, my-schedule-2, my-schedule-3, my-schedule-4
+            # NOT: my-schedule, my-schedule-2, my-schedule-2-3, my-schedule-2-3-4
+            ids = [call[0][1].id for call in mock_save.call_args_list]
+            assert ids == ["my-schedule", "my-schedule-2", "my-schedule-3", "my-schedule-4"]
+
+    def test_create_job_race_condition_max_retries_exceeded(self, client, mock_repo):
+        """Returns 409 when max retries exceeded due to race condition."""
+        def always_fail(*args, **kwargs):
+            raise FileExistsError("File already exists")
+
+        with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
+             patch("app.routers.schedules.generate_schedule_id", return_value="test-job-id"), \
+             patch("app.routers.schedules.save_schedule_definition", side_effect=always_fail):
+
+            response = client.post("/repos/1/schedules", json={
+                "name": "Test Job",
+                "cron_expression": "0 9 * * *",
+                "target_type": "issues",
+                "command_id": "test-command",
+            })
+
+            assert response.status_code == 409
+            assert "too many concurrent requests" in response.json()["detail"].lower()
+
 
 class TestGetScheduledJob:
     """Tests for GET /repos/{repo_id}/schedules/{job_id} endpoint."""

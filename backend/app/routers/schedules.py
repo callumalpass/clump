@@ -378,7 +378,8 @@ async def create_scheduled_job(repo_id: int, data: ScheduledJobCreate) -> Schedu
 
     # Generate unique schedule ID with retry on race condition
     max_retries = 5
-    schedule_id = generate_schedule_id(data.name, repo["local_path"])
+    base_schedule_id = generate_schedule_id(data.name, repo["local_path"])
+    schedule_id = base_schedule_id
 
     for attempt in range(max_retries):
         # Create definition
@@ -408,8 +409,8 @@ async def create_scheduled_job(repo_id: int, data: ScheduledJobCreate) -> Schedu
             break
         except FileExistsError:
             # Race condition: another request created a file with the same ID
-            # Regenerate the ID with a suffix
-            schedule_id = f"{schedule_id}-{attempt + 2}"
+            # Regenerate the ID with a suffix using the base ID
+            schedule_id = f"{base_schedule_id}-{attempt + 2}"
             if attempt == max_retries - 1:
                 raise HTTPException(
                     status_code=409,
