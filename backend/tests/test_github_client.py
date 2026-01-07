@@ -253,7 +253,7 @@ class TestListIssues:
         query = call_args[0][0]
         assert "repo:owner/repo" in query
         assert "is:issue" in query
-        assert "state:open" in query
+        assert "is:open" in query
 
     def test_list_issues_state_all_omits_state_filter(self, client, mock_github):
         """Test that state='all' doesn't add state filter."""
@@ -443,9 +443,9 @@ class TestListPRs:
 
         client.list_prs("owner", "repo", state="closed")
 
-        # Verify search query includes state:closed
+        # Verify search query includes is:closed (GitHub search syntax)
         query = mock_github.search_issues.call_args[0][0]
-        assert "state:closed" in query
+        assert "is:closed" in query
 
     def test_list_prs_respects_per_page(self, client, mock_github):
         """Test PR listing respects the per_page parameter."""

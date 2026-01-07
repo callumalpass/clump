@@ -52,6 +52,14 @@ from app.storage import (
     save_config,
     get_config_value,
     set_config_value,
+    # Schedule definitions
+    ScheduleDefinition,
+    get_repo_schedules_dir,
+    get_schedule_definition,
+    save_schedule_definition,
+    delete_schedule_definition,
+    list_schedule_definitions,
+    generate_schedule_id,
 )
 
 
@@ -1452,3 +1460,577 @@ class TestDiscoverAllSessions:
             # Newest first
             assert sessions[0].session_id == "new-session"
             assert sessions[1].session_id == "old-session"
+
+
+class TestScheduleDefinition:
+    """Tests for ScheduleDefinition dataclass."""
+
+    def test_to_dict_basic(self):
+        """Test converting schedule to dictionary."""
+        schedule = ScheduleDefinition(
+            id="my-schedule",
+            name="My Schedule",
+            description="A test schedule",
+            status="active",
+            cron_expression="0 9 * * 1",
+            timezone="America/New_York",
+            target_type="issues",
+            filter_query="label:bug",
+            max_items=5,
+        )
+
+        result = schedule.to_dict()
+
+        assert result["id"] == "my-schedule"
+        assert result["name"] == "My Schedule"
+        assert result["description"] == "A test schedule"
+        assert result["status"] == "active"
+        assert result["cron_expression"] == "0 9 * * 1"
+        assert result["timezone"] == "America/New_York"
+        assert result["target_type"] == "issues"
+        assert result["filter_query"] == "label:bug"
+        assert result["max_items"] == 5
+
+    def test_to_dict_with_defaults(self):
+        """Test converting schedule with default values."""
+        schedule = ScheduleDefinition(id="test", name="Test")
+        result = schedule.to_dict()
+
+        assert result["id"] == "test"
+        assert result["name"] == "Test"
+        assert result["description"] is None
+        assert result["status"] == "active"
+        assert result["cron_expression"] == "0 9 * * *"
+        assert result["timezone"] == "UTC"
+        assert result["target_type"] == "codebase"
+        assert result["filter_query"] is None
+        assert result["max_items"] == 10
+        assert result["only_new"] is False
+
+    def test_to_dict_with_all_optional_fields(self):
+        """Test converting schedule with all optional fields set."""
+        schedule = ScheduleDefinition(
+            id="full-schedule",
+            name="Full Schedule",
+            description="Complete test",
+            status="paused",
+            cron_expression="*/30 * * * *",
+            timezone="Europe/London",
+            target_type="prs",
+            filter_query="state:open",
+            command_id="code-review",
+            custom_prompt="Review this code carefully",
+            max_items=20,
+            only_new=True,
+            permission_mode="plan",
+            allowed_tools=["read", "write", "bash"],
+            max_turns=50,
+            model="claude-3-opus",
+            cli_type="claude",
+        )
+
+        result = schedule.to_dict()
+
+        assert result["command_id"] == "code-review"
+        assert result["custom_prompt"] == "Review this code carefully"
+        assert result["only_new"] is True
+        assert result["permission_mode"] == "plan"
+        assert result["allowed_tools"] == ["read", "write", "bash"]
+        assert result["max_turns"] == 50
+        assert result["model"] == "claude-3-opus"
+        assert result["cli_type"] == "claude"
+
+    def test_from_dict_basic(self):
+        """Test creating schedule from dictionary."""
+        data = {
+            "id": "test-schedule",
+            "name": "Test Schedule",
+            "description": "A test",
+            "status": "disabled",
+            "cron_expression": "0 12 * * *",
+            "timezone": "Asia/Tokyo",
+            "target_type": "custom",
+        }
+
+        schedule = ScheduleDefinition.from_dict(data)
+
+        assert schedule.id == "test-schedule"
+        assert schedule.name == "Test Schedule"
+        assert schedule.description == "A test"
+        assert schedule.status == "disabled"
+        assert schedule.cron_expression == "0 12 * * *"
+        assert schedule.timezone == "Asia/Tokyo"
+        assert schedule.target_type == "custom"
+
+    def test_from_dict_with_defaults(self):
+        """Test creating schedule from minimal dictionary."""
+        data = {"id": "minimal", "name": "Minimal Schedule"}
+
+        schedule = ScheduleDefinition.from_dict(data)
+
+        assert schedule.id == "minimal"
+        assert schedule.name == "Minimal Schedule"
+        assert schedule.status == "active"
+        assert schedule.cron_expression == "0 9 * * *"
+        assert schedule.timezone == "UTC"
+        assert schedule.target_type == "codebase"
+        assert schedule.max_items == 10
+        assert schedule.only_new is False
+
+    def test_from_dict_with_all_fields(self):
+        """Test creating schedule from dictionary with all fields."""
+        data = {
+            "id": "complete",
+            "name": "Complete Schedule",
+            "description": "Full test",
+            "status": "active",
+            "cron_expression": "0 0 * * 0",
+            "timezone": "UTC",
+            "target_type": "issues",
+            "filter_query": "priority:high",
+            "command_id": "triage",
+            "custom_prompt": "Triage this issue",
+            "max_items": 15,
+            "only_new": True,
+            "permission_mode": "default",
+            "allowed_tools": ["read"],
+            "max_turns": 25,
+            "model": "claude-3-sonnet",
+            "cli_type": "gemini",
+        }
+
+        schedule = ScheduleDefinition.from_dict(data)
+
+        assert schedule.filter_query == "priority:high"
+        assert schedule.command_id == "triage"
+        assert schedule.custom_prompt == "Triage this issue"
+        assert schedule.max_items == 15
+        assert schedule.only_new is True
+        assert schedule.permission_mode == "default"
+        assert schedule.allowed_tools == ["read"]
+        assert schedule.max_turns == 25
+        assert schedule.model == "claude-3-sonnet"
+        assert schedule.cli_type == "gemini"
+
+    def test_roundtrip_to_dict_from_dict(self):
+        """Test that to_dict/from_dict roundtrip preserves all data."""
+        original = ScheduleDefinition(
+            id="roundtrip-test",
+            name="Roundtrip Test",
+            description="Testing roundtrip",
+            status="paused",
+            cron_expression="30 8 * * 1-5",
+            timezone="America/Chicago",
+            target_type="prs",
+            filter_query="label:needs-review",
+            command_id="review",
+            custom_prompt="Custom prompt here",
+            max_items=7,
+            only_new=True,
+            permission_mode="trust",
+            allowed_tools=["read", "write"],
+            max_turns=100,
+            model="custom-model",
+            cli_type="codex",
+        )
+
+        data = original.to_dict()
+        restored = ScheduleDefinition.from_dict(data)
+
+        assert restored.id == original.id
+        assert restored.name == original.name
+        assert restored.description == original.description
+        assert restored.status == original.status
+        assert restored.cron_expression == original.cron_expression
+        assert restored.timezone == original.timezone
+        assert restored.target_type == original.target_type
+        assert restored.filter_query == original.filter_query
+        assert restored.command_id == original.command_id
+        assert restored.custom_prompt == original.custom_prompt
+        assert restored.max_items == original.max_items
+        assert restored.only_new == original.only_new
+        assert restored.permission_mode == original.permission_mode
+        assert restored.allowed_tools == original.allowed_tools
+        assert restored.max_turns == original.max_turns
+        assert restored.model == original.model
+        assert restored.cli_type == original.cli_type
+
+
+class TestGetRepoSchedulesDir:
+    """Tests for get_repo_schedules_dir function."""
+
+    def test_creates_schedules_directory(self, tmp_path):
+        """Test that schedules directory is created."""
+        repo_path = str(tmp_path / "my-repo")
+        (tmp_path / "my-repo").mkdir()
+
+        schedules_dir = get_repo_schedules_dir(repo_path)
+
+        assert schedules_dir.exists()
+        assert schedules_dir == Path(repo_path) / ".clump" / "schedules"
+
+    def test_returns_existing_directory(self, tmp_path):
+        """Test that existing directory is returned without error."""
+        repo_path = str(tmp_path / "my-repo")
+        (tmp_path / "my-repo" / ".clump" / "schedules").mkdir(parents=True)
+
+        schedules_dir = get_repo_schedules_dir(repo_path)
+
+        assert schedules_dir.exists()
+        assert schedules_dir == Path(repo_path) / ".clump" / "schedules"
+
+
+class TestScheduleDefinitionIO:
+    """Tests for schedule definition read/write operations."""
+
+    def test_save_and_get_schedule_definition(self, tmp_path):
+        """Test saving and retrieving a schedule definition."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        schedule = ScheduleDefinition(
+            id="test-schedule",
+            name="Test Schedule",
+            description="Testing save/load",
+            cron_expression="0 10 * * *",
+        )
+
+        save_schedule_definition(repo_path, schedule)
+        loaded = get_schedule_definition(repo_path, "test-schedule")
+
+        assert loaded is not None
+        assert loaded.id == "test-schedule"
+        assert loaded.name == "Test Schedule"
+        assert loaded.description == "Testing save/load"
+        assert loaded.cron_expression == "0 10 * * *"
+
+    def test_get_schedule_definition_not_found(self, tmp_path):
+        """Test getting non-existent schedule returns None."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        result = get_schedule_definition(repo_path, "nonexistent")
+
+        assert result is None
+
+    def test_get_schedule_definition_invalid_json(self, tmp_path):
+        """Test handling of invalid JSON in schedule file."""
+        repo_path = str(tmp_path / "test-repo")
+        schedules_dir = tmp_path / "test-repo" / ".clump" / "schedules"
+        schedules_dir.mkdir(parents=True)
+
+        schedule_file = schedules_dir / "bad-schedule.json"
+        schedule_file.write_text("not valid json {{{")
+
+        result = get_schedule_definition(repo_path, "bad-schedule")
+
+        assert result is None
+
+    def test_get_schedule_definition_uses_filename_as_id(self, tmp_path):
+        """Test that the filename takes precedence over id in JSON."""
+        repo_path = str(tmp_path / "test-repo")
+        schedules_dir = tmp_path / "test-repo" / ".clump" / "schedules"
+        schedules_dir.mkdir(parents=True)
+
+        # Create a file where JSON id doesn't match filename
+        schedule_data = {
+            "id": "wrong-id",
+            "name": "Test",
+        }
+        schedule_file = schedules_dir / "correct-id.json"
+        schedule_file.write_text(json.dumps(schedule_data))
+
+        loaded = get_schedule_definition(repo_path, "correct-id")
+
+        assert loaded is not None
+        assert loaded.id == "correct-id"  # Filename wins
+
+    def test_save_schedule_definition_overwrites(self, tmp_path):
+        """Test that save overwrites existing schedule."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        original = ScheduleDefinition(
+            id="overwrite-test",
+            name="Original Name",
+            description="Original description",
+        )
+        save_schedule_definition(repo_path, original)
+
+        updated = ScheduleDefinition(
+            id="overwrite-test",
+            name="Updated Name",
+            description="Updated description",
+        )
+        save_schedule_definition(repo_path, updated)
+
+        loaded = get_schedule_definition(repo_path, "overwrite-test")
+
+        assert loaded is not None
+        assert loaded.name == "Updated Name"
+        assert loaded.description == "Updated description"
+
+    def test_save_schedule_definition_create_new(self, tmp_path):
+        """Test that create_new=True fails if file exists."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        schedule = ScheduleDefinition(
+            id="unique-test",
+            name="First Schedule",
+        )
+        save_schedule_definition(repo_path, schedule, create_new=True)
+
+        # Try to create again with same ID
+        duplicate = ScheduleDefinition(
+            id="unique-test",
+            name="Duplicate Schedule",
+        )
+
+        with pytest.raises(FileExistsError):
+            save_schedule_definition(repo_path, duplicate, create_new=True)
+
+    def test_delete_schedule_definition_exists(self, tmp_path):
+        """Test deleting an existing schedule definition."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        schedule = ScheduleDefinition(id="to-delete", name="Delete Me")
+        save_schedule_definition(repo_path, schedule)
+
+        # Verify it exists
+        assert get_schedule_definition(repo_path, "to-delete") is not None
+
+        # Delete it
+        result = delete_schedule_definition(repo_path, "to-delete")
+
+        assert result is True
+        assert get_schedule_definition(repo_path, "to-delete") is None
+
+    def test_delete_schedule_definition_not_found(self, tmp_path):
+        """Test deleting non-existent schedule returns False."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        result = delete_schedule_definition(repo_path, "nonexistent")
+
+        assert result is False
+
+
+class TestListScheduleDefinitions:
+    """Tests for list_schedule_definitions function."""
+
+    def test_list_empty_directory(self, tmp_path):
+        """Test listing schedules when no schedules exist."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        schedules = list_schedule_definitions(repo_path)
+
+        assert schedules == []
+
+    def test_list_schedules_directory_not_exists(self, tmp_path):
+        """Test listing schedules when .clump/schedules doesn't exist."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        # Don't create .clump/schedules
+        schedules = list_schedule_definitions(repo_path)
+
+        assert schedules == []
+
+    def test_list_multiple_schedules(self, tmp_path):
+        """Test listing multiple schedule definitions."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        schedule1 = ScheduleDefinition(id="alpha", name="Alpha Schedule")
+        schedule2 = ScheduleDefinition(id="beta", name="Beta Schedule")
+        schedule3 = ScheduleDefinition(id="gamma", name="Gamma Schedule")
+
+        save_schedule_definition(repo_path, schedule1)
+        save_schedule_definition(repo_path, schedule2)
+        save_schedule_definition(repo_path, schedule3)
+
+        schedules = list_schedule_definitions(repo_path)
+
+        assert len(schedules) == 3
+        names = [s.name for s in schedules]
+        assert "Alpha Schedule" in names
+        assert "Beta Schedule" in names
+        assert "Gamma Schedule" in names
+
+    def test_list_schedules_sorted_alphabetically(self, tmp_path):
+        """Test that schedules are sorted alphabetically by filename."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        # Create in non-alphabetical order
+        schedule_c = ScheduleDefinition(id="charlie", name="Charlie")
+        schedule_a = ScheduleDefinition(id="alpha", name="Alpha")
+        schedule_b = ScheduleDefinition(id="bravo", name="Bravo")
+
+        save_schedule_definition(repo_path, schedule_c)
+        save_schedule_definition(repo_path, schedule_a)
+        save_schedule_definition(repo_path, schedule_b)
+
+        schedules = list_schedule_definitions(repo_path)
+
+        assert len(schedules) == 3
+        assert schedules[0].id == "alpha"
+        assert schedules[1].id == "bravo"
+        assert schedules[2].id == "charlie"
+
+    def test_list_schedules_skips_invalid_json(self, tmp_path):
+        """Test that invalid JSON files are skipped."""
+        repo_path = str(tmp_path / "test-repo")
+        schedules_dir = tmp_path / "test-repo" / ".clump" / "schedules"
+        schedules_dir.mkdir(parents=True)
+
+        # Create a valid schedule
+        valid_schedule = ScheduleDefinition(id="valid", name="Valid Schedule")
+        save_schedule_definition(repo_path, valid_schedule)
+
+        # Create an invalid JSON file
+        (schedules_dir / "invalid.json").write_text("not json {{{")
+
+        schedules = list_schedule_definitions(repo_path)
+
+        assert len(schedules) == 1
+        assert schedules[0].id == "valid"
+
+    def test_list_schedules_skips_missing_required_fields(self, tmp_path):
+        """Test that files missing required fields are skipped."""
+        repo_path = str(tmp_path / "test-repo")
+        schedules_dir = tmp_path / "test-repo" / ".clump" / "schedules"
+        schedules_dir.mkdir(parents=True)
+
+        # Create a valid schedule
+        valid_schedule = ScheduleDefinition(id="valid", name="Valid")
+        save_schedule_definition(repo_path, valid_schedule)
+
+        # Create a file missing required 'name' field
+        incomplete = {"description": "No name"}  # Missing id and name
+        (schedules_dir / "incomplete.json").write_text(json.dumps(incomplete))
+
+        schedules = list_schedule_definitions(repo_path)
+
+        assert len(schedules) == 1
+        assert schedules[0].id == "valid"
+
+    def test_list_schedules_uses_filename_as_id(self, tmp_path):
+        """Test that filenames are used as IDs."""
+        repo_path = str(tmp_path / "test-repo")
+        schedules_dir = tmp_path / "test-repo" / ".clump" / "schedules"
+        schedules_dir.mkdir(parents=True)
+
+        # Create a file where JSON id doesn't match filename
+        schedule_data = {"id": "wrong-id", "name": "Test Schedule"}
+        (schedules_dir / "correct-id.json").write_text(json.dumps(schedule_data))
+
+        schedules = list_schedule_definitions(repo_path)
+
+        assert len(schedules) == 1
+        assert schedules[0].id == "correct-id"
+
+
+class TestGenerateScheduleId:
+    """Tests for generate_schedule_id function."""
+
+    def test_basic_slugification(self, tmp_path):
+        """Test basic name to slug conversion."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        schedule_id = generate_schedule_id("My Test Schedule", repo_path)
+
+        assert schedule_id == "my-test-schedule"
+
+    def test_handles_special_characters(self, tmp_path):
+        """Test that special characters are removed."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        schedule_id = generate_schedule_id("Test!@#$%^&*()Schedule", repo_path)
+
+        assert schedule_id == "testschedule"
+
+    def test_handles_multiple_spaces(self, tmp_path):
+        """Test that multiple spaces become single dashes."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        schedule_id = generate_schedule_id("Test    Multiple   Spaces", repo_path)
+
+        assert schedule_id == "test----multiple---spaces"
+
+    def test_handles_leading_trailing_dashes(self, tmp_path):
+        """Test that leading/trailing dashes are removed."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        schedule_id = generate_schedule_id("---Test---", repo_path)
+
+        assert schedule_id == "test"
+
+    def test_empty_name_uses_default(self, tmp_path):
+        """Test that empty name defaults to 'schedule'."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        schedule_id = generate_schedule_id("", repo_path)
+
+        assert schedule_id == "schedule"
+
+    def test_special_chars_only_uses_default(self, tmp_path):
+        """Test that name with only special chars defaults to 'schedule'."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        schedule_id = generate_schedule_id("!@#$%^&*()", repo_path)
+
+        assert schedule_id == "schedule"
+
+    def test_ensures_uniqueness(self, tmp_path):
+        """Test that generated IDs are unique within repo."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        # Create first schedule with this name
+        schedule1 = ScheduleDefinition(
+            id=generate_schedule_id("My Schedule", repo_path),
+            name="My Schedule"
+        )
+        save_schedule_definition(repo_path, schedule1)
+
+        # Generate ID for same name should add suffix
+        schedule_id2 = generate_schedule_id("My Schedule", repo_path)
+
+        assert schedule_id2 == "my-schedule-1"
+
+    def test_uniqueness_counter_increments(self, tmp_path):
+        """Test that uniqueness counter increments correctly."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        # Create schedules with incrementing suffixes
+        for i in range(3):
+            schedule = ScheduleDefinition(
+                id=generate_schedule_id("Test", repo_path),
+                name="Test"
+            )
+            save_schedule_definition(repo_path, schedule)
+
+        # Fourth one should be test-3
+        next_id = generate_schedule_id("Test", repo_path)
+
+        assert next_id == "test-3"
+
+    def test_preserves_existing_numbers_in_name(self, tmp_path):
+        """Test that numbers in the name are preserved."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        schedule_id = generate_schedule_id("Schedule 2023", repo_path)
+
+        assert schedule_id == "schedule-2023"
