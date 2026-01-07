@@ -461,6 +461,47 @@ export function describeCron(cron: string): string {
   return cron;
 }
 
+// Common IANA timezone names for validation
+const COMMON_TIMEZONES = new Set([
+  'UTC', 'GMT',
+  // Americas
+  'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+  'America/Toronto', 'America/Vancouver', 'America/Phoenix', 'America/Anchorage',
+  'America/Sao_Paulo', 'America/Mexico_City', 'America/Buenos_Aires',
+  // Europe
+  'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Rome', 'Europe/Madrid',
+  'Europe/Amsterdam', 'Europe/Brussels', 'Europe/Stockholm', 'Europe/Oslo',
+  'Europe/Copenhagen', 'Europe/Helsinki', 'Europe/Vienna', 'Europe/Warsaw',
+  'Europe/Prague', 'Europe/Budapest', 'Europe/Athens', 'Europe/Moscow',
+  'Europe/Zurich', 'Europe/Dublin', 'Europe/Lisbon',
+  // Asia
+  'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Hong_Kong', 'Asia/Singapore', 'Asia/Seoul',
+  'Asia/Taipei', 'Asia/Bangkok', 'Asia/Jakarta', 'Asia/Manila', 'Asia/Kuala_Lumpur',
+  'Asia/Kolkata', 'Asia/Mumbai', 'Asia/Dubai', 'Asia/Jerusalem', 'Asia/Riyadh',
+  // Pacific
+  'Pacific/Auckland', 'Pacific/Sydney', 'Pacific/Melbourne', 'Pacific/Fiji',
+  'Pacific/Honolulu', 'Pacific/Guam',
+  // Australia
+  'Australia/Sydney', 'Australia/Melbourne', 'Australia/Brisbane', 'Australia/Perth',
+  'Australia/Adelaide', 'Australia/Darwin',
+  // Africa
+  'Africa/Cairo', 'Africa/Johannesburg', 'Africa/Lagos', 'Africa/Nairobi',
+]);
+
+/**
+ * Check if a timezone looks like a valid IANA timezone.
+ * This is a basic check - full validation happens on the backend.
+ */
+export function isValidTimezone(tz: string): boolean {
+  if (!tz || typeof tz !== 'string') return false;
+  const trimmed = tz.trim();
+  // Check against common timezones
+  if (COMMON_TIMEZONES.has(trimmed)) return true;
+  // Also accept IANA format: Region/City or Region/SubRegion/City
+  // Timezone names can include letters, underscores, dashes, and +/- for Etc zones (e.g., Etc/GMT+5)
+  return /^[A-Za-z_-]+\/[A-Za-z0-9_+-]+(\/[A-Za-z0-9_+-]+)?$/.test(trimmed) || trimmed === 'UTC' || trimmed === 'GMT';
+}
+
 export function formatRelativeTime(date: Date): string {
   const now = new Date();
   const diffMs = date.getTime() - now.getTime();

@@ -1540,18 +1540,25 @@ def get_schedule_definition(repo_path: str, schedule_id: str) -> Optional[Schedu
         return None
 
 
-def save_schedule_definition(repo_path: str, schedule: ScheduleDefinition) -> None:
+def save_schedule_definition(
+    repo_path: str,
+    schedule: ScheduleDefinition,
+    create_new: bool = False
+) -> None:
     """
     Save a schedule definition to JSON.
 
     Args:
         repo_path: Path to the repository
         schedule: The schedule definition to save
+        create_new: If True, use exclusive mode to ensure atomic creation.
+                   Raises FileExistsError if file already exists.
     """
     schedules_dir = get_repo_schedules_dir(repo_path)
     schedule_path = schedules_dir / f"{schedule.id}.json"
 
-    with open(schedule_path, "w", encoding="utf-8") as f:
+    mode = "x" if create_new else "w"
+    with open(schedule_path, mode, encoding="utf-8") as f:
         json.dump(schedule.to_dict(), f, indent=2)
 
 

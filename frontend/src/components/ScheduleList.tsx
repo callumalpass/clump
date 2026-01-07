@@ -1,6 +1,6 @@
 import { useState, useEffect, memo, type MutableRefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { useSchedules, describeCron, formatRelativeTime, CRON_PRESETS, isValidCronExpression } from '../hooks/useSchedules';
+import { useSchedules, describeCron, formatRelativeTime, CRON_PRESETS, isValidCronExpression, isValidTimezone } from '../hooks/useSchedules';
 import type { ScheduledJob, ScheduledJobCreate, ScheduledJobTargetType, CommandsResponse } from '../types';
 
 interface ScheduleListProps {
@@ -44,6 +44,8 @@ export function ScheduleList({ repoId, commands, selectedScheduleId, onSelectSch
     try {
       setActionError(null);
       await triggerNow(schedule.id);
+      // Clear any previous errors on success
+      setActionError(null);
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'Failed to trigger job');
     }
@@ -60,6 +62,8 @@ export function ScheduleList({ repoId, commands, selectedScheduleId, onSelectSch
   };
 
   const handleTogglePause = async (schedule: ScheduledJob) => {
+    const action = schedule.status === 'paused' ? 'resume' : 'pause';
+    if (!confirm(`Are you sure you want to ${action} "${schedule.name}"?`)) return;
     try {
       setActionError(null);
       if (schedule.status === 'paused') {
@@ -103,8 +107,17 @@ export function ScheduleList({ repoId, commands, selectedScheduleId, onSelectSch
 
       {/* Error */}
       {(error || actionError) && (
-        <div className="mx-4 mt-4 p-4 bg-danger-400/10 rounded-stoody text-sm text-danger-400">
-          {error || actionError}
+        <div className="mx-4 mt-4 p-4 bg-danger-400/10 rounded-stoody text-sm text-danger-400 flex items-center justify-between">
+          <span>{error || actionError}</span>
+          <button
+            onClick={() => setActionError(null)}
+            className="ml-2 p-1 hover:bg-danger-400/20 rounded transition-colors"
+            title="Dismiss error"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       )}
 
@@ -397,7 +410,7 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
     }
 
     if (form.target_type !== 'custom' && !form.command_id) {
-      setError('Command is required');
+      setError(`No commands available for target type "${form.target_type}". Please add commands first or use "custom" target type with a custom prompt.`);
       return;
     }
 
@@ -491,7 +504,7 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
               onChange={(e) => {
                 if (e.target.value === 'custom') {
                   setIsCustomCron(true);
-                  setForm((f) => ({ ...f, cron_expression: '' }));
+                  // Keep current cron_expression - it will show in the input field
                 } else {
                   setIsCustomCron(false);
                   setForm((f) => ({ ...f, cron_expression: e.target.value }));
@@ -526,12 +539,37 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
             <p className="text-xs text-gray-500 mt-1">
               {form.cron_expression ? (
                 <>
-                  {describeCron(form.cron_expression)} ({form.timezone})
+                  {describeCron(form.cron_expression)}
                 </>
               ) : (
-                <>Enter a cron expression ({form.timezone})</>
+                <>Enter a cron expression</>
               )}
             </p>
+          </div>
+
+          {/* Timezone */}
+          <div>
+            <label className="block text-sm font-medium mb-2">Timezone</label>
+            <input
+              type="text"
+              value={form.timezone}
+              onChange={(e) => setForm((f) => ({ ...f, timezone: e.target.value }))}
+              placeholder="e.g., America/New_York"
+              className={`w-full bg-gray-800 border rounded-stoody px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blurple-500 transition-colors ${
+                form.timezone && !isValidTimezone(form.timezone)
+                  ? 'border-warning-500'
+                  : 'border-gray-750'
+              }`}
+            />
+            {form.timezone && !isValidTimezone(form.timezone) ? (
+              <p className="text-xs text-warning-500 mt-1">
+                Timezone may not be valid. Use IANA format (e.g., America/New_York, Europe/London, UTC)
+              </p>
+            ) : (
+              <p className="text-xs text-gray-500 mt-1">
+                IANA timezone (e.g., America/New_York, Europe/London, UTC)
+              </p>
+            )}
           </div>
 
           {/* Target Type */}
@@ -618,7 +656,9 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
               <select
                 value={form.command_id}
                 onChange={(e) => setForm((f) => ({ ...f, command_id: e.target.value }))}
-                className="w-full bg-gray-800 border border-gray-750 rounded-stoody px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blurple-500 transition-colors"
+                className={`w-full bg-gray-800 border rounded-stoody px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blurple-500 transition-colors ${
+                  availableCommands.length === 0 ? 'border-warning-500' : 'border-gray-750'
+                }`}
               >
                 {availableCommands.length === 0 ? (
                   <option value="">No commands available</option>
@@ -630,6 +670,11 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
                   ))
                 )}
               </select>
+              {availableCommands.length === 0 && (
+                <p className="text-xs text-warning-500 mt-1">
+                  No commands available for {form.target_type}. Add commands in the Commands tab or use "custom" target type with a custom prompt.
+                </p>
+              )}
             </div>
           )}
 

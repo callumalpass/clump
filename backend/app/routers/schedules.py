@@ -105,6 +105,16 @@ class ScheduledJobCreate(BaseModel):
             raise ValueError(f"target_type must be one of: {valid}")
         return v
 
+    @field_validator("cli_type")
+    @classmethod
+    def validate_cli_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        valid = {"claude", "gemini", "codex"}
+        if v not in valid:
+            raise ValueError(f"cli_type must be one of: {valid}")
+        return v
+
 
 class ScheduledJobUpdate(BaseModel):
     """Request body for updating a scheduled job."""
@@ -157,6 +167,16 @@ class ScheduledJobUpdate(BaseModel):
             pytz.timezone(v)
         except pytz.UnknownTimeZoneError:
             raise ValueError(f"Unknown timezone: {v}")
+        return v
+
+    @field_validator("cli_type")
+    @classmethod
+    def validate_cli_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        valid = {"claude", "gemini", "codex"}
+        if v not in valid:
+            raise ValueError(f"cli_type must be one of: {valid}")
         return v
 
 
@@ -356,32 +376,45 @@ async def create_scheduled_job(repo_id: int, data: ScheduledJobCreate) -> Schedu
                 detail="command_id is required when target_type is not 'custom'"
             )
 
-    # Generate unique schedule ID
+    # Generate unique schedule ID with retry on race condition
+    max_retries = 5
     schedule_id = generate_schedule_id(data.name, repo["local_path"])
 
-    # Create definition
-    definition = ScheduleDefinition(
-        id=schedule_id,
-        name=data.name,
-        description=data.description,
-        status="active",
-        cron_expression=data.cron_expression,
-        timezone=data.timezone,
-        target_type=data.target_type,
-        filter_query=data.filter_query,
-        command_id=data.command_id,
-        custom_prompt=data.custom_prompt,
-        max_items=data.max_items,
-        only_new=data.only_new,
-        permission_mode=data.permission_mode,
-        allowed_tools=data.allowed_tools,
-        max_turns=data.max_turns,
-        model=data.model,
-        cli_type=data.cli_type,
-    )
+    for attempt in range(max_retries):
+        # Create definition
+        definition = ScheduleDefinition(
+            id=schedule_id,
+            name=data.name,
+            description=data.description,
+            status="active",
+            cron_expression=data.cron_expression,
+            timezone=data.timezone,
+            target_type=data.target_type,
+            filter_query=data.filter_query,
+            command_id=data.command_id,
+            custom_prompt=data.custom_prompt,
+            max_items=data.max_items,
+            only_new=data.only_new,
+            permission_mode=data.permission_mode,
+            allowed_tools=data.allowed_tools,
+            max_turns=data.max_turns,
+            model=data.model,
+            cli_type=data.cli_type,
+        )
 
-    # Save to JSON
-    save_schedule_definition(repo["local_path"], definition)
+        try:
+            # Save to JSON with atomic creation
+            save_schedule_definition(repo["local_path"], definition, create_new=True)
+            break
+        except FileExistsError:
+            # Race condition: another request created a file with the same ID
+            # Regenerate the ID with a suffix
+            schedule_id = f"{schedule_id}-{attempt + 2}"
+            if attempt == max_retries - 1:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Failed to create schedule: too many concurrent requests with the same name"
+                )
 
     # Create runtime state in SQLite
     async with get_repo_db(repo["local_path"]) as db:
@@ -461,7 +494,7 @@ async def update_scheduled_job(
     # Save updated definition
     save_schedule_definition(repo["local_path"], definition)
 
-    # Update runtime state
+    # Update runtime state (create if doesn't exist)
     async with get_repo_db(repo["local_path"]) as db:
         result = await db.execute(
             select(ScheduledJob).where(
@@ -470,6 +503,10 @@ async def update_scheduled_job(
             )
         )
         runtime = result.scalar_one_or_none()
+
+        if not runtime:
+            # Create runtime if it doesn't exist
+            runtime = await get_or_create_runtime(db, repo_id, schedule_id, definition)
 
         if runtime:
             # Sync definition fields to runtime
@@ -507,12 +544,12 @@ async def delete_scheduled_job(repo_id: int, schedule_id: str) -> dict:
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
 
-    # Delete JSON definition
-    deleted = delete_schedule_definition(repo["local_path"], schedule_id)
-    if not deleted:
+    # Verify definition exists before attempting delete
+    definition = get_schedule_definition(repo["local_path"], schedule_id)
+    if not definition:
         raise HTTPException(status_code=404, detail="Scheduled job not found")
 
-    # Delete runtime state from SQLite
+    # Delete runtime state from SQLite first (can be rolled back)
     async with get_repo_db(repo["local_path"]) as db:
         result = await db.execute(
             select(ScheduledJob).where(
@@ -525,6 +562,17 @@ async def delete_scheduled_job(repo_id: int, schedule_id: str) -> dict:
         if runtime:
             await db.delete(runtime)
             await db.commit()
+
+    # Delete JSON definition (after SQLite succeeds)
+    # If this fails, the schedule will be orphaned in JSON but not in SQLite
+    # which is safer than the reverse (can be manually cleaned up)
+    deleted = delete_schedule_definition(repo["local_path"], schedule_id)
+    if not deleted:
+        # This shouldn't happen since we checked above, but handle it gracefully
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to delete schedule definition file"
+        )
 
     return {"status": "deleted", "id": schedule_id}
 

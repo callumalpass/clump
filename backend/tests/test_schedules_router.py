@@ -407,9 +407,33 @@ class TestScheduledJobUpdate:
 class TestListScheduledJobs:
     """Tests for GET /repos/{repo_id}/schedules endpoint."""
 
-    def test_list_jobs_success(self, client, mock_repo, mock_job):
+    @pytest.fixture
+    def mock_definition(self):
+        """Create a mock ScheduleDefinition for list tests."""
+        return ScheduleDefinition(
+            id="test-job",
+            name="Test Job",
+            description="A test scheduled job",
+            status="active",
+            cron_expression="0 9 * * *",
+            timezone="UTC",
+            target_type="issues",
+            filter_query="label:bug",
+            command_id="test-command",
+            custom_prompt=None,
+            max_items=10,
+            only_new=False,
+            permission_mode="default",
+            allowed_tools=["Read", "Grep"],
+            max_turns=5,
+            model="claude-3-sonnet",
+            cli_type=None,
+        )
+
+    def test_list_jobs_success(self, client, mock_repo, mock_job, mock_definition):
         """Lists jobs successfully for a repository."""
         with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
+             patch("app.routers.schedules.list_schedule_definitions", return_value=[mock_definition]), \
              patch("app.routers.schedules.get_repo_db") as mock_db:
 
             mock_session = AsyncMock()
@@ -437,6 +461,7 @@ class TestListScheduledJobs:
     def test_list_jobs_empty(self, client, mock_repo):
         """Returns empty list when no jobs exist."""
         with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
+             patch("app.routers.schedules.list_schedule_definitions", return_value=[]), \
              patch("app.routers.schedules.get_repo_db") as mock_db:
 
             mock_session = AsyncMock()
@@ -458,25 +483,12 @@ class TestCreateScheduledJob:
     def test_create_job_success(self, client, mock_repo, mock_job):
         """Creates job successfully."""
         with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
-             patch("app.routers.schedules.calculate_next_run", return_value=datetime(2024, 1, 15, 9, 0, 0)), \
+             patch("app.routers.schedules.generate_schedule_id", return_value="test-job-id"), \
+             patch("app.routers.schedules.save_schedule_definition") as mock_save, \
+             patch("app.routers.schedules.get_or_create_runtime", new_callable=AsyncMock, return_value=mock_job), \
              patch("app.routers.schedules.get_repo_db") as mock_db:
 
             mock_session = AsyncMock()
-            mock_session.add = MagicMock()
-            mock_session.commit = AsyncMock()
-            mock_session.refresh = AsyncMock()
-
-            # Mock the refresh to set the job ID
-            def set_job_id(job):
-                job.id = 1
-                job.status = ScheduledJobStatus.ACTIVE.value
-                job.run_count = 0
-                job.created_at = datetime(2024, 1, 1, 0, 0, 0)
-                job.updated_at = datetime(2024, 1, 1, 0, 0, 0)
-                job.last_run_at = None
-                job.last_run_status = None
-            mock_session.refresh.side_effect = set_job_id
-
             mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_db.return_value.__aexit__ = AsyncMock(return_value=None)
 
@@ -488,8 +500,7 @@ class TestCreateScheduledJob:
             })
 
             assert response.status_code == 200
-            mock_session.add.assert_called_once()
-            mock_session.commit.assert_called_once()
+            mock_save.assert_called_once()
 
     def test_create_job_repo_not_found(self, client):
         """Returns 404 when repository not found."""
@@ -531,9 +542,33 @@ class TestCreateScheduledJob:
 class TestGetScheduledJob:
     """Tests for GET /repos/{repo_id}/schedules/{job_id} endpoint."""
 
-    def test_get_job_success(self, client, mock_repo, mock_job):
+    @pytest.fixture
+    def mock_definition(self):
+        """Create a mock ScheduleDefinition for get tests."""
+        return ScheduleDefinition(
+            id="test-job",
+            name="Test Job",
+            description="A test scheduled job",
+            status="active",
+            cron_expression="0 9 * * *",
+            timezone="UTC",
+            target_type="issues",
+            filter_query="label:bug",
+            command_id="test-command",
+            custom_prompt=None,
+            max_items=10,
+            only_new=False,
+            permission_mode="default",
+            allowed_tools=["Read", "Grep"],
+            max_turns=5,
+            model="claude-3-sonnet",
+            cli_type=None,
+        )
+
+    def test_get_job_success(self, client, mock_repo, mock_job, mock_definition):
         """Gets job details successfully."""
         with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
+             patch("app.routers.schedules.get_schedule_definition", return_value=mock_definition), \
              patch("app.routers.schedules.get_repo_db") as mock_db:
 
             mock_session = AsyncMock()
@@ -543,7 +578,7 @@ class TestGetScheduledJob:
             mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_db.return_value.__aexit__ = AsyncMock(return_value=None)
 
-            response = client.get("/repos/1/schedules/1")
+            response = client.get("/repos/1/schedules/test-job")
 
             assert response.status_code == 200
             assert response.json()["name"] == "Test Job"
@@ -551,16 +586,9 @@ class TestGetScheduledJob:
     def test_get_job_not_found(self, client, mock_repo):
         """Returns 404 when job not found."""
         with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
-             patch("app.routers.schedules.get_repo_db") as mock_db:
+             patch("app.routers.schedules.get_schedule_definition", return_value=None):
 
-            mock_session = AsyncMock()
-            mock_result = MagicMock()
-            mock_result.scalar_one_or_none.return_value = None
-            mock_session.execute = AsyncMock(return_value=mock_result)
-            mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_db.return_value.__aexit__ = AsyncMock(return_value=None)
-
-            response = client.get("/repos/1/schedules/999")
+            response = client.get("/repos/1/schedules/nonexistent")
 
             assert response.status_code == 404
 
@@ -575,9 +603,34 @@ class TestGetScheduledJob:
 class TestUpdateScheduledJob:
     """Tests for PATCH /repos/{repo_id}/schedules/{job_id} endpoint."""
 
-    def test_update_job_name(self, client, mock_repo, mock_job):
+    @pytest.fixture
+    def mock_definition(self):
+        """Create a mock ScheduleDefinition for update tests."""
+        return ScheduleDefinition(
+            id="test-job",
+            name="Test Job",
+            description="A test scheduled job",
+            status="active",
+            cron_expression="0 9 * * *",
+            timezone="UTC",
+            target_type="issues",
+            filter_query="label:bug",
+            command_id="test-command",
+            custom_prompt=None,
+            max_items=10,
+            only_new=False,
+            permission_mode="default",
+            allowed_tools=["Read", "Grep"],
+            max_turns=5,
+            model="claude-3-sonnet",
+            cli_type=None,
+        )
+
+    def test_update_job_name(self, client, mock_repo, mock_job, mock_definition):
         """Updates job name successfully."""
         with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
+             patch("app.routers.schedules.get_schedule_definition", return_value=mock_definition), \
+             patch("app.routers.schedules.save_schedule_definition") as mock_save, \
              patch("app.routers.schedules.get_repo_db") as mock_db:
 
             mock_session = AsyncMock()
@@ -589,16 +642,19 @@ class TestUpdateScheduledJob:
             mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_db.return_value.__aexit__ = AsyncMock(return_value=None)
 
-            response = client.patch("/repos/1/schedules/1", json={
+            response = client.patch("/repos/1/schedules/test-job", json={
                 "name": "Updated Name"
             })
 
             assert response.status_code == 200
+            mock_save.assert_called_once()
             mock_session.commit.assert_called_once()
 
-    def test_update_job_cron_recalculates_next_run(self, client, mock_repo, mock_job):
+    def test_update_job_cron_recalculates_next_run(self, client, mock_repo, mock_job, mock_definition):
         """Recalculates next_run when cron expression is updated."""
         with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
+             patch("app.routers.schedules.get_schedule_definition", return_value=mock_definition), \
+             patch("app.routers.schedules.save_schedule_definition") as mock_save, \
              patch("app.routers.schedules.calculate_next_run", return_value=datetime(2024, 1, 20, 12, 0, 0)) as mock_calc, \
              patch("app.routers.schedules.get_repo_db") as mock_db:
 
@@ -611,7 +667,7 @@ class TestUpdateScheduledJob:
             mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_db.return_value.__aexit__ = AsyncMock(return_value=None)
 
-            response = client.patch("/repos/1/schedules/1", json={
+            response = client.patch("/repos/1/schedules/test-job", json={
                 "cron_expression": "0 12 * * *"
             })
 
@@ -621,16 +677,9 @@ class TestUpdateScheduledJob:
     def test_update_job_not_found(self, client, mock_repo):
         """Returns 404 when job not found."""
         with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
-             patch("app.routers.schedules.get_repo_db") as mock_db:
+             patch("app.routers.schedules.get_schedule_definition", return_value=None):
 
-            mock_session = AsyncMock()
-            mock_result = MagicMock()
-            mock_result.scalar_one_or_none.return_value = None
-            mock_session.execute = AsyncMock(return_value=mock_result)
-            mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_db.return_value.__aexit__ = AsyncMock(return_value=None)
-
-            response = client.patch("/repos/1/schedules/999", json={
+            response = client.patch("/repos/1/schedules/nonexistent", json={
                 "name": "New Name"
             })
 
@@ -640,9 +689,34 @@ class TestUpdateScheduledJob:
 class TestDeleteScheduledJob:
     """Tests for DELETE /repos/{repo_id}/schedules/{job_id} endpoint."""
 
-    def test_delete_job_success(self, client, mock_repo, mock_job):
+    @pytest.fixture
+    def mock_definition(self):
+        """Create a mock ScheduleDefinition for delete tests."""
+        return ScheduleDefinition(
+            id="test-job",
+            name="Test Job",
+            description="A test scheduled job",
+            status="active",
+            cron_expression="0 9 * * *",
+            timezone="UTC",
+            target_type="issues",
+            filter_query="label:bug",
+            command_id="test-command",
+            custom_prompt=None,
+            max_items=10,
+            only_new=False,
+            permission_mode="default",
+            allowed_tools=["Read", "Grep"],
+            max_turns=5,
+            model="claude-3-sonnet",
+            cli_type=None,
+        )
+
+    def test_delete_job_success(self, client, mock_repo, mock_job, mock_definition):
         """Deletes job successfully."""
         with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
+             patch("app.routers.schedules.get_schedule_definition", return_value=mock_definition), \
+             patch("app.routers.schedules.delete_schedule_definition", return_value=True), \
              patch("app.routers.schedules.get_repo_db") as mock_db:
 
             mock_session = AsyncMock()
@@ -654,7 +728,7 @@ class TestDeleteScheduledJob:
             mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_db.return_value.__aexit__ = AsyncMock(return_value=None)
 
-            response = client.delete("/repos/1/schedules/1")
+            response = client.delete("/repos/1/schedules/test-job")
 
             assert response.status_code == 200
             assert response.json()["status"] == "deleted"
@@ -663,16 +737,9 @@ class TestDeleteScheduledJob:
     def test_delete_job_not_found(self, client, mock_repo):
         """Returns 404 when job not found."""
         with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
-             patch("app.routers.schedules.get_repo_db") as mock_db:
+             patch("app.routers.schedules.get_schedule_definition", return_value=None):
 
-            mock_session = AsyncMock()
-            mock_result = MagicMock()
-            mock_result.scalar_one_or_none.return_value = None
-            mock_session.execute = AsyncMock(return_value=mock_result)
-            mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_db.return_value.__aexit__ = AsyncMock(return_value=None)
-
-            response = client.delete("/repos/1/schedules/999")
+            response = client.delete("/repos/1/schedules/nonexistent")
 
             assert response.status_code == 404
 
@@ -680,27 +747,61 @@ class TestDeleteScheduledJob:
 class TestTriggerJobNow:
     """Tests for POST /repos/{repo_id}/schedules/{job_id}/run endpoint."""
 
-    def test_trigger_job_success(self, client, mock_repo, mock_job_run):
+    @pytest.fixture
+    def mock_definition(self):
+        """Create a mock ScheduleDefinition for trigger tests."""
+        return ScheduleDefinition(
+            id="test-job",
+            name="Test Job",
+            description="A test scheduled job",
+            status="active",
+            cron_expression="0 9 * * *",
+            timezone="UTC",
+            target_type="issues",
+            filter_query="label:bug",
+            command_id="test-command",
+            custom_prompt=None,
+            max_items=10,
+            only_new=False,
+            permission_mode="default",
+            allowed_tools=["Read", "Grep"],
+            max_turns=5,
+            model="claude-3-sonnet",
+            cli_type=None,
+        )
+
+    def test_trigger_job_success(self, client, mock_repo, mock_job_run, mock_definition, mock_job):
         """Triggers job successfully."""
         with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
+             patch("app.routers.schedules.get_schedule_definition", return_value=mock_definition), \
+             patch("app.routers.schedules.get_or_create_runtime", new_callable=AsyncMock, return_value=mock_job), \
+             patch("app.routers.schedules.get_repo_db") as mock_db, \
              patch("app.routers.schedules.scheduler") as mock_scheduler:
 
+            mock_session = AsyncMock()
+            mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_db.return_value.__aexit__ = AsyncMock(return_value=None)
             mock_scheduler.trigger_job = AsyncMock(return_value=(mock_job_run, None))
 
-            response = client.post("/repos/1/schedules/1/run")
+            response = client.post("/repos/1/schedules/test-job/run")
 
             assert response.status_code == 200
             assert response.json()["status"] == "triggered"
-            mock_scheduler.trigger_job.assert_called_once_with(1, 1)
 
-    def test_trigger_job_already_running(self, client, mock_repo):
+    def test_trigger_job_already_running(self, client, mock_repo, mock_definition, mock_job):
         """Returns 409 when job is already running."""
         with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
+             patch("app.routers.schedules.get_schedule_definition", return_value=mock_definition), \
+             patch("app.routers.schedules.get_or_create_runtime", new_callable=AsyncMock, return_value=mock_job), \
+             patch("app.routers.schedules.get_repo_db") as mock_db, \
              patch("app.routers.schedules.scheduler") as mock_scheduler:
 
+            mock_session = AsyncMock()
+            mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_db.return_value.__aexit__ = AsyncMock(return_value=None)
             mock_scheduler.trigger_job = AsyncMock(return_value=(None, "already_running"))
 
-            response = client.post("/repos/1/schedules/1/run")
+            response = client.post("/repos/1/schedules/test-job/run")
 
             assert response.status_code == 409
             assert "already running" in response.json()["detail"].lower()
@@ -708,11 +809,9 @@ class TestTriggerJobNow:
     def test_trigger_job_not_found(self, client, mock_repo):
         """Returns 404 when job not found."""
         with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
-             patch("app.routers.schedules.scheduler") as mock_scheduler:
+             patch("app.routers.schedules.get_schedule_definition", return_value=None):
 
-            mock_scheduler.trigger_job = AsyncMock(return_value=(None, None))
-
-            response = client.post("/repos/1/schedules/999/run")
+            response = client.post("/repos/1/schedules/nonexistent/run")
 
             assert response.status_code == 404
 
@@ -720,9 +819,34 @@ class TestTriggerJobNow:
 class TestPauseJob:
     """Tests for POST /repos/{repo_id}/schedules/{job_id}/pause endpoint."""
 
-    def test_pause_job_success(self, client, mock_repo, mock_job):
+    @pytest.fixture
+    def mock_definition(self):
+        """Create a mock ScheduleDefinition for pause tests."""
+        return ScheduleDefinition(
+            id="test-job",
+            name="Test Job",
+            description="A test scheduled job",
+            status="active",
+            cron_expression="0 9 * * *",
+            timezone="UTC",
+            target_type="issues",
+            filter_query="label:bug",
+            command_id="test-command",
+            custom_prompt=None,
+            max_items=10,
+            only_new=False,
+            permission_mode="default",
+            allowed_tools=["Read", "Grep"],
+            max_turns=5,
+            model="claude-3-sonnet",
+            cli_type=None,
+        )
+
+    def test_pause_job_success(self, client, mock_repo, mock_job, mock_definition):
         """Pauses job successfully."""
         with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
+             patch("app.routers.schedules.get_schedule_definition", return_value=mock_definition), \
+             patch("app.routers.schedules.save_schedule_definition") as mock_save, \
              patch("app.routers.schedules.get_repo_db") as mock_db:
 
             mock_session = AsyncMock()
@@ -734,24 +858,18 @@ class TestPauseJob:
             mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_db.return_value.__aexit__ = AsyncMock(return_value=None)
 
-            response = client.post("/repos/1/schedules/1/pause")
+            response = client.post("/repos/1/schedules/test-job/pause")
 
             assert response.status_code == 200
-            assert mock_job.status == ScheduledJobStatus.PAUSED.value
+            mock_save.assert_called_once()
+            assert mock_definition.status == "paused"
 
     def test_pause_job_not_found(self, client, mock_repo):
         """Returns 404 when job not found."""
         with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
-             patch("app.routers.schedules.get_repo_db") as mock_db:
+             patch("app.routers.schedules.get_schedule_definition", return_value=None):
 
-            mock_session = AsyncMock()
-            mock_result = MagicMock()
-            mock_result.scalar_one_or_none.return_value = None
-            mock_session.execute = AsyncMock(return_value=mock_result)
-            mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_db.return_value.__aexit__ = AsyncMock(return_value=None)
-
-            response = client.post("/repos/1/schedules/999/pause")
+            response = client.post("/repos/1/schedules/nonexistent/pause")
 
             assert response.status_code == 404
 
@@ -759,11 +877,36 @@ class TestPauseJob:
 class TestResumeJob:
     """Tests for POST /repos/{repo_id}/schedules/{job_id}/resume endpoint."""
 
-    def test_resume_job_success(self, client, mock_repo, mock_job):
+    @pytest.fixture
+    def mock_definition(self):
+        """Create a mock ScheduleDefinition for resume tests."""
+        return ScheduleDefinition(
+            id="test-job",
+            name="Test Job",
+            description="A test scheduled job",
+            status="paused",
+            cron_expression="0 9 * * *",
+            timezone="UTC",
+            target_type="issues",
+            filter_query="label:bug",
+            command_id="test-command",
+            custom_prompt=None,
+            max_items=10,
+            only_new=False,
+            permission_mode="default",
+            allowed_tools=["Read", "Grep"],
+            max_turns=5,
+            model="claude-3-sonnet",
+            cli_type=None,
+        )
+
+    def test_resume_job_success(self, client, mock_repo, mock_job, mock_definition):
         """Resumes job successfully."""
         mock_job.status = ScheduledJobStatus.PAUSED.value
 
         with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
+             patch("app.routers.schedules.get_schedule_definition", return_value=mock_definition), \
+             patch("app.routers.schedules.save_schedule_definition") as mock_save, \
              patch("app.routers.schedules.calculate_next_run", return_value=datetime(2024, 1, 15, 9, 0, 0)), \
              patch("app.routers.schedules.get_repo_db") as mock_db:
 
@@ -776,24 +919,18 @@ class TestResumeJob:
             mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_db.return_value.__aexit__ = AsyncMock(return_value=None)
 
-            response = client.post("/repos/1/schedules/1/resume")
+            response = client.post("/repos/1/schedules/test-job/resume")
 
             assert response.status_code == 200
-            assert mock_job.status == ScheduledJobStatus.ACTIVE.value
+            mock_save.assert_called_once()
+            assert mock_definition.status == "active"
 
     def test_resume_job_not_found(self, client, mock_repo):
         """Returns 404 when job not found."""
         with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
-             patch("app.routers.schedules.get_repo_db") as mock_db:
+             patch("app.routers.schedules.get_schedule_definition", return_value=None):
 
-            mock_session = AsyncMock()
-            mock_result = MagicMock()
-            mock_result.scalar_one_or_none.return_value = None
-            mock_session.execute = AsyncMock(return_value=mock_result)
-            mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_db.return_value.__aexit__ = AsyncMock(return_value=None)
-
-            response = client.post("/repos/1/schedules/999/resume")
+            response = client.post("/repos/1/schedules/nonexistent/resume")
 
             assert response.status_code == 404
 
@@ -801,12 +938,40 @@ class TestResumeJob:
 class TestListJobRuns:
     """Tests for GET /repos/{repo_id}/schedules/{job_id}/runs endpoint."""
 
-    def test_list_runs_success(self, client, mock_repo, mock_job_run):
+    @pytest.fixture
+    def mock_definition(self):
+        """Create a mock ScheduleDefinition for list runs tests."""
+        return ScheduleDefinition(
+            id="test-job",
+            name="Test Job",
+            description="A test scheduled job",
+            status="active",
+            cron_expression="0 9 * * *",
+            timezone="UTC",
+            target_type="issues",
+            filter_query="label:bug",
+            command_id="test-command",
+            custom_prompt=None,
+            max_items=10,
+            only_new=False,
+            permission_mode="default",
+            allowed_tools=["Read", "Grep"],
+            max_turns=5,
+            model="claude-3-sonnet",
+            cli_type=None,
+        )
+
+    def test_list_runs_success(self, client, mock_repo, mock_job_run, mock_job, mock_definition):
         """Lists job runs successfully."""
         with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
+             patch("app.routers.schedules.get_schedule_definition", return_value=mock_definition), \
              patch("app.routers.schedules.get_repo_db") as mock_db:
 
             mock_session = AsyncMock()
+
+            # Mock runtime query
+            mock_runtime_result = MagicMock()
+            mock_runtime_result.scalar_one_or_none.return_value = mock_job
 
             # Mock count query
             mock_count_result = MagicMock()
@@ -816,11 +981,11 @@ class TestListJobRuns:
             mock_runs_result = MagicMock()
             mock_runs_result.scalars.return_value.all.return_value = [mock_job_run]
 
-            mock_session.execute = AsyncMock(side_effect=[mock_count_result, mock_runs_result])
+            mock_session.execute = AsyncMock(side_effect=[mock_runtime_result, mock_count_result, mock_runs_result])
             mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_db.return_value.__aexit__ = AsyncMock(return_value=None)
 
-            response = client.get("/repos/1/schedules/1/runs")
+            response = client.get("/repos/1/schedules/test-job/runs")
 
             assert response.status_code == 200
             data = response.json()
@@ -828,12 +993,16 @@ class TestListJobRuns:
             assert len(data["runs"]) == 1
             assert data["runs"][0]["status"] == "completed"
 
-    def test_list_runs_with_pagination(self, client, mock_repo, mock_job_run):
+    def test_list_runs_with_pagination(self, client, mock_repo, mock_job_run, mock_job, mock_definition):
         """Lists job runs with pagination parameters."""
         with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
+             patch("app.routers.schedules.get_schedule_definition", return_value=mock_definition), \
              patch("app.routers.schedules.get_repo_db") as mock_db:
 
             mock_session = AsyncMock()
+
+            mock_runtime_result = MagicMock()
+            mock_runtime_result.scalar_one_or_none.return_value = mock_job
 
             mock_count_result = MagicMock()
             mock_count_result.scalar.return_value = 50
@@ -841,11 +1010,11 @@ class TestListJobRuns:
             mock_runs_result = MagicMock()
             mock_runs_result.scalars.return_value.all.return_value = [mock_job_run]
 
-            mock_session.execute = AsyncMock(side_effect=[mock_count_result, mock_runs_result])
+            mock_session.execute = AsyncMock(side_effect=[mock_runtime_result, mock_count_result, mock_runs_result])
             mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_db.return_value.__aexit__ = AsyncMock(return_value=None)
 
-            response = client.get("/repos/1/schedules/1/runs?limit=10&offset=20")
+            response = client.get("/repos/1/schedules/test-job/runs?limit=10&offset=20")
 
             assert response.status_code == 200
             data = response.json()
@@ -854,28 +1023,27 @@ class TestListJobRuns:
     def test_list_runs_repo_not_found(self, client):
         """Returns 404 when repository not found."""
         with patch("app.routers.schedules.get_repo_by_id", return_value=None):
-            response = client.get("/repos/999/schedules/1/runs")
+            response = client.get("/repos/999/schedules/test-job/runs")
 
             assert response.status_code == 404
 
-    def test_list_runs_empty(self, client, mock_repo):
-        """Returns empty list when no runs exist."""
+    def test_list_runs_empty(self, client, mock_repo, mock_definition):
+        """Returns empty list when no runs exist (no runtime)."""
         with patch("app.routers.schedules.get_repo_by_id", return_value=mock_repo), \
+             patch("app.routers.schedules.get_schedule_definition", return_value=mock_definition), \
              patch("app.routers.schedules.get_repo_db") as mock_db:
 
             mock_session = AsyncMock()
 
-            mock_count_result = MagicMock()
-            mock_count_result.scalar.return_value = 0
+            # No runtime found = empty results
+            mock_runtime_result = MagicMock()
+            mock_runtime_result.scalar_one_or_none.return_value = None
 
-            mock_runs_result = MagicMock()
-            mock_runs_result.scalars.return_value.all.return_value = []
-
-            mock_session.execute = AsyncMock(side_effect=[mock_count_result, mock_runs_result])
+            mock_session.execute = AsyncMock(return_value=mock_runtime_result)
             mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_db.return_value.__aexit__ = AsyncMock(return_value=None)
 
-            response = client.get("/repos/1/schedules/1/runs")
+            response = client.get("/repos/1/schedules/test-job/runs")
 
             assert response.status_code == 200
             data = response.json()

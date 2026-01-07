@@ -144,7 +144,7 @@ class GitHubClient:
 
         # Add state filter (skip if "all")
         if state and state != "all":
-            query += f" state:{state}"
+            query += f" is:{state}"
 
         # Add label filters
         if labels:
@@ -206,7 +206,7 @@ class GitHubClient:
         query = f"repo:{owner}/{name} is:issue"
 
         if state and state != "all":
-            query += f" state:{state}"
+            query += f" is:{state}"
 
         if labels:
             for label in labels:
@@ -292,7 +292,7 @@ class GitHubClient:
 
         # Add state filter (skip if "all")
         if state and state != "all":
-            query += f" state:{state}"
+            query += f" is:{state}"
 
         # Add text search (prepend to search in title/body)
         if search_query:
@@ -347,7 +347,7 @@ class GitHubClient:
         query = f"repo:{owner}/{name} is:pr"
 
         if state and state != "all":
-            query += f" state:{state}"
+            query += f" is:{state}"
 
         if search_query:
             query = f"{search_query} {query}"

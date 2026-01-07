@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { describeCron, formatRelativeTime, CRON_PRESETS } from './useSchedules';
+import { describeCron, formatRelativeTime, CRON_PRESETS, isValidCronExpression, isValidTimezone } from './useSchedules';
 
 describe('describeCron', () => {
   describe('every X minutes patterns', () => {
@@ -293,6 +293,213 @@ describe('formatRelativeTime', () => {
       const result = formatRelativeTime(sevenDaysAgo);
       // At exactly 7 days, should fall through to date format
       expect(result).toBeTruthy();
+    });
+  });
+});
+
+describe('isValidCronExpression', () => {
+  describe('valid expressions', () => {
+    it('accepts standard 5-field cron expressions', () => {
+      expect(isValidCronExpression('0 9 * * *')).toBe(true);
+      expect(isValidCronExpression('30 14 * * *')).toBe(true);
+      expect(isValidCronExpression('0 0 1 1 *')).toBe(true);
+    });
+
+    it('accepts wildcard (*) in any field', () => {
+      expect(isValidCronExpression('* * * * *')).toBe(true);
+    });
+
+    it('accepts step values (*/n)', () => {
+      expect(isValidCronExpression('*/5 * * * *')).toBe(true);
+      expect(isValidCronExpression('0 */2 * * *')).toBe(true);
+      expect(isValidCronExpression('*/15 */6 * * *')).toBe(true);
+    });
+
+    it('accepts ranges (n-m)', () => {
+      expect(isValidCronExpression('0 9 * * 1-5')).toBe(true);
+      expect(isValidCronExpression('0-30 * * * *')).toBe(true);
+      expect(isValidCronExpression('0 9-17 * * *')).toBe(true);
+    });
+
+    it('accepts comma-separated values', () => {
+      expect(isValidCronExpression('0 9,12,18 * * *')).toBe(true);
+      expect(isValidCronExpression('0,30 * * * *')).toBe(true);
+      expect(isValidCronExpression('0 9 * * 1,3,5')).toBe(true);
+    });
+
+    it('accepts all CRON_PRESETS (except custom)', () => {
+      CRON_PRESETS.filter(p => p.value !== 'custom').forEach(preset => {
+        expect(isValidCronExpression(preset.value)).toBe(true);
+      });
+    });
+  });
+
+  describe('field range validation', () => {
+    it('validates minute field (0-59)', () => {
+      expect(isValidCronExpression('59 * * * *')).toBe(true);
+      expect(isValidCronExpression('60 * * * *')).toBe(false);
+      expect(isValidCronExpression('-1 * * * *')).toBe(false);
+    });
+
+    it('validates hour field (0-23)', () => {
+      expect(isValidCronExpression('0 23 * * *')).toBe(true);
+      expect(isValidCronExpression('0 24 * * *')).toBe(false);
+    });
+
+    it('validates day of month field (1-31)', () => {
+      expect(isValidCronExpression('0 0 31 * *')).toBe(true);
+      expect(isValidCronExpression('0 0 32 * *')).toBe(false);
+      expect(isValidCronExpression('0 0 0 * *')).toBe(false);
+    });
+
+    it('validates month field (1-12)', () => {
+      expect(isValidCronExpression('0 0 * 12 *')).toBe(true);
+      expect(isValidCronExpression('0 0 * 13 *')).toBe(false);
+      expect(isValidCronExpression('0 0 * 0 *')).toBe(false);
+    });
+
+    it('validates day of week field (0-6)', () => {
+      expect(isValidCronExpression('0 0 * * 6')).toBe(true);
+      expect(isValidCronExpression('0 0 * * 7')).toBe(false);
+    });
+
+    it('validates ranges are within bounds', () => {
+      expect(isValidCronExpression('0 9-17 * * *')).toBe(true);
+      expect(isValidCronExpression('0 22-25 * * *')).toBe(false);
+      expect(isValidCronExpression('55-65 * * * *')).toBe(false);
+    });
+
+    it('validates step values are within bounds', () => {
+      expect(isValidCronExpression('*/30 * * * *')).toBe(true);
+      expect(isValidCronExpression('*/60 * * * *')).toBe(false);
+    });
+  });
+
+  describe('invalid expressions', () => {
+    it('rejects expressions with wrong number of fields', () => {
+      expect(isValidCronExpression('0 9 * *')).toBe(false);
+      expect(isValidCronExpression('0 9 * * * *')).toBe(false);
+      expect(isValidCronExpression('0 9 *')).toBe(false);
+    });
+
+    it('rejects empty strings', () => {
+      expect(isValidCronExpression('')).toBe(false);
+    });
+
+    it('rejects null/undefined', () => {
+      expect(isValidCronExpression(null as unknown as string)).toBe(false);
+      expect(isValidCronExpression(undefined as unknown as string)).toBe(false);
+    });
+
+    it('rejects non-string types', () => {
+      expect(isValidCronExpression(123 as unknown as string)).toBe(false);
+      expect(isValidCronExpression({} as unknown as string)).toBe(false);
+    });
+
+    it('rejects invalid characters', () => {
+      expect(isValidCronExpression('0 9 * * @')).toBe(false);
+      expect(isValidCronExpression('0 9 * * MON')).toBe(false); // Named days not supported
+    });
+
+    it('rejects ranges with start > end', () => {
+      expect(isValidCronExpression('0 17-9 * * *')).toBe(false);
+      expect(isValidCronExpression('0 0 * * 5-1')).toBe(false);
+    });
+  });
+});
+
+describe('isValidTimezone', () => {
+  describe('common IANA timezones', () => {
+    it('accepts UTC and GMT', () => {
+      expect(isValidTimezone('UTC')).toBe(true);
+      expect(isValidTimezone('GMT')).toBe(true);
+    });
+
+    it('accepts common American timezones', () => {
+      expect(isValidTimezone('America/New_York')).toBe(true);
+      expect(isValidTimezone('America/Los_Angeles')).toBe(true);
+      expect(isValidTimezone('America/Chicago')).toBe(true);
+      expect(isValidTimezone('America/Denver')).toBe(true);
+    });
+
+    it('accepts common European timezones', () => {
+      expect(isValidTimezone('Europe/London')).toBe(true);
+      expect(isValidTimezone('Europe/Paris')).toBe(true);
+      expect(isValidTimezone('Europe/Berlin')).toBe(true);
+    });
+
+    it('accepts common Asian timezones', () => {
+      expect(isValidTimezone('Asia/Tokyo')).toBe(true);
+      expect(isValidTimezone('Asia/Shanghai')).toBe(true);
+      expect(isValidTimezone('Asia/Singapore')).toBe(true);
+    });
+
+    it('accepts Australian timezones', () => {
+      expect(isValidTimezone('Australia/Sydney')).toBe(true);
+      expect(isValidTimezone('Pacific/Auckland')).toBe(true);
+    });
+  });
+
+  describe('IANA format validation', () => {
+    it('accepts Region/City format', () => {
+      expect(isValidTimezone('Africa/Cairo')).toBe(true);
+      expect(isValidTimezone('Indian/Mauritius')).toBe(true);
+    });
+
+    it('accepts Region/SubRegion/City format', () => {
+      expect(isValidTimezone('America/North_Dakota/New_Salem')).toBe(true);
+      expect(isValidTimezone('America/Indiana/Indianapolis')).toBe(true);
+    });
+
+    it('accepts timezones with dashes in names', () => {
+      expect(isValidTimezone('America/Port-au-Prince')).toBe(true);
+    });
+
+    it('accepts timezones with underscores', () => {
+      expect(isValidTimezone('America/New_York')).toBe(true);
+      expect(isValidTimezone('Asia/Kuala_Lumpur')).toBe(true);
+    });
+
+    it('accepts timezones with numbers', () => {
+      expect(isValidTimezone('Etc/GMT+5')).toBe(true);
+      expect(isValidTimezone('Etc/GMT-12')).toBe(true);
+    });
+  });
+
+  describe('whitespace handling', () => {
+    it('trims leading/trailing whitespace', () => {
+      expect(isValidTimezone(' UTC ')).toBe(true);
+      expect(isValidTimezone('  America/New_York  ')).toBe(true);
+    });
+  });
+
+  describe('invalid timezones', () => {
+    it('rejects empty strings', () => {
+      expect(isValidTimezone('')).toBe(false);
+    });
+
+    it('rejects null/undefined', () => {
+      expect(isValidTimezone(null as unknown as string)).toBe(false);
+      expect(isValidTimezone(undefined as unknown as string)).toBe(false);
+    });
+
+    it('rejects non-string types', () => {
+      expect(isValidTimezone(123 as unknown as string)).toBe(false);
+      expect(isValidTimezone({} as unknown as string)).toBe(false);
+    });
+
+    it('rejects single-word timezones (except UTC/GMT)', () => {
+      expect(isValidTimezone('America')).toBe(false);
+      expect(isValidTimezone('NewYork')).toBe(false);
+    });
+
+    it('rejects invalid format (no slash)', () => {
+      expect(isValidTimezone('America-New_York')).toBe(false);
+      expect(isValidTimezone('invalid')).toBe(false);
+    });
+
+    it('rejects timezones with spaces', () => {
+      expect(isValidTimezone('America/New York')).toBe(false);
     });
   });
 });

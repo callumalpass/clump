@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ScheduledJob, ScheduledJobUpdate, SessionSummary, CommandsResponse } from '../types';
-import { useScheduleDetail, describeCron, formatRelativeTime, CRON_PRESETS, isValidCronExpression } from '../hooks/useSchedules';
+import { useScheduleDetail, describeCron, formatRelativeTime, CRON_PRESETS, isValidCronExpression, isValidTimezone } from '../hooks/useSchedules';
 
 interface ScheduleDetailProps {
   repoId: number;
@@ -101,6 +101,26 @@ export function ScheduleDetail({
       return;
     }
 
+    // Validate command is selected for non-custom target types
+    const targetType = editForm.target_type || schedule?.target_type;
+    if (targetType !== 'custom') {
+      const commandId = editForm.command_id !== undefined ? editForm.command_id : schedule?.command_id;
+      if (!commandId) {
+        setActionError(`Command is required for target type "${targetType}".`);
+        return;
+      }
+    }
+
+    // Validate custom prompt for custom target type
+    if (targetType === 'custom') {
+      const customPrompt = editForm.custom_prompt !== undefined ? editForm.custom_prompt : schedule?.custom_prompt;
+      const commandId = editForm.command_id !== undefined ? editForm.command_id : schedule?.command_id;
+      if (!customPrompt && !commandId) {
+        setActionError('Custom prompt or command is required for custom target type.');
+        return;
+      }
+    }
+
     setSaving(true);
     setActionError(null);
     try {
@@ -131,6 +151,8 @@ export function ScheduleDetail({
 
   // Handle pause/resume
   const handleTogglePause = async () => {
+    const action = schedule?.status === 'paused' ? 'resume' : 'pause';
+    if (!confirm(`Are you sure you want to ${action} this schedule?`)) return;
     setTogglingPause(true);
     setActionError(null);
     try {
@@ -302,8 +324,17 @@ export function ScheduleDetail({
       </div>
 
       {actionError && (
-        <div className="mb-4 p-3 bg-red-900/30 border border-red-800 rounded text-red-400 text-sm">
-          {actionError}
+        <div className="mb-4 p-3 bg-red-900/30 border border-red-800 rounded text-red-400 text-sm flex items-center justify-between">
+          <span>{actionError}</span>
+          <button
+            onClick={() => setActionError(null)}
+            className="ml-2 p-1 hover:bg-red-900/50 rounded transition-colors"
+            title="Dismiss error"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       )}
 
@@ -320,7 +351,7 @@ export function ScheduleDetail({
                   onChange={(e) => {
                     if (e.target.value === 'custom') {
                       setIsCustomCron(true);
-                      setEditForm({ ...editForm, cron_expression: '' });
+                      // Keep current cron_expression - it will show in the input field
                     } else {
                       setIsCustomCron(false);
                       setEditForm({ ...editForm, cron_expression: e.target.value });
@@ -361,9 +392,17 @@ export function ScheduleDetail({
                   value={editForm.timezone || schedule?.timezone || 'UTC'}
                   onChange={(e) => setEditForm({ ...editForm, timezone: e.target.value })}
                   placeholder="e.g., America/New_York"
-                  className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-gray-200"
+                  className={`w-full bg-gray-700 border rounded px-2 py-1 text-gray-200 ${
+                    (editForm.timezone || schedule?.timezone) && !isValidTimezone(editForm.timezone || schedule?.timezone || '')
+                      ? 'border-yellow-500'
+                      : 'border-gray-600'
+                  }`}
                 />
-                <p className="text-xs text-gray-500 mt-1">IANA timezone (e.g., America/New_York, Europe/London, UTC)</p>
+                {(editForm.timezone || schedule?.timezone) && !isValidTimezone(editForm.timezone || schedule?.timezone || '') ? (
+                  <p className="text-xs text-yellow-500 mt-1">Timezone may not be valid. Use IANA format (e.g., America/New_York, Europe/London, UTC)</p>
+                ) : (
+                  <p className="text-xs text-gray-500 mt-1">IANA timezone (e.g., America/New_York, Europe/London, UTC)</p>
+                )}
               </div>
               <div>
                 <label className="block text-gray-500 mb-1">Target</label>
