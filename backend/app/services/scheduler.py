@@ -835,6 +835,7 @@ class SchedulerService:
                 status=SessionStatus.RUNNING.value,
                 claude_session_id=session_id,
                 scheduled_job_id=job.id,  # Link session to the schedule that created it
+                cli_type=job.cli_type or "claude",  # Use job's CLI type
             )
             db.add(session)
             await db.commit()
@@ -899,6 +900,11 @@ class SchedulerService:
                     )
                     db_session.transcript = result.result
                     db_session.completed_at = datetime.now(timezone.utc)
+                    # Save cost and duration from headless result
+                    if result.cost_usd is not None:
+                        db_session.cost_usd = result.cost_usd
+                    if result.duration_ms is not None:
+                        db_session.duration_ms = result.duration_ms
                     await db.commit()
 
             if result.success:
