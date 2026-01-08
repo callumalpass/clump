@@ -496,3 +496,163 @@ class TestAdapterPathMethods:
         assert sidecar.suffix == ".json"
         assert sidecar.stem == "session-123"
         assert ".clump" in str(sidecar)
+
+
+class TestCodexAdapterSessionDiscovery:
+    """Tests for Codex adapter session discovery methods."""
+
+    @pytest.fixture
+    def adapter(self):
+        return CodexAdapter()
+
+    def test_get_sessions_dir_codex(self, adapter):
+        """Codex sessions dir is ~/.codex/sessions."""
+        sessions_dir = adapter.get_sessions_dir("/any/path")
+        expected = Path.home() / ".codex" / "sessions"
+        assert sessions_dir == expected
+
+    def test_get_resume_session_id_extracts_uuid(self, adapter):
+        """Extracts UUID from Codex session filename."""
+        # Codex filenames look like: rollout-2026-01-01T13-20-18-019b775b-1dc2-7bf1-9681-db60a06cb4cb
+        session_id = "rollout-2026-01-01T13-20-18-019b775b-1dc2-7bf1-9681-db60a06cb4cb"
+        result = adapter.get_resume_session_id(session_id)
+        assert result == "019b775b-1dc2-7bf1-9681-db60a06cb4cb"
+
+    def test_get_resume_session_id_handles_simple_uuid(self, adapter):
+        """Returns simple UUID unchanged."""
+        session_id = "019b775b-1dc2-7bf1-9681-db60a06cb4cb"
+        result = adapter.get_resume_session_id(session_id)
+        assert result == "019b775b-1dc2-7bf1-9681-db60a06cb4cb"
+
+    def test_get_resume_session_id_fallback(self, adapter):
+        """Returns as-is when no UUID pattern found."""
+        session_id = "no-uuid-here"
+        result = adapter.get_resume_session_id(session_id)
+        assert result == "no-uuid-here"
+
+    def test_find_sessions_for_repo_empty(self, adapter, tmp_path, monkeypatch):
+        """Returns empty list when sessions dir doesn't exist."""
+        # Monkey-patch get_sessions_dir to use tmp_path
+        monkeypatch.setattr(
+            adapter,
+            "get_sessions_dir",
+            lambda repo_path: tmp_path / ".codex" / "sessions"
+        )
+        result = adapter.find_sessions_for_repo("/home/user/project")
+        assert result == []
+
+    def test_find_sessions_for_repo_with_matching_session(self, adapter, tmp_path, monkeypatch):
+        """Finds sessions that match the repo path."""
+        import json
+
+        # Create directory structure: sessions/2026/01/09/session.jsonl
+        sessions_dir = tmp_path / ".codex" / "sessions" / "2026" / "01" / "09"
+        sessions_dir.mkdir(parents=True)
+
+        # Create a session file with matching cwd
+        # Use absolute resolved path to match how the adapter normalizes paths
+        repo_path = tmp_path / "my-project"
+        repo_path.mkdir(parents=True, exist_ok=True)
+        resolved_path = str(repo_path.resolve())
+
+        session_file = sessions_dir / "test-session.jsonl"
+        session_data = {
+            "type": "session_meta",
+            "payload": {"cwd": resolved_path}
+        }
+        session_file.write_text(json.dumps(session_data) + "\n")
+
+        # Monkey-patch get_sessions_dir to use tmp_path
+        monkeypatch.setattr(
+            adapter,
+            "get_sessions_dir",
+            lambda rp: tmp_path / ".codex" / "sessions"
+        )
+
+        result = adapter.find_sessions_for_repo(str(repo_path))
+
+        assert len(result) == 1
+        assert result[0] == session_file
+
+    def test_find_sessions_for_repo_excludes_non_matching(self, adapter, tmp_path, monkeypatch):
+        """Excludes sessions that don't match the repo path."""
+        import json
+
+        # Create directory structure: sessions/2026/01/09/session.jsonl
+        sessions_dir = tmp_path / ".codex" / "sessions" / "2026" / "01" / "09"
+        sessions_dir.mkdir(parents=True)
+
+        # Create a session file with DIFFERENT cwd
+        session_file = sessions_dir / "other-session.jsonl"
+        session_data = {
+            "type": "session_meta",
+            "payload": {"cwd": "/different/project"}
+        }
+        session_file.write_text(json.dumps(session_data) + "\n")
+
+        # Monkey-patch get_sessions_dir to use tmp_path
+        monkeypatch.setattr(
+            adapter,
+            "get_sessions_dir",
+            lambda repo_path: tmp_path / ".codex" / "sessions"
+        )
+
+        result = adapter.find_sessions_for_repo("/home/user/project")
+        assert len(result) == 0
+
+    def test_find_sessions_glob_pattern_has_four_levels(self, adapter, tmp_path, monkeypatch):
+        """Verifies the glob pattern correctly uses year/month/day/file structure."""
+        import json
+
+        # Create directory structure with exactly 4 levels as expected by Codex
+        sessions_dir = tmp_path / ".codex" / "sessions" / "2026" / "01" / "09"
+        sessions_dir.mkdir(parents=True)
+
+        # Also create a 3-level structure to ensure it's NOT matched
+        wrong_dir = tmp_path / ".codex" / "sessions" / "2026" / "01"
+        wrong_session = wrong_dir / "wrong.jsonl"
+        wrong_session.write_text('{"type": "session_meta", "payload": {"cwd": "/test/path"}}\n')
+
+        # Create correct 4-level session with matching path
+        test_path = tmp_path / "test-project"
+        test_path.mkdir(parents=True, exist_ok=True)
+        resolved_path = str(test_path.resolve())
+
+        correct_session = sessions_dir / "correct.jsonl"
+        correct_session.write_text(
+            f'{{"type": "session_meta", "payload": {{"cwd": "{resolved_path}"}}}}\n'
+        )
+
+        # Monkey-patch get_sessions_dir
+        monkeypatch.setattr(
+            adapter,
+            "get_sessions_dir",
+            lambda repo_path: tmp_path / ".codex" / "sessions"
+        )
+
+        result = adapter.find_sessions_for_repo(str(test_path))
+
+        # Should find the correct session (4-level path)
+        assert len(result) == 1
+        assert result[0] == correct_session
+
+    def test_find_sessions_for_repo_handles_parse_errors(self, adapter, tmp_path, monkeypatch):
+        """Gracefully handles sessions with invalid JSON."""
+        # Create directory structure
+        sessions_dir = tmp_path / ".codex" / "sessions" / "2026" / "01" / "09"
+        sessions_dir.mkdir(parents=True)
+
+        # Create session file with invalid JSON
+        invalid_session = sessions_dir / "invalid.jsonl"
+        invalid_session.write_text("not valid json\n")
+
+        # Monkey-patch get_sessions_dir
+        monkeypatch.setattr(
+            adapter,
+            "get_sessions_dir",
+            lambda repo_path: tmp_path / ".codex" / "sessions"
+        )
+
+        # Should not raise, just return empty list
+        result = adapter.find_sessions_for_repo("/any/path")
+        assert result == []

@@ -329,7 +329,7 @@ class CodexAdapter(CLIAdapter):
 
         normalized_path = str(Path(repo_path).resolve())
 
-        for session_file in sessions_dir.glob("*/*/*.jsonl"):
+        for session_file in sessions_dir.glob("*/*/*/*.jsonl"):
             try:
                 data = self.parse_session_file(session_file)
                 if data.get("cwd") == normalized_path:
