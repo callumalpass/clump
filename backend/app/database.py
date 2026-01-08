@@ -12,6 +12,7 @@ Performance optimizations:
 - Optimized SQLite pragmas for performance
 """
 
+import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -21,6 +22,20 @@ from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import StaticPool
 
 from app.storage import get_repo_db_path
+
+logger = logging.getLogger(__name__)
+
+
+def _is_duplicate_column_error(e: Exception) -> bool:
+    """Check if an exception is a 'duplicate column' error from SQLite."""
+    error_msg = str(e).lower()
+    return "duplicate column" in error_msg
+
+
+def _is_table_already_exists_error(e: Exception) -> bool:
+    """Check if an exception is a 'table already exists' error from SQLite."""
+    error_msg = str(e).lower()
+    return "already exists" in error_msg
 
 
 class Base(DeclarativeBase):
@@ -95,56 +110,48 @@ def _run_migrations(conn) -> None:
 
     These are idempotent - they check if columns exist before adding.
     Called synchronously within run_sync().
+
+    Raises:
+        Exception: Re-raises any unexpected database errors (not duplicate column errors).
     """
     from sqlalchemy import text
 
-    # Migration: Add only_new column to scheduled_jobs
-    try:
-        conn.execute(text(
-            "ALTER TABLE scheduled_jobs ADD COLUMN only_new INTEGER DEFAULT 0"
-        ))
-    except Exception:
-        pass  # Column already exists
+    migrations = [
+        # (description, SQL statement)
+        ("Add only_new column to scheduled_jobs",
+         "ALTER TABLE scheduled_jobs ADD COLUMN only_new INTEGER DEFAULT 0"),
+        ("Add scheduled_job_id column to sessions",
+         "ALTER TABLE sessions ADD COLUMN scheduled_job_id INTEGER"),
+        ("Add cost_usd column to sessions",
+         "ALTER TABLE sessions ADD COLUMN cost_usd REAL"),
+        ("Add duration_ms column to sessions",
+         "ALTER TABLE sessions ADD COLUMN duration_ms INTEGER"),
+        ("Add cli_type column to sessions",
+         "ALTER TABLE sessions ADD COLUMN cli_type VARCHAR(20) DEFAULT 'claude'"),
+    ]
 
-    # Migration: Add scheduled_job_id column to sessions
-    try:
-        conn.execute(text(
-            "ALTER TABLE sessions ADD COLUMN scheduled_job_id INTEGER"
-        ))
-    except Exception:
-        pass  # Column already exists
+    for description, sql in migrations:
+        try:
+            conn.execute(text(sql))
+            logger.debug(f"Migration applied: {description}")
+        except Exception as e:
+            if _is_duplicate_column_error(e):
+                # Expected - column already exists, nothing to do
+                pass
+            else:
+                # Unexpected error - log and re-raise
+                logger.error(f"Migration failed ({description}): {e}")
+                raise
 
-    # Migration: Add cost_usd column to sessions (for headless session cost tracking)
-    try:
-        conn.execute(text(
-            "ALTER TABLE sessions ADD COLUMN cost_usd REAL"
-        ))
-    except Exception:
-        pass  # Column already exists
-
-    # Migration: Add duration_ms column to sessions (for headless session duration tracking)
-    try:
-        conn.execute(text(
-            "ALTER TABLE sessions ADD COLUMN duration_ms INTEGER"
-        ))
-    except Exception:
-        pass  # Column already exists
-
-    # Migration: Add cli_type column to sessions (for multi-CLI support)
-    try:
-        conn.execute(text(
-            "ALTER TABLE sessions ADD COLUMN cli_type VARCHAR(20) DEFAULT 'claude'"
-        ))
-    except Exception:
-        pass  # Column already exists
-
-    # Create index on cli_type for filtering
+    # Create index on cli_type for filtering (uses IF NOT EXISTS, so no error expected)
     try:
         conn.execute(text(
             "CREATE INDEX IF NOT EXISTS idx_sessions_cli_type ON sessions(cli_type)"
         ))
-    except Exception:
-        pass  # Index already exists
+    except Exception as e:
+        # Log unexpected index creation errors but don't fail the migration
+        # (indexes are performance optimizations, not critical for correctness)
+        logger.warning(f"Failed to create index idx_sessions_cli_type: {e}")
 
 
 async def init_repo_db(local_path: str) -> None:

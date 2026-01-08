@@ -21,11 +21,18 @@ from app.database import (
     _initialized_dbs,
     _get_engine,
     _get_session_factory,
+    _is_duplicate_column_error,
+    _is_table_already_exists_error,
+    _run_migrations,
     init_repo_db,
     get_repo_db,
     close_all_engines,
     clear_engine_cache,
 )
+
+# Import models to register them with Base.metadata
+# This is required for Base.metadata.create_all() to create the actual tables
+import app.models  # noqa: F401
 
 
 class TestEngineManagement:
@@ -510,3 +517,248 @@ class TestDatabaseSessionBehavior:
             async with get_repo_db(repo_path) as session:
                 assert hasattr(session, "refresh")
                 assert callable(session.refresh)
+
+
+class TestIsDuplicateColumnError:
+    """Tests for the _is_duplicate_column_error helper function."""
+
+    def test_detects_duplicate_column_error(self):
+        """Test detection of duplicate column SQLite error."""
+        error = Exception("duplicate column name: only_new")
+        assert _is_duplicate_column_error(error) is True
+
+    def test_detects_duplicate_column_error_uppercase(self):
+        """Test detection handles uppercase error message."""
+        error = Exception("DUPLICATE COLUMN NAME: cost_usd")
+        assert _is_duplicate_column_error(error) is True
+
+    def test_detects_duplicate_column_error_mixed_case(self):
+        """Test detection handles mixed case error message."""
+        error = Exception("Duplicate Column name: scheduled_job_id")
+        assert _is_duplicate_column_error(error) is True
+
+    def test_rejects_table_already_exists_error(self):
+        """Test that table exists errors are not detected as duplicate column."""
+        error = Exception("table sessions already exists")
+        assert _is_duplicate_column_error(error) is False
+
+    def test_rejects_generic_error(self):
+        """Test that generic errors are not detected as duplicate column."""
+        error = Exception("disk I/O error")
+        assert _is_duplicate_column_error(error) is False
+
+    def test_rejects_permission_error(self):
+        """Test that permission errors are not detected as duplicate column."""
+        error = Exception("unable to open database file: Permission denied")
+        assert _is_duplicate_column_error(error) is False
+
+    def test_handles_empty_message(self):
+        """Test handling of empty error message."""
+        error = Exception("")
+        assert _is_duplicate_column_error(error) is False
+
+
+class TestIsTableAlreadyExistsError:
+    """Tests for the _is_table_already_exists_error helper function."""
+
+    def test_detects_table_exists_error(self):
+        """Test detection of table already exists SQLite error."""
+        error = Exception("table sessions already exists")
+        assert _is_table_already_exists_error(error) is True
+
+    def test_detects_table_exists_error_uppercase(self):
+        """Test detection handles uppercase error message."""
+        error = Exception("TABLE SESSIONS ALREADY EXISTS")
+        assert _is_table_already_exists_error(error) is True
+
+    def test_detects_index_exists_error(self):
+        """Test detection of index already exists error."""
+        error = Exception("index idx_sessions_cli_type already exists")
+        assert _is_table_already_exists_error(error) is True
+
+    def test_rejects_duplicate_column_error(self):
+        """Test that duplicate column errors are not detected as table exists."""
+        error = Exception("duplicate column name: only_new")
+        assert _is_table_already_exists_error(error) is False
+
+    def test_rejects_generic_error(self):
+        """Test that generic errors are not detected as table exists."""
+        error = Exception("database is locked")
+        assert _is_table_already_exists_error(error) is False
+
+    def test_handles_empty_message(self):
+        """Test handling of empty error message."""
+        error = Exception("")
+        assert _is_table_already_exists_error(error) is False
+
+
+class TestRunMigrations:
+    """Tests for the _run_migrations function.
+
+    Note: _run_migrations is called via SQLAlchemy's run_sync(), which provides
+    a SQLAlchemy connection that accepts text() objects. These tests use
+    SQLAlchemy sync engines to properly test the migration behavior.
+    """
+
+    def test_runs_all_migrations_on_fresh_db(self, tmp_path):
+        """Test that all migrations are applied to a fresh database."""
+        from sqlalchemy import create_engine, text
+
+        db_path = tmp_path / "test.db"
+        engine = create_engine(f"sqlite:///{db_path}")
+
+        with engine.connect() as conn:
+            # Create base tables that migrations expect
+            conn.execute(text("""
+                CREATE TABLE scheduled_jobs (
+                    id INTEGER PRIMARY KEY
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE sessions (
+                    id INTEGER PRIMARY KEY
+                )
+            """))
+            conn.commit()
+
+            # Run migrations
+            _run_migrations(conn)
+
+            # Verify columns were added
+            result = conn.execute(text("PRAGMA table_info(scheduled_jobs)"))
+            columns = {row[1] for row in result.fetchall()}
+            assert "only_new" in columns
+
+            result = conn.execute(text("PRAGMA table_info(sessions)"))
+            columns = {row[1] for row in result.fetchall()}
+            assert "scheduled_job_id" in columns
+            assert "cost_usd" in columns
+            assert "duration_ms" in columns
+            assert "cli_type" in columns
+
+        engine.dispose()
+
+    def test_idempotent_on_already_migrated_db(self, tmp_path):
+        """Test that migrations can be safely run multiple times."""
+        from sqlalchemy import create_engine, text
+
+        db_path = tmp_path / "test.db"
+        engine = create_engine(f"sqlite:///{db_path}")
+
+        with engine.connect() as conn:
+            # Create tables with all migration columns already present
+            conn.execute(text("""
+                CREATE TABLE scheduled_jobs (
+                    id INTEGER PRIMARY KEY,
+                    only_new INTEGER DEFAULT 0
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE sessions (
+                    id INTEGER PRIMARY KEY,
+                    scheduled_job_id INTEGER,
+                    cost_usd REAL,
+                    duration_ms INTEGER,
+                    cli_type VARCHAR(20) DEFAULT 'claude'
+                )
+            """))
+            conn.execute(text("""
+                CREATE INDEX idx_sessions_cli_type ON sessions(cli_type)
+            """))
+            conn.commit()
+
+            # Run migrations - should not raise any errors
+            _run_migrations(conn)
+
+        engine.dispose()
+
+    def test_reraises_unexpected_errors(self, tmp_path):
+        """Test that unexpected errors are re-raised, not silently ignored."""
+        from sqlalchemy import create_engine, text
+
+        db_path = tmp_path / "test.db"
+        engine = create_engine(f"sqlite:///{db_path}")
+
+        with engine.connect() as conn:
+            # Don't create the scheduled_jobs table - this will cause an unexpected error
+            conn.execute(text("""
+                CREATE TABLE sessions (
+                    id INTEGER PRIMARY KEY
+                )
+            """))
+            conn.commit()
+
+            # Run migrations - should raise because scheduled_jobs table doesn't exist
+            with pytest.raises(Exception) as exc_info:
+                _run_migrations(conn)
+
+            # The error should be about missing table, not about duplicate column
+            assert "no such table" in str(exc_info.value).lower()
+
+        engine.dispose()
+
+    def test_logs_applied_migrations(self, tmp_path, caplog):
+        """Test that applied migrations are logged at debug level."""
+        from sqlalchemy import create_engine, text
+        import logging
+
+        db_path = tmp_path / "test.db"
+        engine = create_engine(f"sqlite:///{db_path}")
+
+        with engine.connect() as conn:
+            # Create base tables
+            conn.execute(text("CREATE TABLE scheduled_jobs (id INTEGER PRIMARY KEY)"))
+            conn.execute(text("CREATE TABLE sessions (id INTEGER PRIMARY KEY)"))
+            conn.commit()
+
+            with caplog.at_level(logging.DEBUG, logger="app.database"):
+                _run_migrations(conn)
+
+            # Check that some migration was logged
+            assert any("Migration applied" in record.message for record in caplog.records)
+
+        engine.dispose()
+
+    def test_logs_unexpected_errors(self, tmp_path, caplog):
+        """Test that unexpected migration errors are logged before re-raising."""
+        from sqlalchemy import create_engine, text
+        import logging
+
+        db_path = tmp_path / "test.db"
+        engine = create_engine(f"sqlite:///{db_path}")
+
+        with engine.connect() as conn:
+            # Don't create tables - will cause errors
+            conn.commit()
+
+            with caplog.at_level(logging.ERROR, logger="app.database"):
+                with pytest.raises(Exception):
+                    _run_migrations(conn)
+
+            # Check that error was logged
+            assert any("Migration failed" in record.message for record in caplog.records)
+
+        engine.dispose()
+
+    def test_index_created_successfully(self, tmp_path):
+        """Test that index is created when migrations run successfully."""
+        from sqlalchemy import create_engine, text
+
+        db_path = tmp_path / "test.db"
+        engine = create_engine(f"sqlite:///{db_path}")
+
+        with engine.connect() as conn:
+            conn.execute(text("CREATE TABLE scheduled_jobs (id INTEGER PRIMARY KEY)"))
+            conn.execute(text("CREATE TABLE sessions (id INTEGER PRIMARY KEY)"))
+            conn.commit()
+
+            _run_migrations(conn)
+
+            # Index should exist now
+            result = conn.execute(text(
+                "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_sessions_cli_type'"
+            ))
+            row = result.fetchone()
+            assert row is not None
+
+        engine.dispose()
