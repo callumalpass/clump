@@ -265,11 +265,11 @@ class ClaudeAdapter(CLIAdapter):
         """
         Encode a local path to Claude's format.
 
-        Claude replaces forward slashes with dashes.
-        Example: /home/user/project -> -home-user-project
+        Claude replaces forward slashes and underscores with dashes.
+        Example: /home/user/my_project -> -home-user-my-project
         """
         normalized = str(Path(local_path).resolve())
-        return normalized.replace("/", "-")
+        return normalized.replace("/", "-").replace("_", "-")
 
     def decode_path(self, encoded: str) -> Optional[str]:
         """

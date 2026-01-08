@@ -141,6 +141,16 @@ class TestClaudeAdapter:
         encoded = adapter.encode_path("/home/user/project")
         assert encoded == "-home-user-project"
 
+    def test_encode_path_with_underscores(self, adapter):
+        """Encodes paths with underscores correctly.
+
+        Claude's format replaces both slashes and underscores with dashes.
+        This must match storage.encode_path behavior for consistent session discovery.
+        """
+        encoded = adapter.encode_path("/home/user/my_project")
+        assert encoded == "-home-user-my-project"
+        assert "_" not in encoded
+
     def test_decode_path(self, adapter):
         """Decodes paths correctly."""
         decoded = adapter.decode_path("-home-user-project")
