@@ -2696,6 +2696,132 @@ class TestTranscriptScanCache:
         # And it should have been cleaned up to MAX_ENTRIES
         assert len(sessions_module._transcript_scan_cache) <= MAX_ENTRIES
 
+    def test_cache_thread_safety_concurrent_access(self, tmp_path):
+        """Test that concurrent cache access from multiple threads is safe.
+
+        This is a regression test for the thread-safety bug where concurrent
+        access to _transcript_scan_cache without locking could cause race
+        conditions when cleanup modifies the cache while other threads read it.
+        """
+        import app.routers.sessions as sessions_module
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import threading
+
+        # Create a bunch of test files
+        num_files = 100
+        files = []
+        for i in range(num_files):
+            transcript = tmp_path / f"concurrent_{i}.jsonl"
+            transcript.write_text(
+                f'{{"type": "user", "message": {{"content": "Hello {i}"}}, "timestamp": "2024-01-15T10:00:00Z"}}\n'
+            )
+            files.append(transcript)
+
+        errors = []
+        results = []
+        lock = threading.Lock()
+
+        def scan_file(file_path):
+            """Scan a file and record the result."""
+            try:
+                result = sessions_module._quick_scan_transcript(file_path)
+                with lock:
+                    results.append(result)
+                return result
+            except Exception as e:
+                with lock:
+                    errors.append((file_path, e))
+                raise
+
+        # Run many concurrent scans to stress test the lock
+        with ThreadPoolExecutor(max_workers=16) as executor:
+            # Submit files multiple times to increase contention
+            futures = []
+            for _ in range(3):  # Run 3 rounds
+                for f in files:
+                    futures.append(executor.submit(scan_file, f))
+
+            # Wait for all futures
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception:
+                    pass  # Error already recorded
+
+        # Should have no errors
+        assert len(errors) == 0, f"Thread safety errors: {errors}"
+
+        # Should have processed all files (3 rounds × num_files)
+        assert len(results) == 3 * num_files
+
+        # Cache should be in valid state
+        assert len(sessions_module._transcript_scan_cache) <= sessions_module.TRANSCRIPT_CACHE_MAX_ENTRIES
+
+    def test_cache_thread_safety_cleanup_during_read(self, tmp_path):
+        """Test that cleanup doesn't corrupt cache during concurrent reads.
+
+        Creates enough files to trigger cleanup, then verifies that concurrent
+        reads during cleanup don't raise errors or return corrupted data.
+        """
+        import app.routers.sessions as sessions_module
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import threading
+        import time
+
+        MAX_ENTRIES = sessions_module.TRANSCRIPT_CACHE_MAX_ENTRIES
+
+        # Create files to fill cache and trigger cleanup
+        num_files = MAX_ENTRIES + 50
+        files = []
+        for i in range(num_files):
+            transcript = tmp_path / f"cleanup_test_{i}.jsonl"
+            transcript.write_text(
+                f'{{"type": "summary", "summary": "File {i}"}}\n'
+                f'{{"type": "user", "message": {{"content": "Content {i}"}}, "timestamp": "2024-01-15T10:00:00Z"}}\n'
+            )
+            files.append(transcript)
+
+        errors = []
+        lock = threading.Lock()
+
+        def scan_and_verify(file_path, expected_idx):
+            """Scan a file and verify the result is not corrupted."""
+            try:
+                result = sessions_module._quick_scan_transcript(file_path)
+                # Verify result has expected structure
+                assert "title" in result, "Missing title key"
+                assert "message_count" in result, "Missing message_count key"
+                # The title should be our summary or None
+                if result["title"] is not None:
+                    assert isinstance(result["title"], str), "Title should be string"
+                return result
+            except Exception as e:
+                with lock:
+                    errors.append((file_path, str(e)))
+                raise
+
+        # Run concurrent scans with high contention
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            futures = []
+            for i, f in enumerate(files):
+                futures.append(executor.submit(scan_and_verify, f, i))
+                # Interleave re-reads of earlier files to increase contention
+                if i > 10 and i % 5 == 0:
+                    earlier_idx = i - 10
+                    futures.append(executor.submit(scan_and_verify, files[earlier_idx], earlier_idx))
+
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception:
+                    pass
+
+        # Should have no errors
+        assert len(errors) == 0, f"Concurrent cleanup errors: {errors}"
+
+        # Cache should be properly bounded
+        assert len(sessions_module._transcript_scan_cache) <= MAX_ENTRIES
+
 
 class TestSessionCache:
     """Tests for SessionCache class."""

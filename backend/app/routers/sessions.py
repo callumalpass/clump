@@ -7,6 +7,7 @@ with optional sidecar metadata stored in ~/.clump/projects/
 
 import asyncio
 import json
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -170,6 +171,7 @@ EXPORT_TITLE_LENGTH = 50  # Safe filename title truncation
 # Transcript scan cache - avoids re-parsing files that haven't changed
 # Cache entry format: (scan_result, file_mtime)
 _transcript_scan_cache: dict[str, tuple[dict, float]] = {}
+_transcript_scan_cache_lock = threading.Lock()  # Thread-safe access for parallel scans
 TRANSCRIPT_CACHE_MAX_ENTRIES = 500  # Keep last N transcript scans cached
 
 # Thread pool for parallel session summary conversion
@@ -629,6 +631,9 @@ def _quick_scan_transcript(transcript_path: Path, cli_type: str = "claude") -> Q
 
     Uses mtime-based caching to avoid re-parsing files that haven't changed.
     When cache exceeds TRANSCRIPT_CACHE_MAX_ENTRIES, older entries are pruned.
+
+    Thread-safety: Uses _transcript_scan_cache_lock to protect concurrent access
+    since this function is called from multiple threads via _summary_thread_pool.
     """
 
     cache_key = str(transcript_path)
@@ -646,13 +651,15 @@ def _quick_scan_transcript(transcript_path: Path, cli_type: str = "claude") -> Q
             "message_count": 0,
         }
 
-    if cache_key in _transcript_scan_cache:
-        cached_result, cached_mtime = _transcript_scan_cache[cache_key]
-        if cached_mtime >= current_mtime:
-            # File hasn't been modified, return cached result
-            return cached_result
+    # Thread-safe cache lookup
+    with _transcript_scan_cache_lock:
+        if cache_key in _transcript_scan_cache:
+            cached_result, cached_mtime = _transcript_scan_cache[cache_key]
+            if cached_mtime >= current_mtime:
+                # File hasn't been modified, return cached result
+                return cached_result
 
-    # Cache miss or file modified - scan the file
+    # Cache miss or file modified - scan the file (outside of lock)
     # Use CLI-specific parsing based on file extension or CLI type
     if cli_type == "gemini" or transcript_path.suffix == ".json":
         result = _do_quick_scan_gemini_transcript(transcript_path)
@@ -661,22 +668,23 @@ def _quick_scan_transcript(transcript_path: Path, cli_type: str = "claude") -> Q
     else:
         result = _do_quick_scan_transcript(transcript_path)
 
-    # Update cache
-    _transcript_scan_cache[cache_key] = (result, current_mtime)
+    # Thread-safe cache update and cleanup
+    with _transcript_scan_cache_lock:
+        _transcript_scan_cache[cache_key] = (result, current_mtime)
 
-    # Clean up old cache entries if too many
-    if len(_transcript_scan_cache) > TRANSCRIPT_CACHE_MAX_ENTRIES:
-        # Remove oldest entries, keeping up to max entries
-        # Sort by mtime and find keys to remove (thread-safe: modify in-place)
-        sorted_entries = sorted(
-            _transcript_scan_cache.items(),
-            key=lambda x: x[1][1],  # Sort by cached mtime
-            reverse=True
-        )
-        keys_to_keep = {k for k, _ in sorted_entries[:TRANSCRIPT_CACHE_MAX_ENTRIES]}
-        keys_to_remove = [k for k in _transcript_scan_cache if k not in keys_to_keep]
-        for key in keys_to_remove:
-            _transcript_scan_cache.pop(key, None)
+        # Clean up old cache entries if too many
+        if len(_transcript_scan_cache) > TRANSCRIPT_CACHE_MAX_ENTRIES:
+            # Remove oldest entries, keeping up to max entries
+            # Sort by mtime and keep the most recently modified
+            sorted_entries = sorted(
+                _transcript_scan_cache.items(),
+                key=lambda x: x[1][1],  # Sort by cached mtime
+                reverse=True
+            )
+            keys_to_keep = {k for k, _ in sorted_entries[:TRANSCRIPT_CACHE_MAX_ENTRIES]}
+            keys_to_remove = [k for k in list(_transcript_scan_cache.keys()) if k not in keys_to_keep]
+            for key in keys_to_remove:
+                del _transcript_scan_cache[key]
 
     return result
 
