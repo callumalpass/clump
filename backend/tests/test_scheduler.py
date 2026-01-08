@@ -1934,3 +1934,262 @@ class TestSchedulerSessionCreation:
         assert should_save_duration(15000) is True
         # None means no duration data - don't save
         assert should_save_duration(None) is False
+
+
+class TestFilterIssuesBySidecarEdgeCases:
+    """Edge case tests for filter_issues_by_sidecar function."""
+
+    def test_issue_with_none_priority_passes_exclude_filter(self):
+        """Issues with None priority pass exclude_priority filters."""
+        from app.services.scheduler import filter_issues_by_sidecar
+        from app.storage import IssueMetadata
+        filters = parse_filter_query("-priority:low")
+        issues = [{"number": 1}, {"number": 2}]
+
+        def mock_get_metadata(encoded_path, issue_number):
+            metadata_map = {
+                1: IssueMetadata(issue_number=1, priority=None),  # None priority
+                2: IssueMetadata(issue_number=2, priority="low"),  # Excluded
+            }
+            return metadata_map.get(issue_number)
+
+        with patch("app.services.scheduler.get_issue_metadata", side_effect=mock_get_metadata):
+            result = filter_issues_by_sidecar(issues, filters, "encoded_path")
+
+        # Issue 1 (None priority) should pass since None != "low"
+        assert len(result) == 1
+        assert result[0]["number"] == 1
+
+    def test_issue_with_none_difficulty_passes_exclude_filter(self):
+        """Issues with None difficulty pass exclude_difficulty filters."""
+        from app.services.scheduler import filter_issues_by_sidecar
+        from app.storage import IssueMetadata
+        filters = parse_filter_query("-difficulty:complex")
+        issues = [{"number": 1}, {"number": 2}]
+
+        def mock_get_metadata(encoded_path, issue_number):
+            metadata_map = {
+                1: IssueMetadata(issue_number=1, difficulty=None),
+                2: IssueMetadata(issue_number=2, difficulty="complex"),
+            }
+            return metadata_map.get(issue_number)
+
+        with patch("app.services.scheduler.get_issue_metadata", side_effect=mock_get_metadata):
+            result = filter_issues_by_sidecar(issues, filters, "encoded_path")
+
+        assert len(result) == 1
+        assert result[0]["number"] == 1
+
+    def test_issue_with_empty_affected_areas_excluded_by_filter(self):
+        """Issues with empty affected_areas don't match any area filter."""
+        from app.services.scheduler import filter_issues_by_sidecar
+        from app.storage import IssueMetadata
+        filters = parse_filter_query("affected-area:backend")
+        issues = [{"number": 1}, {"number": 2}]
+
+        def mock_get_metadata(encoded_path, issue_number):
+            metadata_map = {
+                1: IssueMetadata(issue_number=1, affected_areas=[]),  # Empty list
+                2: IssueMetadata(issue_number=2, affected_areas=["backend"]),
+            }
+            return metadata_map.get(issue_number)
+
+        with patch("app.services.scheduler.get_issue_metadata", side_effect=mock_get_metadata):
+            result = filter_issues_by_sidecar(issues, filters, "encoded_path")
+
+        # Only issue 2 matches affected-area:backend
+        assert len(result) == 1
+        assert result[0]["number"] == 2
+
+    def test_issue_with_none_affected_areas_excluded_by_filter(self):
+        """Issues with None affected_areas don't match any area filter."""
+        from app.services.scheduler import filter_issues_by_sidecar
+        from app.storage import IssueMetadata
+        filters = parse_filter_query("affected-area:backend")
+        issues = [{"number": 1}, {"number": 2}]
+
+        def mock_get_metadata(encoded_path, issue_number):
+            metadata_map = {
+                1: IssueMetadata(issue_number=1, affected_areas=None),  # None
+                2: IssueMetadata(issue_number=2, affected_areas=["backend"]),
+            }
+            return metadata_map.get(issue_number)
+
+        with patch("app.services.scheduler.get_issue_metadata", side_effect=mock_get_metadata):
+            result = filter_issues_by_sidecar(issues, filters, "encoded_path")
+
+        # Only issue 2 matches
+        assert len(result) == 1
+        assert result[0]["number"] == 2
+
+    def test_issue_with_empty_affected_areas_passes_exclude_filter(self):
+        """Issues with empty affected_areas pass exclude_affected_areas filters."""
+        from app.services.scheduler import filter_issues_by_sidecar
+        from app.storage import IssueMetadata
+        filters = parse_filter_query("-affected-area:docs")
+        issues = [{"number": 1}, {"number": 2}]
+
+        def mock_get_metadata(encoded_path, issue_number):
+            metadata_map = {
+                1: IssueMetadata(issue_number=1, affected_areas=[]),  # Empty - passes
+                2: IssueMetadata(issue_number=2, affected_areas=["docs"]),  # Excluded
+            }
+            return metadata_map.get(issue_number)
+
+        with patch("app.services.scheduler.get_issue_metadata", side_effect=mock_get_metadata):
+            result = filter_issues_by_sidecar(issues, filters, "encoded_path")
+
+        # Issue 1 passes (no areas to exclude), issue 2 excluded
+        assert len(result) == 1
+        assert result[0]["number"] == 1
+
+    def test_combined_include_and_exclude_same_field(self):
+        """Include and exclude on same field work together."""
+        from app.services.scheduler import filter_issues_by_sidecar
+        from app.storage import IssueMetadata
+        # Include high/critical, exclude critical
+        filters = parse_filter_query("priority:high,critical -priority:critical")
+        issues = [{"number": 1}, {"number": 2}, {"number": 3}]
+
+        def mock_get_metadata(encoded_path, issue_number):
+            metadata_map = {
+                1: IssueMetadata(issue_number=1, priority="high"),
+                2: IssueMetadata(issue_number=2, priority="critical"),
+                3: IssueMetadata(issue_number=3, priority="low"),
+            }
+            return metadata_map.get(issue_number)
+
+        with patch("app.services.scheduler.get_issue_metadata", side_effect=mock_get_metadata):
+            result = filter_issues_by_sidecar(issues, filters, "encoded_path")
+
+        # Only issue 1 (high) passes: matches include, not in exclude
+        # Issue 2 matches include but is excluded
+        # Issue 3 doesn't match include
+        assert len(result) == 1
+        assert result[0]["number"] == 1
+
+    def test_empty_issues_list(self):
+        """Empty issues list returns empty result."""
+        from app.services.scheduler import filter_issues_by_sidecar
+        filters = parse_filter_query("priority:high")
+        result = filter_issues_by_sidecar([], filters, "encoded_path")
+        assert result == []
+
+
+class TestFilterPrsBySidecarEdgeCases:
+    """Edge case tests for filter_prs_by_sidecar function."""
+
+    def test_pr_with_none_review_priority_passes_exclude_filter(self):
+        """PRs with None review_priority pass exclude_priority filters."""
+        from app.services.scheduler import filter_prs_by_sidecar
+        from app.storage import PRMetadata
+        filters = parse_filter_query("-priority:low")
+        prs = [{"number": 1}, {"number": 2}]
+
+        def mock_get_metadata(encoded_path, pr_number):
+            metadata_map = {
+                1: PRMetadata(pr_number=1, review_priority=None),
+                2: PRMetadata(pr_number=2, review_priority="low"),
+            }
+            return metadata_map.get(pr_number)
+
+        with patch("app.services.scheduler.get_pr_metadata", side_effect=mock_get_metadata):
+            result = filter_prs_by_sidecar(prs, filters, "encoded_path")
+
+        assert len(result) == 1
+        assert result[0]["number"] == 1
+
+    def test_pr_with_none_complexity_passes_exclude_filter(self):
+        """PRs with None complexity pass exclude_difficulty filters."""
+        from app.services.scheduler import filter_prs_by_sidecar
+        from app.storage import PRMetadata
+        filters = parse_filter_query("-difficulty:complex")
+        prs = [{"number": 1}, {"number": 2}]
+
+        def mock_get_metadata(encoded_path, pr_number):
+            metadata_map = {
+                1: PRMetadata(pr_number=1, complexity=None),
+                2: PRMetadata(pr_number=2, complexity="complex"),
+            }
+            return metadata_map.get(pr_number)
+
+        with patch("app.services.scheduler.get_pr_metadata", side_effect=mock_get_metadata):
+            result = filter_prs_by_sidecar(prs, filters, "encoded_path")
+
+        assert len(result) == 1
+        assert result[0]["number"] == 1
+
+    def test_pr_with_none_change_type_passes_exclude_filter(self):
+        """PRs with None change_type pass exclude_type filters."""
+        from app.services.scheduler import filter_prs_by_sidecar
+        from app.storage import PRMetadata
+        filters = parse_filter_query("-type:docs")
+        prs = [{"number": 1}, {"number": 2}]
+
+        def mock_get_metadata(encoded_path, pr_number):
+            metadata_map = {
+                1: PRMetadata(pr_number=1, change_type=None),
+                2: PRMetadata(pr_number=2, change_type="docs"),
+            }
+            return metadata_map.get(pr_number)
+
+        with patch("app.services.scheduler.get_pr_metadata", side_effect=mock_get_metadata):
+            result = filter_prs_by_sidecar(prs, filters, "encoded_path")
+
+        assert len(result) == 1
+        assert result[0]["number"] == 1
+
+    def test_pr_with_none_affected_areas_passes_exclude_filter(self):
+        """PRs with None affected_areas pass exclude_affected_areas filters."""
+        from app.services.scheduler import filter_prs_by_sidecar
+        from app.storage import PRMetadata
+        filters = parse_filter_query("-affected-area:legacy")
+        prs = [{"number": 1}, {"number": 2}]
+
+        def mock_get_metadata(encoded_path, pr_number):
+            metadata_map = {
+                1: PRMetadata(pr_number=1, affected_areas=None),
+                2: PRMetadata(pr_number=2, affected_areas=["legacy"]),
+            }
+            return metadata_map.get(pr_number)
+
+        with patch("app.services.scheduler.get_pr_metadata", side_effect=mock_get_metadata):
+            result = filter_prs_by_sidecar(prs, filters, "encoded_path")
+
+        assert len(result) == 1
+        assert result[0]["number"] == 1
+
+    def test_empty_prs_list(self):
+        """Empty PRs list returns empty result."""
+        from app.services.scheduler import filter_prs_by_sidecar
+        filters = parse_filter_query("priority:high")
+        result = filter_prs_by_sidecar([], filters, "encoded_path")
+        assert result == []
+
+    def test_all_filters_combined(self):
+        """All sidecar filter types work together."""
+        from app.services.scheduler import filter_prs_by_sidecar
+        from app.storage import PRMetadata
+        filters = parse_filter_query(
+            "priority:high difficulty:moderate type:feature risk:low "
+            "-affected-area:legacy sidecar-status:open"
+        )
+        prs = [{"number": 1}]
+
+        def mock_get_metadata(encoded_path, pr_number):
+            return PRMetadata(
+                pr_number=1,
+                review_priority="high",
+                complexity="moderate",
+                change_type="feature",
+                risk="low",
+                affected_areas=["api"],  # Not legacy
+                status="open",
+            )
+
+        with patch("app.services.scheduler.get_pr_metadata", side_effect=mock_get_metadata):
+            result = filter_prs_by_sidecar(prs, filters, "encoded_path")
+
+        # PR matches all filters
+        assert len(result) == 1
+        assert result[0]["number"] == 1
