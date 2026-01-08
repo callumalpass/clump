@@ -119,6 +119,65 @@ class TestPathEncoding:
         assert decoded != original
         assert decoded == "/home/user/my/project"  # dashes become slashes
 
+    def test_encode_path_with_underscores(self):
+        """Test that underscores are replaced with dashes.
+
+        This matches Claude's encoding format where underscores in paths
+        are also converted to dashes for consistent directory naming.
+        """
+        original = "/home/user/my_project"
+        encoded = encode_path(original)
+        # Underscores should be replaced with dashes
+        assert "_" not in encoded
+        assert encoded == "-home-user-my-project"
+
+    def test_encode_path_with_multiple_underscores(self):
+        """Test encoding paths with multiple underscores."""
+        original = "/home/user/my_awesome_project/src_main"
+        encoded = encode_path(original)
+        assert "_" not in encoded
+        assert encoded == "-home-user-my-awesome-project-src-main"
+
+    def test_encode_decode_roundtrip_with_underscores_is_lossy(self):
+        """Test that encode/decode is lossy for paths containing underscores.
+
+        This is expected behavior - underscores become indistinguishable
+        from slashes after encoding. Similar to the dash behavior.
+        """
+        original = "/home/user/my_project"
+        encoded = encode_path(original)
+        decoded = decode_path(encoded)
+        # Paths with underscores will NOT roundtrip correctly
+        assert decoded != original
+        assert decoded == "/home/user/my/project"  # underscores become slashes
+
+    def test_encode_path_with_mixed_special_chars(self):
+        """Test encoding paths with both dashes and underscores."""
+        original = "/home/user/my-project_v2"
+        encoded = encode_path(original)
+        # Both dashes and underscores should become dashes
+        assert "_" not in encoded
+        assert encoded == "-home-user-my-project-v2"
+
+    def test_encode_path_consecutive_underscores(self):
+        """Test encoding paths with consecutive underscores."""
+        original = "/home/user/my__project"
+        encoded = encode_path(original)
+        # Consecutive underscores become consecutive dashes
+        assert encoded == "-home-user-my--project"
+
+    def test_encode_path_trailing_underscore(self):
+        """Test encoding paths with trailing underscore."""
+        original = "/home/user/project_"
+        encoded = encode_path(original)
+        assert encoded == "-home-user-project-"
+
+    def test_encode_path_leading_underscore_in_component(self):
+        """Test encoding paths with leading underscore in component."""
+        original = "/home/user/_hidden"
+        encoded = encode_path(original)
+        assert encoded == "-home-user--hidden"
+
 
 class TestSubsessionDetection:
     """Tests for subsession detection."""
@@ -511,6 +570,34 @@ class TestEntityLink:
         link = EntityLink(kind="pr", number=123)
         assert link.kind == "pr"
         assert link.number == 123
+
+    def test_entity_link_equality(self):
+        """Test that two EntityLinks with same values are equal."""
+        link1 = EntityLink(kind="issue", number=42)
+        link2 = EntityLink(kind="issue", number=42)
+        assert link1 == link2
+
+    def test_entity_link_inequality_kind(self):
+        """Test that EntityLinks with different kinds are not equal."""
+        link1 = EntityLink(kind="issue", number=42)
+        link2 = EntityLink(kind="pr", number=42)
+        assert link1 != link2
+
+    def test_entity_link_inequality_number(self):
+        """Test that EntityLinks with different numbers are not equal."""
+        link1 = EntityLink(kind="issue", number=42)
+        link2 = EntityLink(kind="issue", number=43)
+        assert link1 != link2
+
+    def test_entity_link_zero_number(self):
+        """Test EntityLink with number 0."""
+        link = EntityLink(kind="issue", number=0)
+        assert link.number == 0
+
+    def test_entity_link_large_number(self):
+        """Test EntityLink with large issue/PR number."""
+        link = EntityLink(kind="pr", number=999999)
+        assert link.number == 999999
 
 
 class TestDirectoryUtilities:
