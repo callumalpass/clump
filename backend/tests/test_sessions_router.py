@@ -20,6 +20,7 @@ from app.routers.sessions import (
     router,
     _quick_scan_transcript,
     _get_pending_sessions,
+    _get_pending_headless_sessions,
     invalidate_session_cache,
     _calculate_duration_seconds,
     _parse_datetime_naive,
@@ -3216,3 +3217,345 @@ class TestListSessionsDateFiltering:
             data = response.json()
             assert data["total"] == 1
             assert data["sessions"][0]["session_id"] == "session-1"
+
+
+class TestGetPendingHeadlessSessions:
+    """Tests for _get_pending_headless_sessions function.
+
+    This function retrieves synthetic session summaries for running headless sessions
+    that don't have JSONL files yet. It uses in-memory tracking from the headless
+    analyzer for reliable real-time status and sidecar metadata for session info.
+    """
+
+    def test_empty_when_no_running_sessions(self):
+        """Test returns empty list when no sessions are running."""
+        with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer:
+            mock_analyzer.list_running.return_value = []
+
+            result = _get_pending_headless_sessions(set())
+
+            assert result == []
+
+    def test_empty_when_all_sessions_discovered(self):
+        """Test returns empty when all running sessions are already discovered."""
+        with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer:
+            mock_analyzer.list_running.return_value = ["session-1", "session-2"]
+
+            # All running sessions are already discovered
+            discovered = {"session-1", "session-2"}
+            result = _get_pending_headless_sessions(discovered)
+
+            assert result == []
+
+    def test_returns_pending_session_with_metadata(self, tmp_path):
+        """Test returns pending session when metadata exists for a running session."""
+        with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer, \
+             patch("app.routers.sessions.load_repos") as mock_load_repos, \
+             patch("app.routers.sessions.encode_path") as mock_encode, \
+             patch("app.routers.sessions.get_session_metadata") as mock_get_meta:
+
+            mock_analyzer.list_running.return_value = ["running-session-123"]
+            mock_load_repos.return_value = [
+                {"id": 1, "owner": "testowner", "name": "testrepo", "local_path": "/home/user/repo"}
+            ]
+            mock_encode.return_value = "-home-user-repo"
+            mock_get_meta.return_value = SessionMetadata(
+                session_id="running-session-123",
+                title="Running Session",
+                repo_path="/home/user/repo",
+                entities=[EntityLink(kind="issue", number=42)],
+                tags=["important"],
+                starred=True,
+                created_at="2024-01-15T10:00:00Z",
+            )
+
+            result = _get_pending_headless_sessions(set())
+
+            assert len(result) == 1
+            assert result[0].session_id == "running-session-123"
+            assert result[0].encoded_path == "-home-user-repo"
+            assert result[0].repo_path == "/home/user/repo"
+            assert result[0].repo_name == "testowner/testrepo"
+            assert result[0].title == "Running Session"
+            assert result[0].is_active is True
+            assert result[0].starred is True
+            assert result[0].tags == ["important"]
+            assert len(result[0].entities) == 1
+            assert result[0].entities[0].kind == "issue"
+            assert result[0].entities[0].number == 42
+
+    def test_skips_session_without_metadata(self):
+        """Test skips sessions that don't have metadata in any repo."""
+        with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer, \
+             patch("app.routers.sessions.load_repos") as mock_load_repos, \
+             patch("app.routers.sessions.encode_path") as mock_encode, \
+             patch("app.routers.sessions.get_session_metadata") as mock_get_meta:
+
+            mock_analyzer.list_running.return_value = ["running-session-no-meta"]
+            mock_load_repos.return_value = [
+                {"id": 1, "owner": "owner", "name": "repo", "local_path": "/path/to/repo"}
+            ]
+            mock_encode.return_value = "-path-to-repo"
+            mock_get_meta.return_value = None  # No metadata
+
+            result = _get_pending_headless_sessions(set())
+
+            assert result == []
+
+    def test_filters_already_discovered_sessions(self):
+        """Test excludes sessions that are already in discovered_session_ids."""
+        with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer, \
+             patch("app.routers.sessions.load_repos") as mock_load_repos, \
+             patch("app.routers.sessions.encode_path") as mock_encode, \
+             patch("app.routers.sessions.get_session_metadata") as mock_get_meta:
+
+            # Two running sessions, one already discovered
+            mock_analyzer.list_running.return_value = ["discovered-session", "pending-session"]
+            mock_load_repos.return_value = [
+                {"id": 1, "owner": "owner", "name": "repo", "local_path": "/path/to/repo"}
+            ]
+            mock_encode.return_value = "-path-to-repo"
+
+            # Only return metadata for the pending session
+            def get_meta(encoded_path, session_id):
+                if session_id == "pending-session":
+                    return SessionMetadata(
+                        session_id="pending-session",
+                        title="Pending",
+                        created_at="2024-01-15T10:00:00Z",
+                    )
+                return None
+
+            mock_get_meta.side_effect = get_meta
+
+            # Mark one as already discovered
+            result = _get_pending_headless_sessions({"discovered-session"})
+
+            assert len(result) == 1
+            assert result[0].session_id == "pending-session"
+
+    def test_filters_by_repo_path(self):
+        """Test filters results to specific repo when repo_path is provided."""
+        with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer, \
+             patch("app.routers.sessions.load_repos") as mock_load_repos, \
+             patch("app.routers.sessions.encode_path") as mock_encode, \
+             patch("app.routers.sessions.get_session_metadata") as mock_get_meta:
+
+            mock_analyzer.list_running.return_value = ["session-1"]
+            mock_load_repos.return_value = [
+                {"id": 1, "owner": "owner1", "name": "repo1", "local_path": "/path/to/repo1"},
+                {"id": 2, "owner": "owner2", "name": "repo2", "local_path": "/path/to/repo2"},
+            ]
+            mock_encode.return_value = "-path-to-repo2"
+            mock_get_meta.return_value = SessionMetadata(
+                session_id="session-1",
+                title="Session in Repo 2",
+                created_at="2024-01-15T10:00:00Z",
+            )
+
+            # Filter to only repo2
+            result = _get_pending_headless_sessions(set(), repo_path="/path/to/repo2")
+
+            # Only repo2 should be checked
+            assert mock_encode.call_count == 1
+            mock_encode.assert_called_with("/path/to/repo2")
+
+    def test_avoids_duplicate_sessions_across_repos(self):
+        """Test that the same session ID is not returned multiple times.
+
+        This tests the fix for the bug where a session could be added multiple times
+        if its metadata somehow existed in multiple repo directories.
+        """
+        with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer, \
+             patch("app.routers.sessions.load_repos") as mock_load_repos, \
+             patch("app.routers.sessions.encode_path") as mock_encode, \
+             patch("app.routers.sessions.get_session_metadata") as mock_get_meta:
+
+            mock_analyzer.list_running.return_value = ["duplicate-session"]
+            mock_load_repos.return_value = [
+                {"id": 1, "owner": "owner1", "name": "repo1", "local_path": "/path/to/repo1"},
+                {"id": 2, "owner": "owner2", "name": "repo2", "local_path": "/path/to/repo2"},
+            ]
+
+            # Encode path returns different values for different repos
+            def encode_for_repo(path):
+                if path == "/path/to/repo1":
+                    return "-path-to-repo1"
+                return "-path-to-repo2"
+
+            mock_encode.side_effect = encode_for_repo
+
+            # Simulate metadata existing in BOTH repos (edge case)
+            mock_get_meta.return_value = SessionMetadata(
+                session_id="duplicate-session",
+                title="Duplicate Session",
+                created_at="2024-01-15T10:00:00Z",
+            )
+
+            result = _get_pending_headless_sessions(set())
+
+            # Should only appear once, not twice
+            assert len(result) == 1
+            assert result[0].session_id == "duplicate-session"
+            # Should be associated with the first repo that matched
+            assert result[0].encoded_path == "-path-to-repo1"
+
+    def test_handles_repo_without_owner_name(self):
+        """Test handles repos that don't have owner/name (local only repos)."""
+        with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer, \
+             patch("app.routers.sessions.load_repos") as mock_load_repos, \
+             patch("app.routers.sessions.encode_path") as mock_encode, \
+             patch("app.routers.sessions.get_session_metadata") as mock_get_meta:
+
+            mock_analyzer.list_running.return_value = ["session-1"]
+            mock_load_repos.return_value = [
+                {"id": 1, "local_path": "/path/to/local-only-repo"}  # No owner or name
+            ]
+            mock_encode.return_value = "-path-to-local-only-repo"
+            mock_get_meta.return_value = SessionMetadata(
+                session_id="session-1",
+                title="Local Session",
+                created_at="2024-01-15T10:00:00Z",
+            )
+
+            result = _get_pending_headless_sessions(set())
+
+            assert len(result) == 1
+            assert result[0].repo_name is None  # No repo name for local-only repos
+
+    def test_uses_running_title_when_metadata_title_is_none(self):
+        """Test uses 'Running...' as title when metadata has no title."""
+        with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer, \
+             patch("app.routers.sessions.load_repos") as mock_load_repos, \
+             patch("app.routers.sessions.encode_path") as mock_encode, \
+             patch("app.routers.sessions.get_session_metadata") as mock_get_meta:
+
+            mock_analyzer.list_running.return_value = ["session-1"]
+            mock_load_repos.return_value = [
+                {"id": 1, "owner": "owner", "name": "repo", "local_path": "/path"}
+            ]
+            mock_encode.return_value = "-path"
+            mock_get_meta.return_value = SessionMetadata(
+                session_id="session-1",
+                title=None,  # No title
+                created_at="2024-01-15T10:00:00Z",
+            )
+
+            result = _get_pending_headless_sessions(set())
+
+            assert len(result) == 1
+            assert result[0].title == "Running..."
+
+    def test_includes_scheduled_job_id(self):
+        """Test that scheduled_job_id is included when present in metadata."""
+        with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer, \
+             patch("app.routers.sessions.load_repos") as mock_load_repos, \
+             patch("app.routers.sessions.encode_path") as mock_encode, \
+             patch("app.routers.sessions.get_session_metadata") as mock_get_meta:
+
+            mock_analyzer.list_running.return_value = ["scheduled-session"]
+            mock_load_repos.return_value = [
+                {"id": 1, "owner": "owner", "name": "repo", "local_path": "/path"}
+            ]
+            mock_encode.return_value = "-path"
+            mock_get_meta.return_value = SessionMetadata(
+                session_id="scheduled-session",
+                title="Scheduled Run",
+                scheduled_job_id=42,
+                created_at="2024-01-15T10:00:00Z",
+            )
+
+            result = _get_pending_headless_sessions(set())
+
+            assert len(result) == 1
+            assert result[0].scheduled_job_id == 42
+
+    def test_multiple_pending_sessions_different_repos(self):
+        """Test handling multiple pending sessions across different repos."""
+        with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer, \
+             patch("app.routers.sessions.load_repos") as mock_load_repos, \
+             patch("app.routers.sessions.encode_path") as mock_encode, \
+             patch("app.routers.sessions.get_session_metadata") as mock_get_meta:
+
+            mock_analyzer.list_running.return_value = ["session-repo1", "session-repo2"]
+            mock_load_repos.return_value = [
+                {"id": 1, "owner": "owner1", "name": "repo1", "local_path": "/path/repo1"},
+                {"id": 2, "owner": "owner2", "name": "repo2", "local_path": "/path/repo2"},
+            ]
+
+            def encode_for_repo(path):
+                if path == "/path/repo1":
+                    return "-path-repo1"
+                return "-path-repo2"
+
+            mock_encode.side_effect = encode_for_repo
+
+            def get_meta(encoded_path, session_id):
+                # session-repo1 metadata exists in repo1
+                if encoded_path == "-path-repo1" and session_id == "session-repo1":
+                    return SessionMetadata(
+                        session_id="session-repo1",
+                        title="Session 1",
+                        created_at="2024-01-15T10:00:00Z",
+                    )
+                # session-repo2 metadata exists in repo2
+                if encoded_path == "-path-repo2" and session_id == "session-repo2":
+                    return SessionMetadata(
+                        session_id="session-repo2",
+                        title="Session 2",
+                        created_at="2024-01-15T10:00:00Z",
+                    )
+                return None
+
+            mock_get_meta.side_effect = get_meta
+
+            result = _get_pending_headless_sessions(set())
+
+            assert len(result) == 2
+            session_ids = {s.session_id for s in result}
+            assert session_ids == {"session-repo1", "session-repo2"}
+
+    def test_efficiency_skips_matched_sessions_in_subsequent_repos(self):
+        """Test that once a session is matched, it's not checked in subsequent repos.
+
+        This verifies the performance optimization where matched session IDs
+        are tracked and skipped in subsequent iterations.
+        """
+        with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer, \
+             patch("app.routers.sessions.load_repos") as mock_load_repos, \
+             patch("app.routers.sessions.encode_path") as mock_encode, \
+             patch("app.routers.sessions.get_session_metadata") as mock_get_meta:
+
+            mock_analyzer.list_running.return_value = ["matched-session"]
+            mock_load_repos.return_value = [
+                {"id": 1, "owner": "owner1", "name": "repo1", "local_path": "/path/repo1"},
+                {"id": 2, "owner": "owner2", "name": "repo2", "local_path": "/path/repo2"},
+                {"id": 3, "owner": "owner3", "name": "repo3", "local_path": "/path/repo3"},
+            ]
+
+            def encode_for_repo(path):
+                return f"-{path.replace('/', '-')}"
+
+            mock_encode.side_effect = encode_for_repo
+
+            call_count = [0]
+
+            def get_meta(encoded_path, session_id):
+                call_count[0] += 1
+                # Only return metadata from the first repo
+                if encoded_path == "--path-repo1":
+                    return SessionMetadata(
+                        session_id="matched-session",
+                        title="Matched",
+                        created_at="2024-01-15T10:00:00Z",
+                    )
+                return None
+
+            mock_get_meta.side_effect = get_meta
+
+            result = _get_pending_headless_sessions(set())
+
+            assert len(result) == 1
+            # Should only call get_session_metadata once for the first repo
+            # because after matching, subsequent repos skip this session_id
+            assert call_count[0] == 1

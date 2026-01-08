@@ -558,16 +558,24 @@ def _get_pending_headless_sessions(
     if repo_path:
         repos = [r for r in repos if r["local_path"] == repo_path]
 
+    # Track which session IDs have been matched to avoid duplicates
+    matched_ids: set[str] = set()
+
     for repo in repos:
         encoded_path = encode_path(repo["local_path"])
         repo_name = f"{repo['owner']}/{repo['name']}" if repo.get('owner') and repo.get('name') else None
 
         for session_id in pending_ids:
+            # Skip if already matched to another repo
+            if session_id in matched_ids:
+                continue
+
             # Try to get sidecar metadata if it exists
             metadata = get_session_metadata(encoded_path, session_id)
 
             # Only include if metadata exists for this repo (means session belongs to this repo)
             if metadata:
+                matched_ids.add(session_id)
                 entities = _entities_to_response(metadata.entities)
 
                 pending.append(SessionSummaryResponse(
