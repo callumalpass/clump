@@ -1654,6 +1654,11 @@ def generate_schedule_id(name: str, repo_path: str) -> str:
     # Slugify the name
     slug = name.lower().replace(" ", "-")
     slug = "".join(c for c in slug if c.isalnum() or c == "-")
+
+    # Collapse consecutive dashes into a single dash
+    while "--" in slug:
+        slug = slug.replace("--", "-")
+
     slug = slug.strip("-")
 
     if not slug:

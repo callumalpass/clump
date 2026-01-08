@@ -2177,13 +2177,14 @@ class TestGenerateScheduleId:
         assert schedule_id == "testschedule"
 
     def test_handles_multiple_spaces(self, tmp_path):
-        """Test that multiple spaces become single dashes."""
+        """Test that multiple spaces collapse into single dashes."""
         repo_path = str(tmp_path / "test-repo")
         (tmp_path / "test-repo").mkdir()
 
         schedule_id = generate_schedule_id("Test    Multiple   Spaces", repo_path)
 
-        assert schedule_id == "test----multiple---spaces"
+        # Multiple consecutive dashes should collapse into a single dash
+        assert schedule_id == "test-multiple-spaces"
 
     def test_handles_leading_trailing_dashes(self, tmp_path):
         """Test that leading/trailing dashes are removed."""
@@ -2255,6 +2256,45 @@ class TestGenerateScheduleId:
         schedule_id = generate_schedule_id("Schedule 2023", repo_path)
 
         assert schedule_id == "schedule-2023"
+
+    def test_collapses_consecutive_dashes_from_special_chars(self, tmp_path):
+        """Test that special chars between words don't create multiple dashes."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        # Special chars surrounded by spaces should collapse to single dash
+        schedule_id = generate_schedule_id("Test - Schedule", repo_path)
+
+        assert schedule_id == "test-schedule"
+
+    def test_collapses_many_consecutive_dashes(self, tmp_path):
+        """Test that many consecutive dashes collapse to one."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        # Name that would produce many dashes
+        schedule_id = generate_schedule_id("A     B", repo_path)
+
+        assert schedule_id == "a-b"
+
+    def test_mixed_special_chars_and_spaces(self, tmp_path):
+        """Test combination of special chars and spaces."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        schedule_id = generate_schedule_id("Test!!! @ Schedule", repo_path)
+
+        # Special chars removed, multiple spaces collapse to single dash
+        assert schedule_id == "test-schedule"
+
+    def test_dashes_in_middle_of_name_preserved(self, tmp_path):
+        """Test that single dashes in the name are preserved."""
+        repo_path = str(tmp_path / "test-repo")
+        (tmp_path / "test-repo").mkdir()
+
+        schedule_id = generate_schedule_id("test-schedule-name", repo_path)
+
+        assert schedule_id == "test-schedule-name"
 
 
 class TestGetRepoPathFromEncoded:
