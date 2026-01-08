@@ -2021,7 +2021,7 @@ class TestKillSession:
              patch("app.routers.sessions.invalidate_session_cache") as mock_invalidate:
             mock_pm.list_processes = AsyncMock(return_value=[])  # No PTY processes
             mock_headless.cancel = AsyncMock(return_value=True)
-            mock_headless.unregister_running = MagicMock()
+            mock_headless.unregister_running = AsyncMock()
             mock_events.emit = AsyncMock()
 
             response = client.post("/sessions/test-uuid-1234/kill")
@@ -2051,7 +2051,7 @@ class TestKillSession:
             mock_pm.list_processes = AsyncMock(return_value=[mock_process])
             mock_pm.kill = AsyncMock(return_value=True)
             mock_headless.cancel = AsyncMock(return_value=True)
-            mock_headless.unregister_running = MagicMock()
+            mock_headless.unregister_running = AsyncMock()
             mock_events.emit = AsyncMock()
 
             response = client.post("/sessions/test-uuid-1234/kill")
@@ -3362,34 +3362,37 @@ class TestGetPendingHeadlessSessions:
     analyzer for reliable real-time status and sidecar metadata for session info.
     """
 
-    def test_empty_when_no_running_sessions(self):
+    @pytest.mark.asyncio
+    async def test_empty_when_no_running_sessions(self):
         """Test returns empty list when no sessions are running."""
         with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer:
-            mock_analyzer.list_running.return_value = []
+            mock_analyzer.list_running = AsyncMock(return_value=[])
 
-            result = _get_pending_headless_sessions(set())
+            result = await _get_pending_headless_sessions(set())
 
             assert result == []
 
-    def test_empty_when_all_sessions_discovered(self):
+    @pytest.mark.asyncio
+    async def test_empty_when_all_sessions_discovered(self):
         """Test returns empty when all running sessions are already discovered."""
         with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer:
-            mock_analyzer.list_running.return_value = ["session-1", "session-2"]
+            mock_analyzer.list_running = AsyncMock(return_value=["session-1", "session-2"])
 
             # All running sessions are already discovered
             discovered = {"session-1", "session-2"}
-            result = _get_pending_headless_sessions(discovered)
+            result = await _get_pending_headless_sessions(discovered)
 
             assert result == []
 
-    def test_returns_pending_session_with_metadata(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_returns_pending_session_with_metadata(self, tmp_path):
         """Test returns pending session when metadata exists for a running session."""
         with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer, \
              patch("app.routers.sessions.load_repos") as mock_load_repos, \
              patch("app.routers.sessions.encode_path") as mock_encode, \
              patch("app.routers.sessions.get_session_metadata") as mock_get_meta:
 
-            mock_analyzer.list_running.return_value = ["running-session-123"]
+            mock_analyzer.list_running = AsyncMock(return_value=["running-session-123"])
             mock_load_repos.return_value = [
                 {"id": 1, "owner": "testowner", "name": "testrepo", "local_path": "/home/user/repo"}
             ]
@@ -3404,7 +3407,7 @@ class TestGetPendingHeadlessSessions:
                 created_at="2024-01-15T10:00:00Z",
             )
 
-            result = _get_pending_headless_sessions(set())
+            result = await _get_pending_headless_sessions(set())
 
             assert len(result) == 1
             assert result[0].session_id == "running-session-123"
@@ -3419,25 +3422,27 @@ class TestGetPendingHeadlessSessions:
             assert result[0].entities[0].kind == "issue"
             assert result[0].entities[0].number == 42
 
-    def test_skips_session_without_metadata(self):
+    @pytest.mark.asyncio
+    async def test_skips_session_without_metadata(self):
         """Test skips sessions that don't have metadata in any repo."""
         with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer, \
              patch("app.routers.sessions.load_repos") as mock_load_repos, \
              patch("app.routers.sessions.encode_path") as mock_encode, \
              patch("app.routers.sessions.get_session_metadata") as mock_get_meta:
 
-            mock_analyzer.list_running.return_value = ["running-session-no-meta"]
+            mock_analyzer.list_running = AsyncMock(return_value=["running-session-no-meta"])
             mock_load_repos.return_value = [
                 {"id": 1, "owner": "owner", "name": "repo", "local_path": "/path/to/repo"}
             ]
             mock_encode.return_value = "-path-to-repo"
             mock_get_meta.return_value = None  # No metadata
 
-            result = _get_pending_headless_sessions(set())
+            result = await _get_pending_headless_sessions(set())
 
             assert result == []
 
-    def test_filters_already_discovered_sessions(self):
+    @pytest.mark.asyncio
+    async def test_filters_already_discovered_sessions(self):
         """Test excludes sessions that are already in discovered_session_ids."""
         with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer, \
              patch("app.routers.sessions.load_repos") as mock_load_repos, \
@@ -3445,7 +3450,7 @@ class TestGetPendingHeadlessSessions:
              patch("app.routers.sessions.get_session_metadata") as mock_get_meta:
 
             # Two running sessions, one already discovered
-            mock_analyzer.list_running.return_value = ["discovered-session", "pending-session"]
+            mock_analyzer.list_running = AsyncMock(return_value=["discovered-session", "pending-session"])
             mock_load_repos.return_value = [
                 {"id": 1, "owner": "owner", "name": "repo", "local_path": "/path/to/repo"}
             ]
@@ -3464,19 +3469,20 @@ class TestGetPendingHeadlessSessions:
             mock_get_meta.side_effect = get_meta
 
             # Mark one as already discovered
-            result = _get_pending_headless_sessions({"discovered-session"})
+            result = await _get_pending_headless_sessions({"discovered-session"})
 
             assert len(result) == 1
             assert result[0].session_id == "pending-session"
 
-    def test_filters_by_repo_path(self):
+    @pytest.mark.asyncio
+    async def test_filters_by_repo_path(self):
         """Test filters results to specific repo when repo_path is provided."""
         with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer, \
              patch("app.routers.sessions.load_repos") as mock_load_repos, \
              patch("app.routers.sessions.encode_path") as mock_encode, \
              patch("app.routers.sessions.get_session_metadata") as mock_get_meta:
 
-            mock_analyzer.list_running.return_value = ["session-1"]
+            mock_analyzer.list_running = AsyncMock(return_value=["session-1"])
             mock_load_repos.return_value = [
                 {"id": 1, "owner": "owner1", "name": "repo1", "local_path": "/path/to/repo1"},
                 {"id": 2, "owner": "owner2", "name": "repo2", "local_path": "/path/to/repo2"},
@@ -3489,13 +3495,14 @@ class TestGetPendingHeadlessSessions:
             )
 
             # Filter to only repo2
-            result = _get_pending_headless_sessions(set(), repo_path="/path/to/repo2")
+            result = await _get_pending_headless_sessions(set(), repo_path="/path/to/repo2")
 
             # Only repo2 should be checked
             assert mock_encode.call_count == 1
             mock_encode.assert_called_with("/path/to/repo2")
 
-    def test_avoids_duplicate_sessions_across_repos(self):
+    @pytest.mark.asyncio
+    async def test_avoids_duplicate_sessions_across_repos(self):
         """Test that the same session ID is not returned multiple times.
 
         This tests the fix for the bug where a session could be added multiple times
@@ -3506,7 +3513,7 @@ class TestGetPendingHeadlessSessions:
              patch("app.routers.sessions.encode_path") as mock_encode, \
              patch("app.routers.sessions.get_session_metadata") as mock_get_meta:
 
-            mock_analyzer.list_running.return_value = ["duplicate-session"]
+            mock_analyzer.list_running = AsyncMock(return_value=["duplicate-session"])
             mock_load_repos.return_value = [
                 {"id": 1, "owner": "owner1", "name": "repo1", "local_path": "/path/to/repo1"},
                 {"id": 2, "owner": "owner2", "name": "repo2", "local_path": "/path/to/repo2"},
@@ -3527,7 +3534,7 @@ class TestGetPendingHeadlessSessions:
                 created_at="2024-01-15T10:00:00Z",
             )
 
-            result = _get_pending_headless_sessions(set())
+            result = await _get_pending_headless_sessions(set())
 
             # Should only appear once, not twice
             assert len(result) == 1
@@ -3535,14 +3542,15 @@ class TestGetPendingHeadlessSessions:
             # Should be associated with the first repo that matched
             assert result[0].encoded_path == "-path-to-repo1"
 
-    def test_handles_repo_without_owner_name(self):
+    @pytest.mark.asyncio
+    async def test_handles_repo_without_owner_name(self):
         """Test handles repos that don't have owner/name (local only repos)."""
         with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer, \
              patch("app.routers.sessions.load_repos") as mock_load_repos, \
              patch("app.routers.sessions.encode_path") as mock_encode, \
              patch("app.routers.sessions.get_session_metadata") as mock_get_meta:
 
-            mock_analyzer.list_running.return_value = ["session-1"]
+            mock_analyzer.list_running = AsyncMock(return_value=["session-1"])
             mock_load_repos.return_value = [
                 {"id": 1, "local_path": "/path/to/local-only-repo"}  # No owner or name
             ]
@@ -3553,19 +3561,20 @@ class TestGetPendingHeadlessSessions:
                 created_at="2024-01-15T10:00:00Z",
             )
 
-            result = _get_pending_headless_sessions(set())
+            result = await _get_pending_headless_sessions(set())
 
             assert len(result) == 1
             assert result[0].repo_name is None  # No repo name for local-only repos
 
-    def test_uses_running_title_when_metadata_title_is_none(self):
+    @pytest.mark.asyncio
+    async def test_uses_running_title_when_metadata_title_is_none(self):
         """Test uses 'Running...' as title when metadata has no title."""
         with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer, \
              patch("app.routers.sessions.load_repos") as mock_load_repos, \
              patch("app.routers.sessions.encode_path") as mock_encode, \
              patch("app.routers.sessions.get_session_metadata") as mock_get_meta:
 
-            mock_analyzer.list_running.return_value = ["session-1"]
+            mock_analyzer.list_running = AsyncMock(return_value=["session-1"])
             mock_load_repos.return_value = [
                 {"id": 1, "owner": "owner", "name": "repo", "local_path": "/path"}
             ]
@@ -3576,19 +3585,20 @@ class TestGetPendingHeadlessSessions:
                 created_at="2024-01-15T10:00:00Z",
             )
 
-            result = _get_pending_headless_sessions(set())
+            result = await _get_pending_headless_sessions(set())
 
             assert len(result) == 1
             assert result[0].title == "Running..."
 
-    def test_includes_scheduled_job_id(self):
+    @pytest.mark.asyncio
+    async def test_includes_scheduled_job_id(self):
         """Test that scheduled_job_id is included when present in metadata."""
         with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer, \
              patch("app.routers.sessions.load_repos") as mock_load_repos, \
              patch("app.routers.sessions.encode_path") as mock_encode, \
              patch("app.routers.sessions.get_session_metadata") as mock_get_meta:
 
-            mock_analyzer.list_running.return_value = ["scheduled-session"]
+            mock_analyzer.list_running = AsyncMock(return_value=["scheduled-session"])
             mock_load_repos.return_value = [
                 {"id": 1, "owner": "owner", "name": "repo", "local_path": "/path"}
             ]
@@ -3600,19 +3610,20 @@ class TestGetPendingHeadlessSessions:
                 created_at="2024-01-15T10:00:00Z",
             )
 
-            result = _get_pending_headless_sessions(set())
+            result = await _get_pending_headless_sessions(set())
 
             assert len(result) == 1
             assert result[0].scheduled_job_id == 42
 
-    def test_multiple_pending_sessions_different_repos(self):
+    @pytest.mark.asyncio
+    async def test_multiple_pending_sessions_different_repos(self):
         """Test handling multiple pending sessions across different repos."""
         with patch("app.services.headless_analyzer.headless_analyzer") as mock_analyzer, \
              patch("app.routers.sessions.load_repos") as mock_load_repos, \
              patch("app.routers.sessions.encode_path") as mock_encode, \
              patch("app.routers.sessions.get_session_metadata") as mock_get_meta:
 
-            mock_analyzer.list_running.return_value = ["session-repo1", "session-repo2"]
+            mock_analyzer.list_running = AsyncMock(return_value=["session-repo1", "session-repo2"])
             mock_load_repos.return_value = [
                 {"id": 1, "owner": "owner1", "name": "repo1", "local_path": "/path/repo1"},
                 {"id": 2, "owner": "owner2", "name": "repo2", "local_path": "/path/repo2"},
@@ -3644,13 +3655,14 @@ class TestGetPendingHeadlessSessions:
 
             mock_get_meta.side_effect = get_meta
 
-            result = _get_pending_headless_sessions(set())
+            result = await _get_pending_headless_sessions(set())
 
             assert len(result) == 2
             session_ids = {s.session_id for s in result}
             assert session_ids == {"session-repo1", "session-repo2"}
 
-    def test_efficiency_skips_matched_sessions_in_subsequent_repos(self):
+    @pytest.mark.asyncio
+    async def test_efficiency_skips_matched_sessions_in_subsequent_repos(self):
         """Test that once a session is matched, it's not checked in subsequent repos.
 
         This verifies the performance optimization where matched session IDs
@@ -3661,7 +3673,7 @@ class TestGetPendingHeadlessSessions:
              patch("app.routers.sessions.encode_path") as mock_encode, \
              patch("app.routers.sessions.get_session_metadata") as mock_get_meta:
 
-            mock_analyzer.list_running.return_value = ["matched-session"]
+            mock_analyzer.list_running = AsyncMock(return_value=["matched-session"])
             mock_load_repos.return_value = [
                 {"id": 1, "owner": "owner1", "name": "repo1", "local_path": "/path/repo1"},
                 {"id": 2, "owner": "owner2", "name": "repo2", "local_path": "/path/repo2"},
@@ -3688,7 +3700,7 @@ class TestGetPendingHeadlessSessions:
 
             mock_get_meta.side_effect = get_meta
 
-            result = _get_pending_headless_sessions(set())
+            result = await _get_pending_headless_sessions(set())
 
             assert len(result) == 1
             # Should only call get_session_metadata once for the first repo

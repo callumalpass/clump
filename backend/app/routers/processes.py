@@ -53,7 +53,7 @@ async def _emit_counts_changed():
         for proc in processes
         if proc.claude_session_id
     }
-    active_session_ids.update(headless_analyzer.list_running())
+    active_session_ids.update(await headless_analyzer.list_running())
 
     # Build counts dict keyed by repo_id
     counts = {}
@@ -145,7 +145,7 @@ async def _run_headless_background(
         await _emit_counts_changed()
 
     finally:
-        headless_analyzer.unregister_running(claude_session_id)
+        await headless_analyzer.unregister_running(claude_session_id)
 
 
 async def _create_headless_session(data: "ProcessCreate", repo: dict) -> "ProcessResponse":
@@ -207,7 +207,7 @@ async def _create_headless_session(data: "ProcessCreate", repo: dict) -> "Proces
     save_session_metadata(encoded, claude_session_id, metadata)
 
     # Register as running before spawning background task
-    headless_analyzer.register_running(claude_session_id)
+    await headless_analyzer.register_running(claude_session_id)
 
     # Spawn background task to run analysis
     asyncio.create_task(_run_headless_background(

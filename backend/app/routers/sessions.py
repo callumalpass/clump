@@ -377,14 +377,14 @@ def invalidate_session_cache(repo_path: Optional[str] = None) -> None:
     _session_cache.invalidate(repo_path)
 
 
-def _get_running_headless_session_ids() -> set[str]:
+async def _get_running_headless_session_ids() -> set[str]:
     """
     Get session IDs of headless sessions that are currently running.
 
     Uses the headless analyzer's in-memory tracking for reliable real-time status.
     """
     from app.services.headless_analyzer import headless_analyzer
-    return set(headless_analyzer.list_running())
+    return set(await headless_analyzer.list_running())
 
 
 async def _get_active_session_ids_from_processes() -> set[str]:
@@ -539,7 +539,7 @@ def _get_pending_sessions(
     return pending
 
 
-def _get_pending_headless_sessions(
+async def _get_pending_headless_sessions(
     discovered_session_ids: set[str],
     repo_path: Optional[str] = None,
 ) -> list[SessionSummaryResponse]:
@@ -552,7 +552,7 @@ def _get_pending_headless_sessions(
     from app.services.headless_analyzer import headless_analyzer
 
     pending = []
-    running_ids = set(headless_analyzer.list_running())
+    running_ids = set(await headless_analyzer.list_running())
 
     # Only process sessions that are running but not yet discovered
     pending_ids = running_ids - discovered_session_ids
@@ -1034,7 +1034,7 @@ async def list_sessions(
 
     # Get headless session IDs (fast in-memory lookup)
     active_session_ids = process_session_ids
-    active_session_ids.update(_get_running_headless_session_ids())
+    active_session_ids.update(await _get_running_headless_session_ids())
 
     # Track which sessions we've discovered (have JSONL files)
     discovered_session_ids = {s.session_id for s in sessions}
@@ -1098,7 +1098,7 @@ async def list_sessions(
         if is_active is None or is_active is True:
             # Pending sessions are always active, so only include if is_active filter allows
             pending = _get_pending_sessions(active_session_ids, discovered_session_ids, repo_path)
-            pending_headless = _get_pending_headless_sessions(discovered_session_ids, repo_path)
+            pending_headless = await _get_pending_headless_sessions(discovered_session_ids, repo_path)
             all_pending = pending + pending_headless
 
             # Apply starred filter to pending sessions
@@ -1156,7 +1156,7 @@ async def list_sessions(
     summaries.extend(pending)
 
     # Add pending headless sessions (running in database but no JSONL file yet)
-    pending_headless = _get_pending_headless_sessions(discovered_session_ids, repo_path)
+    pending_headless = await _get_pending_headless_sessions(discovered_session_ids, repo_path)
     summaries.extend(pending_headless)
 
     # Sort based on the requested field and order
@@ -1262,7 +1262,7 @@ async def get_session_counts():
     }
 
     # Also include headless sessions that are currently running (e.g., scheduled jobs)
-    running_headless_ids = _get_running_headless_session_ids()
+    running_headless_ids = await _get_running_headless_session_ids()
     active_session_ids.update(running_headless_ids)
 
     counts = []
@@ -1285,7 +1285,7 @@ async def get_session_counts():
                     active_count += 1
 
         # Also count pending headless sessions (running in database but no JSONL file yet)
-        pending_headless = _get_pending_headless_sessions(discovered_ids, repo["local_path"])
+        pending_headless = await _get_pending_headless_sessions(discovered_ids, repo["local_path"])
         active_count += len(pending_headless)
 
         counts.append(RepoSessionCount(
@@ -1652,7 +1652,7 @@ async def kill_session(session_id: str):
     # Try to cancel if it's a headless session
     if await headless_analyzer.cancel(session_id):
         killed_headless = True
-        headless_analyzer.unregister_running(session_id)
+        await headless_analyzer.unregister_running(session_id)
 
     # Emit session completed event if we killed anything
     if killed_pty or killed_headless:

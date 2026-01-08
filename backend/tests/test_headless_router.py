@@ -106,8 +106,10 @@ class TestRunHeadlessSession:
             mock_db.commit = AsyncMock()
             mock_db.refresh = AsyncMock(side_effect=lambda s: setattr(s, 'id', 1))
 
-            # Mock analyzer
+            # Mock analyzer (register_running and unregister_running are now async)
             mock_analyzer.analyze = AsyncMock(return_value=mock_session_result)
+            mock_analyzer.register_running = AsyncMock()
+            mock_analyzer.unregister_running = AsyncMock()
 
             response = client.post(
                 "/headless/run",
@@ -144,6 +146,8 @@ class TestRunHeadlessSession:
             mock_db.refresh = AsyncMock(side_effect=lambda s: setattr(s, 'id', 1))
 
             mock_analyzer.analyze = AsyncMock(return_value=mock_session_result)
+            mock_analyzer.register_running = AsyncMock()
+            mock_analyzer.unregister_running = AsyncMock()
 
             response = client.post(
                 "/headless/run",
@@ -189,6 +193,8 @@ class TestRunHeadlessSession:
             mock_db.refresh = AsyncMock(side_effect=lambda s: setattr(s, 'id', 1))
 
             mock_analyzer.analyze = AsyncMock(return_value=mock_failed_session_result)
+            mock_analyzer.register_running = AsyncMock()
+            mock_analyzer.unregister_running = AsyncMock()
 
             response = client.post(
                 "/headless/run",
@@ -237,6 +243,8 @@ class TestRunHeadlessSession:
             mock_db.refresh = AsyncMock(side_effect=lambda s: setattr(s, 'id', 1))
 
             mock_analyzer.analyze = AsyncMock(side_effect=Exception("Claude Code not found"))
+            mock_analyzer.register_running = AsyncMock()
+            mock_analyzer.unregister_running = AsyncMock()
 
             response = client.post(
                 "/headless/run",
@@ -264,6 +272,8 @@ class TestRunHeadlessSession:
             mock_db.refresh = AsyncMock(side_effect=lambda s: setattr(s, 'id', 1))
 
             mock_analyzer.analyze = AsyncMock(return_value=mock_session_result)
+            mock_analyzer.register_running = AsyncMock()
+            mock_analyzer.unregister_running = AsyncMock()
 
             # Only provide required fields
             response = client.post(
@@ -312,6 +322,8 @@ class TestRunHeadlessSessionStream:
             mock_db.execute = AsyncMock(return_value=mock_result)
 
             mock_analyzer.analyze_stream = mock_stream
+            mock_analyzer.register_running = AsyncMock()
+            mock_analyzer.unregister_running = AsyncMock()
 
             response = client.post(
                 "/headless/run/stream",
@@ -360,6 +372,8 @@ class TestRunHeadlessSessionStream:
             mock_db.execute = AsyncMock(return_value=mock_result)
 
             mock_analyzer.analyze_stream = mock_stream
+            mock_analyzer.register_running = AsyncMock()
+            mock_analyzer.unregister_running = AsyncMock()
 
             response = client.post(
                 "/headless/run/stream",
@@ -390,7 +404,7 @@ class TestListRunningHeadlessSessions:
     def test_list_running_sessions_empty(self, client):
         """Test listing running sessions when none are running."""
         with patch("app.routers.headless.headless_analyzer") as mock_analyzer:
-            mock_analyzer.list_running.return_value = []
+            mock_analyzer.list_running = AsyncMock(return_value=[])
 
             response = client.get("/headless/running")
 
@@ -400,7 +414,7 @@ class TestListRunningHeadlessSessions:
     def test_list_running_sessions_with_sessions(self, client):
         """Test listing running sessions when some are active."""
         with patch("app.routers.headless.headless_analyzer") as mock_analyzer:
-            mock_analyzer.list_running.return_value = ["session-1", "session-2", "session-3"]
+            mock_analyzer.list_running = AsyncMock(return_value=["session-1", "session-2", "session-3"])
 
             response = client.get("/headless/running")
 

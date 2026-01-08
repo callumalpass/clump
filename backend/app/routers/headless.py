@@ -94,7 +94,7 @@ async def run_headless_session(data: HeadlessSessionCreate):
         save_session_metadata(encoded_path, claude_session_id, metadata)
 
         # Register session as running for reliable status tracking
-        headless_analyzer.register_running(claude_session_id)
+        await headless_analyzer.register_running(claude_session_id)
 
         # Emit session created event
         await event_manager.emit(EventType.SESSION_CREATED, {
@@ -143,7 +143,7 @@ async def run_headless_session(data: HeadlessSessionCreate):
 
         finally:
             # Always unregister when done
-            headless_analyzer.unregister_running(claude_session_id)
+            await headless_analyzer.unregister_running(claude_session_id)
 
             # Emit session completed event
             await event_manager.emit(EventType.SESSION_COMPLETED, {
@@ -191,7 +191,7 @@ async def run_headless_session_stream(data: HeadlessSessionCreate):
     save_session_metadata(encoded_path, claude_session_id, metadata)
 
     # Register session as running BEFORE the generator starts
-    headless_analyzer.register_running(claude_session_id)
+    await headless_analyzer.register_running(claude_session_id)
 
     # Emit session created event (must be done before returning StreamingResponse)
     await event_manager.emit(EventType.SESSION_CREATED, {
@@ -261,7 +261,7 @@ async def run_headless_session_stream(data: HeadlessSessionCreate):
 
         finally:
             # Always unregister when generator completes
-            headless_analyzer.unregister_running(claude_session_id)
+            await headless_analyzer.unregister_running(claude_session_id)
 
             # Emit session completed event
             await event_manager.emit(EventType.SESSION_COMPLETED, {
@@ -282,7 +282,7 @@ async def run_headless_session_stream(data: HeadlessSessionCreate):
 @router.get("/headless/running")
 async def list_running_sessions():
     """List currently running headless sessions."""
-    return {"running": headless_analyzer.list_running()}
+    return {"running": await headless_analyzer.list_running()}
 
 
 @router.delete("/headless/{session_id}")

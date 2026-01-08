@@ -61,22 +61,30 @@ class HeadlessAnalyzer:
 
     Supports multiple CLI tools through the adapter pattern.
     Uses real-time structured output that can be parsed and displayed progressively.
+
+    Thread-safety: All access to _running_sessions and _active_session_ids is
+    protected by _lock to prevent race conditions when multiple sessions are
+    started/stopped concurrently.
     """
 
     def __init__(self):
         self._running_sessions: dict[str, asyncio.subprocess.Process] = {}
         # Explicit tracking set - more reliable than process dict for status checks
         self._active_session_ids: set[str] = set()
+        # Lock to protect concurrent access to session tracking data structures
+        self._lock = asyncio.Lock()
 
-    def register_running(self, session_id: str) -> None:
+    async def register_running(self, session_id: str) -> None:
         """Register a session as running. Call before starting the session."""
         logger.info("Registering session as running: %s", session_id)
-        self._active_session_ids.add(session_id)
+        async with self._lock:
+            self._active_session_ids.add(session_id)
 
-    def unregister_running(self, session_id: str) -> None:
+    async def unregister_running(self, session_id: str) -> None:
         """Unregister a session as running. Call when session completes."""
         logger.info("Unregistering session (completed): %s", session_id)
-        self._active_session_ids.discard(session_id)
+        async with self._lock:
+            self._active_session_ids.discard(session_id)
 
     async def analyze(
         self,
@@ -217,7 +225,8 @@ class HeadlessAnalyzer:
         )
 
         run_id = session_id or str(uuid4())[:8]
-        self._running_sessions[run_id] = process
+        async with self._lock:
+            self._running_sessions[run_id] = process
 
         try:
             # Read stdout line by line (stream-json is newline-delimited)
@@ -250,7 +259,8 @@ class HeadlessAnalyzer:
                     )
 
         finally:
-            self._running_sessions.pop(run_id, None)
+            async with self._lock:
+                self._running_sessions.pop(run_id, None)
 
     def _parse_message(self, data: dict) -> SessionMessage:
         """Parse a JSON message from stream-json output."""
@@ -283,7 +293,8 @@ class HeadlessAnalyzer:
 
     async def cancel(self, session_id: str) -> bool:
         """Cancel a running session."""
-        process = self._running_sessions.get(session_id)
+        async with self._lock:
+            process = self._running_sessions.get(session_id)
         if process:
             process.terminate()
             try:
@@ -293,10 +304,11 @@ class HeadlessAnalyzer:
             return True
         return False
 
-    def list_running(self) -> list[str]:
+    async def list_running(self) -> list[str]:
         """List IDs of running sessions."""
-        # Combine both tracking mechanisms for robustness
-        all_running = set(self._running_sessions.keys()) | self._active_session_ids
+        async with self._lock:
+            # Combine both tracking mechanisms for robustness
+            all_running = set(self._running_sessions.keys()) | self._active_session_ids
         if all_running:
             logger.debug("list_running: %s", all_running)
         return list(all_running)

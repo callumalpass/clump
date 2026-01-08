@@ -228,67 +228,101 @@ class TestHeadlessAnalyzerRunningSessionsManagement:
         from app.services.headless_analyzer import HeadlessAnalyzer
         return HeadlessAnalyzer()
 
-    def test_list_running_empty(self, analyzer):
+    @pytest.mark.asyncio
+    async def test_list_running_empty(self, analyzer):
         """Test list_running with no sessions."""
-        assert analyzer.list_running() == []
+        assert await analyzer.list_running() == []
 
-    def test_list_running_with_sessions(self, analyzer):
+    @pytest.mark.asyncio
+    async def test_list_running_with_sessions(self, analyzer):
         """Test list_running with sessions."""
         analyzer._running_sessions["session-1"] = MagicMock()
         analyzer._running_sessions["session-2"] = MagicMock()
 
-        running = analyzer.list_running()
+        running = await analyzer.list_running()
 
         assert len(running) == 2
         assert "session-1" in running
         assert "session-2" in running
 
-    def test_register_running_adds_session(self, analyzer):
+    @pytest.mark.asyncio
+    async def test_register_running_adds_session(self, analyzer):
         """Test that register_running adds session ID to tracking set."""
-        analyzer.register_running("test-session-123")
+        await analyzer.register_running("test-session-123")
 
         assert "test-session-123" in analyzer._active_session_ids
-        running = analyzer.list_running()
+        running = await analyzer.list_running()
         assert "test-session-123" in running
 
-    def test_unregister_running_removes_session(self, analyzer):
+    @pytest.mark.asyncio
+    async def test_unregister_running_removes_session(self, analyzer):
         """Test that unregister_running removes session ID from tracking set."""
         analyzer._active_session_ids.add("session-to-remove")
 
-        analyzer.unregister_running("session-to-remove")
+        await analyzer.unregister_running("session-to-remove")
 
         assert "session-to-remove" not in analyzer._active_session_ids
 
-    def test_unregister_running_handles_nonexistent_session(self, analyzer):
+    @pytest.mark.asyncio
+    async def test_unregister_running_handles_nonexistent_session(self, analyzer):
         """Test that unregister_running handles non-existent session gracefully."""
         # Should not raise an error
-        analyzer.unregister_running("nonexistent-session")
+        await analyzer.unregister_running("nonexistent-session")
 
         assert "nonexistent-session" not in analyzer._active_session_ids
 
-    def test_list_running_combines_both_tracking_mechanisms(self, analyzer):
+    @pytest.mark.asyncio
+    async def test_list_running_combines_both_tracking_mechanisms(self, analyzer):
         """Test that list_running combines _running_sessions and _active_session_ids."""
         # Add session via subprocess tracking
         analyzer._running_sessions["process-session"] = MagicMock()
         # Add session via explicit registration
-        analyzer.register_running("registered-session")
+        await analyzer.register_running("registered-session")
 
-        running = analyzer.list_running()
+        running = await analyzer.list_running()
 
         assert len(running) == 2
         assert "process-session" in running
         assert "registered-session" in running
 
-    def test_list_running_deduplicates_sessions(self, analyzer):
+    @pytest.mark.asyncio
+    async def test_list_running_deduplicates_sessions(self, analyzer):
         """Test that list_running deduplicates sessions in both tracking mechanisms."""
         # Add same session to both tracking mechanisms
         analyzer._running_sessions["shared-session"] = MagicMock()
         analyzer._active_session_ids.add("shared-session")
 
-        running = analyzer.list_running()
+        running = await analyzer.list_running()
 
         # Should only appear once
         assert running.count("shared-session") == 1
+
+    @pytest.mark.asyncio
+    async def test_concurrent_register_unregister(self, analyzer):
+        """Test that concurrent register/unregister operations are thread-safe."""
+        # This test verifies the lock prevents race conditions
+        import asyncio
+
+        async def register_task(session_id: str):
+            await analyzer.register_running(session_id)
+            await asyncio.sleep(0.001)  # Simulate some work
+
+        async def unregister_task(session_id: str):
+            await asyncio.sleep(0.001)  # Let register happen first
+            await analyzer.unregister_running(session_id)
+
+        # Run many concurrent operations
+        tasks = []
+        for i in range(50):
+            session_id = f"session-{i}"
+            tasks.append(register_task(session_id))
+            tasks.append(unregister_task(session_id))
+
+        await asyncio.gather(*tasks)
+
+        # All sessions should be unregistered after the operations
+        running = await analyzer.list_running()
+        assert len(running) == 0
 
 
 class TestHeadlessAnalyzerCancel:

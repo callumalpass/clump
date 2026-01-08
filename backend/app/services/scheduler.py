@@ -865,7 +865,7 @@ class SchedulerService:
         save_session_metadata(encoded_path, session_id, metadata)
 
         # Register session as running BEFORE starting (belt and suspenders with analyze_stream tracking)
-        headless_analyzer.register_running(session_id)
+        await headless_analyzer.register_running(session_id)
 
         # Emit session created event
         await event_manager.emit(EventType.SESSION_CREATED, {
@@ -929,7 +929,7 @@ class SchedulerService:
 
         finally:
             # Always unregister when done (success, failure, or exception)
-            headless_analyzer.unregister_running(session_id)
+            await headless_analyzer.unregister_running(session_id)
 
             # Emit session completed event
             await event_manager.emit(EventType.SESSION_COMPLETED, {
