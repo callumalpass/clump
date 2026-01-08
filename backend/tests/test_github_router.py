@@ -674,8 +674,8 @@ class TestGitHubCache:
         assert "valid" in _github_cache
 
     @pytest.mark.asyncio
-    async def test_cache_evicts_oldest_when_over_limit(self):
-        """Test that oldest entries are evicted when cache exceeds max size."""
+    async def test_cache_evicts_oldest_when_at_limit(self):
+        """Test that oldest entries are evicted when cache is at max size."""
         from app.routers.github import (
             _cache_response,
             _github_cache,
@@ -690,11 +690,11 @@ class TestGitHubCache:
 
         assert len(_github_cache) == GITHUB_CACHE_MAX_SIZE
 
-        # Add one more entry - should trigger eviction of oldest
+        # Add one more entry - should trigger eviction of oldest BEFORE adding
         await _cache_response("new_key", {"data": "new"})
 
-        # Cache should still be at max size
-        assert len(_github_cache) <= GITHUB_CACHE_MAX_SIZE + 1  # +1 because we just added
+        # Cache should remain exactly at max size (never exceeds)
+        assert len(_github_cache) == GITHUB_CACHE_MAX_SIZE
         # The oldest entry (key_0 with lowest timestamp) should be gone
         assert "key_0" not in _github_cache
         # The new entry should be present
@@ -870,6 +870,52 @@ class TestGitHubCache:
         for result in results:
             assert result is not None
             assert isinstance(result, dict)
+
+    @pytest.mark.asyncio
+    async def test_cache_update_existing_key_no_eviction(self):
+        """Test that updating an existing key doesn't evict other entries."""
+        from app.routers.github import (
+            _cache_response,
+            _github_cache,
+            GITHUB_CACHE_MAX_SIZE,
+        )
+        import time as time_module
+
+        # Fill cache to exactly max size
+        base_time = time_module.time()
+        for i in range(GITHUB_CACHE_MAX_SIZE):
+            _github_cache[f"key_{i}"] = ({"data": i}, base_time + i)
+
+        assert len(_github_cache) == GITHUB_CACHE_MAX_SIZE
+
+        # Update an existing key - should NOT trigger eviction
+        await _cache_response("key_5", {"data": "updated"})
+
+        # Cache should still be at max size with all original keys
+        assert len(_github_cache) == GITHUB_CACHE_MAX_SIZE
+        # key_0 (oldest) should still exist since we didn't add a new key
+        assert "key_0" in _github_cache
+        # The updated key should have new value
+        data, _ = _github_cache["key_5"]
+        assert data == {"data": "updated"}
+
+    @pytest.mark.asyncio
+    async def test_cache_never_exceeds_max_size(self):
+        """Test that cache never exceeds GITHUB_CACHE_MAX_SIZE."""
+        from app.routers.github import (
+            _cache_response,
+            _github_cache,
+            GITHUB_CACHE_MAX_SIZE,
+        )
+
+        # Add more than max size entries
+        for i in range(GITHUB_CACHE_MAX_SIZE + 50):
+            await _cache_response(f"key_{i}", {"data": i})
+            # Cache should never exceed max size at any point
+            assert len(_github_cache) <= GITHUB_CACHE_MAX_SIZE
+
+        # Final check
+        assert len(_github_cache) == GITHUB_CACHE_MAX_SIZE
 
 
 class TestErrorHandling:

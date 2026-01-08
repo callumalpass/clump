@@ -90,16 +90,19 @@ async def _cache_response(cache_key: str, data: Any) -> None:
     """Cache a response with current timestamp.
 
     Thread-safe: acquires _github_cache_lock before modifying the cache.
+    Ensures cache never exceeds GITHUB_CACHE_MAX_SIZE entries.
     """
     async with _github_cache_lock:
-        _github_cache[cache_key] = (data, time.time())
-        # Cleanup: first remove expired entries, then evict oldest if still over limit
-        if len(_github_cache) > GITHUB_CACHE_MAX_SIZE:
+        # If adding a new key would exceed max size, make room first
+        # (updating an existing key doesn't increase size)
+        if cache_key not in _github_cache and len(_github_cache) >= GITHUB_CACHE_MAX_SIZE:
+            # First try to remove expired entries
             _cleanup_expired_cache_entries()
-            # If still over limit after removing expired entries, evict oldest
-            while len(_github_cache) > GITHUB_CACHE_MAX_SIZE:
+            # If still at/over limit, evict oldest entries until we have room
+            while len(_github_cache) >= GITHUB_CACHE_MAX_SIZE:
                 oldest_key = min(_github_cache, key=lambda k: _github_cache[k][1])
                 del _github_cache[oldest_key]
+        _github_cache[cache_key] = (data, time.time())
 
 
 async def _clear_cache() -> None:
