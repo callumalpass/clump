@@ -276,7 +276,9 @@ class ClaudeAdapter(CLIAdapter):
         Decode a Claude-encoded path back to a local path.
 
         Example: -home-user-project -> /home/user/project
+
+        Note: This must match storage.decode_path behavior for consistency.
         """
         if encoded.startswith("-"):
-            return encoded.replace("-", "/")
-        return "/" + encoded.replace("-", "/")
+            return "/" + encoded[1:].replace("-", "/")
+        return encoded.replace("-", "/")

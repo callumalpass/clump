@@ -156,6 +156,58 @@ class TestClaudeAdapter:
         decoded = adapter.decode_path("-home-user-project")
         assert decoded == "/home/user/project"
 
+    def test_decode_path_without_leading_dash(self, adapter):
+        """Decodes paths without leading dash as relative paths.
+
+        This tests the fix for the bug where paths without a leading dash
+        were incorrectly getting a '/' prefix added. The behavior must match
+        storage.decode_path for consistency.
+        """
+        decoded = adapter.decode_path("home-user-project")
+        # Should NOT add leading slash - this is a relative path
+        assert decoded == "home/user/project"
+        # Verify it doesn't start with slash
+        assert not decoded.startswith("/")
+
+    def test_decode_path_single_component(self, adapter):
+        """Decodes single component path."""
+        decoded = adapter.decode_path("-project")
+        assert decoded == "/project"
+
+    def test_decode_path_matches_storage_behavior(self, adapter):
+        """Ensures decode_path matches storage.decode_path behavior.
+
+        Both functions must produce identical results for session discovery
+        and path matching to work correctly across the codebase.
+        """
+        from app.storage import decode_path as storage_decode_path
+
+        test_cases = [
+            "-home-user-project",
+            "-home-user-my-project",
+            "relative-path",
+            "-single",
+        ]
+
+        for encoded in test_cases:
+            adapter_result = adapter.decode_path(encoded)
+            storage_result = storage_decode_path(encoded)
+            assert adapter_result == storage_result, (
+                f"Mismatch for '{encoded}': "
+                f"adapter={adapter_result}, storage={storage_result}"
+            )
+
+    def test_encode_decode_consistency(self, adapter):
+        """Tests that encode and decode are consistent for absolute paths.
+
+        Note: The encoding is lossy for paths containing dashes or underscores,
+        so we test with a path that doesn't have those characters.
+        """
+        original = "/home/user/project"
+        encoded = adapter.encode_path(original)
+        decoded = adapter.decode_path(encoded)
+        assert decoded == original
+
     def test_build_interactive_command_basic(self, adapter):
         """Builds basic interactive command."""
         cmd = adapter.build_interactive_command("/path/to/project")
