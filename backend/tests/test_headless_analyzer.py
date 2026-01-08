@@ -765,6 +765,140 @@ class TestHeadlessAnalyzerAnalyze:
         assert result.error == "Unknown error"
 
 
+class TestHeadlessAnalyzerWithCLIType:
+    """Tests for HeadlessAnalyzer with different CLI types."""
+
+    @pytest.fixture
+    def analyzer(self):
+        """Create HeadlessAnalyzer instance."""
+        from app.services.headless_analyzer import HeadlessAnalyzer
+        return HeadlessAnalyzer()
+
+    @pytest.mark.asyncio
+    async def test_analyze_stream_with_string_cli_type(self, analyzer):
+        """Test analyze_stream accepts string CLI type and converts to enum."""
+        from app.cli import CLIType
+
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.wait = AsyncMock()
+
+        async def readline_generator():
+            yield b'{"type": "result", "subtype": "success", "result": "Done"}\n'
+            yield b''
+
+        gen = readline_generator()
+        mock_process.stdout = MagicMock()
+        mock_process.stdout.readline = lambda: gen.__anext__()
+        mock_process.stderr = MagicMock()
+        mock_process.stderr.read = AsyncMock(return_value=b'')
+
+        with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=mock_process)):
+            messages = []
+            # Pass string "claude" instead of CLIType.CLAUDE
+            async for msg in analyzer.analyze_stream("Test", "/path", cli_type="claude"):
+                messages.append(msg)
+
+        assert len(messages) == 1
+        assert messages[0].type == "result"
+
+    @pytest.mark.asyncio
+    async def test_analyze_stream_unsupported_cli_yields_error(self, analyzer):
+        """Test analyze_stream yields error for CLI without headless support."""
+        # Create a mock adapter that doesn't support headless
+        mock_adapter = MagicMock()
+        mock_adapter.capabilities.supports_headless = False
+        mock_adapter.display_name = "MockCLI"
+
+        with patch("app.services.headless_analyzer.get_adapter", return_value=mock_adapter):
+            messages = []
+            async for msg in analyzer.analyze_stream("Test", "/path"):
+                messages.append(msg)
+
+        assert len(messages) == 1
+        assert messages[0].type == "error"
+        assert "does not support headless mode" in messages[0].content
+
+
+class TestHeadlessAnalyzerParseMessageEdgeCases:
+    """Additional edge case tests for _parse_message method."""
+
+    @pytest.fixture
+    def analyzer(self):
+        """Create HeadlessAnalyzer instance."""
+        from app.services.headless_analyzer import HeadlessAnalyzer
+        return HeadlessAnalyzer()
+
+    def test_parse_message_with_numeric_content(self, analyzer):
+        """Test parsing message where content value is a number (edge case)."""
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": 12345  # Numeric content instead of string/list
+            },
+        }
+
+        msg = analyzer._parse_message(data)
+
+        # Numeric content should not cause an error
+        assert msg.type == "assistant"
+        # Numeric content is passed through as-is (not a list or string case)
+        assert msg.content == 12345
+
+    def test_parse_message_with_nested_content_blocks(self, analyzer):
+        """Test parsing assistant message with deeply nested content."""
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {"type": "text", "text": "First."},
+                    {"type": "text", "text": "Second."},
+                    {"type": "text", "text": "Third."},
+                ]
+            },
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "assistant"
+        assert msg.content == "First. Second. Third."
+
+    def test_parse_message_result_with_cost_and_duration_zero(self, analyzer):
+        """Test parsing result with zero cost and duration values."""
+        data = {
+            "type": "result",
+            "subtype": "success",
+            "result": "Done",
+            "total_cost_usd": 0.0,
+            "duration_ms": 0,
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "result"
+        assert msg.cost_usd == 0.0
+        assert msg.duration_ms == 0
+
+    def test_parse_message_with_whitespace_text_content(self, analyzer):
+        """Test parsing message with whitespace-only text blocks."""
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {"type": "text", "text": "   "},
+                    {"type": "text", "text": "Valid"},
+                    {"type": "text", "text": "\n\t"},
+                ]
+            },
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "assistant"
+        # All text blocks are joined with space
+        assert "Valid" in msg.content
+
+
 class TestGlobalAnalyzerInstance:
     """Tests for the global headless_analyzer instance."""
 

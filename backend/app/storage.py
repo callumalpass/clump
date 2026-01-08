@@ -1277,7 +1277,7 @@ def match_encoded_path_to_repo(encoded_path: str) -> Optional[RepoInfo]:
     return None
 
 
-def get_repo_path_from_encoded(encoded_path: str) -> Optional[str]:
+def get_repo_path_from_encoded(encoded_path: str) -> str:
     """
     Get the actual repo path from an encoded path.
 
