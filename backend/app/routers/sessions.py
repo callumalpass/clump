@@ -76,7 +76,6 @@ class SessionCacheEntry:
     dir_mtime: float
 
 
-@dataclass
 class SessionCache:
     """
     Manages session discovery cache with TTL and mtime-based invalidation.
@@ -85,22 +84,46 @@ class SessionCache:
     - Serving from cache if within TTL and directory hasn't changed
     - Refreshing if directory mtime has changed (new/modified sessions)
     - Hard refresh after TTL expires regardless of mtime
+
+    Thread-safety: All operations are protected by a threading lock since this
+    cache is accessed from both async endpoints and thread pool executors.
     """
-    entries: dict[str, SessionCacheEntry] = field(default_factory=dict)
-    last_mtime_check: dict[str, float] = field(default_factory=dict)
-    cached_mtimes: dict[str, float] = field(default_factory=dict)
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._entries: dict[str, SessionCacheEntry] = {}
+        self._last_mtime_check: dict[str, float] = {}
+        self._cached_mtimes: dict[str, float] = {}
 
     def get(self, key: str) -> Optional[SessionCacheEntry]:
         """Get a cache entry by key."""
-        return self.entries.get(key)
+        with self._lock:
+            return self._entries.get(key)
 
     def set(self, key: str, sessions: list, mtime: float) -> None:
         """Set a cache entry with current timestamp."""
-        self.entries[key] = SessionCacheEntry(
-            sessions=sessions,
-            cached_at=time.time(),
-            dir_mtime=mtime,
-        )
+        with self._lock:
+            self._entries[key] = SessionCacheEntry(
+                sessions=sessions,
+                cached_at=time.time(),
+                dir_mtime=mtime,
+            )
+
+    def get_mtime_check(self, key: str) -> float:
+        """Get the last mtime check timestamp for a key."""
+        with self._lock:
+            return self._last_mtime_check.get(key, 0)
+
+    def get_cached_mtime(self, key: str) -> float:
+        """Get the cached directory mtime for a key."""
+        with self._lock:
+            return self._cached_mtimes.get(key, 0)
+
+    def set_mtime_data(self, key: str, check_time: float, mtime: float) -> None:
+        """Update the mtime tracking data for a key."""
+        with self._lock:
+            self._last_mtime_check[key] = check_time
+            self._cached_mtimes[key] = mtime
 
     def invalidate(self, key: Optional[str] = None) -> None:
         """
@@ -109,44 +132,46 @@ class SessionCache:
         If key is provided, invalidates that key and the global "__all__" key.
         If key is None, clears all cache state.
         """
-        if key:
-            self.entries.pop(key, None)
-            self.entries.pop("__all__", None)
-            self.last_mtime_check.pop(key, None)
-            self.last_mtime_check.pop("__all__", None)
-            self.cached_mtimes.pop(key, None)
-            self.cached_mtimes.pop("__all__", None)
-        else:
-            self.entries.clear()
-            self.last_mtime_check.clear()
-            self.cached_mtimes.clear()
+        with self._lock:
+            if key:
+                self._entries.pop(key, None)
+                self._entries.pop("__all__", None)
+                self._last_mtime_check.pop(key, None)
+                self._last_mtime_check.pop("__all__", None)
+                self._cached_mtimes.pop(key, None)
+                self._cached_mtimes.pop("__all__", None)
+            else:
+                self._entries.clear()
+                self._last_mtime_check.clear()
+                self._cached_mtimes.clear()
 
     def cleanup_old_entries(self, max_entries: int = MAX_CACHE_ENTRIES) -> None:
         """Remove old cache entries if cache exceeds max size."""
-        if len(self.entries) > max_entries:
-            now = time.time()
-            cutoff = now - SESSION_CACHE_TTL * 10
-            # Get keys to remove (entries older than cutoff)
-            keys_to_remove = {
-                k for k, v in self.entries.items()
-                if v.cached_at <= cutoff
-            }
-            # Clean up entries
-            self.entries = {
-                k: v for k, v in self.entries.items()
-                if k not in keys_to_remove
-            }
-            # Also clean up corresponding mtime tracking to prevent memory leak
-            for key in keys_to_remove:
-                self.last_mtime_check.pop(key, None)
-                self.cached_mtimes.pop(key, None)
+        with self._lock:
+            if len(self._entries) > max_entries:
+                now = time.time()
+                cutoff = now - SESSION_CACHE_TTL * 10
+                # Get keys to remove (entries older than cutoff)
+                keys_to_remove = {
+                    k for k, v in self._entries.items()
+                    if v.cached_at <= cutoff
+                }
+                # Clean up entries
+                self._entries = {
+                    k: v for k, v in self._entries.items()
+                    if k not in keys_to_remove
+                }
+                # Also clean up corresponding mtime tracking to prevent memory leak
+                for key in keys_to_remove:
+                    self._last_mtime_check.pop(key, None)
+                    self._cached_mtimes.pop(key, None)
 
-            # If still over limit after removing expired entries, evict oldest
-            while len(self.entries) > max_entries:
-                oldest_key = min(self.entries, key=lambda k: self.entries[k].cached_at)
-                del self.entries[oldest_key]
-                self.last_mtime_check.pop(oldest_key, None)
-                self.cached_mtimes.pop(oldest_key, None)
+                # If still over limit after removing expired entries, evict oldest
+                while len(self._entries) > max_entries:
+                    oldest_key = min(self._entries, key=lambda k: self._entries[k].cached_at)
+                    del self._entries[oldest_key]
+                    self._last_mtime_check.pop(oldest_key, None)
+                    self._cached_mtimes.pop(oldest_key, None)
 
     def clear(self) -> None:
         """Clear all cache state. Alias for invalidate() with no arguments."""
@@ -154,11 +179,13 @@ class SessionCache:
 
     def __contains__(self, key: str) -> bool:
         """Support 'key in cache' syntax for checking entry existence."""
-        return key in self.entries
+        with self._lock:
+            return key in self._entries
 
     def __len__(self) -> int:
         """Return number of cache entries."""
-        return len(self.entries)
+        with self._lock:
+            return len(self._entries)
 
 
 # Global session cache instance
@@ -315,20 +342,20 @@ def _should_refresh_cache(cache_key: str, cached_mtime: float) -> bool:
     Check if cache should be refreshed based on directory mtime.
 
     Only actually stats the directory if enough time has passed since last check.
+    Thread-safe: uses SessionCache's thread-safe methods.
     """
     now = time.time()
 
     # Check if we need to re-stat the directory
-    last_check = _session_cache.last_mtime_check.get(cache_key, 0)
+    last_check = _session_cache.get_mtime_check(cache_key)
     if now - last_check < SESSION_CACHE_MTIME_CHECK_INTERVAL:
         # Use cached mtime value
-        current_mtime = _session_cache.cached_mtimes.get(cache_key, 0)
+        current_mtime = _session_cache.get_cached_mtime(cache_key)
     else:
         # Actually check the filesystem
         repo_path = None if cache_key == "__all__" else cache_key
         current_mtime = _get_projects_dir_mtime(repo_path)
-        _session_cache.last_mtime_check[cache_key] = now
-        _session_cache.cached_mtimes[cache_key] = current_mtime
+        _session_cache.set_mtime_data(cache_key, now, current_mtime)
 
     # Cache is stale if directory was modified after cache was created
     return current_mtime > cached_mtime

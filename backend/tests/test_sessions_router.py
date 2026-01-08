@@ -2872,11 +2872,9 @@ class TestSessionCache:
         cache.set("key2", [], mtime=200.0)
         cache.set("__all__", [], mtime=300.0)
 
-        # Also set up mtime tracking
-        cache.last_mtime_check["key1"] = 100.0
-        cache.last_mtime_check["__all__"] = 300.0
-        cache.cached_mtimes["key1"] = 100.0
-        cache.cached_mtimes["__all__"] = 300.0
+        # Also set up mtime tracking using the thread-safe method
+        cache.set_mtime_data("key1", 100.0, 100.0)
+        cache.set_mtime_data("__all__", 300.0, 300.0)
 
         cache.invalidate("key1")
 
@@ -2887,49 +2885,47 @@ class TestSessionCache:
         assert "key2" in cache
 
         # Mtime tracking should also be cleared for invalidated keys
-        assert "key1" not in cache.last_mtime_check
-        assert "__all__" not in cache.last_mtime_check
-        assert "key1" not in cache.cached_mtimes
-        assert "__all__" not in cache.cached_mtimes
+        # Check via the private attributes (acceptable for unit tests)
+        assert "key1" not in cache._last_mtime_check
+        assert "__all__" not in cache._last_mtime_check
+        assert "key1" not in cache._cached_mtimes
+        assert "__all__" not in cache._cached_mtimes
 
     def test_invalidate_all(self, cache):
         """Test invalidating all cache entries."""
         cache.set("key1", [], mtime=100.0)
         cache.set("key2", [], mtime=200.0)
-        cache.last_mtime_check["key1"] = 100.0
-        cache.cached_mtimes["key1"] = 100.0
+        cache.set_mtime_data("key1", 100.0, 100.0)
 
         cache.invalidate()
 
         assert len(cache) == 0
-        assert len(cache.last_mtime_check) == 0
-        assert len(cache.cached_mtimes) == 0
+        assert len(cache._last_mtime_check) == 0
+        assert len(cache._cached_mtimes) == 0
 
     def test_clear_is_alias_for_invalidate(self, cache):
         """Test that clear() is an alias for invalidate()."""
         cache.set("key1", [], mtime=100.0)
-        cache.last_mtime_check["key1"] = 100.0
-        cache.cached_mtimes["key1"] = 100.0
+        cache.set_mtime_data("key1", 100.0, 100.0)
 
         cache.clear()
 
         assert len(cache) == 0
-        assert len(cache.last_mtime_check) == 0
-        assert len(cache.cached_mtimes) == 0
+        assert len(cache._last_mtime_check) == 0
+        assert len(cache._cached_mtimes) == 0
 
     def test_cleanup_old_entries_when_under_limit(self, cache):
         """Test that cleanup does nothing when under the limit."""
         cache.set("key1", [], mtime=100.0)
         cache.set("key2", [], mtime=200.0)
-        cache.last_mtime_check["key1"] = 100.0
-        cache.cached_mtimes["key1"] = 100.0
+        cache.set_mtime_data("key1", 100.0, 100.0)
 
         # Should not clean up when under the limit
         cache.cleanup_old_entries(max_entries=10)
 
         assert len(cache) == 2
-        assert "key1" in cache.last_mtime_check
-        assert "key1" in cache.cached_mtimes
+        assert "key1" in cache._last_mtime_check
+        assert "key1" in cache._cached_mtimes
 
     def test_cleanup_old_entries_removes_old_entries(self, cache):
         """Test that cleanup removes entries older than cutoff."""
@@ -2939,31 +2935,30 @@ class TestSessionCache:
         from app.routers.sessions import SessionCacheEntry, SESSION_CACHE_TTL
 
         old_time = time.time() - SESSION_CACHE_TTL * 20  # Very old
-        cache.entries["old_key"] = SessionCacheEntry(
+        cache._entries["old_key"] = SessionCacheEntry(
             sessions=[],
             cached_at=old_time,
             dir_mtime=100.0,
         )
-        cache.last_mtime_check["old_key"] = old_time
-        cache.cached_mtimes["old_key"] = 100.0
+        cache._last_mtime_check["old_key"] = old_time
+        cache._cached_mtimes["old_key"] = 100.0
 
         # Create a recent entry
         cache.set("recent_key", [], mtime=200.0)
-        cache.last_mtime_check["recent_key"] = time.time()
-        cache.cached_mtimes["recent_key"] = 200.0
+        cache.set_mtime_data("recent_key", time.time(), 200.0)
 
         # Trigger cleanup (set max_entries to 1 to force cleanup)
         cache.cleanup_old_entries(max_entries=1)
 
         # Old key should be removed along with its mtime tracking
         assert "old_key" not in cache
-        assert "old_key" not in cache.last_mtime_check
-        assert "old_key" not in cache.cached_mtimes
+        assert "old_key" not in cache._last_mtime_check
+        assert "old_key" not in cache._cached_mtimes
 
         # Recent key should remain
         assert "recent_key" in cache
-        assert "recent_key" in cache.last_mtime_check
-        assert "recent_key" in cache.cached_mtimes
+        assert "recent_key" in cache._last_mtime_check
+        assert "recent_key" in cache._cached_mtimes
 
     def test_cleanup_old_entries_prevents_memory_leak(self, cache):
         """Test that cleanup clears mtime tracking for removed entries.
@@ -2978,35 +2973,34 @@ class TestSessionCache:
         old_time = time.time() - SESSION_CACHE_TTL * 20
         for i in range(10):
             key = f"old_key_{i}"
-            cache.entries[key] = SessionCacheEntry(
+            cache._entries[key] = SessionCacheEntry(
                 sessions=[],
                 cached_at=old_time,
                 dir_mtime=100.0 + i,
             )
-            cache.last_mtime_check[key] = old_time
-            cache.cached_mtimes[key] = 100.0 + i
+            cache._last_mtime_check[key] = old_time
+            cache._cached_mtimes[key] = 100.0 + i
 
         # Create one recent entry
         cache.set("recent_key", [], mtime=500.0)
-        cache.last_mtime_check["recent_key"] = time.time()
-        cache.cached_mtimes["recent_key"] = 500.0
+        cache.set_mtime_data("recent_key", time.time(), 500.0)
 
         # Before cleanup, all tracking dicts should have 11 entries
-        assert len(cache.entries) == 11
-        assert len(cache.last_mtime_check) == 11
-        assert len(cache.cached_mtimes) == 11
+        assert len(cache._entries) == 11
+        assert len(cache._last_mtime_check) == 11
+        assert len(cache._cached_mtimes) == 11
 
         # Trigger cleanup
         cache.cleanup_old_entries(max_entries=1)
 
         # After cleanup, only recent entry should remain in ALL dicts
         # This tests the memory leak fix
-        assert len(cache.entries) == 1
-        assert len(cache.last_mtime_check) == 1
-        assert len(cache.cached_mtimes) == 1
-        assert "recent_key" in cache.entries
-        assert "recent_key" in cache.last_mtime_check
-        assert "recent_key" in cache.cached_mtimes
+        assert len(cache._entries) == 1
+        assert len(cache._last_mtime_check) == 1
+        assert len(cache._cached_mtimes) == 1
+        assert "recent_key" in cache._entries
+        assert "recent_key" in cache._last_mtime_check
+        assert "recent_key" in cache._cached_mtimes
 
     def test_set_updates_existing_entry(self, cache):
         """Test that setting a key updates an existing entry."""
@@ -3029,21 +3023,20 @@ class TestSessionCache:
         below max_entries because only the expired-entry removal logic ran.
         """
         import time
+        from app.routers.sessions import SessionCacheEntry
 
         # Create multiple fresh entries (all recent, none will be removed by cutoff)
         base_time = time.time()
         for i in range(5):
             key = f"fresh_key_{i}"
-            # Each entry is slightly newer than the previous
-            cache.set(key, [f"session_{i}"], mtime=100.0 + i)
-            # Manually set cached_at to ensure ordering (oldest first)
-            cache.entries[key] = cache.entries[key].__class__(
+            # Manually set entries to ensure ordering (oldest first)
+            cache._entries[key] = SessionCacheEntry(
                 sessions=[f"session_{i}"],
                 cached_at=base_time + i,  # Increasing time = newer
                 dir_mtime=100.0 + i,
             )
-            cache.last_mtime_check[key] = base_time + i
-            cache.cached_mtimes[key] = 100.0 + i
+            cache._last_mtime_check[key] = base_time + i
+            cache._cached_mtimes[key] = 100.0 + i
 
         # Verify we have 5 entries
         assert len(cache) == 5
@@ -3064,10 +3057,10 @@ class TestSessionCache:
         assert "fresh_key_4" in cache
 
         # Mtime tracking should also be cleaned up for evicted entries
-        assert "fresh_key_0" not in cache.last_mtime_check
-        assert "fresh_key_0" not in cache.cached_mtimes
-        assert "fresh_key_3" in cache.last_mtime_check
-        assert "fresh_key_3" in cache.cached_mtimes
+        assert "fresh_key_0" not in cache._last_mtime_check
+        assert "fresh_key_0" not in cache._cached_mtimes
+        assert "fresh_key_3" in cache._last_mtime_check
+        assert "fresh_key_3" in cache._cached_mtimes
 
     def test_cleanup_old_entries_combines_expired_and_oldest_eviction(self, cache):
         """Test that cleanup first removes expired, then evicts oldest if still over limit.
@@ -3082,25 +3075,25 @@ class TestSessionCache:
         old_time = time.time() - SESSION_CACHE_TTL * 20
         for i in range(2):
             key = f"expired_key_{i}"
-            cache.entries[key] = SessionCacheEntry(
+            cache._entries[key] = SessionCacheEntry(
                 sessions=[],
                 cached_at=old_time,
                 dir_mtime=50.0 + i,
             )
-            cache.last_mtime_check[key] = old_time
-            cache.cached_mtimes[key] = 50.0 + i
+            cache._last_mtime_check[key] = old_time
+            cache._cached_mtimes[key] = 50.0 + i
 
         # Create 4 fresh entries with distinct ages
         base_time = time.time()
         for i in range(4):
             key = f"fresh_key_{i}"
-            cache.entries[key] = SessionCacheEntry(
+            cache._entries[key] = SessionCacheEntry(
                 sessions=[],
                 cached_at=base_time + i,  # Increasing = newer
                 dir_mtime=100.0 + i,
             )
-            cache.last_mtime_check[key] = base_time + i
-            cache.cached_mtimes[key] = 100.0 + i
+            cache._last_mtime_check[key] = base_time + i
+            cache._cached_mtimes[key] = 100.0 + i
 
         # Total: 6 entries (2 expired + 4 fresh)
         assert len(cache) == 6
@@ -3123,6 +3116,159 @@ class TestSessionCache:
         # Newest fresh should remain
         assert "fresh_key_2" in cache
         assert "fresh_key_3" in cache
+
+    def test_mtime_tracking_methods(self, cache):
+        """Test the mtime tracking methods (get_mtime_check, get_cached_mtime, set_mtime_data)."""
+        # Initially returns 0 for unknown keys
+        assert cache.get_mtime_check("key1") == 0
+        assert cache.get_cached_mtime("key1") == 0
+
+        # Set mtime data
+        cache.set_mtime_data("key1", 1000.0, 2000.0)
+
+        # Verify it was stored correctly
+        assert cache.get_mtime_check("key1") == 1000.0
+        assert cache.get_cached_mtime("key1") == 2000.0
+
+        # Update with new values
+        cache.set_mtime_data("key1", 3000.0, 4000.0)
+        assert cache.get_mtime_check("key1") == 3000.0
+        assert cache.get_cached_mtime("key1") == 4000.0
+
+    def test_thread_safety_concurrent_access(self, cache):
+        """Test that concurrent access to the cache doesn't cause errors.
+
+        This test uses multiple threads to simultaneously read and write to the cache.
+        If the cache is not thread-safe, this could result in race conditions or errors.
+        """
+        import threading
+        import time
+        from app.routers.sessions import SessionCacheEntry
+
+        errors = []
+        operations_completed = {"read": 0, "write": 0, "invalidate": 0}
+        lock = threading.Lock()
+
+        def writer_thread(thread_id: int, iterations: int):
+            """Write entries to the cache."""
+            for i in range(iterations):
+                try:
+                    key = f"thread_{thread_id}_key_{i}"
+                    cache.set(key, [{"session": f"{thread_id}_{i}"}], mtime=float(i))
+                    cache.set_mtime_data(key, time.time(), float(i))
+                    with lock:
+                        operations_completed["write"] += 1
+                except Exception as e:
+                    with lock:
+                        errors.append(f"Writer {thread_id}: {e}")
+
+        def reader_thread(thread_id: int, iterations: int):
+            """Read entries from the cache."""
+            for i in range(iterations):
+                try:
+                    # Try to read various keys (some may not exist)
+                    key = f"thread_{thread_id % 3}_key_{i % 10}"
+                    _ = cache.get(key)
+                    _ = cache.get_mtime_check(key)
+                    _ = cache.get_cached_mtime(key)
+                    _ = key in cache
+                    _ = len(cache)
+                    with lock:
+                        operations_completed["read"] += 1
+                except Exception as e:
+                    with lock:
+                        errors.append(f"Reader {thread_id}: {e}")
+
+        def invalidator_thread(iterations: int):
+            """Invalidate cache entries periodically."""
+            for i in range(iterations):
+                try:
+                    if i % 3 == 0:
+                        cache.invalidate(f"thread_0_key_{i % 10}")
+                    else:
+                        cache.cleanup_old_entries(max_entries=50)
+                    with lock:
+                        operations_completed["invalidate"] += 1
+                except Exception as e:
+                    with lock:
+                        errors.append(f"Invalidator: {e}")
+
+        # Start multiple threads
+        threads = []
+
+        # 3 writer threads
+        for i in range(3):
+            t = threading.Thread(target=writer_thread, args=(i, 50))
+            threads.append(t)
+
+        # 3 reader threads
+        for i in range(3):
+            t = threading.Thread(target=reader_thread, args=(i, 100))
+            threads.append(t)
+
+        # 1 invalidator thread
+        t = threading.Thread(target=invalidator_thread, args=(30,))
+        threads.append(t)
+
+        # Start all threads
+        for t in threads:
+            t.start()
+
+        # Wait for all threads to complete
+        for t in threads:
+            t.join(timeout=10)
+
+        # Check that no errors occurred
+        assert len(errors) == 0, f"Thread-safety errors: {errors}"
+
+        # Verify that operations completed
+        assert operations_completed["write"] > 0
+        assert operations_completed["read"] > 0
+        assert operations_completed["invalidate"] > 0
+
+    def test_thread_safety_cleanup_during_read(self, cache):
+        """Test that cleanup can run while other threads are reading."""
+        import threading
+        import time
+        from app.routers.sessions import SessionCacheEntry
+
+        errors = []
+
+        # Pre-populate cache with some entries
+        for i in range(20):
+            cache.set(f"key_{i}", [{"session": i}], mtime=float(i))
+            cache.set_mtime_data(f"key_{i}", time.time() - 1000, float(i))
+
+        def reader_thread(iterations: int):
+            """Continuously read from cache."""
+            for _ in range(iterations):
+                try:
+                    for i in range(20):
+                        _ = cache.get(f"key_{i}")
+                        _ = len(cache)
+                except Exception as e:
+                    errors.append(f"Reader: {e}")
+
+        def cleanup_thread(iterations: int):
+            """Continuously run cleanup."""
+            for _ in range(iterations):
+                try:
+                    cache.cleanup_old_entries(max_entries=10)
+                except Exception as e:
+                    errors.append(f"Cleanup: {e}")
+
+        threads = [
+            threading.Thread(target=reader_thread, args=(50,)),
+            threading.Thread(target=reader_thread, args=(50,)),
+            threading.Thread(target=cleanup_thread, args=(20,)),
+        ]
+
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=10)
+
+        assert len(errors) == 0, f"Thread-safety errors: {errors}"
 
 
 class TestParseDateFilter:
