@@ -351,46 +351,47 @@ async def list_issues(
     if cached is not None:
         return cached
 
-    if fetch_all:
-        # Fetch all issues for client-side filtering
-        all_issues = github_client.list_all_issues(
-            repo["owner"],
-            repo["name"],
-            state=state,
-            labels=labels if labels else None,
-        )
-        # Apply search filter if provided
-        if search:
-            search_lower = search.lower()
-            all_issues = [
-                i for i in all_issues
-                if search_lower in (i.title or "").lower() or search_lower in (i.body or "").lower()
-            ]
-        total = len(all_issues)
-        response = IssueListResponse(
-            issues=[_issue_to_response(i) for i in all_issues],
-            total=total,
-            page=1,
-            per_page=total,  # All items in one "page"
-        )
-    else:
-        issues, total = github_client.list_issues(
-            repo["owner"],
-            repo["name"],
-            state=state,
-            labels=labels if labels else None,
-            search_query=search,
-            sort=sort,
-            order=order,
-            page=page,
-            per_page=per_page,
-        )
-        response = IssueListResponse(
-            issues=[_issue_to_response(i) for i in issues],
-            total=total,
-            page=page,
-            per_page=per_page,
-        )
+    with github_api_error_handler():
+        if fetch_all:
+            # Fetch all issues for client-side filtering
+            all_issues = github_client.list_all_issues(
+                repo["owner"],
+                repo["name"],
+                state=state,
+                labels=labels if labels else None,
+            )
+            # Apply search filter if provided
+            if search:
+                search_lower = search.lower()
+                all_issues = [
+                    i for i in all_issues
+                    if search_lower in (i.title or "").lower() or search_lower in (i.body or "").lower()
+                ]
+            total = len(all_issues)
+            response = IssueListResponse(
+                issues=[_issue_to_response(i) for i in all_issues],
+                total=total,
+                page=1,
+                per_page=total,  # All items in one "page"
+            )
+        else:
+            issues, total = github_client.list_issues(
+                repo["owner"],
+                repo["name"],
+                state=state,
+                labels=labels if labels else None,
+                search_query=search,
+                sort=sort,
+                order=order,
+                page=page,
+                per_page=per_page,
+            )
+            response = IssueListResponse(
+                issues=[_issue_to_response(i) for i in issues],
+                total=total,
+                page=page,
+                per_page=per_page,
+            )
     _cache_response(cache_key, response)
     return response
 
@@ -747,22 +748,23 @@ async def list_prs(
     if cached is not None:
         return cached
 
-    prs, total = github_client.list_prs(
-        repo["owner"],
-        repo["name"],
-        state=state,
-        search_query=search,
-        sort=sort,
-        order=order,
-        page=page,
-        per_page=per_page,
-    )
-    response = PRListResponse(
-        prs=[_pr_to_response(p) for p in prs],
-        total=total,
-        page=page,
-        per_page=per_page,
-    )
+    with github_api_error_handler():
+        prs, total = github_client.list_prs(
+            repo["owner"],
+            repo["name"],
+            state=state,
+            search_query=search,
+            sort=sort,
+            order=order,
+            page=page,
+            per_page=per_page,
+        )
+        response = PRListResponse(
+            prs=[_pr_to_response(p) for p in prs],
+            total=total,
+            page=page,
+            per_page=per_page,
+        )
     _cache_response(cache_key, response)
     return response
 
@@ -774,7 +776,8 @@ async def get_pr(
 ):
     """Get a single pull request with comments."""
     repo = get_repo_or_404(repo_id)
-    pr = github_client.get_pr(repo["owner"], repo["name"], pr_number)
+    with github_api_error_handler():
+        pr = github_client.get_pr(repo["owner"], repo["name"], pr_number)
     response = _pr_to_response(pr)
     response_dict = response.model_dump()
     response_dict["comments"] = [

@@ -808,3 +808,204 @@ class TestGitHubCache:
         # Empty dict
         _cache_response("empty_dict", {})
         assert _get_cached_response("empty_dict") == {}
+
+
+class TestErrorHandling:
+    """Tests for error handling in GitHub API endpoints."""
+
+    def test_list_issues_handles_github_not_found(self, client, mock_repo_info):
+        """Test list_issues returns 404 for GitHub not found errors."""
+        with patch("app.routers.github.get_repo_or_404") as mock_get, \
+             patch("app.routers.github.github_client") as mock_client:
+            mock_get.return_value = mock_repo_info
+            mock_client.list_issues.side_effect = UnknownObjectException(
+                status=404, data={"message": "Not Found"}, headers={}
+            )
+
+            response = client.get("/repos/1/issues")
+
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+
+    def test_list_issues_fetch_all_handles_github_not_found(self, client, mock_repo_info):
+        """Test list_issues with fetch_all=true returns 404 for GitHub not found errors."""
+        with patch("app.routers.github.get_repo_or_404") as mock_get, \
+             patch("app.routers.github.github_client") as mock_client:
+            mock_get.return_value = mock_repo_info
+            mock_client.list_all_issues.side_effect = UnknownObjectException(
+                status=404, data={"message": "Not Found"}, headers={}
+            )
+
+            response = client.get("/repos/1/issues?fetch_all=true")
+
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+
+    def test_list_prs_handles_github_not_found(self, client, mock_repo_info):
+        """Test list_prs returns 404 for GitHub not found errors."""
+        with patch("app.routers.github.get_repo_or_404") as mock_get, \
+             patch("app.routers.github.github_client") as mock_client:
+            mock_get.return_value = mock_repo_info
+            mock_client.list_prs.side_effect = UnknownObjectException(
+                status=404, data={"message": "Not Found"}, headers={}
+            )
+
+            response = client.get("/repos/1/prs")
+
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+
+    def test_get_pr_handles_github_not_found(self, client, mock_repo_info):
+        """Test get_pr returns 404 for GitHub not found errors."""
+        with patch("app.routers.github.get_repo_or_404") as mock_get, \
+             patch("app.routers.github.github_client") as mock_client:
+            mock_get.return_value = mock_repo_info
+            mock_client.get_pr.side_effect = UnknownObjectException(
+                status=404, data={"message": "Not Found"}, headers={}
+            )
+
+            response = client.get("/repos/1/prs/123")
+
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
+
+    def test_list_issues_handles_rate_limit(self, client, mock_repo_info):
+        """Test list_issues returns 429 for rate limit errors."""
+        from github import RateLimitExceededException
+
+        with patch("app.routers.github.get_repo_or_404") as mock_get, \
+             patch("app.routers.github.github_client") as mock_client:
+            mock_get.return_value = mock_repo_info
+            mock_client.list_issues.side_effect = RateLimitExceededException(
+                status=403, data={"message": "Rate limit exceeded"}, headers={}
+            )
+
+            response = client.get("/repos/1/issues")
+
+        assert response.status_code == 429
+        assert "rate limit" in response.json()["detail"].lower()
+
+    def test_list_prs_handles_rate_limit(self, client, mock_repo_info):
+        """Test list_prs returns 429 for rate limit errors."""
+        from github import RateLimitExceededException
+
+        with patch("app.routers.github.get_repo_or_404") as mock_get, \
+             patch("app.routers.github.github_client") as mock_client:
+            mock_get.return_value = mock_repo_info
+            mock_client.list_prs.side_effect = RateLimitExceededException(
+                status=403, data={"message": "Rate limit exceeded"}, headers={}
+            )
+
+            response = client.get("/repos/1/prs")
+
+        assert response.status_code == 429
+        assert "rate limit" in response.json()["detail"].lower()
+
+    def test_get_pr_handles_rate_limit(self, client, mock_repo_info):
+        """Test get_pr returns 429 for rate limit errors."""
+        from github import RateLimitExceededException
+
+        with patch("app.routers.github.get_repo_or_404") as mock_get, \
+             patch("app.routers.github.github_client") as mock_client:
+            mock_get.return_value = mock_repo_info
+            mock_client.get_pr.side_effect = RateLimitExceededException(
+                status=403, data={"message": "Rate limit exceeded"}, headers={}
+            )
+
+            response = client.get("/repos/1/prs/123")
+
+        assert response.status_code == 429
+        assert "rate limit" in response.json()["detail"].lower()
+
+    def test_list_issues_handles_bad_credentials(self, client, mock_repo_info):
+        """Test list_issues returns 401 for bad credentials."""
+        from github import BadCredentialsException
+
+        with patch("app.routers.github.get_repo_or_404") as mock_get, \
+             patch("app.routers.github.github_client") as mock_client:
+            mock_get.return_value = mock_repo_info
+            mock_client.list_issues.side_effect = BadCredentialsException(
+                status=401, data={"message": "Bad credentials"}, headers={}
+            )
+
+            response = client.get("/repos/1/issues")
+
+        assert response.status_code == 401
+        assert "authentication failed" in response.json()["detail"].lower()
+
+    def test_list_prs_handles_bad_credentials(self, client, mock_repo_info):
+        """Test list_prs returns 401 for bad credentials."""
+        from github import BadCredentialsException
+
+        with patch("app.routers.github.get_repo_or_404") as mock_get, \
+             patch("app.routers.github.github_client") as mock_client:
+            mock_get.return_value = mock_repo_info
+            mock_client.list_prs.side_effect = BadCredentialsException(
+                status=401, data={"message": "Bad credentials"}, headers={}
+            )
+
+            response = client.get("/repos/1/prs")
+
+        assert response.status_code == 401
+        assert "authentication failed" in response.json()["detail"].lower()
+
+    def test_get_pr_handles_bad_credentials(self, client, mock_repo_info):
+        """Test get_pr returns 401 for bad credentials."""
+        from github import BadCredentialsException
+
+        with patch("app.routers.github.get_repo_or_404") as mock_get, \
+             patch("app.routers.github.github_client") as mock_client:
+            mock_get.return_value = mock_repo_info
+            mock_client.get_pr.side_effect = BadCredentialsException(
+                status=401, data={"message": "Bad credentials"}, headers={}
+            )
+
+            response = client.get("/repos/1/prs/123")
+
+        assert response.status_code == 401
+        assert "authentication failed" in response.json()["detail"].lower()
+
+    def test_list_issues_handles_server_error(self, client, mock_repo_info):
+        """Test list_issues returns 502 for GitHub server errors."""
+        from github import GithubException
+
+        with patch("app.routers.github.get_repo_or_404") as mock_get, \
+             patch("app.routers.github.github_client") as mock_client:
+            mock_get.return_value = mock_repo_info
+            mock_client.list_issues.side_effect = GithubException(
+                status=500, data={"message": "Internal Server Error"}, headers={}
+            )
+
+            response = client.get("/repos/1/issues")
+
+        assert response.status_code == 502
+
+    def test_list_prs_handles_server_error(self, client, mock_repo_info):
+        """Test list_prs returns 502 for GitHub server errors."""
+        from github import GithubException
+
+        with patch("app.routers.github.get_repo_or_404") as mock_get, \
+             patch("app.routers.github.github_client") as mock_client:
+            mock_get.return_value = mock_repo_info
+            mock_client.list_prs.side_effect = GithubException(
+                status=500, data={"message": "Internal Server Error"}, headers={}
+            )
+
+            response = client.get("/repos/1/prs")
+
+        assert response.status_code == 502
+
+    def test_get_pr_handles_server_error(self, client, mock_repo_info):
+        """Test get_pr returns 502 for GitHub server errors."""
+        from github import GithubException
+
+        with patch("app.routers.github.get_repo_or_404") as mock_get, \
+             patch("app.routers.github.github_client") as mock_client:
+            mock_get.return_value = mock_repo_info
+            mock_client.get_pr.side_effect = GithubException(
+                status=500, data={"message": "Internal Server Error"}, headers={}
+            )
+
+            response = client.get("/repos/1/prs/123")
+
+        assert response.status_code == 502
