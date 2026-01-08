@@ -273,6 +273,7 @@ def _parse_claude_transcript(transcript_path: Path, session_id: str) -> ParsedTr
                                     elif isinstance(tool_content, list):
                                         # Content is array of blocks - can be text or image
                                         text_parts_inner = []
+                                        image_data_url = None
                                         for item in tool_content:
                                             if isinstance(item, dict):
                                                 if item.get('type') == 'text':
@@ -285,8 +286,14 @@ def _parse_claude_transcript(transcript_path: Path, session_id: str) -> ParsedTr
                                                         data = source.get('data', '')
                                                         if data:
                                                             # Store as data URL for frontend to render
-                                                            result_text = f"data:{media_type};base64,{data}"
-                                        if text_parts_inner and not result_text:
+                                                            image_data_url = f"data:{media_type};base64,{data}"
+                                        # Combine text and image data if both present
+                                        if text_parts_inner and image_data_url:
+                                            # Include both text and image, separated by newline
+                                            result_text = '\n'.join(text_parts_inner) + '\n' + image_data_url
+                                        elif image_data_url:
+                                            result_text = image_data_url
+                                        elif text_parts_inner:
                                             result_text = '\n'.join(text_parts_inner)
 
                                         # Also check for spawned agent

@@ -1017,6 +1017,199 @@ class TestParseTranscript:
         assert result is not None
         assert len(result.messages) == 1
 
+    def test_parses_tool_result_with_image_only(self, tmp_path, monkeypatch):
+        """Parses tool result containing only an image."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-img.jsonl"
+        lines = [
+            json.dumps({
+                "type": "assistant",
+                "uuid": "msg-1",
+                "timestamp": "2025-01-01T10:00:00Z",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "read-123",
+                            "name": "Read",
+                            "input": {"file_path": "/test/image.png"}
+                        }
+                    ]
+                }
+            }),
+            json.dumps({
+                "type": "user",
+                "uuid": "msg-2",
+                "timestamp": "2025-01-01T10:00:01Z",
+                "message": {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "read-123",
+                            "content": [
+                                {
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": "image/png",
+                                        "data": "iVBORw0KGgo="
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }),
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-img", "/test/project")
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].tool_uses[0].result == "data:image/png;base64,iVBORw0KGgo="
+
+    def test_parses_tool_result_with_text_and_image(self, tmp_path, monkeypatch):
+        """Parses tool result containing both text and image - preserves both."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-mixed.jsonl"
+        lines = [
+            json.dumps({
+                "type": "assistant",
+                "uuid": "msg-1",
+                "timestamp": "2025-01-01T10:00:00Z",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "read-456",
+                            "name": "Read",
+                            "input": {"file_path": "/test/image.png"}
+                        }
+                    ]
+                }
+            }),
+            json.dumps({
+                "type": "user",
+                "uuid": "msg-2",
+                "timestamp": "2025-01-01T10:00:01Z",
+                "message": {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "read-456",
+                            "content": [
+                                {"type": "text", "text": "Image metadata: 800x600 PNG"},
+                                {
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": "image/png",
+                                        "data": "iVBORw0KGgo="
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }),
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-mixed", "/test/project")
+        assert result is not None
+        assert len(result.messages) == 1
+        # Both text and image should be preserved
+        tool_result = result.messages[0].tool_uses[0].result
+        assert "Image metadata: 800x600 PNG" in tool_result
+        assert "data:image/png;base64,iVBORw0KGgo=" in tool_result
+
+    def test_parses_tool_result_with_multiple_text_and_image(self, tmp_path, monkeypatch):
+        """Parses tool result with multiple text blocks and an image."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-multi.jsonl"
+        lines = [
+            json.dumps({
+                "type": "assistant",
+                "uuid": "msg-1",
+                "timestamp": "2025-01-01T10:00:00Z",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "read-789",
+                            "name": "Read",
+                            "input": {"file_path": "/test/image.png"}
+                        }
+                    ]
+                }
+            }),
+            json.dumps({
+                "type": "user",
+                "uuid": "msg-2",
+                "timestamp": "2025-01-01T10:00:01Z",
+                "message": {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "read-789",
+                            "content": [
+                                {"type": "text", "text": "File: image.png"},
+                                {"type": "text", "text": "Size: 800x600"},
+                                {
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": "image/jpeg",
+                                        "data": "/9j/4AAQ="
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }),
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-multi", "/test/project")
+        assert result is not None
+        tool_result = result.messages[0].tool_uses[0].result
+        # All text blocks should be combined
+        assert "File: image.png" in tool_result
+        assert "Size: 800x600" in tool_result
+        # Image should also be present
+        assert "data:image/jpeg;base64,/9j/4AAQ=" in tool_result
+
 
 class TestTranscriptToDictComplete:
     """Additional tests for transcript_to_dict edge cases."""
