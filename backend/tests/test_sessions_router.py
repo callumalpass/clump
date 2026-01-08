@@ -2863,6 +2863,109 @@ class TestSessionCache:
         """Test that get returns None for missing keys."""
         assert cache.get("nonexistent") is None
 
+    def test_cleanup_old_entries_evicts_oldest_when_all_fresh(self, cache):
+        """Test that cleanup evicts oldest entries when all are newer than cutoff.
+
+        This is a regression test for the bug where if all cache entries were
+        fresh (newer than SESSION_CACHE_TTL * 10), the cache would never shrink
+        below max_entries because only the expired-entry removal logic ran.
+        """
+        import time
+
+        # Create multiple fresh entries (all recent, none will be removed by cutoff)
+        base_time = time.time()
+        for i in range(5):
+            key = f"fresh_key_{i}"
+            # Each entry is slightly newer than the previous
+            cache.set(key, [f"session_{i}"], mtime=100.0 + i)
+            # Manually set cached_at to ensure ordering (oldest first)
+            cache.entries[key] = cache.entries[key].__class__(
+                sessions=[f"session_{i}"],
+                cached_at=base_time + i,  # Increasing time = newer
+                dir_mtime=100.0 + i,
+            )
+            cache.last_mtime_check[key] = base_time + i
+            cache.cached_mtimes[key] = 100.0 + i
+
+        # Verify we have 5 entries
+        assert len(cache) == 5
+
+        # Trigger cleanup with max_entries=2 - should evict the 3 oldest
+        cache.cleanup_old_entries(max_entries=2)
+
+        # Should have exactly 2 entries remaining
+        assert len(cache) == 2
+
+        # The oldest entries (fresh_key_0, fresh_key_1, fresh_key_2) should be gone
+        assert "fresh_key_0" not in cache
+        assert "fresh_key_1" not in cache
+        assert "fresh_key_2" not in cache
+
+        # The newest entries (fresh_key_3, fresh_key_4) should remain
+        assert "fresh_key_3" in cache
+        assert "fresh_key_4" in cache
+
+        # Mtime tracking should also be cleaned up for evicted entries
+        assert "fresh_key_0" not in cache.last_mtime_check
+        assert "fresh_key_0" not in cache.cached_mtimes
+        assert "fresh_key_3" in cache.last_mtime_check
+        assert "fresh_key_3" in cache.cached_mtimes
+
+    def test_cleanup_old_entries_combines_expired_and_oldest_eviction(self, cache):
+        """Test that cleanup first removes expired, then evicts oldest if still over limit.
+
+        This tests the combined behavior: first expired entries are removed,
+        then if still over the limit, the oldest remaining entries are evicted.
+        """
+        import time
+        from app.routers.sessions import SessionCacheEntry, SESSION_CACHE_TTL
+
+        # Create 2 old (expired) entries
+        old_time = time.time() - SESSION_CACHE_TTL * 20
+        for i in range(2):
+            key = f"expired_key_{i}"
+            cache.entries[key] = SessionCacheEntry(
+                sessions=[],
+                cached_at=old_time,
+                dir_mtime=50.0 + i,
+            )
+            cache.last_mtime_check[key] = old_time
+            cache.cached_mtimes[key] = 50.0 + i
+
+        # Create 4 fresh entries with distinct ages
+        base_time = time.time()
+        for i in range(4):
+            key = f"fresh_key_{i}"
+            cache.entries[key] = SessionCacheEntry(
+                sessions=[],
+                cached_at=base_time + i,  # Increasing = newer
+                dir_mtime=100.0 + i,
+            )
+            cache.last_mtime_check[key] = base_time + i
+            cache.cached_mtimes[key] = 100.0 + i
+
+        # Total: 6 entries (2 expired + 4 fresh)
+        assert len(cache) == 6
+
+        # Cleanup with max_entries=2
+        # Should: 1) Remove 2 expired, 2) Still have 4 fresh > 2, so evict 2 oldest fresh
+        cache.cleanup_old_entries(max_entries=2)
+
+        # Should have exactly 2 entries
+        assert len(cache) == 2
+
+        # Expired should be gone
+        assert "expired_key_0" not in cache
+        assert "expired_key_1" not in cache
+
+        # Oldest fresh should be gone
+        assert "fresh_key_0" not in cache
+        assert "fresh_key_1" not in cache
+
+        # Newest fresh should remain
+        assert "fresh_key_2" in cache
+        assert "fresh_key_3" in cache
+
 
 class TestParseDateFilter:
     """Tests for the _parse_date_filter helper function."""

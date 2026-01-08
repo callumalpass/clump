@@ -140,6 +140,13 @@ class SessionCache:
                 self.last_mtime_check.pop(key, None)
                 self.cached_mtimes.pop(key, None)
 
+            # If still over limit after removing expired entries, evict oldest
+            while len(self.entries) > max_entries:
+                oldest_key = min(self.entries, key=lambda k: self.entries[k].cached_at)
+                del self.entries[oldest_key]
+                self.last_mtime_check.pop(oldest_key, None)
+                self.cached_mtimes.pop(oldest_key, None)
+
     def clear(self) -> None:
         """Clear all cache state. Alias for invalidate() with no arguments."""
         self.invalidate()
