@@ -1725,3 +1725,626 @@ class TestParseCodexTranscript:
         assert result.messages[1].role == "assistant"
         assert result.messages[2].role == "user"
         assert result.messages[3].role == "assistant"
+
+
+# ==========================================
+# _find_tool_use_by_id Tests
+# ==========================================
+
+class TestFindToolUseById:
+    """Tests for the _find_tool_use_by_id helper function."""
+
+    def test_finds_tool_use_in_single_message(self):
+        """Finds a tool use in a single assistant message."""
+        from app.services.transcript_parser import _find_tool_use_by_id, TranscriptMessage, ToolUse
+
+        tool = ToolUse(id="tool-123", name="Read", input={"file": "test.py"})
+        messages = [
+            TranscriptMessage(
+                uuid="msg-1",
+                role="assistant",
+                content="Let me read that.",
+                timestamp="2025-01-01T10:00:00Z",
+                tool_uses=[tool],
+            )
+        ]
+
+        result = _find_tool_use_by_id(messages, "tool-123")
+
+        assert result is not None
+        assert result.id == "tool-123"
+        assert result.name == "Read"
+
+    def test_finds_tool_use_in_multiple_messages(self):
+        """Finds a tool use across multiple assistant messages."""
+        from app.services.transcript_parser import _find_tool_use_by_id, TranscriptMessage, ToolUse
+
+        tool1 = ToolUse(id="tool-1", name="Read", input={})
+        tool2 = ToolUse(id="tool-2", name="Write", input={})
+        messages = [
+            TranscriptMessage(
+                uuid="msg-1",
+                role="assistant",
+                content="First",
+                timestamp="2025-01-01T10:00:00Z",
+                tool_uses=[tool1],
+            ),
+            TranscriptMessage(
+                uuid="msg-2",
+                role="user",
+                content="User input",
+                timestamp="2025-01-01T10:01:00Z",
+            ),
+            TranscriptMessage(
+                uuid="msg-3",
+                role="assistant",
+                content="Second",
+                timestamp="2025-01-01T10:02:00Z",
+                tool_uses=[tool2],
+            ),
+        ]
+
+        result = _find_tool_use_by_id(messages, "tool-1")
+
+        assert result is not None
+        assert result.id == "tool-1"
+        assert result.name == "Read"
+
+    def test_finds_most_recent_tool_use(self):
+        """When searching backwards, finds the most recent matching tool use."""
+        from app.services.transcript_parser import _find_tool_use_by_id, TranscriptMessage, ToolUse
+
+        # Same ID in two different messages - should find the later one (due to reverse search)
+        tool1 = ToolUse(id="same-id", name="First", input={})
+        tool2 = ToolUse(id="same-id", name="Second", input={})
+        messages = [
+            TranscriptMessage(
+                uuid="msg-1",
+                role="assistant",
+                content="First",
+                timestamp="2025-01-01T10:00:00Z",
+                tool_uses=[tool1],
+            ),
+            TranscriptMessage(
+                uuid="msg-2",
+                role="assistant",
+                content="Second",
+                timestamp="2025-01-01T10:01:00Z",
+                tool_uses=[tool2],
+            ),
+        ]
+
+        result = _find_tool_use_by_id(messages, "same-id")
+
+        assert result is not None
+        # Should find the second one (most recent) due to reverse iteration
+        assert result.name == "Second"
+
+    def test_returns_none_when_not_found(self):
+        """Returns None when tool use ID is not found."""
+        from app.services.transcript_parser import _find_tool_use_by_id, TranscriptMessage, ToolUse
+
+        tool = ToolUse(id="existing-id", name="Read", input={})
+        messages = [
+            TranscriptMessage(
+                uuid="msg-1",
+                role="assistant",
+                content="Message",
+                timestamp="2025-01-01T10:00:00Z",
+                tool_uses=[tool],
+            )
+        ]
+
+        result = _find_tool_use_by_id(messages, "nonexistent-id")
+
+        assert result is None
+
+    def test_returns_none_for_empty_messages(self):
+        """Returns None when message list is empty."""
+        from app.services.transcript_parser import _find_tool_use_by_id
+
+        result = _find_tool_use_by_id([], "any-id")
+
+        assert result is None
+
+    def test_skips_user_messages(self):
+        """Only searches assistant messages, skipping user messages."""
+        from app.services.transcript_parser import _find_tool_use_by_id, TranscriptMessage, ToolUse
+
+        # Tool use in user message should not be found
+        tool = ToolUse(id="tool-in-user-msg", name="Read", input={})
+        messages = [
+            TranscriptMessage(
+                uuid="msg-1",
+                role="user",
+                content="User",
+                timestamp="2025-01-01T10:00:00Z",
+                tool_uses=[tool],  # Even if tool_uses is populated, user messages are skipped
+            )
+        ]
+
+        result = _find_tool_use_by_id(messages, "tool-in-user-msg")
+
+        assert result is None
+
+    def test_finds_tool_use_among_multiple_tools_in_one_message(self):
+        """Finds correct tool when message has multiple tool uses."""
+        from app.services.transcript_parser import _find_tool_use_by_id, TranscriptMessage, ToolUse
+
+        tool1 = ToolUse(id="first", name="Read", input={})
+        tool2 = ToolUse(id="second", name="Write", input={})
+        tool3 = ToolUse(id="third", name="Bash", input={})
+        messages = [
+            TranscriptMessage(
+                uuid="msg-1",
+                role="assistant",
+                content="Multiple tools",
+                timestamp="2025-01-01T10:00:00Z",
+                tool_uses=[tool1, tool2, tool3],
+            )
+        ]
+
+        result = _find_tool_use_by_id(messages, "second")
+
+        assert result is not None
+        assert result.id == "second"
+        assert result.name == "Write"
+
+    def test_handles_messages_with_no_tool_uses(self):
+        """Handles messages that have empty tool_uses list."""
+        from app.services.transcript_parser import _find_tool_use_by_id, TranscriptMessage, ToolUse
+
+        tool = ToolUse(id="target", name="Read", input={})
+        messages = [
+            TranscriptMessage(
+                uuid="msg-1",
+                role="assistant",
+                content="No tools",
+                timestamp="2025-01-01T10:00:00Z",
+                tool_uses=[],
+            ),
+            TranscriptMessage(
+                uuid="msg-2",
+                role="assistant",
+                content="Has tools",
+                timestamp="2025-01-01T10:01:00Z",
+                tool_uses=[tool],
+            ),
+        ]
+
+        result = _find_tool_use_by_id(messages, "target")
+
+        assert result is not None
+        assert result.id == "target"
+
+
+# ==========================================
+# Tool Result Linking Tests
+# ==========================================
+
+class TestToolResultLinking:
+    """Tests for linking tool results to tool uses during transcript parsing."""
+
+    def test_links_text_result_to_tool_use(self, tmp_path, monkeypatch):
+        """Links a text tool result to its corresponding tool use."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-link.jsonl"
+        lines = [
+            json.dumps({
+                "type": "assistant",
+                "uuid": "msg-1",
+                "timestamp": "2025-01-01T10:00:00Z",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "text", "text": "Reading file..."},
+                        {"type": "tool_use", "id": "read-1", "name": "Read", "input": {"path": "/test.py"}}
+                    ]
+                }
+            }),
+            json.dumps({
+                "type": "user",
+                "uuid": "msg-2",
+                "timestamp": "2025-01-01T10:00:01Z",
+                "message": {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "read-1",
+                            "content": [{"type": "text", "text": "def hello(): pass"}]
+                        }
+                    ]
+                }
+            })
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-link", "/test/project")
+
+        assert result is not None
+        assert len(result.messages) == 1  # Only assistant message
+        assert result.messages[0].tool_uses[0].result == "def hello(): pass"
+        assert result.messages[0].tool_uses[0].result_is_error is False
+
+    def test_links_error_result_to_tool_use(self, tmp_path, monkeypatch):
+        """Links an error tool result to its corresponding tool use."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-error.jsonl"
+        lines = [
+            json.dumps({
+                "type": "assistant",
+                "uuid": "msg-1",
+                "timestamp": "2025-01-01T10:00:00Z",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "tool_use", "id": "read-err", "name": "Read", "input": {"path": "/nonexistent"}}
+                    ]
+                }
+            }),
+            json.dumps({
+                "type": "user",
+                "uuid": "msg-2",
+                "timestamp": "2025-01-01T10:00:01Z",
+                "message": {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "read-err",
+                            "is_error": True,
+                            "content": [{"type": "text", "text": "Error: File not found"}]
+                        }
+                    ]
+                }
+            })
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-error", "/test/project")
+
+        assert result is not None
+        assert result.messages[0].tool_uses[0].result == "Error: File not found"
+        assert result.messages[0].tool_uses[0].result_is_error is True
+
+    def test_links_multiple_results_to_multiple_tools(self, tmp_path, monkeypatch):
+        """Links multiple tool results to their corresponding tool uses."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-multi-tools.jsonl"
+        lines = [
+            json.dumps({
+                "type": "assistant",
+                "uuid": "msg-1",
+                "timestamp": "2025-01-01T10:00:00Z",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "tool_use", "id": "tool-a", "name": "Read", "input": {}},
+                        {"type": "tool_use", "id": "tool-b", "name": "Grep", "input": {}},
+                        {"type": "tool_use", "id": "tool-c", "name": "Bash", "input": {}}
+                    ]
+                }
+            }),
+            json.dumps({
+                "type": "user",
+                "uuid": "msg-2",
+                "timestamp": "2025-01-01T10:00:01Z",
+                "message": {
+                    "role": "user",
+                    "content": [
+                        {"type": "tool_result", "tool_use_id": "tool-a", "content": [{"type": "text", "text": "Result A"}]},
+                        {"type": "tool_result", "tool_use_id": "tool-b", "content": [{"type": "text", "text": "Result B"}]},
+                        {"type": "tool_result", "tool_use_id": "tool-c", "is_error": True, "content": [{"type": "text", "text": "Error C"}]}
+                    ]
+                }
+            })
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-multi-tools", "/test/project")
+
+        assert result is not None
+        tools = result.messages[0].tool_uses
+        assert len(tools) == 3
+        assert tools[0].result == "Result A"
+        assert tools[0].result_is_error is False
+        assert tools[1].result == "Result B"
+        assert tools[1].result_is_error is False
+        assert tools[2].result == "Error C"
+        assert tools[2].result_is_error is True
+
+    def test_links_string_result_content(self, tmp_path, monkeypatch):
+        """Links tool result when content is a string instead of list."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-str-result.jsonl"
+        lines = [
+            json.dumps({
+                "type": "assistant",
+                "uuid": "msg-1",
+                "timestamp": "2025-01-01T10:00:00Z",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "tool_use", "id": "tool-str", "name": "Bash", "input": {}}
+                    ]
+                }
+            }),
+            json.dumps({
+                "type": "user",
+                "uuid": "msg-2",
+                "timestamp": "2025-01-01T10:00:01Z",
+                "message": {
+                    "role": "user",
+                    "content": [
+                        {"type": "tool_result", "tool_use_id": "tool-str", "content": "Plain string result"}
+                    ]
+                }
+            })
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-str-result", "/test/project")
+
+        assert result is not None
+        assert result.messages[0].tool_uses[0].result == "Plain string result"
+
+    def test_unmatched_tool_result_does_not_crash(self, tmp_path, monkeypatch):
+        """Tool result with non-matching ID is handled gracefully."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-unmatched.jsonl"
+        lines = [
+            json.dumps({
+                "type": "assistant",
+                "uuid": "msg-1",
+                "timestamp": "2025-01-01T10:00:00Z",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "tool_use", "id": "real-id", "name": "Read", "input": {}}
+                    ]
+                }
+            }),
+            json.dumps({
+                "type": "user",
+                "uuid": "msg-2",
+                "timestamp": "2025-01-01T10:00:01Z",
+                "message": {
+                    "role": "user",
+                    "content": [
+                        {"type": "tool_result", "tool_use_id": "wrong-id", "content": [{"type": "text", "text": "Orphan result"}]}
+                    ]
+                }
+            })
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-unmatched", "/test/project")
+
+        assert result is not None
+        # Tool use should not have result populated since IDs don't match
+        assert result.messages[0].tool_uses[0].result is None
+
+    def test_tool_result_without_tool_use_id(self, tmp_path, monkeypatch):
+        """Tool result without tool_use_id is handled gracefully."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-no-id.jsonl"
+        lines = [
+            json.dumps({
+                "type": "assistant",
+                "uuid": "msg-1",
+                "timestamp": "2025-01-01T10:00:00Z",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "tool_use", "id": "some-id", "name": "Read", "input": {}}
+                    ]
+                }
+            }),
+            json.dumps({
+                "type": "user",
+                "uuid": "msg-2",
+                "timestamp": "2025-01-01T10:00:01Z",
+                "message": {
+                    "role": "user",
+                    "content": [
+                        {"type": "tool_result", "content": [{"type": "text", "text": "Result without ID"}]}
+                    ]
+                }
+            })
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-no-id", "/test/project")
+
+        assert result is not None
+        # Should not crash, tool use result remains None
+        assert result.messages[0].tool_uses[0].result is None
+
+    def test_links_result_across_multiple_turns(self, tmp_path, monkeypatch):
+        """Links tool result to tool use from earlier conversation turn."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-turns.jsonl"
+        lines = [
+            # First turn: assistant uses tool
+            json.dumps({
+                "type": "assistant",
+                "uuid": "msg-1",
+                "timestamp": "2025-01-01T10:00:00Z",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "text", "text": "Let me read that."},
+                        {"type": "tool_use", "id": "earlier-tool", "name": "Read", "input": {}}
+                    ]
+                }
+            }),
+            # First turn: tool result
+            json.dumps({
+                "type": "user",
+                "uuid": "msg-2",
+                "timestamp": "2025-01-01T10:00:01Z",
+                "message": {
+                    "role": "user",
+                    "content": [
+                        {"type": "tool_result", "tool_use_id": "earlier-tool", "content": [{"type": "text", "text": "File contents"}]}
+                    ]
+                }
+            }),
+            # Second turn: user asks follow-up
+            json.dumps({
+                "type": "user",
+                "uuid": "msg-3",
+                "timestamp": "2025-01-01T10:01:00Z",
+                "message": {
+                    "role": "user",
+                    "content": "Can you modify it?"
+                }
+            }),
+            # Second turn: assistant responds
+            json.dumps({
+                "type": "assistant",
+                "uuid": "msg-4",
+                "timestamp": "2025-01-01T10:01:01Z",
+                "message": {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "Sure, I'll edit it."}]
+                }
+            })
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-turns", "/test/project")
+
+        assert result is not None
+        # Find the assistant message with tool uses
+        assistant_msg_with_tools = [m for m in result.messages if m.tool_uses]
+        assert len(assistant_msg_with_tools) == 1
+        assert assistant_msg_with_tools[0].tool_uses[0].result == "File contents"
+
+
+# ==========================================
+# ToolUse Dataclass Tests
+# ==========================================
+
+class TestToolUseDataclass:
+    """Additional tests for ToolUse dataclass."""
+
+    def test_default_values(self):
+        """Test ToolUse default values."""
+        from app.services.transcript_parser import ToolUse
+
+        tool = ToolUse(id="test", name="Read", input={})
+
+        assert tool.id == "test"
+        assert tool.name == "Read"
+        assert tool.input == {}
+        assert tool.spawned_agent_id is None
+        assert tool.result is None
+        assert tool.result_is_error is False
+
+    def test_with_all_fields(self):
+        """Test ToolUse with all fields populated."""
+        from app.services.transcript_parser import ToolUse
+
+        tool = ToolUse(
+            id="full-tool",
+            name="Task",
+            input={"prompt": "search for files"},
+            spawned_agent_id="abc1234",
+            result="Found 5 files",
+            result_is_error=False,
+        )
+
+        assert tool.id == "full-tool"
+        assert tool.name == "Task"
+        assert tool.input == {"prompt": "search for files"}
+        assert tool.spawned_agent_id == "abc1234"
+        assert tool.result == "Found 5 files"
+        assert tool.result_is_error is False
+
+    def test_error_result(self):
+        """Test ToolUse with error result."""
+        from app.services.transcript_parser import ToolUse
+
+        tool = ToolUse(
+            id="err-tool",
+            name="Bash",
+            input={"command": "rm -rf /"},
+            result="Permission denied",
+            result_is_error=True,
+        )
+
+        assert tool.result == "Permission denied"
+        assert tool.result_is_error is True
+
+    def test_empty_result_string(self):
+        """Test ToolUse with empty string result (not None)."""
+        from app.services.transcript_parser import ToolUse
+
+        tool = ToolUse(
+            id="empty-tool",
+            name="Bash",
+            input={},
+            result="",
+            result_is_error=False,
+        )
+
+        assert tool.result == ""
+        assert tool.result_is_error is False
