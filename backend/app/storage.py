@@ -965,7 +965,7 @@ def get_issue_metadata(encoded_path: str, issue_number: int) -> Optional[IssueMe
         IssueMetadata if sidecar exists, None otherwise.
     """
     # Primary: check local repo .clump/issues/
-    repo_path = decode_path(encoded_path)
+    repo_path = get_repo_path_from_encoded(encoded_path)
     local_issues_dir = Path(repo_path) / ".clump" / "issues"
     local_sidecar_path = local_issues_dir / f"{issue_number}.json"
 
@@ -1003,7 +1003,7 @@ def save_issue_metadata(encoded_path: str, issue_number: int, metadata: IssueMet
         issue_number: The GitHub issue number
         metadata: The metadata to save
     """
-    repo_path = decode_path(encoded_path)
+    repo_path = get_repo_path_from_encoded(encoded_path)
     issues_dir = get_local_issues_dir(repo_path)
     sidecar_path = issues_dir / f"{issue_number}.json"
 
@@ -1021,7 +1021,7 @@ def delete_issue_metadata(encoded_path: str, issue_number: int) -> bool:
     deleted = False
 
     # Try local repo .clump/issues/
-    repo_path = decode_path(encoded_path)
+    repo_path = get_repo_path_from_encoded(encoded_path)
     local_issues_dir = Path(repo_path) / ".clump" / "issues"
     local_sidecar_path = local_issues_dir / f"{issue_number}.json"
 
@@ -1071,7 +1071,7 @@ def list_issue_metadata(encoded_path: str) -> list[IssueMetadata]:
             pass
 
     # Then, load from local repo .clump/issues/ (overrides global)
-    repo_path = decode_path(encoded_path)
+    repo_path = get_repo_path_from_encoded(encoded_path)
     local_issues_dir = Path(repo_path) / ".clump" / "issues"
     if local_issues_dir.exists():
         try:
@@ -1131,7 +1131,7 @@ def get_pr_metadata(encoded_path: str, pr_number: int) -> Optional[PRMetadata]:
         PRMetadata if sidecar exists, None otherwise.
     """
     # Primary: check local repo .clump/prs/
-    repo_path = decode_path(encoded_path)
+    repo_path = get_repo_path_from_encoded(encoded_path)
     local_prs_dir = Path(repo_path) / ".clump" / "prs"
     local_sidecar_path = local_prs_dir / f"{pr_number}.json"
 
@@ -1169,7 +1169,7 @@ def save_pr_metadata(encoded_path: str, pr_number: int, metadata: PRMetadata) ->
         pr_number: The GitHub PR number
         metadata: The metadata to save
     """
-    repo_path = decode_path(encoded_path)
+    repo_path = get_repo_path_from_encoded(encoded_path)
     prs_dir = get_local_prs_dir(repo_path)
     sidecar_path = prs_dir / f"{pr_number}.json"
 
@@ -1187,7 +1187,7 @@ def delete_pr_metadata(encoded_path: str, pr_number: int) -> bool:
     deleted = False
 
     # Try local repo .clump/prs/
-    repo_path = decode_path(encoded_path)
+    repo_path = get_repo_path_from_encoded(encoded_path)
     local_prs_dir = Path(repo_path) / ".clump" / "prs"
     local_sidecar_path = local_prs_dir / f"{pr_number}.json"
 
@@ -1237,7 +1237,7 @@ def list_pr_metadata(encoded_path: str) -> list[PRMetadata]:
             pass
 
     # Then, load from local repo .clump/prs/ (overrides global)
-    repo_path = decode_path(encoded_path)
+    repo_path = get_repo_path_from_encoded(encoded_path)
     local_prs_dir = Path(repo_path) / ".clump" / "prs"
     if local_prs_dir.exists():
         try:
@@ -1275,6 +1275,28 @@ def match_encoded_path_to_repo(encoded_path: str) -> Optional[RepoInfo]:
             return repo
 
     return None
+
+
+def get_repo_path_from_encoded(encoded_path: str) -> Optional[str]:
+    """
+    Get the actual repo path from an encoded path.
+
+    Uses match_encoded_path_to_repo to find the correct path, avoiding
+    the lossy decode_path function which fails for paths with underscores
+    or dashes in the original path.
+
+    Args:
+        encoded_path: The encoded path directory name
+
+    Returns:
+        The actual repo path if found in known repos, otherwise falls back
+        to decode_path (which may be incorrect for paths with underscores).
+    """
+    repo = match_encoded_path_to_repo(encoded_path)
+    if repo:
+        return repo["local_path"]
+    # Fall back to lossy decode for unknown repos (best effort)
+    return decode_path(encoded_path)
 
 
 def get_repos_json_path() -> Path:

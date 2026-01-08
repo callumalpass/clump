@@ -38,6 +38,7 @@ from app.storage import (
     save_session_metadata,
     delete_session_metadata,
     match_encoded_path_to_repo,
+    get_repo_path_from_encoded,
     # Repos registry
     get_repos_json_path,
     load_repos,
@@ -62,6 +63,18 @@ from app.storage import (
     delete_schedule_definition,
     list_schedule_definitions,
     generate_schedule_id,
+    # Issue metadata
+    IssueMetadata,
+    get_issue_metadata,
+    save_issue_metadata,
+    delete_issue_metadata,
+    list_issue_metadata,
+    # PR metadata
+    PRMetadata,
+    get_pr_metadata,
+    save_pr_metadata,
+    delete_pr_metadata,
+    list_pr_metadata,
 )
 
 
@@ -2242,3 +2255,288 @@ class TestGenerateScheduleId:
         schedule_id = generate_schedule_id("Schedule 2023", repo_path)
 
         assert schedule_id == "schedule-2023"
+
+
+class TestGetRepoPathFromEncoded:
+    """Tests for get_repo_path_from_encoded function.
+
+    This function correctly retrieves repo paths from encoded paths,
+    avoiding the lossy decode_path function which fails for paths
+    with underscores or dashes.
+    """
+
+    def test_returns_repo_path_for_known_repo(self, tmp_path, monkeypatch):
+        """Test that known repos return correct path."""
+        # Create a repo with underscores in path
+        repo_path = str(tmp_path / "my_project_v2")
+        (tmp_path / "my_project_v2").mkdir()
+
+        repos = [{"id": 1, "owner": "test", "name": "repo", "local_path": repo_path}]
+        monkeypatch.setattr("app.storage.load_repos", lambda: repos)
+
+        encoded = encode_path(repo_path)
+        result = get_repo_path_from_encoded(encoded)
+
+        assert result == repo_path
+
+    def test_returns_repo_path_for_known_repo_with_dashes(self, tmp_path, monkeypatch):
+        """Test that repos with dashes in path return correct path."""
+        repo_path = str(tmp_path / "my-project-v2")
+        (tmp_path / "my-project-v2").mkdir()
+
+        repos = [{"id": 1, "owner": "test", "name": "repo", "local_path": repo_path}]
+        monkeypatch.setattr("app.storage.load_repos", lambda: repos)
+
+        encoded = encode_path(repo_path)
+        result = get_repo_path_from_encoded(encoded)
+
+        assert result == repo_path
+
+    def test_falls_back_to_decode_path_for_unknown_repo(self, monkeypatch):
+        """Test fallback to decode_path for unknown repos."""
+        monkeypatch.setattr("app.storage.load_repos", lambda: [])
+
+        # For a path without special chars, decode_path works correctly
+        encoded = "-home-user-projects"
+        result = get_repo_path_from_encoded(encoded)
+
+        assert result == "/home/user/projects"
+
+    def test_correctly_resolves_path_with_underscores_in_known_repo(self, tmp_path, monkeypatch):
+        """Test that paths with underscores are correctly resolved.
+
+        This is the key bug fix - decode_path would incorrectly convert
+        underscores (which become dashes when encoded) back to slashes.
+        """
+        # Original path has underscores
+        repo_path = str(tmp_path / "my_awesome_project")
+        (tmp_path / "my_awesome_project").mkdir()
+
+        repos = [{"id": 1, "owner": "test", "name": "repo", "local_path": repo_path}]
+        monkeypatch.setattr("app.storage.load_repos", lambda: repos)
+
+        encoded = encode_path(repo_path)
+        result = get_repo_path_from_encoded(encoded)
+
+        # Should return original path with underscores, not slashes
+        assert result == repo_path
+        assert "_" in result  # Underscores preserved
+
+    def test_handles_multiple_repos(self, tmp_path, monkeypatch):
+        """Test matching when multiple repos are registered."""
+        repo1_path = str(tmp_path / "project_one")
+        repo2_path = str(tmp_path / "project_two")
+        (tmp_path / "project_one").mkdir()
+        (tmp_path / "project_two").mkdir()
+
+        repos = [
+            {"id": 1, "owner": "test", "name": "one", "local_path": repo1_path},
+            {"id": 2, "owner": "test", "name": "two", "local_path": repo2_path},
+        ]
+        monkeypatch.setattr("app.storage.load_repos", lambda: repos)
+
+        # Should match the correct repo
+        result = get_repo_path_from_encoded(encode_path(repo2_path))
+        assert result == repo2_path
+
+
+class TestIssueMetadataWithUnderscorePaths:
+    """Tests for issue metadata functions with paths containing underscores.
+
+    These tests verify that the fix for using get_repo_path_from_encoded
+    instead of decode_path works correctly.
+    """
+
+    @pytest.fixture
+    def repo_with_underscores(self, tmp_path, monkeypatch):
+        """Create a repo with underscores in the path."""
+        repo_path = tmp_path / "my_project_v2"
+        repo_path.mkdir()
+        (repo_path / ".clump" / "issues").mkdir(parents=True)
+
+        repos = [{"id": 1, "owner": "test", "name": "repo", "local_path": str(repo_path)}]
+        monkeypatch.setattr("app.storage.load_repos", lambda: repos)
+
+        return str(repo_path)
+
+    def test_save_and_get_issue_metadata(self, repo_with_underscores, monkeypatch):
+        """Test that metadata can be saved and retrieved for repos with underscores."""
+        repo_path = repo_with_underscores
+        encoded_path = encode_path(repo_path)
+
+        # Patch get_clump_projects_dir to use temp dir
+        monkeypatch.setattr("app.storage.get_clump_projects_dir", lambda: Path(repo_path).parent / ".clump_test")
+
+        metadata = IssueMetadata(issue_number=42, priority="high", difficulty="medium")
+        save_issue_metadata(encoded_path, 42, metadata)
+
+        # Retrieve it
+        result = get_issue_metadata(encoded_path, 42)
+
+        assert result is not None
+        assert result.issue_number == 42
+        assert result.priority == "high"
+        assert result.difficulty == "medium"
+
+    def test_delete_issue_metadata(self, repo_with_underscores, monkeypatch):
+        """Test that metadata can be deleted for repos with underscores."""
+        repo_path = repo_with_underscores
+        encoded_path = encode_path(repo_path)
+
+        monkeypatch.setattr("app.storage.get_clump_projects_dir", lambda: Path(repo_path).parent / ".clump_test")
+
+        metadata = IssueMetadata(issue_number=42, priority="high")
+        save_issue_metadata(encoded_path, 42, metadata)
+
+        # Delete it
+        deleted = delete_issue_metadata(encoded_path, 42)
+        assert deleted is True
+
+        # Verify it's gone
+        result = get_issue_metadata(encoded_path, 42)
+        assert result is None
+
+    def test_list_issue_metadata(self, repo_with_underscores, monkeypatch):
+        """Test listing all issue metadata for repos with underscores."""
+        repo_path = repo_with_underscores
+        encoded_path = encode_path(repo_path)
+
+        monkeypatch.setattr("app.storage.get_clump_projects_dir", lambda: Path(repo_path).parent / ".clump_test")
+
+        # Save multiple issues
+        for i in range(1, 4):
+            metadata = IssueMetadata(issue_number=i, priority="medium")
+            save_issue_metadata(encoded_path, i, metadata)
+
+        # List them
+        result = list_issue_metadata(encoded_path)
+
+        assert len(result) == 3
+        issue_numbers = {m.issue_number for m in result}
+        assert issue_numbers == {1, 2, 3}
+
+
+class TestPRMetadataWithUnderscorePaths:
+    """Tests for PR metadata functions with paths containing underscores."""
+
+    @pytest.fixture
+    def repo_with_underscores(self, tmp_path, monkeypatch):
+        """Create a repo with underscores in the path."""
+        repo_path = tmp_path / "my_project_v2"
+        repo_path.mkdir()
+        (repo_path / ".clump" / "prs").mkdir(parents=True)
+
+        repos = [{"id": 1, "owner": "test", "name": "repo", "local_path": str(repo_path)}]
+        monkeypatch.setattr("app.storage.load_repos", lambda: repos)
+
+        return str(repo_path)
+
+    def test_save_and_get_pr_metadata(self, repo_with_underscores, monkeypatch):
+        """Test that PR metadata can be saved and retrieved for repos with underscores."""
+        repo_path = repo_with_underscores
+        encoded_path = encode_path(repo_path)
+
+        monkeypatch.setattr("app.storage.get_clump_projects_dir", lambda: Path(repo_path).parent / ".clump_test")
+
+        metadata = PRMetadata(pr_number=42, risk="low")
+        save_pr_metadata(encoded_path, 42, metadata)
+
+        result = get_pr_metadata(encoded_path, 42)
+
+        assert result is not None
+        assert result.pr_number == 42
+        assert result.risk == "low"
+
+    def test_delete_pr_metadata(self, repo_with_underscores, monkeypatch):
+        """Test that PR metadata can be deleted for repos with underscores."""
+        repo_path = repo_with_underscores
+        encoded_path = encode_path(repo_path)
+
+        monkeypatch.setattr("app.storage.get_clump_projects_dir", lambda: Path(repo_path).parent / ".clump_test")
+
+        metadata = PRMetadata(pr_number=42, risk="high")
+        save_pr_metadata(encoded_path, 42, metadata)
+
+        deleted = delete_pr_metadata(encoded_path, 42)
+        assert deleted is True
+
+        result = get_pr_metadata(encoded_path, 42)
+        assert result is None
+
+    def test_list_pr_metadata(self, repo_with_underscores, monkeypatch):
+        """Test listing all PR metadata for repos with underscores."""
+        repo_path = repo_with_underscores
+        encoded_path = encode_path(repo_path)
+
+        monkeypatch.setattr("app.storage.get_clump_projects_dir", lambda: Path(repo_path).parent / ".clump_test")
+
+        for i in range(1, 4):
+            metadata = PRMetadata(pr_number=i, risk="medium")
+            save_pr_metadata(encoded_path, i, metadata)
+
+        result = list_pr_metadata(encoded_path)
+
+        assert len(result) == 3
+        pr_numbers = {m.pr_number for m in result}
+        assert pr_numbers == {1, 2, 3}
+
+
+class TestMetadataFallbackToGlobal:
+    """Tests for metadata fallback to global ~/.clump/projects/ location."""
+
+    def test_get_issue_metadata_falls_back_to_global(self, tmp_path, monkeypatch):
+        """Test that issue metadata falls back to global location."""
+        repo_path = tmp_path / "my_project"
+        repo_path.mkdir()
+        # Don't create local .clump/issues/
+
+        # Set up global location
+        global_clump = tmp_path / ".clump_global"
+        encoded_path = encode_path(str(repo_path))
+        global_issues = global_clump / encoded_path / "issues"
+        global_issues.mkdir(parents=True)
+
+        # Write metadata to global location
+        metadata = {"issue_number": 42, "priority": "high"}
+        with open(global_issues / "42.json", "w") as f:
+            json.dump(metadata, f)
+
+        repos = [{"id": 1, "owner": "test", "name": "repo", "local_path": str(repo_path)}]
+        monkeypatch.setattr("app.storage.load_repos", lambda: repos)
+        monkeypatch.setattr("app.storage.get_clump_projects_dir", lambda: global_clump)
+
+        result = get_issue_metadata(encoded_path, 42)
+
+        assert result is not None
+        assert result.issue_number == 42
+        assert result.priority == "high"
+
+    def test_local_metadata_takes_precedence(self, tmp_path, monkeypatch):
+        """Test that local metadata overrides global."""
+        repo_path = tmp_path / "my_project"
+        repo_path.mkdir()
+        local_issues = repo_path / ".clump" / "issues"
+        local_issues.mkdir(parents=True)
+
+        global_clump = tmp_path / ".clump_global"
+        encoded_path = encode_path(str(repo_path))
+        global_issues = global_clump / encoded_path / "issues"
+        global_issues.mkdir(parents=True)
+
+        # Write different metadata to both locations
+        local_meta = {"issue_number": 42, "priority": "critical"}
+        global_meta = {"issue_number": 42, "priority": "low"}
+
+        with open(local_issues / "42.json", "w") as f:
+            json.dump(local_meta, f)
+        with open(global_issues / "42.json", "w") as f:
+            json.dump(global_meta, f)
+
+        repos = [{"id": 1, "owner": "test", "name": "repo", "local_path": str(repo_path)}]
+        monkeypatch.setattr("app.storage.load_repos", lambda: repos)
+        monkeypatch.setattr("app.storage.get_clump_projects_dir", lambda: global_clump)
+
+        result = get_issue_metadata(encoded_path, 42)
+
+        # Should get local value
+        assert result.priority == "critical"
