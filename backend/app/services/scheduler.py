@@ -134,7 +134,8 @@ def parse_filter_query(filter_query: str | None) -> FilterParams:
     if not filter_query or not filter_query.strip():
         return filters
 
-    # Define prefix mappings: (prefix, filter_key, is_exclude)
+    # Define prefix mappings: (prefix, filter_key, is_list)
+    # is_list: True if filter value is a list (extend), False if single value (assign)
     prefix_mappings = [
         # GitHub filters
         ("state:", "state", False),
