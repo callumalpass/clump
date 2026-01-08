@@ -2664,6 +2664,38 @@ class TestTranscriptScanCache:
         assert result2["title"] == "Summary Two"
         assert len(sessions_module._transcript_scan_cache) == 2
 
+    def test_cache_cleanup_modifies_in_place(self, tmp_path):
+        """Test that cache cleanup modifies the dict in-place for thread safety.
+
+        This is a regression test for the thread-safety bug where the cache
+        was reassigned to a new dict during cleanup, which could cause issues
+        with concurrent access.
+        """
+        import app.routers.sessions as sessions_module
+        import time
+
+        MAX_ENTRIES = sessions_module.TRANSCRIPT_CACHE_MAX_ENTRIES
+
+        # Get reference to the original cache dict
+        original_cache_id = id(sessions_module._transcript_scan_cache)
+
+        # Create more files than MAX_ENTRIES to trigger cleanup
+        num_files = MAX_ENTRIES + 20
+        for i in range(num_files):
+            transcript = tmp_path / f"test_{i}.jsonl"
+            transcript.write_text(f'{{"type": "user", "message": {{"content": "Hello {i}"}}}}\n')
+            # Small delay to ensure different mtimes
+            if i % 50 == 0:
+                time.sleep(0.01)
+            sessions_module._quick_scan_transcript(transcript)
+
+        # After cleanup, the cache dict should be the SAME object (modified in-place)
+        # This is the key test - if cleanup reassigned the dict, id() would differ
+        assert id(sessions_module._transcript_scan_cache) == original_cache_id
+
+        # And it should have been cleaned up to MAX_ENTRIES
+        assert len(sessions_module._transcript_scan_cache) <= MAX_ENTRIES
+
 
 class TestSessionCache:
     """Tests for SessionCache class."""

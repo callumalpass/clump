@@ -630,7 +630,6 @@ def _quick_scan_transcript(transcript_path: Path, cli_type: str = "claude") -> Q
     Uses mtime-based caching to avoid re-parsing files that haven't changed.
     When cache exceeds TRANSCRIPT_CACHE_MAX_ENTRIES, older entries are pruned.
     """
-    global _transcript_scan_cache  # Needed for cache cleanup reassignment
 
     cache_key = str(transcript_path)
 
@@ -668,13 +667,16 @@ def _quick_scan_transcript(transcript_path: Path, cli_type: str = "claude") -> Q
     # Clean up old cache entries if too many
     if len(_transcript_scan_cache) > TRANSCRIPT_CACHE_MAX_ENTRIES:
         # Remove oldest entries, keeping up to max entries
-        # Sort by mtime and keep the most recently modified
+        # Sort by mtime and find keys to remove (thread-safe: modify in-place)
         sorted_entries = sorted(
             _transcript_scan_cache.items(),
             key=lambda x: x[1][1],  # Sort by cached mtime
             reverse=True
         )
-        _transcript_scan_cache = dict(sorted_entries[:TRANSCRIPT_CACHE_MAX_ENTRIES])
+        keys_to_keep = {k for k, _ in sorted_entries[:TRANSCRIPT_CACHE_MAX_ENTRIES]}
+        keys_to_remove = [k for k in _transcript_scan_cache if k not in keys_to_keep]
+        for key in keys_to_remove:
+            _transcript_scan_cache.pop(key, None)
 
     return result
 
