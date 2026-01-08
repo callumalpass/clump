@@ -294,9 +294,16 @@ class HeadlessAnalyzer:
         )
 
     async def cancel(self, session_id: str) -> bool:
-        """Cancel a running session."""
+        """Cancel a running session.
+
+        Uses pop to atomically retrieve and remove the process from tracking,
+        preventing race conditions where the process could be removed by another
+        coroutine between the get and terminate calls.
+        """
         async with self._lock:
-            process = self._running_sessions.get(session_id)
+            process = self._running_sessions.pop(session_id, None)
+            # Also remove from active_session_ids if present
+            self._active_session_ids.discard(session_id)
         if process:
             process.terminate()
             try:

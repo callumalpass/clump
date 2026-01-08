@@ -524,6 +524,115 @@ class TestHeadlessAnalyzerCancel:
         mock_process.terminate.assert_called_once()
         mock_process.kill.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_cancel_removes_from_running_sessions(self, analyzer):
+        """Test that cancel atomically removes session from tracking.
+
+        This tests the fix for the race condition where a session could be
+        retrieved but removed by another coroutine before terminate() was called.
+        By using pop() instead of get(), we atomically retrieve and remove.
+        """
+        mock_process = MagicMock()
+        mock_process.terminate = MagicMock()
+        mock_process.wait = AsyncMock()
+
+        analyzer._running_sessions["atomic-test"] = mock_process
+
+        result = await analyzer.cancel("atomic-test")
+
+        assert result is True
+        # Session should be removed from _running_sessions
+        assert "atomic-test" not in analyzer._running_sessions
+
+    @pytest.mark.asyncio
+    async def test_cancel_removes_from_active_session_ids(self, analyzer):
+        """Test that cancel also removes session from _active_session_ids.
+
+        Sessions can be tracked in both _running_sessions and _active_session_ids.
+        Cancel should clean up both to prevent stale entries.
+        """
+        mock_process = MagicMock()
+        mock_process.terminate = MagicMock()
+        mock_process.wait = AsyncMock()
+
+        session_id = "dual-tracked-session"
+        analyzer._running_sessions[session_id] = mock_process
+        analyzer._active_session_ids.add(session_id)
+
+        result = await analyzer.cancel(session_id)
+
+        assert result is True
+        assert session_id not in analyzer._running_sessions
+        assert session_id not in analyzer._active_session_ids
+
+    @pytest.mark.asyncio
+    async def test_cancel_only_active_session_ids(self, analyzer):
+        """Test canceling a session that exists only in _active_session_ids.
+
+        If a session is registered but the process hasn't been stored yet,
+        cancel should still clean up _active_session_ids but return False
+        since there's no process to terminate.
+        """
+        session_id = "only-registered"
+        analyzer._active_session_ids.add(session_id)
+
+        result = await analyzer.cancel(session_id)
+
+        # Returns False because no process was found to terminate
+        assert result is False
+        # But the session_id should still be removed from _active_session_ids
+        assert session_id not in analyzer._active_session_ids
+
+    @pytest.mark.asyncio
+    async def test_cancel_idempotent(self, analyzer):
+        """Test that canceling the same session twice is safe.
+
+        The second cancel should return False since the session was already removed.
+        """
+        mock_process = MagicMock()
+        mock_process.terminate = MagicMock()
+        mock_process.wait = AsyncMock()
+
+        analyzer._running_sessions["idempotent-test"] = mock_process
+
+        first_result = await analyzer.cancel("idempotent-test")
+        second_result = await analyzer.cancel("idempotent-test")
+
+        assert first_result is True
+        assert second_result is False
+        # terminate should only be called once
+        mock_process.terminate.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_cancel_concurrent_safety(self, analyzer):
+        """Test that concurrent cancels on the same session are safe.
+
+        Only one cancel should succeed in terminating the process.
+        This tests the atomicity of the pop() operation under the lock.
+        """
+        mock_process = MagicMock()
+        mock_process.terminate = MagicMock()
+        mock_process.wait = AsyncMock()
+
+        analyzer._running_sessions["concurrent-test"] = mock_process
+        analyzer._active_session_ids.add("concurrent-test")
+
+        # Launch multiple concurrent cancels
+        results = await asyncio.gather(
+            analyzer.cancel("concurrent-test"),
+            analyzer.cancel("concurrent-test"),
+            analyzer.cancel("concurrent-test"),
+        )
+
+        # Only one should succeed
+        assert results.count(True) == 1
+        assert results.count(False) == 2
+        # terminate should only be called once
+        mock_process.terminate.assert_called_once()
+        # Session should be fully cleaned up
+        assert "concurrent-test" not in analyzer._running_sessions
+        assert "concurrent-test" not in analyzer._active_session_ids
+
 
 class TestHeadlessAnalyzerAnalyzeStream:
     """Tests for HeadlessAnalyzer.analyze_stream method."""
