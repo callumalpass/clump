@@ -124,6 +124,12 @@ async def run_headless_session(data: HeadlessSessionCreate):
                 SessionStatus.COMPLETED.value if result.success else SessionStatus.FAILED.value
             )
             session.transcript = result.result
+            session.completed_at = datetime.now(timezone.utc)
+            # Save cost and duration from headless result
+            if result.cost_usd is not None:
+                session.cost_usd = result.cost_usd
+            if result.duration_ms is not None:
+                session.duration_ms = result.duration_ms
             await db.commit()
 
             return HeadlessSessionResponse(
@@ -131,13 +137,14 @@ async def run_headless_session(data: HeadlessSessionCreate):
                 claude_session_id=claude_session_id,
                 result=result.result,
                 success=result.success,
-                cost_usd=result.cost_usd,
-                duration_ms=result.duration_ms,
+                cost_usd=result.cost_usd if result.cost_usd is not None else 0.0,
+                duration_ms=result.duration_ms if result.duration_ms is not None else 0,
                 error=result.error,
             )
 
         except Exception as e:
             session.status = SessionStatus.FAILED.value
+            session.completed_at = datetime.now(timezone.utc)
             await db.commit()
             raise HTTPException(status_code=500, detail=str(e))
 
@@ -205,6 +212,8 @@ async def run_headless_session_stream(data: HeadlessSessionCreate):
         """Generate streaming response."""
         full_result = ""
         success = False
+        final_cost_usd = None
+        final_duration_ms = None
 
         try:
             async for msg in headless_analyzer.analyze_stream(
@@ -222,6 +231,9 @@ async def run_headless_session_stream(data: HeadlessSessionCreate):
                 if msg.type == "result" and msg.subtype == "success":
                     full_result = msg.content or ""
                     success = True
+                    # Capture cost and duration from the result message
+                    final_cost_usd = msg.cost_usd
+                    final_duration_ms = msg.duration_ms
 
                 # Yield message as JSON
                 yield json.dumps({
@@ -243,6 +255,12 @@ async def run_headless_session_stream(data: HeadlessSessionCreate):
                         SessionStatus.COMPLETED.value if success else SessionStatus.FAILED.value
                     )
                     session.transcript = full_result
+                    session.completed_at = datetime.now(timezone.utc)
+                    # Save cost and duration from headless result
+                    if final_cost_usd is not None:
+                        session.cost_usd = final_cost_usd
+                    if final_duration_ms is not None:
+                        session.duration_ms = final_duration_ms
                     await db.commit()
 
         except Exception as e:
@@ -257,6 +275,7 @@ async def run_headless_session_stream(data: HeadlessSessionCreate):
                 session = result.scalar_one_or_none()
                 if session:
                     session.status = SessionStatus.FAILED.value
+                    session.completed_at = datetime.now(timezone.utc)
                     await db.commit()
 
         finally:
