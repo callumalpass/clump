@@ -218,6 +218,156 @@ class TestHeadlessAnalyzerParseMessage:
 
         assert msg.raw == data
 
+    def test_parse_assistant_message_with_none_message(self, analyzer):
+        """Test parsing assistant message when 'message' key is None.
+
+        This tests the fix for the bug where data.get("message", {}).get(...)
+        would fail with AttributeError if 'message' exists but is None.
+        """
+        data = {
+            "type": "assistant",
+            "message": None,  # Key exists but value is None
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "assistant"
+        assert msg.content == ""  # Should default to empty string
+
+    def test_parse_assistant_message_without_message_key(self, analyzer):
+        """Test parsing assistant message when 'message' key is missing."""
+        data = {
+            "type": "assistant",
+            # No 'message' key at all
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "assistant"
+        assert msg.content == ""  # Should default to empty string
+
+    def test_parse_assistant_message_with_none_content(self, analyzer):
+        """Test parsing assistant message when 'content' is None."""
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": None,
+            },
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "assistant"
+        # When content is None, it should stay as None (not converted to string)
+        assert msg.content is None
+
+    def test_parse_assistant_message_with_empty_content_list(self, analyzer):
+        """Test parsing assistant message with empty content list."""
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": [],
+            },
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "assistant"
+        assert msg.content == ""  # Empty list should result in empty string
+
+    def test_parse_assistant_message_with_non_text_blocks_only(self, analyzer):
+        """Test parsing assistant message with only non-text content blocks."""
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {"type": "tool_use", "name": "Read"},
+                    {"type": "image", "source": "base64data"},
+                ]
+            },
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "assistant"
+        assert msg.content == ""  # No text blocks, so empty string
+
+    def test_parse_assistant_message_with_empty_message_dict(self, analyzer):
+        """Test parsing assistant message with empty message dict."""
+        data = {
+            "type": "assistant",
+            "message": {},  # Empty dict
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "assistant"
+        assert msg.content == ""  # Should default to empty string
+
+    def test_parse_result_with_none_result(self, analyzer):
+        """Test parsing result message when 'result' is None."""
+        data = {
+            "type": "result",
+            "subtype": "success",
+            "result": None,
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "result"
+        assert msg.subtype == "success"
+        assert msg.content is None
+
+    def test_parse_result_without_result_key(self, analyzer):
+        """Test parsing result message when 'result' key is missing."""
+        data = {
+            "type": "result",
+            "subtype": "success",
+            # No 'result' key
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "result"
+        assert msg.content == ""  # Should default to empty string
+
+    def test_parse_assistant_mixed_content_blocks(self, analyzer):
+        """Test parsing assistant message with mixed content block types."""
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {"type": "thinking", "thinking": "Let me think..."},
+                    {"type": "text", "text": "Here is the answer."},
+                    {"type": "tool_use", "id": "abc", "name": "Bash"},
+                    {"type": "text", "text": " More text."},
+                ]
+            },
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "assistant"
+        assert msg.content == "Here is the answer.  More text."
+
+    def test_parse_assistant_content_block_missing_text(self, analyzer):
+        """Test parsing content blocks that are missing the 'text' key."""
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {"type": "text"},  # Missing 'text' key
+                    {"type": "text", "text": "Valid text"},
+                ]
+            },
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "assistant"
+        # First block contributes empty string, second contributes "Valid text"
+        assert msg.content == " Valid text"
+
 
 class TestHeadlessAnalyzerRunningSessionsManagement:
     """Tests for running sessions tracking."""

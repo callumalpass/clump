@@ -270,7 +270,9 @@ class HeadlessAnalyzer:
         content = None
         if msg_type == "assistant":
             # Assistant message with content
-            content = data.get("message", {}).get("content", "")
+            # Use `or {}` to handle None values (key exists but value is None)
+            message_data = data.get("message") or {}
+            content = message_data.get("content", "")
             if isinstance(content, list):
                 # Extract text from content blocks
                 content = " ".join(
