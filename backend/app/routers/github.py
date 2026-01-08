@@ -10,8 +10,8 @@ import re
 import time
 from pathlib import Path
 
-from contextlib import contextmanager
-from typing import Generator, Any
+from contextlib import contextmanager, asynccontextmanager
+from typing import Generator, Any, AsyncGenerator
 
 from fastapi import APIRouter, HTTPException, Query
 from github import (
@@ -50,13 +50,18 @@ router = APIRouter()
 # ==========================================
 # Simple TTL cache to avoid hammering GitHub API on rapid repo switching
 # Cache entries: {cache_key: (response_data, timestamp)}
+# Protected by _github_cache_lock for thread-safe async access
 _github_cache: dict[str, tuple[Any, float]] = {}
+_github_cache_lock = asyncio.Lock()
 GITHUB_CACHE_TTL = 30  # seconds
 GITHUB_CACHE_MAX_SIZE = 100
 
 
 def _cleanup_expired_cache_entries() -> None:
-    """Remove all expired entries from the cache."""
+    """Remove all expired entries from the cache.
+
+    Note: Must be called while holding _github_cache_lock.
+    """
     current_time = time.time()
     expired_keys = [
         key for key, (_, timestamp) in _github_cache.items()
@@ -66,32 +71,44 @@ def _cleanup_expired_cache_entries() -> None:
         del _github_cache[key]
 
 
-def _get_cached_response(cache_key: str) -> Any | None:
-    """Get cached response if still valid."""
-    if cache_key in _github_cache:
-        data, timestamp = _github_cache[cache_key]
-        if time.time() - timestamp < GITHUB_CACHE_TTL:
-            return data
-        # Expired - remove from cache
-        del _github_cache[cache_key]
-    return None
+async def _get_cached_response(cache_key: str) -> Any | None:
+    """Get cached response if still valid.
+
+    Thread-safe: acquires _github_cache_lock before accessing the cache.
+    """
+    async with _github_cache_lock:
+        if cache_key in _github_cache:
+            data, timestamp = _github_cache[cache_key]
+            if time.time() - timestamp < GITHUB_CACHE_TTL:
+                return data
+            # Expired - remove from cache
+            del _github_cache[cache_key]
+        return None
 
 
-def _cache_response(cache_key: str, data: Any) -> None:
-    """Cache a response with current timestamp."""
-    _github_cache[cache_key] = (data, time.time())
-    # Cleanup: first remove expired entries, then evict oldest if still over limit
-    if len(_github_cache) > GITHUB_CACHE_MAX_SIZE:
-        _cleanup_expired_cache_entries()
-        # If still over limit after removing expired entries, evict oldest
-        while len(_github_cache) > GITHUB_CACHE_MAX_SIZE:
-            oldest_key = min(_github_cache, key=lambda k: _github_cache[k][1])
-            del _github_cache[oldest_key]
+async def _cache_response(cache_key: str, data: Any) -> None:
+    """Cache a response with current timestamp.
+
+    Thread-safe: acquires _github_cache_lock before modifying the cache.
+    """
+    async with _github_cache_lock:
+        _github_cache[cache_key] = (data, time.time())
+        # Cleanup: first remove expired entries, then evict oldest if still over limit
+        if len(_github_cache) > GITHUB_CACHE_MAX_SIZE:
+            _cleanup_expired_cache_entries()
+            # If still over limit after removing expired entries, evict oldest
+            while len(_github_cache) > GITHUB_CACHE_MAX_SIZE:
+                oldest_key = min(_github_cache, key=lambda k: _github_cache[k][1])
+                del _github_cache[oldest_key]
 
 
-def _clear_cache() -> None:
-    """Clear all entries from the cache. Useful for testing."""
-    _github_cache.clear()
+async def _clear_cache() -> None:
+    """Clear all entries from the cache. Useful for testing.
+
+    Thread-safe: acquires _github_cache_lock before clearing.
+    """
+    async with _github_cache_lock:
+        _github_cache.clear()
 
 
 @contextmanager
@@ -347,7 +364,7 @@ async def list_issues(
     # Check cache first
     labels_key = ",".join(sorted(labels)) if labels else ""
     cache_key = f"issues:{repo_id}:{state}:{search or ''}:{labels_key}:{sort}:{order}:{page}:{per_page}:{fetch_all}"
-    cached = _get_cached_response(cache_key)
+    cached = await _get_cached_response(cache_key)
     if cached is not None:
         return cached
 
@@ -392,7 +409,7 @@ async def list_issues(
                 page=page,
                 per_page=per_page,
             )
-    _cache_response(cache_key, response)
+    await _cache_response(cache_key, response)
     return response
 
 
@@ -744,7 +761,7 @@ async def list_prs(
 
     # Check cache first
     cache_key = f"prs:{repo_id}:{state}:{search or ''}:{sort}:{order}:{page}:{per_page}"
-    cached = _get_cached_response(cache_key)
+    cached = await _get_cached_response(cache_key)
     if cached is not None:
         return cached
 
@@ -765,7 +782,7 @@ async def list_prs(
             page=page,
             per_page=per_page,
         )
-    _cache_response(cache_key, response)
+    await _cache_response(cache_key, response)
     return response
 
 

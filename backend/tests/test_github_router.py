@@ -596,31 +596,34 @@ class TestGitHubCache:
     """Tests for the GitHub API response cache."""
 
     @pytest.fixture(autouse=True)
-    def clear_cache(self):
+    async def clear_cache(self):
         """Clear the cache before and after each test."""
         from app.routers.github import _clear_cache
-        _clear_cache()
+        await _clear_cache()
         yield
-        _clear_cache()
+        await _clear_cache()
 
-    def test_cache_stores_and_retrieves_response(self):
+    @pytest.mark.asyncio
+    async def test_cache_stores_and_retrieves_response(self):
         """Test that cached responses can be retrieved."""
         from app.routers.github import _cache_response, _get_cached_response
 
         test_data = {"issues": [{"number": 1, "title": "Test"}]}
-        _cache_response("test_key", test_data)
+        await _cache_response("test_key", test_data)
 
-        result = _get_cached_response("test_key")
+        result = await _get_cached_response("test_key")
         assert result == test_data
 
-    def test_cache_returns_none_for_missing_key(self):
+    @pytest.mark.asyncio
+    async def test_cache_returns_none_for_missing_key(self):
         """Test that missing keys return None."""
         from app.routers.github import _get_cached_response
 
-        result = _get_cached_response("nonexistent_key")
+        result = await _get_cached_response("nonexistent_key")
         assert result is None
 
-    def test_cache_expires_after_ttl(self):
+    @pytest.mark.asyncio
+    async def test_cache_expires_after_ttl(self):
         """Test that cached entries expire after TTL."""
         from app.routers.github import (
             _cache_response,
@@ -631,10 +634,10 @@ class TestGitHubCache:
         import time as time_module
 
         test_data = {"test": "data"}
-        _cache_response("expiring_key", test_data)
+        await _cache_response("expiring_key", test_data)
 
         # Verify it's cached
-        assert _get_cached_response("expiring_key") == test_data
+        assert await _get_cached_response("expiring_key") == test_data
 
         # Manually set the timestamp to be expired
         _github_cache["expiring_key"] = (
@@ -643,7 +646,7 @@ class TestGitHubCache:
         )
 
         # Should now return None and remove the entry
-        result = _get_cached_response("expiring_key")
+        result = await _get_cached_response("expiring_key")
         assert result is None
         assert "expiring_key" not in _github_cache
 
@@ -670,7 +673,8 @@ class TestGitHubCache:
         assert "expired2" not in _github_cache
         assert "valid" in _github_cache
 
-    def test_cache_evicts_oldest_when_over_limit(self):
+    @pytest.mark.asyncio
+    async def test_cache_evicts_oldest_when_over_limit(self):
         """Test that oldest entries are evicted when cache exceeds max size."""
         from app.routers.github import (
             _cache_response,
@@ -687,7 +691,7 @@ class TestGitHubCache:
         assert len(_github_cache) == GITHUB_CACHE_MAX_SIZE
 
         # Add one more entry - should trigger eviction of oldest
-        _cache_response("new_key", {"data": "new"})
+        await _cache_response("new_key", {"data": "new"})
 
         # Cache should still be at max size
         assert len(_github_cache) <= GITHUB_CACHE_MAX_SIZE + 1  # +1 because we just added
@@ -696,7 +700,8 @@ class TestGitHubCache:
         # The new entry should be present
         assert "new_key" in _github_cache
 
-    def test_cache_cleanup_prefers_expired_over_eviction(self):
+    @pytest.mark.asyncio
+    async def test_cache_cleanup_prefers_expired_over_eviction(self):
         """Test that expired entries are removed before evicting valid ones."""
         from app.routers.github import (
             _cache_response,
@@ -723,7 +728,7 @@ class TestGitHubCache:
         assert len(_github_cache) == GITHUB_CACHE_MAX_SIZE
 
         # Add a new entry - should trigger cleanup of expired entries first
-        _cache_response("new_key", {"data": "new"})
+        await _cache_response("new_key", {"data": "new"})
 
         # All expired entries should be gone
         for i in range(GITHUB_CACHE_MAX_SIZE // 2):
@@ -736,7 +741,8 @@ class TestGitHubCache:
         # New entry should be present
         assert "new_key" in _github_cache
 
-    def test_clear_cache_removes_all_entries(self):
+    @pytest.mark.asyncio
+    async def test_clear_cache_removes_all_entries(self):
         """Test that clear_cache removes all entries."""
         from app.routers.github import (
             _cache_response,
@@ -746,68 +752,124 @@ class TestGitHubCache:
         )
 
         # Add some entries
-        _cache_response("key1", {"data": 1})
-        _cache_response("key2", {"data": 2})
-        _cache_response("key3", {"data": 3})
+        await _cache_response("key1", {"data": 1})
+        await _cache_response("key2", {"data": 2})
+        await _cache_response("key3", {"data": 3})
 
         assert len(_github_cache) == 3
 
-        _clear_cache()
+        await _clear_cache()
 
         assert len(_github_cache) == 0
-        assert _get_cached_response("key1") is None
-        assert _get_cached_response("key2") is None
-        assert _get_cached_response("key3") is None
+        assert await _get_cached_response("key1") is None
+        assert await _get_cached_response("key2") is None
+        assert await _get_cached_response("key3") is None
 
-    def test_cache_overwrites_existing_key(self):
+    @pytest.mark.asyncio
+    async def test_cache_overwrites_existing_key(self):
         """Test that caching with same key overwrites the previous value."""
         from app.routers.github import _cache_response, _get_cached_response
 
-        _cache_response("key", {"value": "old"})
-        assert _get_cached_response("key") == {"value": "old"}
+        await _cache_response("key", {"value": "old"})
+        assert await _get_cached_response("key") == {"value": "old"}
 
-        _cache_response("key", {"value": "new"})
-        assert _get_cached_response("key") == {"value": "new"}
+        await _cache_response("key", {"value": "new"})
+        assert await _get_cached_response("key") == {"value": "new"}
 
-    def test_cache_handles_various_data_types(self):
+    @pytest.mark.asyncio
+    async def test_cache_handles_various_data_types(self):
         """Test that cache handles different data types correctly."""
         from app.routers.github import _cache_response, _get_cached_response
 
         # Test with list
-        _cache_response("list_key", [1, 2, 3])
-        assert _get_cached_response("list_key") == [1, 2, 3]
+        await _cache_response("list_key", [1, 2, 3])
+        assert await _get_cached_response("list_key") == [1, 2, 3]
 
         # Test with nested dict
         nested = {"outer": {"inner": {"deep": "value"}}}
-        _cache_response("nested_key", nested)
-        assert _get_cached_response("nested_key") == nested
+        await _cache_response("nested_key", nested)
+        assert await _get_cached_response("nested_key") == nested
 
         # Test with None value
-        _cache_response("none_key", None)
+        await _cache_response("none_key", None)
         # Note: None is a valid cached value, different from key not existing
         # _get_cached_response returns None for both cases, but the key exists
         from app.routers.github import _github_cache
         assert "none_key" in _github_cache
 
-    def test_cache_key_with_special_characters(self):
+    @pytest.mark.asyncio
+    async def test_cache_key_with_special_characters(self):
         """Test that cache works with keys containing special characters."""
         from app.routers.github import _cache_response, _get_cached_response
 
         special_key = "issues:1:open:search=bug fix:labels=a,b,c"
-        _cache_response(special_key, {"result": "found"})
-        assert _get_cached_response(special_key) == {"result": "found"}
+        await _cache_response(special_key, {"result": "found"})
+        assert await _get_cached_response(special_key) == {"result": "found"}
 
-    def test_cache_empty_response(self):
+    @pytest.mark.asyncio
+    async def test_cache_empty_response(self):
         """Test caching empty responses (valid API responses with no data)."""
         from app.routers.github import _cache_response, _get_cached_response
 
         # Empty list (e.g., no issues found)
-        _cache_response("empty_list", [])
-        assert _get_cached_response("empty_list") == []
+        await _cache_response("empty_list", [])
+        assert await _get_cached_response("empty_list") == []
 
         # Empty dict
-        _cache_response("empty_dict", {})
-        assert _get_cached_response("empty_dict") == {}
+        await _cache_response("empty_dict", {})
+        assert await _get_cached_response("empty_dict") == {}
+
+    @pytest.mark.asyncio
+    async def test_cache_concurrent_access(self):
+        """Test that cache handles concurrent access safely."""
+        from app.routers.github import _cache_response, _get_cached_response, _github_cache
+        import asyncio
+
+        # Test concurrent writes don't cause race conditions
+        async def write_task(key: str, value: int):
+            await _cache_response(key, {"value": value})
+
+        async def read_task(key: str):
+            return await _get_cached_response(key)
+
+        # Run many concurrent writes
+        tasks = [write_task(f"concurrent_key_{i}", i) for i in range(50)]
+        await asyncio.gather(*tasks)
+
+        # All keys should be present
+        for i in range(50):
+            result = await _get_cached_response(f"concurrent_key_{i}")
+            assert result == {"value": i}
+
+    @pytest.mark.asyncio
+    async def test_cache_concurrent_read_write(self):
+        """Test that concurrent reads and writes don't interfere."""
+        from app.routers.github import _cache_response, _get_cached_response
+        import asyncio
+
+        # Pre-populate cache
+        await _cache_response("shared_key", {"initial": True})
+
+        results = []
+
+        async def reader():
+            for _ in range(10):
+                result = await _get_cached_response("shared_key")
+                results.append(result)
+                await asyncio.sleep(0)  # Yield to other tasks
+
+        async def writer():
+            for i in range(10):
+                await _cache_response("shared_key", {"value": i})
+                await asyncio.sleep(0)  # Yield to other tasks
+
+        # Run reader and writer concurrently
+        await asyncio.gather(reader(), writer())
+
+        # All reads should have returned valid data (not corrupted)
+        for result in results:
+            assert result is not None
+            assert isinstance(result, dict)
 
 
 class TestErrorHandling:
