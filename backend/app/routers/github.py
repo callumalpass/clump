@@ -52,6 +52,18 @@ router = APIRouter()
 # Cache entries: {cache_key: (response_data, timestamp)}
 _github_cache: dict[str, tuple[Any, float]] = {}
 GITHUB_CACHE_TTL = 30  # seconds
+GITHUB_CACHE_MAX_SIZE = 100
+
+
+def _cleanup_expired_cache_entries() -> None:
+    """Remove all expired entries from the cache."""
+    current_time = time.time()
+    expired_keys = [
+        key for key, (_, timestamp) in _github_cache.items()
+        if current_time - timestamp >= GITHUB_CACHE_TTL
+    ]
+    for key in expired_keys:
+        del _github_cache[key]
 
 
 def _get_cached_response(cache_key: str) -> Any | None:
@@ -68,10 +80,18 @@ def _get_cached_response(cache_key: str) -> Any | None:
 def _cache_response(cache_key: str, data: Any) -> None:
     """Cache a response with current timestamp."""
     _github_cache[cache_key] = (data, time.time())
-    # Simple cleanup: remove oldest entries if cache gets too large
-    if len(_github_cache) > 100:
-        oldest_key = min(_github_cache, key=lambda k: _github_cache[k][1])
-        del _github_cache[oldest_key]
+    # Cleanup: first remove expired entries, then evict oldest if still over limit
+    if len(_github_cache) > GITHUB_CACHE_MAX_SIZE:
+        _cleanup_expired_cache_entries()
+        # If still over limit after removing expired entries, evict oldest
+        while len(_github_cache) > GITHUB_CACHE_MAX_SIZE:
+            oldest_key = min(_github_cache, key=lambda k: _github_cache[k][1])
+            del _github_cache[oldest_key]
+
+
+def _clear_cache() -> None:
+    """Clear all entries from the cache. Useful for testing."""
+    _github_cache.clear()
 
 
 @contextmanager

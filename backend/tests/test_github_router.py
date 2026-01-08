@@ -590,3 +590,221 @@ class TestResponseModels:
         assert response.owner == "test-owner"
         assert response.name == "test-repo"
         assert response.local_path == "/home/user/projects/test-repo"
+
+
+class TestGitHubCache:
+    """Tests for the GitHub API response cache."""
+
+    @pytest.fixture(autouse=True)
+    def clear_cache(self):
+        """Clear the cache before and after each test."""
+        from app.routers.github import _clear_cache
+        _clear_cache()
+        yield
+        _clear_cache()
+
+    def test_cache_stores_and_retrieves_response(self):
+        """Test that cached responses can be retrieved."""
+        from app.routers.github import _cache_response, _get_cached_response
+
+        test_data = {"issues": [{"number": 1, "title": "Test"}]}
+        _cache_response("test_key", test_data)
+
+        result = _get_cached_response("test_key")
+        assert result == test_data
+
+    def test_cache_returns_none_for_missing_key(self):
+        """Test that missing keys return None."""
+        from app.routers.github import _get_cached_response
+
+        result = _get_cached_response("nonexistent_key")
+        assert result is None
+
+    def test_cache_expires_after_ttl(self):
+        """Test that cached entries expire after TTL."""
+        from app.routers.github import (
+            _cache_response,
+            _get_cached_response,
+            _github_cache,
+            GITHUB_CACHE_TTL,
+        )
+        import time as time_module
+
+        test_data = {"test": "data"}
+        _cache_response("expiring_key", test_data)
+
+        # Verify it's cached
+        assert _get_cached_response("expiring_key") == test_data
+
+        # Manually set the timestamp to be expired
+        _github_cache["expiring_key"] = (
+            test_data,
+            time_module.time() - GITHUB_CACHE_TTL - 1
+        )
+
+        # Should now return None and remove the entry
+        result = _get_cached_response("expiring_key")
+        assert result is None
+        assert "expiring_key" not in _github_cache
+
+    def test_cache_cleanup_removes_expired_entries(self):
+        """Test that cleanup removes all expired entries."""
+        from app.routers.github import (
+            _github_cache,
+            _cleanup_expired_cache_entries,
+            GITHUB_CACHE_TTL,
+        )
+        import time as time_module
+
+        current_time = time_module.time()
+
+        # Add some expired entries
+        _github_cache["expired1"] = ({"data": 1}, current_time - GITHUB_CACHE_TTL - 10)
+        _github_cache["expired2"] = ({"data": 2}, current_time - GITHUB_CACHE_TTL - 5)
+        # Add a valid entry
+        _github_cache["valid"] = ({"data": 3}, current_time)
+
+        _cleanup_expired_cache_entries()
+
+        assert "expired1" not in _github_cache
+        assert "expired2" not in _github_cache
+        assert "valid" in _github_cache
+
+    def test_cache_evicts_oldest_when_over_limit(self):
+        """Test that oldest entries are evicted when cache exceeds max size."""
+        from app.routers.github import (
+            _cache_response,
+            _github_cache,
+            GITHUB_CACHE_MAX_SIZE,
+        )
+        import time as time_module
+
+        # Fill the cache to max size with entries that have ascending timestamps
+        base_time = time_module.time()
+        for i in range(GITHUB_CACHE_MAX_SIZE):
+            _github_cache[f"key_{i}"] = ({"data": i}, base_time + i)
+
+        assert len(_github_cache) == GITHUB_CACHE_MAX_SIZE
+
+        # Add one more entry - should trigger eviction of oldest
+        _cache_response("new_key", {"data": "new"})
+
+        # Cache should still be at max size
+        assert len(_github_cache) <= GITHUB_CACHE_MAX_SIZE + 1  # +1 because we just added
+        # The oldest entry (key_0 with lowest timestamp) should be gone
+        assert "key_0" not in _github_cache
+        # The new entry should be present
+        assert "new_key" in _github_cache
+
+    def test_cache_cleanup_prefers_expired_over_eviction(self):
+        """Test that expired entries are removed before evicting valid ones."""
+        from app.routers.github import (
+            _cache_response,
+            _github_cache,
+            GITHUB_CACHE_MAX_SIZE,
+            GITHUB_CACHE_TTL,
+        )
+        import time as time_module
+
+        current_time = time_module.time()
+
+        # Fill cache to max size with half expired and half valid entries
+        for i in range(GITHUB_CACHE_MAX_SIZE):
+            if i < GITHUB_CACHE_MAX_SIZE // 2:
+                # Expired entries
+                _github_cache[f"expired_{i}"] = (
+                    {"data": i},
+                    current_time - GITHUB_CACHE_TTL - 10
+                )
+            else:
+                # Valid entries
+                _github_cache[f"valid_{i}"] = ({"data": i}, current_time)
+
+        assert len(_github_cache) == GITHUB_CACHE_MAX_SIZE
+
+        # Add a new entry - should trigger cleanup of expired entries first
+        _cache_response("new_key", {"data": "new"})
+
+        # All expired entries should be gone
+        for i in range(GITHUB_CACHE_MAX_SIZE // 2):
+            assert f"expired_{i}" not in _github_cache
+
+        # Valid entries should remain
+        for i in range(GITHUB_CACHE_MAX_SIZE // 2, GITHUB_CACHE_MAX_SIZE):
+            assert f"valid_{i}" in _github_cache
+
+        # New entry should be present
+        assert "new_key" in _github_cache
+
+    def test_clear_cache_removes_all_entries(self):
+        """Test that clear_cache removes all entries."""
+        from app.routers.github import (
+            _cache_response,
+            _get_cached_response,
+            _clear_cache,
+            _github_cache,
+        )
+
+        # Add some entries
+        _cache_response("key1", {"data": 1})
+        _cache_response("key2", {"data": 2})
+        _cache_response("key3", {"data": 3})
+
+        assert len(_github_cache) == 3
+
+        _clear_cache()
+
+        assert len(_github_cache) == 0
+        assert _get_cached_response("key1") is None
+        assert _get_cached_response("key2") is None
+        assert _get_cached_response("key3") is None
+
+    def test_cache_overwrites_existing_key(self):
+        """Test that caching with same key overwrites the previous value."""
+        from app.routers.github import _cache_response, _get_cached_response
+
+        _cache_response("key", {"value": "old"})
+        assert _get_cached_response("key") == {"value": "old"}
+
+        _cache_response("key", {"value": "new"})
+        assert _get_cached_response("key") == {"value": "new"}
+
+    def test_cache_handles_various_data_types(self):
+        """Test that cache handles different data types correctly."""
+        from app.routers.github import _cache_response, _get_cached_response
+
+        # Test with list
+        _cache_response("list_key", [1, 2, 3])
+        assert _get_cached_response("list_key") == [1, 2, 3]
+
+        # Test with nested dict
+        nested = {"outer": {"inner": {"deep": "value"}}}
+        _cache_response("nested_key", nested)
+        assert _get_cached_response("nested_key") == nested
+
+        # Test with None value
+        _cache_response("none_key", None)
+        # Note: None is a valid cached value, different from key not existing
+        # _get_cached_response returns None for both cases, but the key exists
+        from app.routers.github import _github_cache
+        assert "none_key" in _github_cache
+
+    def test_cache_key_with_special_characters(self):
+        """Test that cache works with keys containing special characters."""
+        from app.routers.github import _cache_response, _get_cached_response
+
+        special_key = "issues:1:open:search=bug fix:labels=a,b,c"
+        _cache_response(special_key, {"result": "found"})
+        assert _get_cached_response(special_key) == {"result": "found"}
+
+    def test_cache_empty_response(self):
+        """Test caching empty responses (valid API responses with no data)."""
+        from app.routers.github import _cache_response, _get_cached_response
+
+        # Empty list (e.g., no issues found)
+        _cache_response("empty_list", [])
+        assert _get_cached_response("empty_list") == []
+
+        # Empty dict
+        _cache_response("empty_dict", {})
+        assert _get_cached_response("empty_dict") == {}
