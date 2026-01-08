@@ -1,7 +1,9 @@
 """Tests for storage module - path encoding, session discovery, and repos registry."""
 
 import json
+import logging
 import pytest
+from concurrent.futures import Future, TimeoutError as FuturesTimeoutError
 from pathlib import Path
 from datetime import datetime
 from unittest.mock import patch, MagicMock
@@ -865,6 +867,125 @@ class TestSessionDiscovery:
             assert sessions[0].metadata is not None
             assert sessions[0].metadata.title == "My Session"
             assert sessions[0].metadata.tags == ["important"]
+
+
+class TestDiscoverSessionsErrorHandling:
+    """Tests for discover_sessions error handling and logging."""
+
+    def test_timeout_error_is_logged_and_skipped(self, tmp_path, caplog):
+        """Test that timeout errors are logged with warning and the directory is skipped."""
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            # Create Claude projects directory with multiple project dirs (to trigger parallel scanning)
+            claude_dir = tmp_path / ".claude" / "projects"
+            claude_dir.mkdir(parents=True)
+            (claude_dir / "-project1").mkdir()
+            (claude_dir / "-project2").mkdir()
+            (claude_dir / "-project3").mkdir()
+
+            # Create mock futures - one that times out, others that succeed
+            mock_future_timeout = MagicMock(spec=Future)
+            mock_future_timeout.result.side_effect = FuturesTimeoutError()
+
+            mock_future_success = MagicMock(spec=Future)
+            mock_future_success.result.return_value = []
+
+            # Patch the executor to return our mocked futures
+            with patch("app.storage._fs_executor") as mock_executor:
+                mock_executor.submit.side_effect = [
+                    mock_future_timeout,  # First directory times out
+                    mock_future_success,  # Second directory succeeds
+                    mock_future_success,  # Third directory succeeds
+                ]
+
+                with caplog.at_level(logging.WARNING, logger="app.storage"):
+                    sessions = discover_sessions()
+
+            # Should have logged a warning about the timeout
+            assert "Timeout scanning project directory" in caplog.text
+            assert "30s" in caplog.text
+
+    def test_general_exception_is_logged_and_skipped(self, tmp_path, caplog):
+        """Test that general exceptions are logged with exception traceback and skipped."""
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            # Create Claude projects directory with multiple project dirs
+            claude_dir = tmp_path / ".claude" / "projects"
+            claude_dir.mkdir(parents=True)
+            (claude_dir / "-project1").mkdir()
+            (claude_dir / "-project2").mkdir()
+
+            # Create mock futures - one that raises an exception, one that succeeds
+            mock_future_error = MagicMock(spec=Future)
+            mock_future_error.result.side_effect = PermissionError("Access denied")
+
+            mock_future_success = MagicMock(spec=Future)
+            mock_future_success.result.return_value = []
+
+            with patch("app.storage._fs_executor") as mock_executor:
+                mock_executor.submit.side_effect = [
+                    mock_future_error,  # First directory errors
+                    mock_future_success,  # Second directory succeeds
+                ]
+
+                with caplog.at_level(logging.ERROR, logger="app.storage"):
+                    sessions = discover_sessions()
+
+            # Should have logged an error with exception info
+            assert "Error scanning project directory" in caplog.text
+            assert "skipping" in caplog.text
+
+    def test_mixed_errors_and_successes(self, tmp_path, caplog):
+        """Test that sessions from successful scans are returned despite errors in other dirs."""
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            claude_dir = tmp_path / ".claude" / "projects"
+            claude_dir.mkdir(parents=True)
+            project1 = claude_dir / "-project1"
+            project2 = claude_dir / "-project2"
+            project3 = claude_dir / "-project3"
+            project1.mkdir()
+            project2.mkdir()
+            project3.mkdir()
+
+            # Create a real session file for one project
+            (project2 / "test-session.jsonl").write_text('{"type": "message"}\n')
+
+            from app.storage import DiscoveredSession
+
+            # Create mock discovered session
+            mock_session = DiscoveredSession(
+                session_id="test-session",
+                encoded_path="-project2",
+                transcript_path=project2 / "test-session.jsonl",
+                modified_at=datetime.now(),
+                file_size=20,
+                cli_type="claude",
+            )
+
+            mock_future_timeout = MagicMock(spec=Future)
+            mock_future_timeout.result.side_effect = FuturesTimeoutError()
+
+            mock_future_success = MagicMock(spec=Future)
+            mock_future_success.result.return_value = [mock_session]
+
+            mock_future_error = MagicMock(spec=Future)
+            mock_future_error.result.side_effect = OSError("I/O error")
+
+            with patch("app.storage._fs_executor") as mock_executor:
+                mock_executor.submit.side_effect = [
+                    mock_future_timeout,  # project1 times out
+                    mock_future_success,  # project2 succeeds
+                    mock_future_error,  # project3 errors
+                ]
+
+                with caplog.at_level(logging.WARNING, logger="app.storage"):
+                    sessions = discover_sessions()
+
+            # Should still get the successful session
+            assert len(sessions) == 1
+            assert sessions[0].session_id == "test-session"
+
+            # Should have logged both the timeout and the error
+            assert "Timeout scanning project directory" in caplog.text
+            assert "Error scanning project directory" in caplog.text
 
 
 class TestReposRegistry:

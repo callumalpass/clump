@@ -25,11 +25,14 @@ Performance optimizations:
 """
 
 import json
-from concurrent.futures import ThreadPoolExecutor
+import logging
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
 from datetime import datetime
 from typing import Any, TypedDict, Optional
 from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
 
 
 # Thread pool for parallel filesystem operations
@@ -480,12 +483,21 @@ def discover_sessions(
 
     # Collect all results
     all_sessions: list[DiscoveredSession] = []
-    for future in futures:
+    for future, project_dir in zip(futures, project_dirs):
         try:
             sessions = future.result(timeout=30)  # 30s timeout per directory
             all_sessions.extend(sessions)
+        except FuturesTimeoutError:
+            logger.warning(
+                "Timeout scanning project directory %s after 30s, skipping",
+                project_dir,
+            )
+            continue
         except Exception:
-            # Skip directories that fail to scan
+            logger.exception(
+                "Error scanning project directory %s, skipping",
+                project_dir,
+            )
             continue
 
     # Sort by modification time, newest first

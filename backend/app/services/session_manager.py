@@ -76,6 +76,7 @@ class Process:
 
     subscribers: list[Callable[[bytes], None]] = field(default_factory=list)
     _read_task: asyncio.Task | None = field(default=None, repr=False)
+    _initial_prompt_task: asyncio.Task | None = field(default=None, repr=False)
 
     # CLI session ID (used for resume support)
     claude_session_id: str | None = None
@@ -263,20 +264,28 @@ class ProcessManager:
 
             # Send initial prompt after CLI starts
             if initial_prompt:
-                asyncio.create_task(self._send_initial_prompt(process, initial_prompt))
+                process._initial_prompt_task = asyncio.create_task(
+                    self._send_initial_prompt(process, initial_prompt)
+                )
 
             return process
 
     async def _send_initial_prompt(self, process: Process, prompt: str):
         """Send initial prompt after CLI starts and is ready."""
-        # Wait for CLI to initialize by detecting ready patterns in output
-        await self._wait_for_cli_ready(process)
+        try:
+            # Wait for CLI to initialize by detecting ready patterns in output
+            await self._wait_for_cli_ready(process)
 
-        # Send the prompt as if user typed it, then press Enter
-        # Use \r (carriage return) like a real terminal Enter key, not \n (line feed)
-        await self.write(process.id, prompt)
-        await asyncio.sleep(PROMPT_ENTER_DELAY_SECS)
-        await self.write(process.id, "\r")
+            # Send the prompt as if user typed it, then press Enter
+            # Use \r (carriage return) like a real terminal Enter key, not \n (line feed)
+            await self.write(process.id, prompt)
+            await asyncio.sleep(PROMPT_ENTER_DELAY_SECS)
+            await self.write(process.id, "\r")
+        except Exception:
+            logger.exception(
+                "Failed to send initial prompt to process %s",
+                process.id,
+            )
 
     async def _wait_for_cli_ready(self, process: Process):
         """
@@ -434,6 +443,14 @@ class ProcessManager:
             except asyncio.CancelledError:
                 pass
 
+        # Cancel initial prompt task if still running
+        if process._initial_prompt_task and not process._initial_prompt_task.done():
+            process._initial_prompt_task.cancel()
+            try:
+                await process._initial_prompt_task
+            except asyncio.CancelledError:
+                pass
+
         # Kill process
         try:
             os.kill(process.pid, signal.SIGTERM)
@@ -497,6 +514,14 @@ class ProcessManager:
             process._read_task.cancel()
             try:
                 await process._read_task
+            except asyncio.CancelledError:
+                pass
+
+        # Cancel initial prompt task if still running
+        if process._initial_prompt_task and not process._initial_prompt_task.done():
+            process._initial_prompt_task.cancel()
+            try:
+                await process._initial_prompt_task
             except asyncio.CancelledError:
                 pass
 

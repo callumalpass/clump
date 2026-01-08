@@ -804,3 +804,210 @@ class TestProcessCLIType:
         process = Process(id="cli3", pid=1, fd=1, working_dir="/tmp", cli_type=CLIType.CODEX)
 
         assert process.cli_type == CLIType.CODEX
+
+
+class TestProcessInitialPromptTask:
+    """Tests for Process initial prompt task tracking."""
+
+    def test_initial_prompt_task_default_is_none(self):
+        """Test that _initial_prompt_task defaults to None."""
+        process = Process(id="ipt1", pid=1, fd=1, working_dir="/tmp")
+
+        assert process._initial_prompt_task is None
+
+    def test_initial_prompt_task_can_be_set(self):
+        """Test that _initial_prompt_task can be set to an asyncio.Task."""
+        mock_task = MagicMock(spec=asyncio.Task)
+        process = Process(
+            id="ipt2",
+            pid=1,
+            fd=1,
+            working_dir="/tmp",
+            _initial_prompt_task=mock_task,
+        )
+
+        assert process._initial_prompt_task is mock_task
+
+
+class TestProcessManagerKillInitialPromptTask:
+    """Tests for kill method handling of initial prompt task."""
+
+    @pytest.mark.asyncio
+    async def test_kill_cancels_initial_prompt_task(self):
+        """Test that kill cancels a running initial prompt task."""
+        pm = ProcessManager()
+
+        # Create a real asyncio task that we can cancel
+        async def slow_task():
+            await asyncio.sleep(100)
+
+        real_task = asyncio.create_task(slow_task())
+
+        process = Process(
+            id="kipt1",
+            pid=12345,
+            fd=10,
+            working_dir="/tmp",
+            _initial_prompt_task=real_task,
+        )
+        pm._processes["kipt1"] = process
+
+        with patch("os.kill"), \
+             patch("os.close"), \
+             patch("asyncio.sleep", new_callable=AsyncMock):
+            await pm.kill("kipt1")
+
+        # Task should have been cancelled
+        assert real_task.cancelled()
+
+    @pytest.mark.asyncio
+    async def test_kill_skips_completed_initial_prompt_task(self):
+        """Test that kill doesn't cancel an already-completed initial prompt task."""
+        pm = ProcessManager()
+        mock_task = MagicMock(spec=asyncio.Task)
+        mock_task.done.return_value = True  # Task already completed
+
+        process = Process(
+            id="kipt2",
+            pid=12345,
+            fd=10,
+            working_dir="/tmp",
+            _initial_prompt_task=mock_task,
+        )
+        pm._processes["kipt2"] = process
+
+        with patch("os.kill"), \
+             patch("os.close"), \
+             patch("asyncio.sleep", new_callable=AsyncMock):
+            await pm.kill("kipt2")
+
+        mock_task.cancel.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_kill_handles_none_initial_prompt_task(self):
+        """Test that kill handles None initial prompt task gracefully."""
+        pm = ProcessManager()
+        process = Process(
+            id="kipt3",
+            pid=12345,
+            fd=10,
+            working_dir="/tmp",
+            _initial_prompt_task=None,
+        )
+        pm._processes["kipt3"] = process
+
+        with patch("os.kill"), \
+             patch("os.close"), \
+             patch("asyncio.sleep", new_callable=AsyncMock):
+            result = await pm.kill("kipt3")
+
+        assert result is True
+
+
+class TestProcessManagerCleanupDeadProcessInitialPromptTask:
+    """Tests for _cleanup_dead_process handling of initial prompt task."""
+
+    @pytest.mark.asyncio
+    async def test_cleanup_cancels_initial_prompt_task(self):
+        """Test that _cleanup_dead_process cancels a running initial prompt task."""
+        pm = ProcessManager()
+
+        # Create a real asyncio task that we can cancel
+        async def slow_task():
+            await asyncio.sleep(100)
+
+        real_task = asyncio.create_task(slow_task())
+
+        process = Process(
+            id="cdpt1",
+            pid=12345,
+            fd=10,
+            working_dir="/tmp",
+            _initial_prompt_task=real_task,
+        )
+        pm._processes["cdpt1"] = process
+
+        with patch("os.close"):
+            await pm._cleanup_dead_process("cdpt1")
+
+        # Task should have been cancelled
+        assert real_task.cancelled()
+
+    @pytest.mark.asyncio
+    async def test_cleanup_skips_completed_initial_prompt_task(self):
+        """Test that _cleanup_dead_process doesn't cancel completed initial prompt task."""
+        pm = ProcessManager()
+        mock_task = MagicMock(spec=asyncio.Task)
+        mock_task.done.return_value = True  # Task already completed
+
+        process = Process(
+            id="cdpt2",
+            pid=12345,
+            fd=10,
+            working_dir="/tmp",
+            _initial_prompt_task=mock_task,
+        )
+        pm._processes["cdpt2"] = process
+
+        with patch("os.close"):
+            await pm._cleanup_dead_process("cdpt2")
+
+        mock_task.cancel.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_cleanup_handles_none_initial_prompt_task(self):
+        """Test that _cleanup_dead_process handles None initial prompt task."""
+        pm = ProcessManager()
+        process = Process(
+            id="cdpt3",
+            pid=12345,
+            fd=10,
+            working_dir="/tmp",
+            _initial_prompt_task=None,
+        )
+        pm._processes["cdpt3"] = process
+
+        with patch("os.close"):
+            await pm._cleanup_dead_process("cdpt3")
+
+        # Should complete without error
+        assert "cdpt3" not in pm._processes
+
+
+class TestSendInitialPromptErrorHandling:
+    """Tests for _send_initial_prompt error handling."""
+
+    @pytest.mark.asyncio
+    async def test_send_initial_prompt_logs_exception(self, caplog):
+        """Test that _send_initial_prompt logs exceptions instead of raising."""
+        import logging
+
+        pm = ProcessManager()
+        process = Process(id="sipt1", pid=12345, fd=10, working_dir="/tmp")
+        pm._processes["sipt1"] = process
+
+        # Mock _wait_for_cli_ready to raise an exception
+        with patch.object(pm, "_wait_for_cli_ready", side_effect=RuntimeError("CLI failed")):
+            with caplog.at_level(logging.ERROR, logger="app.services.session_manager"):
+                await pm._send_initial_prompt(process, "test prompt")
+
+        # Should have logged the error instead of propagating it
+        assert "Failed to send initial prompt to process" in caplog.text
+        assert "sipt1" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_send_initial_prompt_logs_write_error(self, caplog):
+        """Test that write errors in _send_initial_prompt are logged."""
+        import logging
+
+        pm = ProcessManager()
+        process = Process(id="sipt2", pid=12345, fd=10, working_dir="/tmp")
+        pm._processes["sipt2"] = process
+
+        with patch.object(pm, "_wait_for_cli_ready", new_callable=AsyncMock), \
+             patch.object(pm, "write", side_effect=OSError("Write failed")):
+            with caplog.at_level(logging.ERROR, logger="app.services.session_manager"):
+                await pm._send_initial_prompt(process, "test prompt")
+
+        # Should have logged the error
+        assert "Failed to send initial prompt to process" in caplog.text
