@@ -2947,3 +2947,405 @@ class TestCodexParserNoneUsageValues:
         assert result is not None
         assert result.total_input_tokens == 200
         assert result.total_output_tokens == 100
+
+
+# ==========================================
+# None Value Handling Tests
+# ==========================================
+
+class TestNoneValueHandling:
+    """Tests for handling None values in transcript data.
+
+    These tests verify the fix for the bug where dict.get('key', {}) would
+    return None instead of {} when the key exists but has a None value.
+    The fix uses `or {}` pattern: dict.get('key') or {}
+    """
+
+    def test_claude_image_with_none_source(self, tmp_path):
+        """Handles image block where 'source' key is explicitly None.
+
+        This tests the fix at transcript_parser.py:285 for:
+            source = item.get('source') or {}
+
+        When 'source' is None, should not crash on source.get('type').
+        """
+        from app.services.transcript_parser import parse_transcript_file
+        import json
+
+        session_dir = tmp_path / "projects" / "-test-repo" / "sessions"
+        session_dir.mkdir(parents=True)
+
+        # Create JSONL with image content block that has source: null
+        transcript = session_dir / "test-session.jsonl"
+        lines = [
+            json.dumps({
+                "type": "user",
+                "uuid": "msg-1",
+                "timestamp": "2025-01-01T10:00:00Z",
+                "message": {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "tool-123",
+                            "content": [
+                                {
+                                    "type": "image",
+                                    "source": None  # This would crash before the fix
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }),
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        # Should not raise AttributeError: 'NoneType' object has no attribute 'get'
+        result = parse_transcript_file(transcript, "test-session", cli_type="claude")
+        assert result is not None
+
+    def test_gemini_function_response_with_none_response(self, tmp_path):
+        """Handles function response where 'response' key is explicitly None.
+
+        This tests the fix at transcript_parser.py:469 for:
+            response = func_resp.get("response") or {}
+
+        When 'response' is None, should not crash on response.get('output').
+        """
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        gemini_dir = tmp_path / ".gemini" / "tmp" / "abc123" / "chats"
+        gemini_dir.mkdir(parents=True)
+
+        session_file = gemini_dir / "session-none-resp.json"
+        session_file.write_text(json.dumps({
+            "sessionId": "session-none-resp",
+            "messages": [
+                {
+                    "type": "user",
+                    "content": [
+                        {
+                            "type": "functionResponse",
+                            "name": "read_file",
+                            "response": None  # This would crash before the fix
+                        }
+                    ],
+                    "timestamp": "2025-01-01T10:00:00Z"
+                }
+            ],
+            "startTime": "2025-01-01T10:00:00Z"
+        }))
+
+        # Should not raise AttributeError
+        result = parse_transcript_file(session_file, "session-none-resp", cli_type=CLIType.GEMINI.value)
+        assert result is not None
+
+    def test_gemini_function_response_with_none_functionResponse_key(self, tmp_path):
+        """Handles when 'functionResponse' key exists but is None.
+
+        This tests the fix at transcript_parser.py:466 for:
+            func_resp = part.get("functionResponse") or part
+
+        When the functionResponse key is None, should fall back to part itself.
+        """
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        gemini_dir = tmp_path / ".gemini" / "tmp" / "abc123" / "chats"
+        gemini_dir.mkdir(parents=True)
+
+        session_file = gemini_dir / "session-none-funcresp.json"
+        session_file.write_text(json.dumps({
+            "sessionId": "session-none-funcresp",
+            "messages": [
+                {
+                    "type": "user",
+                    "content": [
+                        {
+                            "type": "functionResponse",
+                            "functionResponse": None,  # Explicitly None
+                            "name": "read_file",
+                            "response": {"output": "file contents"}
+                        }
+                    ],
+                    "timestamp": "2025-01-01T10:00:00Z"
+                }
+            ],
+            "startTime": "2025-01-01T10:00:00Z"
+        }))
+
+        # Should not crash and should fall back to using part itself
+        result = parse_transcript_file(session_file, "session-none-funcresp", cli_type=CLIType.GEMINI.value)
+        assert result is not None
+
+    def test_codex_session_meta_with_none_payload(self, tmp_path):
+        """Handles session_meta entry where 'payload' key is explicitly None.
+
+        This tests the fix at transcript_parser.py:633 for:
+            payload = entry.get('payload') or {}
+
+        When 'payload' is None, should not crash on payload.get('timestamp').
+        """
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-none-payload.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": None  # This would crash before the fix
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        # Should not raise AttributeError
+        result = parse_transcript_file(session_file, "session-none-payload", cli_type=CLIType.CODEX.value)
+        assert result is not None
+
+    def test_codex_session_meta_with_none_git(self, tmp_path):
+        """Handles session_meta where 'git' key is explicitly None.
+
+        This tests the fix at transcript_parser.py:635 for:
+            git_info = payload.get('git') or {}
+
+        When 'git' is None, should not crash on git_info.get('branch').
+        """
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-none-git.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {
+                    "timestamp": "2025-01-15T10:00:00Z",
+                    "git": None  # This would crash before the fix
+                }
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        # Should not raise AttributeError
+        result = parse_transcript_file(session_file, "session-none-git", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        assert result.git_branch is None  # Should be None, not crash
+
+    def test_codex_turn_context_with_none_payload(self, tmp_path):
+        """Handles turn_context entry where 'payload' key is explicitly None.
+
+        This tests the fix at transcript_parser.py:641 for:
+            payload = entry.get('payload') or {}
+        """
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-turn-none.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "turn_context",
+                "payload": None  # This would crash before the fix
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        # Should not raise AttributeError
+        result = parse_transcript_file(session_file, "session-turn-none", cli_type=CLIType.CODEX.value)
+        assert result is not None
+
+    def test_codex_usage_with_none_payload(self, tmp_path):
+        """Handles usage entry where 'payload' key is explicitly None.
+
+        This tests the fix at transcript_parser.py:657 for:
+            payload = entry.get('payload') or {}
+        """
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-usage-none.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "usage",
+                "payload": None  # This would crash before the fix
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        # Should not raise AttributeError
+        result = parse_transcript_file(session_file, "session-usage-none", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        # Token counts should be 0 when payload is None
+        assert result.total_input_tokens == 0
+        assert result.total_output_tokens == 0
+
+    def test_codex_response_item_with_none_payload(self, tmp_path):
+        """Handles response_item entry where 'payload' key is explicitly None.
+
+        This tests the fix at transcript_parser.py:664 for:
+            payload = entry.get('payload') or {}
+        """
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-resp-none.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:01:00Z",
+                "payload": None  # This would crash before the fix
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        # Should not raise AttributeError
+        result = parse_transcript_file(session_file, "session-resp-none", cli_type=CLIType.CODEX.value)
+        assert result is not None
+
+    def test_valid_image_source_still_works(self, tmp_path):
+        """Verify valid image source processing still works after the fix.
+
+        This is a regression test to ensure the fix doesn't break normal behavior.
+        """
+        from app.services.transcript_parser import parse_transcript_file
+        import json
+
+        session_dir = tmp_path / "projects" / "-test-repo" / "sessions"
+        session_dir.mkdir(parents=True)
+
+        transcript = session_dir / "test-session.jsonl"
+        lines = [
+            json.dumps({
+                "type": "assistant",
+                "uuid": "tool-123",
+                "timestamp": "2025-01-01T10:00:00Z",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "tool-123",
+                            "name": "screenshot",
+                            "input": {}
+                        }
+                    ]
+                }
+            }),
+            json.dumps({
+                "type": "user",
+                "uuid": "msg-2",
+                "timestamp": "2025-01-01T10:00:01Z",
+                "message": {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "tool-123",
+                            "content": [
+                                {
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": "image/png",
+                                        "data": "iVBORw0KGgo="  # Minimal base64
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }),
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(transcript, "test-session", cli_type="claude")
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].tool_uses[0].result is not None
+        # Should contain a data URL
+        assert "data:image/png;base64," in result.messages[0].tool_uses[0].result
+
+    def test_valid_gemini_function_response_still_works(self, tmp_path):
+        """Verify valid Gemini function responses still work after the fix.
+
+        This is a regression test to ensure the fix doesn't break normal behavior.
+        """
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        gemini_dir = tmp_path / ".gemini" / "tmp" / "abc123" / "chats"
+        gemini_dir.mkdir(parents=True)
+
+        session_file = gemini_dir / "session-valid.json"
+        session_file.write_text(json.dumps({
+            "sessionId": "session-valid",
+            "messages": [
+                {
+                    "type": "gemini",
+                    "content": [
+                        {
+                            "type": "functionCall",
+                            "id": "call-1",
+                            "name": "read_file",
+                            "args": {"path": "/test.py"}
+                        }
+                    ],
+                    "model": "gemini-2.0-flash",
+                    "timestamp": "2025-01-01T10:00:00Z"
+                },
+                {
+                    "type": "user",
+                    "content": [
+                        {
+                            "type": "functionResponse",
+                            "name": "read_file",
+                            "response": {
+                                "output": "print('hello')"
+                            }
+                        }
+                    ],
+                    "timestamp": "2025-01-01T10:00:01Z"
+                }
+            ],
+            "startTime": "2025-01-01T10:00:00Z"
+        }))
+
+        result = parse_transcript_file(session_file, "session-valid", cli_type=CLIType.GEMINI.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].tool_uses[0].result == "print('hello')"

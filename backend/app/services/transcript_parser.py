@@ -281,7 +281,8 @@ def _parse_claude_transcript(transcript_path: Path, session_id: str) -> ParsedTr
                                                     text_parts_inner.append(item.get('text', ''))
                                                 elif item.get('type') == 'image':
                                                     # Image block - extract base64 data as data URL
-                                                    source = item.get('source', {})
+                                                    # Use `or {}` to handle None values (key exists but value is None)
+                                                    source = item.get('source') or {}
                                                     if source.get('type') == 'base64':
                                                         media_type = source.get('media_type', 'image/png')
                                                         data = source.get('data', '')
@@ -462,9 +463,10 @@ def _parse_gemini_transcript(transcript_path: Path, session_id: str) -> ParsedTr
                                 text_parts.append(part.get("text", ""))
                             elif part_type == "functionResponse" or "functionResponse" in part:
                                 # Tool result - extract and attach to pending tool_use
-                                func_resp = part.get("functionResponse", part)
+                                func_resp = part.get("functionResponse") or part
                                 func_name = func_resp.get("name", "")
-                                response = func_resp.get("response", {})
+                                # Use `or {}` to handle None values (key exists but value is None)
+                                response = func_resp.get("response") or {}
                                 result_text = response.get("output", str(response))
 
                                 # Try to find matching tool_use by name
@@ -627,14 +629,16 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
                 timestamp = entry.get('timestamp', '')
 
                 if entry_type == 'session_meta':
-                    payload = entry.get('payload', {})
+                    # Use `or {}` to handle None values (key exists but value is None)
+                    payload = entry.get('payload') or {}
                     start_time = payload.get('timestamp')
-                    git_info = payload.get('git', {})
+                    git_info = payload.get('git') or {}
                     if git_info:
                         git_branch = git_info.get('branch')
 
                 elif entry_type == 'turn_context':
-                    payload = entry.get('payload', {})
+                    # Use `or {}` to handle None values (key exists but value is None)
+                    payload = entry.get('payload') or {}
                     model = payload.get('model')
                     if model and not primary_model:
                         primary_model = model
@@ -649,13 +653,15 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
 
                 elif entry_type == 'usage':
                     # Standalone usage entry
-                    payload = entry.get('payload', {})
+                    # Use `or {}` to handle None values (key exists but value is None)
+                    payload = entry.get('payload') or {}
                     # Use `or 0` at the end to handle None values from both keys
                     total_input += payload.get('input_tokens') or payload.get('prompt_tokens') or 0
                     total_output += payload.get('output_tokens') or payload.get('completion_tokens') or 0
 
                 elif entry_type == 'response_item':
-                    payload = entry.get('payload', {})
+                    # Use `or {}` to handle None values (key exists but value is None)
+                    payload = entry.get('payload') or {}
                     role = payload.get('role')
                     item_type = payload.get('type', '')
 
