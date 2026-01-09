@@ -238,8 +238,8 @@ async def notifications_websocket(websocket: WebSocket):
             logger.warning(f"Event queue full, dropping {event.type.value} event")
 
     # Subscribe to both notification and general events
-    notification_manager.subscribe_global(on_notification)
-    event_manager.subscribe(on_event)
+    await notification_manager.subscribe_global(on_notification)
+    await event_manager.subscribe(on_event)
 
     async def send_events() -> None:
         """Task to send events to the client."""
@@ -320,8 +320,8 @@ async def notifications_websocket(websocket: WebSocket):
         })
     except WebSocketDisconnect:
         closing = True
-        notification_manager.unsubscribe_global(on_notification)
-        event_manager.unsubscribe(on_event)
+        await notification_manager.unsubscribe_global(on_notification)
+        await event_manager.unsubscribe(on_event)
         return
 
     # Run both tasks concurrently
@@ -333,7 +333,7 @@ async def notifications_websocket(websocket: WebSocket):
     finally:
         # Set closing flag first to prevent callbacks from queuing more events
         closing = True
-        notification_manager.unsubscribe_global(on_notification)
-        event_manager.unsubscribe(on_event)
+        await notification_manager.unsubscribe_global(on_notification)
+        await event_manager.unsubscribe(on_event)
         send_task.cancel()
         receive_task.cancel()

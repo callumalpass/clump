@@ -55,6 +55,9 @@ class EventManager:
 
     Simple pub-sub pattern - all subscribers receive all events.
     The frontend filters/handles events as needed.
+
+    Thread-safety: All access to _subscribers is protected by _lock to prevent
+    race conditions when subscribers are added/removed while events are being emitted.
     """
 
     def __init__(self):
@@ -71,20 +74,27 @@ class EventManager:
     ) -> None:
         """
         Broadcast an event to all subscribers.
+
+        Takes a snapshot of subscribers under lock to avoid race conditions
+        if subscribers are added/removed during iteration.
         """
         event = Event(
             type=event_type,
             data=data or {},
         )
 
-        subscriber_count = len(self._subscribers)
+        # Take a snapshot of subscribers under lock to avoid race conditions
+        async with self._lock:
+            subscribers_snapshot = list(self._subscribers)
+
+        subscriber_count = len(subscribers_snapshot)
         if subscriber_count == 0:
             logger.debug(f"Event {event_type.value} emitted but no subscribers connected")
         else:
             logger.debug(f"Broadcasting {event_type.value} to {subscriber_count} subscriber(s)")
 
-        # Notify all subscribers
-        for callback in self._subscribers:
+        # Notify all subscribers (using snapshot taken under lock)
+        for callback in subscribers_snapshot:
             try:
                 result = callback(event)
                 if asyncio.iscoroutine(result):
@@ -127,16 +137,24 @@ class EventManager:
         except asyncio.CancelledError:
             pass
 
-    def subscribe(self, callback: Callable[[Event], Any]) -> None:
-        """Subscribe to all events."""
-        self._subscribers.append(callback)
+    async def subscribe(self, callback: Callable[[Event], Any]) -> None:
+        """Subscribe to all events.
 
-    def unsubscribe(self, callback: Callable[[Event], Any]) -> None:
-        """Unsubscribe from events."""
-        try:
-            self._subscribers.remove(callback)
-        except ValueError:
-            pass
+        Thread-safe: Uses lock to prevent race conditions with emit().
+        """
+        async with self._lock:
+            self._subscribers.append(callback)
+
+    async def unsubscribe(self, callback: Callable[[Event], Any]) -> None:
+        """Unsubscribe from events.
+
+        Thread-safe: Uses lock to prevent race conditions with emit().
+        """
+        async with self._lock:
+            try:
+                self._subscribers.remove(callback)
+            except ValueError:
+                pass
 
 
 # Global event manager instance

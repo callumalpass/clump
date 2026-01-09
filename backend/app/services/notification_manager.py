@@ -141,43 +141,63 @@ class NotificationManager:
             if state in (NotificationType.PERMISSION_NEEDED, NotificationType.IDLE)
         ]
 
-    def subscribe(
+    async def subscribe(
         self,
         session_id: str,
         callback: Callable[[Notification], Any],
     ) -> None:
-        """Subscribe to notifications for a specific session."""
-        if session_id not in self._subscribers:
-            self._subscribers[session_id] = []
-        self._subscribers[session_id].append(callback)
+        """Subscribe to notifications for a specific session.
 
-    def unsubscribe(
+        Thread-safe: Uses lock to prevent race conditions with notify().
+        """
+        async with self._lock:
+            if session_id not in self._subscribers:
+                self._subscribers[session_id] = []
+            self._subscribers[session_id].append(callback)
+
+    async def unsubscribe(
         self,
         session_id: str,
         callback: Callable[[Notification], Any],
     ) -> None:
-        """Unsubscribe from notifications for a specific session."""
-        if session_id in self._subscribers:
+        """Unsubscribe from notifications for a specific session.
+
+        Thread-safe: Uses lock to prevent race conditions with notify().
+        """
+        async with self._lock:
+            if session_id in self._subscribers:
+                try:
+                    self._subscribers[session_id].remove(callback)
+                except ValueError:
+                    pass
+
+    async def subscribe_global(self, callback: Callable[[Notification], Any]) -> None:
+        """Subscribe to all notifications (for global UI updates).
+
+        Thread-safe: Uses lock to prevent race conditions with notify().
+        """
+        async with self._lock:
+            self._global_subscribers.append(callback)
+
+    async def unsubscribe_global(self, callback: Callable[[Notification], Any]) -> None:
+        """Unsubscribe from global notifications.
+
+        Thread-safe: Uses lock to prevent race conditions with notify().
+        """
+        async with self._lock:
             try:
-                self._subscribers[session_id].remove(callback)
+                self._global_subscribers.remove(callback)
             except ValueError:
                 pass
 
-    def subscribe_global(self, callback: Callable[[Notification], Any]) -> None:
-        """Subscribe to all notifications (for global UI updates)."""
-        self._global_subscribers.append(callback)
+    async def cleanup_session(self, session_id: str) -> None:
+        """Clean up all state and subscribers for a session.
 
-    def unsubscribe_global(self, callback: Callable[[Notification], Any]) -> None:
-        """Unsubscribe from global notifications."""
-        try:
-            self._global_subscribers.remove(callback)
-        except ValueError:
-            pass
-
-    def cleanup_session(self, session_id: str) -> None:
-        """Clean up all state and subscribers for a session."""
-        self._state.pop(session_id, None)
-        self._subscribers.pop(session_id, None)
+        Thread-safe: Uses lock to prevent race conditions with notify().
+        """
+        async with self._lock:
+            self._state.pop(session_id, None)
+            self._subscribers.pop(session_id, None)
 
 
 # Global notification manager instance

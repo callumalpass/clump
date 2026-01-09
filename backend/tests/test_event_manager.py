@@ -128,7 +128,7 @@ class TestEventManagerEmit:
         """emit() calls synchronous subscriber callbacks."""
         manager = EventManager()
         callback = MagicMock()
-        manager.subscribe(callback)
+        await manager.subscribe(callback)
 
         await manager.emit(EventType.SESSION_CREATED, {"session_id": "abc"})
 
@@ -142,7 +142,7 @@ class TestEventManagerEmit:
         """emit() awaits asynchronous subscriber callbacks."""
         manager = EventManager()
         callback = AsyncMock()
-        manager.subscribe(callback)
+        await manager.subscribe(callback)
 
         await manager.emit(EventType.PROCESS_STARTED)
 
@@ -155,9 +155,9 @@ class TestEventManagerEmit:
         callback1 = MagicMock()
         callback2 = AsyncMock()
         callback3 = MagicMock()
-        manager.subscribe(callback1)
-        manager.subscribe(callback2)
-        manager.subscribe(callback3)
+        await manager.subscribe(callback1)
+        await manager.subscribe(callback2)
+        await manager.subscribe(callback3)
 
         await manager.emit(EventType.SESSION_UPDATED)
 
@@ -170,7 +170,7 @@ class TestEventManagerEmit:
         """emit() works without data parameter."""
         manager = EventManager()
         callback = MagicMock()
-        manager.subscribe(callback)
+        await manager.subscribe(callback)
 
         await manager.emit(EventType.PROCESS_ENDED)
 
@@ -191,8 +191,8 @@ class TestEventManagerEmit:
         manager = EventManager()
         callback_error = MagicMock(side_effect=Exception("Callback failed"))
         callback_ok = MagicMock()
-        manager.subscribe(callback_error)
-        manager.subscribe(callback_ok)
+        await manager.subscribe(callback_error)
+        await manager.subscribe(callback_ok)
 
         # Should not raise, and should continue to other callbacks
         await manager.emit(EventType.SESSION_CREATED)
@@ -204,36 +204,39 @@ class TestEventManagerEmit:
 class TestEventManagerSubscribe:
     """Tests for EventManager.subscribe() method."""
 
-    def test_subscribe_adds_callback(self):
+    @pytest.mark.asyncio
+    async def test_subscribe_adds_callback(self):
         """subscribe() adds callback to subscribers list."""
         manager = EventManager()
         callback = MagicMock()
 
-        manager.subscribe(callback)
+        await manager.subscribe(callback)
 
         assert callback in manager._subscribers
         assert len(manager._subscribers) == 1
 
-    def test_subscribe_multiple_callbacks(self):
+    @pytest.mark.asyncio
+    async def test_subscribe_multiple_callbacks(self):
         """subscribe() can add multiple callbacks."""
         manager = EventManager()
         callback1 = MagicMock()
         callback2 = MagicMock()
 
-        manager.subscribe(callback1)
-        manager.subscribe(callback2)
+        await manager.subscribe(callback1)
+        await manager.subscribe(callback2)
 
         assert len(manager._subscribers) == 2
         assert callback1 in manager._subscribers
         assert callback2 in manager._subscribers
 
-    def test_subscribe_same_callback_twice(self):
+    @pytest.mark.asyncio
+    async def test_subscribe_same_callback_twice(self):
         """subscribe() allows adding the same callback twice."""
         manager = EventManager()
         callback = MagicMock()
 
-        manager.subscribe(callback)
-        manager.subscribe(callback)
+        await manager.subscribe(callback)
+        await manager.subscribe(callback)
 
         # Both are added (no deduplication)
         assert len(manager._subscribers) == 2
@@ -242,33 +245,36 @@ class TestEventManagerSubscribe:
 class TestEventManagerUnsubscribe:
     """Tests for EventManager.unsubscribe() method."""
 
-    def test_unsubscribe_removes_callback(self):
+    @pytest.mark.asyncio
+    async def test_unsubscribe_removes_callback(self):
         """unsubscribe() removes callback from subscribers list."""
         manager = EventManager()
         callback = MagicMock()
-        manager.subscribe(callback)
+        await manager.subscribe(callback)
 
-        manager.unsubscribe(callback)
+        await manager.unsubscribe(callback)
 
         assert callback not in manager._subscribers
         assert len(manager._subscribers) == 0
 
-    def test_unsubscribe_nonexistent_callback(self):
+    @pytest.mark.asyncio
+    async def test_unsubscribe_nonexistent_callback(self):
         """unsubscribe() handles nonexistent callback gracefully."""
         manager = EventManager()
         callback = MagicMock()
 
         # Should not raise
-        manager.unsubscribe(callback)
+        await manager.unsubscribe(callback)
 
-    def test_unsubscribe_removes_only_first_occurrence(self):
+    @pytest.mark.asyncio
+    async def test_unsubscribe_removes_only_first_occurrence(self):
         """unsubscribe() removes only first occurrence if duplicated."""
         manager = EventManager()
         callback = MagicMock()
-        manager.subscribe(callback)
-        manager.subscribe(callback)
+        await manager.subscribe(callback)
+        await manager.subscribe(callback)
 
-        manager.unsubscribe(callback)
+        await manager.unsubscribe(callback)
 
         # Only one should be removed
         assert len(manager._subscribers) == 1
@@ -278,8 +284,8 @@ class TestEventManagerUnsubscribe:
         """Unsubscribed callback is not called on emit."""
         manager = EventManager()
         callback = MagicMock()
-        manager.subscribe(callback)
-        manager.unsubscribe(callback)
+        await manager.subscribe(callback)
+        await manager.unsubscribe(callback)
 
         await manager.emit(EventType.SESSION_CREATED)
 
@@ -294,7 +300,7 @@ class TestEventManagerEmitCountsChanged:
         """emit_counts_changed() debounces multiple rapid calls."""
         manager = EventManager()
         callback = AsyncMock()
-        manager.subscribe(callback)
+        await manager.subscribe(callback)
 
         # Emit multiple counts rapidly
         await manager.emit_counts_changed({"repo1": {"total": 1}})
@@ -326,7 +332,7 @@ class TestEventManagerEmitCountsChanged:
         """emit_counts_changed() clears pending counts after emit."""
         manager = EventManager()
         callback = AsyncMock()
-        manager.subscribe(callback)
+        await manager.subscribe(callback)
 
         await manager.emit_counts_changed({"repo1": {"total": 5}})
         await asyncio.sleep(0.15)
@@ -339,7 +345,7 @@ class TestEventManagerEmitCountsChanged:
         """emit_counts_changed() cancels previous debounce task."""
         manager = EventManager()
         callback = AsyncMock()
-        manager.subscribe(callback)
+        await manager.subscribe(callback)
 
         await manager.emit_counts_changed({"repo1": {"total": 1}})
         first_task = manager._counts_task
@@ -357,7 +363,7 @@ class TestEventManagerEmitCountsChanged:
         """emit_counts_changed() emits COUNTS_CHANGED event type."""
         manager = EventManager()
         callback = AsyncMock()
-        manager.subscribe(callback)
+        await manager.subscribe(callback)
 
         await manager.emit_counts_changed({"repo1": {"total": 10}})
         await asyncio.sleep(0.15)
@@ -378,12 +384,12 @@ class TestEventManagerIntegration:
         async def callback(event):
             received_events.append(event)
 
-        manager.subscribe(callback)
+        await manager.subscribe(callback)
 
         await manager.emit(EventType.SESSION_CREATED, {"id": "1"})
         await manager.emit(EventType.SESSION_UPDATED, {"id": "1"})
 
-        manager.unsubscribe(callback)
+        await manager.unsubscribe(callback)
 
         await manager.emit(EventType.SESSION_DELETED, {"id": "1"})
 
@@ -400,7 +406,7 @@ class TestEventManagerIntegration:
         def callback(event):
             events_by_type[event.type] = event
 
-        manager.subscribe(callback)
+        await manager.subscribe(callback)
 
         await manager.emit(EventType.SESSION_CREATED, {"session": "s1"})
         await manager.emit(EventType.PROCESS_STARTED, {"process": "p1"})
@@ -422,7 +428,7 @@ class TestEventManagerIntegration:
             async with lock:
                 received_events.append(event)
 
-        manager.subscribe(callback)
+        await manager.subscribe(callback)
 
         # Emit multiple events concurrently
         await asyncio.gather(
@@ -446,8 +452,8 @@ class TestEventManagerIntegration:
         async def async_callback(event):
             async_calls.append(event)
 
-        manager.subscribe(sync_callback)
-        manager.subscribe(async_callback)
+        await manager.subscribe(sync_callback)
+        await manager.subscribe(async_callback)
 
         await manager.emit(EventType.PROCESS_ENDED, {"code": 0})
 
@@ -471,7 +477,7 @@ class TestEventManagerIntegration:
             await emit_can_continue.wait()
             received_events.append(event)
 
-        manager.subscribe(slow_callback)
+        await manager.subscribe(slow_callback)
 
         # Start the first emit
         await manager.emit_counts_changed({"repo1": {"total": 1}})
@@ -491,3 +497,107 @@ class TestEventManagerIntegration:
 
         # Should have received both events
         assert len(received_events) == 2
+
+
+class TestEventManagerThreadSafety:
+    """Tests for thread-safety of EventManager."""
+
+    @pytest.mark.asyncio
+    async def test_concurrent_subscribe_and_emit(self):
+        """Subscribe and emit can run concurrently without race conditions."""
+        manager = EventManager()
+        received_events = []
+        lock = asyncio.Lock()
+
+        async def callback(event):
+            async with lock:
+                received_events.append(event)
+
+        # Subscribe first callback
+        await manager.subscribe(callback)
+
+        # Create tasks that subscribe new callbacks and emit events concurrently
+        async def subscribe_task():
+            for _ in range(10):
+                await manager.subscribe(MagicMock())
+                await asyncio.sleep(0)
+
+        async def emit_task():
+            for i in range(10):
+                await manager.emit(EventType.SESSION_CREATED, {"id": str(i)})
+                await asyncio.sleep(0)
+
+        # Run concurrently - should not raise any exceptions
+        await asyncio.gather(
+            subscribe_task(),
+            emit_task(),
+        )
+
+        # Verify events were received
+        assert len(received_events) >= 1
+
+    @pytest.mark.asyncio
+    async def test_concurrent_unsubscribe_and_emit(self):
+        """Unsubscribe and emit can run concurrently without race conditions."""
+        manager = EventManager()
+        received_events = []
+        lock = asyncio.Lock()
+        callbacks = []
+
+        async def callback(event):
+            async with lock:
+                received_events.append(event)
+
+        # Add multiple callbacks
+        for _ in range(10):
+            cb = MagicMock()
+            callbacks.append(cb)
+            await manager.subscribe(cb)
+
+        # Add main callback
+        await manager.subscribe(callback)
+
+        # Create tasks that unsubscribe callbacks and emit events concurrently
+        async def unsubscribe_task():
+            for cb in callbacks:
+                await manager.unsubscribe(cb)
+                await asyncio.sleep(0)
+
+        async def emit_task():
+            for i in range(10):
+                await manager.emit(EventType.SESSION_CREATED, {"id": str(i)})
+                await asyncio.sleep(0)
+
+        # Run concurrently - should not raise any exceptions
+        await asyncio.gather(
+            unsubscribe_task(),
+            emit_task(),
+        )
+
+        # Verify our main callback still received events
+        assert len(received_events) >= 1
+
+    @pytest.mark.asyncio
+    async def test_emit_uses_snapshot(self):
+        """emit() uses a snapshot of subscribers, so unsubscribe during emit doesn't affect current emit."""
+        manager = EventManager()
+        call_order = []
+
+        async def callback1(event):
+            call_order.append("callback1_start")
+            # Unsubscribe callback2 during emit - should not affect this emit
+            await manager.unsubscribe(callback2)
+            call_order.append("callback1_end")
+
+        def callback2(event):
+            call_order.append("callback2")
+
+        await manager.subscribe(callback1)
+        await manager.subscribe(callback2)
+
+        await manager.emit(EventType.SESSION_CREATED)
+
+        # Both callbacks should have been called because emit uses a snapshot
+        assert "callback1_start" in call_order
+        assert "callback1_end" in call_order
+        assert "callback2" in call_order

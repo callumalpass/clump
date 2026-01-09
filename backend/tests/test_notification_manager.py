@@ -107,7 +107,7 @@ class TestNotificationManagerStateManagement:
     async def test_notify_skips_duplicate_state(self, manager):
         """notify() skips duplicate notifications of the same type."""
         callback = MagicMock()
-        manager.subscribe("session-1", callback)
+        await manager.subscribe("session-1", callback)
 
         await manager.notify("session-1", NotificationType.IDLE)
         await manager.notify("session-1", NotificationType.IDLE)  # Duplicate
@@ -119,7 +119,7 @@ class TestNotificationManagerStateManagement:
     async def test_notify_allows_different_types(self, manager):
         """notify() allows changing notification type."""
         callback = MagicMock()
-        manager.subscribe("session-1", callback)
+        await manager.subscribe("session-1", callback)
 
         await manager.notify("session-1", NotificationType.IDLE)
         await manager.notify("session-1", NotificationType.PERMISSION_NEEDED)
@@ -138,7 +138,7 @@ class TestNotificationManagerStateManagement:
     async def test_clear_attention_allows_renotification(self, manager):
         """After clear_attention(), the same notification type can be sent again."""
         callback = MagicMock()
-        manager.subscribe("session-1", callback)
+        await manager.subscribe("session-1", callback)
 
         await manager.notify("session-1", NotificationType.IDLE)
         await manager.clear_attention("session-1")
@@ -177,7 +177,7 @@ class TestNotificationManagerSubscribers:
     async def test_subscribe_receives_notifications(self, manager):
         """Subscribed callback receives notifications."""
         callback = MagicMock()
-        manager.subscribe("session-1", callback)
+        await manager.subscribe("session-1", callback)
 
         await manager.notify("session-1", NotificationType.PERMISSION_NEEDED)
 
@@ -190,7 +190,7 @@ class TestNotificationManagerSubscribers:
     async def test_subscribe_only_receives_for_session(self, manager):
         """Subscriber only receives notifications for subscribed session."""
         callback = MagicMock()
-        manager.subscribe("session-1", callback)
+        await manager.subscribe("session-1", callback)
 
         await manager.notify("session-2", NotificationType.PERMISSION_NEEDED)
 
@@ -201,8 +201,8 @@ class TestNotificationManagerSubscribers:
         """Multiple subscribers for same session all receive notifications."""
         callback1 = MagicMock()
         callback2 = MagicMock()
-        manager.subscribe("session-1", callback1)
-        manager.subscribe("session-1", callback2)
+        await manager.subscribe("session-1", callback1)
+        await manager.subscribe("session-1", callback2)
 
         await manager.notify("session-1", NotificationType.IDLE)
 
@@ -213,8 +213,8 @@ class TestNotificationManagerSubscribers:
     async def test_unsubscribe_stops_notifications(self, manager):
         """Unsubscribed callback no longer receives notifications."""
         callback = MagicMock()
-        manager.subscribe("session-1", callback)
-        manager.unsubscribe("session-1", callback)
+        await manager.subscribe("session-1", callback)
+        await manager.unsubscribe("session-1", callback)
 
         await manager.notify("session-1", NotificationType.PERMISSION_NEEDED)
 
@@ -225,14 +225,14 @@ class TestNotificationManagerSubscribers:
         """Unsubscribing non-existent callback doesn't raise."""
         callback = MagicMock()
         # Should not raise
-        manager.unsubscribe("session-1", callback)
+        await manager.unsubscribe("session-1", callback)
 
     @pytest.mark.asyncio
     async def test_unsubscribe_from_nonexistent_session(self, manager):
         """Unsubscribing from non-existent session doesn't raise."""
         callback = MagicMock()
         # Should not raise
-        manager.unsubscribe("nonexistent", callback)
+        await manager.unsubscribe("nonexistent", callback)
 
 
 class TestNotificationManagerGlobalSubscribers:
@@ -247,7 +247,7 @@ class TestNotificationManagerGlobalSubscribers:
     async def test_global_subscriber_receives_all_notifications(self, manager):
         """Global subscriber receives notifications for all sessions."""
         callback = MagicMock()
-        manager.subscribe_global(callback)
+        await manager.subscribe_global(callback)
 
         await manager.notify("session-1", NotificationType.IDLE)
         await manager.notify("session-2", NotificationType.PERMISSION_NEEDED)
@@ -259,8 +259,8 @@ class TestNotificationManagerGlobalSubscribers:
         """Both session and global subscribers receive notifications."""
         session_callback = MagicMock()
         global_callback = MagicMock()
-        manager.subscribe("session-1", session_callback)
-        manager.subscribe_global(global_callback)
+        await manager.subscribe("session-1", session_callback)
+        await manager.subscribe_global(global_callback)
 
         await manager.notify("session-1", NotificationType.IDLE)
 
@@ -271,8 +271,8 @@ class TestNotificationManagerGlobalSubscribers:
     async def test_unsubscribe_global_stops_notifications(self, manager):
         """Unsubscribed global callback no longer receives notifications."""
         callback = MagicMock()
-        manager.subscribe_global(callback)
-        manager.unsubscribe_global(callback)
+        await manager.subscribe_global(callback)
+        await manager.unsubscribe_global(callback)
 
         await manager.notify("session-1", NotificationType.PERMISSION_NEEDED)
 
@@ -283,7 +283,7 @@ class TestNotificationManagerGlobalSubscribers:
         """Unsubscribing non-existent global callback doesn't raise."""
         callback = MagicMock()
         # Should not raise
-        manager.unsubscribe_global(callback)
+        await manager.unsubscribe_global(callback)
 
 
 class TestNotificationManagerAsyncCallbacks:
@@ -303,7 +303,7 @@ class TestNotificationManagerAsyncCallbacks:
             await asyncio.sleep(0.01)
             called.append(notification)
 
-        manager.subscribe("session-1", async_callback)
+        await manager.subscribe("session-1", async_callback)
         await manager.notify("session-1", NotificationType.IDLE)
 
         assert len(called) == 1
@@ -317,7 +317,7 @@ class TestNotificationManagerAsyncCallbacks:
         def sync_callback(notification):
             called.append(notification)
 
-        manager.subscribe("session-1", sync_callback)
+        await manager.subscribe("session-1", sync_callback)
         await manager.notify("session-1", NotificationType.IDLE)
 
         assert len(called) == 1
@@ -333,8 +333,8 @@ class TestNotificationManagerAsyncCallbacks:
         def success_callback(notification):
             called.append(notification)
 
-        manager.subscribe("session-1", failing_callback)
-        manager.subscribe("session-1", success_callback)
+        await manager.subscribe("session-1", failing_callback)
+        await manager.subscribe("session-1", success_callback)
 
         # Should not raise
         await manager.notify("session-1", NotificationType.IDLE)
@@ -353,8 +353,8 @@ class TestNotificationManagerAsyncCallbacks:
         def success_callback(notification):
             called.append(notification)
 
-        manager.subscribe("session-1", failing_callback)
-        manager.subscribe("session-1", success_callback)
+        await manager.subscribe("session-1", failing_callback)
+        await manager.subscribe("session-1", success_callback)
 
         # Should not raise
         await manager.notify("session-1", NotificationType.IDLE)
@@ -375,22 +375,24 @@ class TestNotificationManagerCleanup:
     async def test_cleanup_session_removes_state(self, manager):
         """cleanup_session() removes session state."""
         await manager.notify("session-1", NotificationType.IDLE)
-        manager.cleanup_session("session-1")
+        await manager.cleanup_session("session-1")
 
         assert manager.get_state("session-1") is None
 
-    def test_cleanup_session_removes_subscribers(self, manager):
+    @pytest.mark.asyncio
+    async def test_cleanup_session_removes_subscribers(self, manager):
         """cleanup_session() removes session subscribers."""
         callback = MagicMock()
-        manager.subscribe("session-1", callback)
-        manager.cleanup_session("session-1")
+        await manager.subscribe("session-1", callback)
+        await manager.cleanup_session("session-1")
 
         assert "session-1" not in manager._subscribers
 
-    def test_cleanup_nonexistent_session(self, manager):
+    @pytest.mark.asyncio
+    async def test_cleanup_nonexistent_session(self, manager):
         """cleanup_session() for non-existent session doesn't raise."""
         # Should not raise
-        manager.cleanup_session("nonexistent")
+        await manager.cleanup_session("nonexistent")
 
 
 class TestNotificationManagerConcurrency:
@@ -408,8 +410,8 @@ class TestNotificationManagerConcurrency:
             "session-1": MagicMock(),
             "session-2": MagicMock(),
         }
-        manager.subscribe("session-1", callbacks["session-1"])
-        manager.subscribe("session-2", callbacks["session-2"])
+        await manager.subscribe("session-1", callbacks["session-1"])
+        await manager.subscribe("session-2", callbacks["session-2"])
 
         await asyncio.gather(
             manager.notify("session-1", NotificationType.IDLE),
@@ -429,16 +431,16 @@ class TestNotificationManagerConcurrency:
         """
         called = []
 
-        def callback1(notification):
+        async def callback1(notification):
             called.append("callback1")
             # Try to unsubscribe callback2 during notification
-            manager.unsubscribe("session-1", callback2)
+            await manager.unsubscribe("session-1", callback2)
 
         def callback2(notification):
             called.append("callback2")
 
-        manager.subscribe("session-1", callback1)
-        manager.subscribe("session-1", callback2)
+        await manager.subscribe("session-1", callback1)
+        await manager.subscribe("session-1", callback2)
 
         await manager.notify("session-1", NotificationType.IDLE)
 
@@ -453,16 +455,16 @@ class TestNotificationManagerConcurrency:
         """
         called = []
 
-        def callback1(notification):
+        async def callback1(notification):
             called.append("callback1")
             # Try to unsubscribe callback2 during notification
-            manager.unsubscribe_global(callback2)
+            await manager.unsubscribe_global(callback2)
 
         def callback2(notification):
             called.append("callback2")
 
-        manager.subscribe_global(callback1)
-        manager.subscribe_global(callback2)
+        await manager.subscribe_global(callback1)
+        await manager.subscribe_global(callback2)
 
         await manager.notify("session-1", NotificationType.IDLE)
 
@@ -478,12 +480,12 @@ class TestNotificationManagerConcurrency:
         called = []
         late_callback = MagicMock()
 
-        def callback1(notification):
+        async def callback1(notification):
             called.append("callback1")
             # Try to add a new subscriber during notification
-            manager.subscribe("session-1", late_callback)
+            await manager.subscribe("session-1", late_callback)
 
-        manager.subscribe("session-1", callback1)
+        await manager.subscribe("session-1", callback1)
 
         await manager.notify("session-1", NotificationType.IDLE)
 
@@ -509,7 +511,7 @@ class TestNotificationManagerNotificationData:
     async def test_notify_passes_data_to_notification(self, manager):
         """notify() passes data to the notification object."""
         callback = MagicMock()
-        manager.subscribe("session-1", callback)
+        await manager.subscribe("session-1", callback)
 
         await manager.notify(
             "session-1",
@@ -525,7 +527,7 @@ class TestNotificationManagerNotificationData:
     async def test_notify_with_none_data(self, manager):
         """notify() with None data results in empty dict."""
         callback = MagicMock()
-        manager.subscribe("session-1", callback)
+        await manager.subscribe("session-1", callback)
 
         await manager.notify("session-1", NotificationType.IDLE, data=None)
 
