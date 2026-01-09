@@ -1223,3 +1223,154 @@ class TestReadLoopSubscriberSnapshot:
 
         # But after iteration, other_callback should be unsubscribed
         assert other_callback not in process.subscribers
+
+
+class TestProcessManagerListProcessesThreadSafety:
+    """Tests for thread-safety of list_processes and get_dead_process_info methods."""
+
+    @pytest.mark.asyncio
+    async def test_list_processes_uses_snapshot(self):
+        """list_processes takes a snapshot under lock to prevent modification during iteration."""
+        pm = ProcessManager()
+        process1 = Process(id="lp1", pid=100, fd=1, working_dir="/tmp")
+        process2 = Process(id="lp2", pid=200, fd=2, working_dir="/tmp")
+        pm._processes["lp1"] = process1
+        pm._processes["lp2"] = process2
+
+        # Track if we can add a process while list_processes is iterating
+        processes_added_during_iteration = []
+
+        original_is_alive = pm._is_process_alive
+
+        def slow_is_alive(pid):
+            # When checking first process, try to add a new one
+            if pid == 100:
+                # This should not affect the current iteration
+                process3 = Process(id="lp3", pid=300, fd=3, working_dir="/tmp")
+                pm._processes["lp3"] = process3
+                processes_added_during_iteration.append("lp3")
+            return True
+
+        with patch.object(pm, "_is_process_alive", side_effect=slow_is_alive):
+            result = await pm.list_processes()
+
+        # Should only return original 2 processes (not the one added during iteration)
+        assert len(result) == 2
+        assert process1 in result
+        assert process2 in result
+
+        # Verify the new process was added to the dict
+        assert "lp3" in pm._processes
+
+    @pytest.mark.asyncio
+    async def test_concurrent_list_processes_and_create(self):
+        """Concurrent list_processes and process creation don't cause RuntimeError."""
+        pm = ProcessManager()
+
+        # Add initial processes
+        for i in range(5):
+            process = Process(id=f"clp{i}", pid=100 + i, fd=i, working_dir="/tmp")
+            pm._processes[f"clp{i}"] = process
+
+        with patch.object(pm, "_is_process_alive", return_value=True):
+            # Create tasks that list and add processes concurrently
+            async def list_task():
+                for _ in range(10):
+                    await pm.list_processes()
+                    await asyncio.sleep(0)
+
+            async def add_task():
+                for i in range(10):
+                    async with pm._lock:
+                        pm._processes[f"new{i}"] = Process(
+                            id=f"new{i}", pid=500 + i, fd=50 + i, working_dir="/tmp"
+                        )
+                    await asyncio.sleep(0)
+
+            # Should not raise RuntimeError: dictionary changed size during iteration
+            await asyncio.gather(list_task(), add_task())
+
+    @pytest.mark.asyncio
+    async def test_concurrent_list_processes_and_kill(self):
+        """Concurrent list_processes and kill operations don't cause RuntimeError."""
+        pm = ProcessManager()
+
+        # Add initial processes
+        for i in range(10):
+            process = Process(id=f"lk{i}", pid=100 + i, fd=i, working_dir="/tmp")
+            pm._processes[f"lk{i}"] = process
+
+        with patch.object(pm, "_is_process_alive", return_value=True), \
+             patch("os.kill"), \
+             patch("os.close"), \
+             patch("asyncio.sleep", new_callable=AsyncMock):
+            # Create tasks that list and kill processes concurrently
+            async def list_task():
+                for _ in range(10):
+                    await pm.list_processes()
+
+            async def kill_task():
+                for i in range(5):
+                    await pm.kill(f"lk{i}")
+
+            # Should not raise RuntimeError
+            await asyncio.gather(list_task(), kill_task())
+
+    @pytest.mark.asyncio
+    async def test_get_dead_process_info_uses_snapshot(self):
+        """get_dead_process_info takes a snapshot under lock to prevent modification during iteration."""
+        pm = ProcessManager()
+        process1 = Process(id="dpi1", pid=100, fd=1, working_dir="/tmp", session_id=1)
+        process1._transcript_chunks = ["transcript1"]
+        process2 = Process(id="dpi2", pid=200, fd=2, working_dir="/tmp", session_id=2)
+        process2._transcript_chunks = ["transcript2"]
+        pm._processes["dpi1"] = process1
+        pm._processes["dpi2"] = process2
+
+        original_cleanup = pm._cleanup_dead_process
+
+        async def patched_cleanup(process_id):
+            # While cleaning up, add a new process
+            if process_id == "dpi1":
+                process3 = Process(id="dpi3", pid=300, fd=3, working_dir="/tmp", session_id=3)
+                async with pm._lock:
+                    pm._processes["dpi3"] = process3
+            await original_cleanup(process_id)
+
+        with patch.object(pm, "_is_process_alive", return_value=False), \
+             patch.object(pm, "_cleanup_dead_process", side_effect=patched_cleanup), \
+             patch("os.close"):
+            result = await pm.get_dead_process_info()
+
+        # Should only return original 2 dead processes (not the one added during iteration)
+        assert len(result) == 2
+        session_ids = [info[0] for info in result]
+        assert 1 in session_ids
+        assert 2 in session_ids
+
+    @pytest.mark.asyncio
+    async def test_concurrent_get_dead_process_info_and_create(self):
+        """Concurrent get_dead_process_info and process creation don't cause RuntimeError."""
+        pm = ProcessManager()
+
+        # Add initial processes
+        for i in range(5):
+            process = Process(id=f"gdpi{i}", pid=100 + i, fd=i, working_dir="/tmp")
+            pm._processes[f"gdpi{i}"] = process
+
+        with patch.object(pm, "_is_process_alive", return_value=True):  # All alive = no dead processes
+            async def info_task():
+                for _ in range(10):
+                    await pm.get_dead_process_info()
+                    await asyncio.sleep(0)
+
+            async def add_task():
+                for i in range(10):
+                    async with pm._lock:
+                        pm._processes[f"newdpi{i}"] = Process(
+                            id=f"newdpi{i}", pid=500 + i, fd=50 + i, working_dir="/tmp"
+                        )
+                    await asyncio.sleep(0)
+
+            # Should not raise RuntimeError
+            await asyncio.gather(info_task(), add_task())

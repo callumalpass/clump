@@ -500,11 +500,19 @@ class ProcessManager:
         return process
 
     async def list_processes(self) -> list[Process]:
-        """List all active processes, cleaning up dead ones."""
+        """List all active processes, cleaning up dead ones.
+
+        Thread-safe: Takes a snapshot of processes under lock to prevent
+        RuntimeError from dictionary modification during iteration.
+        """
         dead_processes = []
         alive_processes = []
 
-        for process_id, process in self._processes.items():
+        # Take a snapshot under lock to prevent dictionary modification during iteration
+        async with self._lock:
+            processes_snapshot = list(self._processes.items())
+
+        for process_id, process in processes_snapshot:
             if self._is_process_alive(process.pid):
                 alive_processes.append(process)
             else:
@@ -554,11 +562,18 @@ class ProcessManager:
 
         Returns list of (session_id, transcript, claude_session_id, working_dir, cli_type)
         for dead processes.
+
+        Thread-safe: Takes a snapshot of processes under lock to prevent
+        RuntimeError from dictionary modification during iteration.
         """
         dead_info = []
         dead_processes = []
 
-        for process_id, process in self._processes.items():
+        # Take a snapshot under lock to prevent dictionary modification during iteration
+        async with self._lock:
+            processes_snapshot = list(self._processes.items())
+
+        for process_id, process in processes_snapshot:
             if not self._is_process_alive(process.pid):
                 dead_info.append(
                     (
