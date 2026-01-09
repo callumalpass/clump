@@ -720,6 +720,52 @@ class TestBuildPromptFromTemplate:
         result = build_prompt_from_template(template, context)
         assert result == "Count: 123, Active: True"
 
+    def test_preserves_zero_value(self):
+        """Preserves zero as '0' instead of empty string.
+
+        This tests the fix for the bug where falsy values like 0 were
+        incorrectly replaced with empty string.
+        """
+        template = "Count: {{count}}"
+        context = {"count": 0}
+        result = build_prompt_from_template(template, context)
+        assert result == "Count: 0"
+
+    def test_preserves_false_value(self):
+        """Preserves False as 'False' instead of empty string.
+
+        This tests the fix for the bug where falsy values like False were
+        incorrectly replaced with empty string.
+        """
+        template = "Active: {{active}}"
+        context = {"active": False}
+        result = build_prompt_from_template(template, context)
+        assert result == "Active: False"
+
+    def test_preserves_empty_string_value(self):
+        """Preserves empty string as '' instead of being silently dropped.
+
+        This tests the fix for the bug where empty strings were treated
+        the same as None.
+        """
+        template = "Description: [{{desc}}]"
+        context = {"desc": ""}
+        result = build_prompt_from_template(template, context)
+        assert result == "Description: []"
+
+    def test_distinguishes_none_from_other_falsy_values(self):
+        """Ensures None is treated differently from other falsy values.
+
+        None -> empty string
+        0 -> '0'
+        False -> 'False'
+        '' -> ''
+        """
+        template = "a={{a}}, b={{b}}, c={{c}}, d={{d}}"
+        context = {"a": None, "b": 0, "c": False, "d": ""}
+        result = build_prompt_from_template(template, context)
+        assert result == "a=, b=0, c=False, d="
+
 
 class TestSchedulerServiceGetPrs:
     """Tests for SchedulerService._get_prs method."""

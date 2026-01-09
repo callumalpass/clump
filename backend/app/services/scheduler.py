@@ -394,11 +394,22 @@ def get_command_template(command_id: str, category: str, repo_path: str | None) 
 
 
 def build_prompt_from_template(template: str, context: dict) -> str:
-    """Build a prompt by substituting template variables."""
+    """Build a prompt by substituting template variables.
+
+    Args:
+        template: A string with {{placeholder}} style variables
+        context: A dict mapping placeholder names to values
+
+    Returns:
+        The template with placeholders replaced by their values.
+        None values are replaced with empty string.
+        Other falsy values (0, False, "") are converted to their string representation.
+    """
     result = template
     for key, value in context.items():
         placeholder = "{{" + key + "}}"
-        result = result.replace(placeholder, str(value) if value else "")
+        # Use 'is None' check instead of truthiness to preserve falsy values like 0, False, ""
+        result = result.replace(placeholder, "" if value is None else str(value))
     return result
 
 
