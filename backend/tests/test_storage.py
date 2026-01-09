@@ -2605,3 +2605,378 @@ class TestMetadataFallbackToGlobal:
 
         # Should get local value
         assert result.priority == "critical"
+
+
+class TestIssueMetadataSerialization:
+    """Tests for IssueMetadata to_dict() and from_dict() methods."""
+
+    def test_to_dict_includes_all_fields(self):
+        """to_dict() returns all fields."""
+        metadata = IssueMetadata(
+            issue_number=42,
+            status="in_progress",
+            tags=["backend", "urgent"],
+            priority="high",
+            difficulty="medium",
+            risk="low",
+            type="bug",
+            affected_areas=["auth", "api"],
+            ai_summary="Auth bug in login flow",
+            notes="Needs investigation",
+            root_cause="Token validation issue",
+            suggested_fix="Update token expiry check",
+            analyzed_at="2025-01-01T10:00:00Z",
+            analyzed_by="claude-sonnet-4",
+        )
+
+        result = metadata.to_dict()
+
+        assert result["issue_number"] == 42
+        assert result["status"] == "in_progress"
+        assert result["tags"] == ["backend", "urgent"]
+        assert result["priority"] == "high"
+        assert result["difficulty"] == "medium"
+        assert result["risk"] == "low"
+        assert result["type"] == "bug"
+        assert result["affected_areas"] == ["auth", "api"]
+        assert result["ai_summary"] == "Auth bug in login flow"
+        assert result["notes"] == "Needs investigation"
+        assert result["root_cause"] == "Token validation issue"
+        assert result["suggested_fix"] == "Update token expiry check"
+        assert result["analyzed_at"] == "2025-01-01T10:00:00Z"
+        assert result["analyzed_by"] == "claude-sonnet-4"
+
+    def test_to_dict_handles_none_fields(self):
+        """to_dict() includes None values for optional fields."""
+        metadata = IssueMetadata(issue_number=1)
+
+        result = metadata.to_dict()
+
+        assert result["issue_number"] == 1
+        assert result["status"] is None
+        assert result["tags"] == []
+        assert result["priority"] is None
+        assert result["difficulty"] is None
+        assert result["risk"] is None
+        assert result["type"] is None
+        assert result["affected_areas"] == []
+        assert result["ai_summary"] is None
+
+    def test_from_dict_parses_all_fields(self):
+        """from_dict() correctly parses all fields."""
+        data = {
+            "issue_number": 42,
+            "status": "open",
+            "tags": ["frontend"],
+            "priority": "critical",
+            "difficulty": "hard",
+            "risk": "high",
+            "type": "feature",
+            "affected_areas": ["ui", "ux"],
+            "ai_summary": "New feature request",
+            "notes": "Important feature",
+            "root_cause": None,
+            "suggested_fix": "Implement new UI component",
+            "analyzed_at": "2025-01-02T12:00:00Z",
+            "analyzed_by": "claude-opus-4",
+        }
+
+        result = IssueMetadata.from_dict(data)
+
+        assert result.issue_number == 42
+        assert result.status == "open"
+        assert result.tags == ["frontend"]
+        assert result.priority == "critical"
+        assert result.difficulty == "hard"
+        assert result.risk == "high"
+        assert result.type == "feature"
+        assert result.affected_areas == ["ui", "ux"]
+        assert result.ai_summary == "New feature request"
+        assert result.notes == "Important feature"
+        assert result.root_cause is None
+        assert result.suggested_fix == "Implement new UI component"
+        assert result.analyzed_at == "2025-01-02T12:00:00Z"
+        assert result.analyzed_by == "claude-opus-4"
+
+    def test_from_dict_handles_missing_fields(self):
+        """from_dict() uses defaults for missing fields."""
+        data = {"issue_number": 99}
+
+        result = IssueMetadata.from_dict(data)
+
+        assert result.issue_number == 99
+        assert result.status is None
+        assert result.tags == []
+        assert result.priority is None
+        assert result.difficulty is None
+        assert result.risk is None
+        assert result.type is None
+        assert result.affected_areas == []
+        assert result.ai_summary is None
+
+    def test_from_dict_handles_empty_dict(self):
+        """from_dict() handles empty dict with defaults."""
+        data = {}
+
+        result = IssueMetadata.from_dict(data)
+
+        assert result.issue_number == 0
+        assert result.tags == []
+        assert result.affected_areas == []
+
+    def test_round_trip_serialization(self):
+        """to_dict() and from_dict() are inverse operations."""
+        original = IssueMetadata(
+            issue_number=123,
+            status="completed",
+            tags=["done", "reviewed"],
+            priority="medium",
+            difficulty="easy",
+            risk="low",
+            type="refactor",
+            affected_areas=["core"],
+            ai_summary="Code cleanup",
+            notes="Minor refactoring",
+            root_cause=None,
+            suggested_fix=None,
+            analyzed_at="2025-01-03T08:00:00Z",
+            analyzed_by="claude-haiku",
+        )
+
+        serialized = original.to_dict()
+        deserialized = IssueMetadata.from_dict(serialized)
+
+        assert deserialized.issue_number == original.issue_number
+        assert deserialized.status == original.status
+        assert deserialized.tags == original.tags
+        assert deserialized.priority == original.priority
+        assert deserialized.difficulty == original.difficulty
+        assert deserialized.risk == original.risk
+        assert deserialized.type == original.type
+        assert deserialized.affected_areas == original.affected_areas
+        assert deserialized.ai_summary == original.ai_summary
+        assert deserialized.notes == original.notes
+        assert deserialized.root_cause == original.root_cause
+        assert deserialized.suggested_fix == original.suggested_fix
+        assert deserialized.analyzed_at == original.analyzed_at
+        assert deserialized.analyzed_by == original.analyzed_by
+
+    def test_from_dict_handles_extra_fields(self):
+        """from_dict() ignores extra/unknown fields."""
+        data = {
+            "issue_number": 1,
+            "priority": "high",
+            "unknown_field": "should be ignored",
+            "another_extra": 42,
+        }
+
+        result = IssueMetadata.from_dict(data)
+
+        assert result.issue_number == 1
+        assert result.priority == "high"
+        # Extra fields are ignored (no exception raised)
+
+
+class TestPRMetadataSerialization:
+    """Tests for PRMetadata to_dict() and from_dict() methods."""
+
+    def test_to_dict_includes_all_fields(self):
+        """to_dict() returns all fields."""
+        metadata = PRMetadata(
+            pr_number=101,
+            status="reviewing",
+            tags=["needs-review", "priority"],
+            risk="medium",
+            complexity="moderate",
+            review_priority="high",
+            security_concerns=["SQL injection risk"],
+            test_coverage="partial",
+            breaking_changes=True,
+            change_type="feature",
+            affected_areas=["api", "database"],
+            ai_summary="New API endpoint for users",
+            review_notes="Check input validation",
+            suggested_improvements="Add rate limiting",
+            analyzed_at="2025-01-01T10:00:00Z",
+            analyzed_by="claude-sonnet-4",
+        )
+
+        result = metadata.to_dict()
+
+        assert result["pr_number"] == 101
+        assert result["status"] == "reviewing"
+        assert result["tags"] == ["needs-review", "priority"]
+        assert result["risk"] == "medium"
+        assert result["complexity"] == "moderate"
+        assert result["review_priority"] == "high"
+        assert result["security_concerns"] == ["SQL injection risk"]
+        assert result["test_coverage"] == "partial"
+        assert result["breaking_changes"] is True
+        assert result["change_type"] == "feature"
+        assert result["affected_areas"] == ["api", "database"]
+        assert result["ai_summary"] == "New API endpoint for users"
+        assert result["review_notes"] == "Check input validation"
+        assert result["suggested_improvements"] == "Add rate limiting"
+        assert result["analyzed_at"] == "2025-01-01T10:00:00Z"
+        assert result["analyzed_by"] == "claude-sonnet-4"
+
+    def test_to_dict_handles_none_and_defaults(self):
+        """to_dict() includes None values and default values."""
+        metadata = PRMetadata(pr_number=1)
+
+        result = metadata.to_dict()
+
+        assert result["pr_number"] == 1
+        assert result["status"] is None
+        assert result["tags"] == []
+        assert result["risk"] is None
+        assert result["complexity"] is None
+        assert result["review_priority"] is None
+        assert result["security_concerns"] == []
+        assert result["test_coverage"] is None
+        assert result["breaking_changes"] is False
+        assert result["change_type"] is None
+        assert result["affected_areas"] == []
+
+    def test_from_dict_parses_all_fields(self):
+        """from_dict() correctly parses all fields."""
+        data = {
+            "pr_number": 202,
+            "status": "approved",
+            "tags": ["lgtm"],
+            "risk": "low",
+            "complexity": "simple",
+            "review_priority": "low",
+            "security_concerns": [],
+            "test_coverage": "good",
+            "breaking_changes": False,
+            "change_type": "bugfix",
+            "affected_areas": ["core"],
+            "ai_summary": "Minor bug fix",
+            "review_notes": "LGTM",
+            "suggested_improvements": None,
+            "analyzed_at": "2025-01-02T12:00:00Z",
+            "analyzed_by": "claude-opus-4",
+        }
+
+        result = PRMetadata.from_dict(data)
+
+        assert result.pr_number == 202
+        assert result.status == "approved"
+        assert result.tags == ["lgtm"]
+        assert result.risk == "low"
+        assert result.complexity == "simple"
+        assert result.review_priority == "low"
+        assert result.security_concerns == []
+        assert result.test_coverage == "good"
+        assert result.breaking_changes is False
+        assert result.change_type == "bugfix"
+        assert result.affected_areas == ["core"]
+        assert result.ai_summary == "Minor bug fix"
+        assert result.review_notes == "LGTM"
+        assert result.suggested_improvements is None
+        assert result.analyzed_at == "2025-01-02T12:00:00Z"
+        assert result.analyzed_by == "claude-opus-4"
+
+    def test_from_dict_handles_missing_fields(self):
+        """from_dict() uses defaults for missing fields."""
+        data = {"pr_number": 99}
+
+        result = PRMetadata.from_dict(data)
+
+        assert result.pr_number == 99
+        assert result.status is None
+        assert result.tags == []
+        assert result.risk is None
+        assert result.complexity is None
+        assert result.review_priority is None
+        assert result.security_concerns == []
+        assert result.test_coverage is None
+        assert result.breaking_changes is False
+        assert result.change_type is None
+        assert result.affected_areas == []
+
+    def test_from_dict_handles_empty_dict(self):
+        """from_dict() handles empty dict with defaults."""
+        data = {}
+
+        result = PRMetadata.from_dict(data)
+
+        assert result.pr_number == 0
+        assert result.tags == []
+        assert result.security_concerns == []
+        assert result.affected_areas == []
+        assert result.breaking_changes is False
+
+    def test_round_trip_serialization(self):
+        """to_dict() and from_dict() are inverse operations."""
+        original = PRMetadata(
+            pr_number=303,
+            status="merged",
+            tags=["merged", "deployed"],
+            risk="high",
+            complexity="complex",
+            review_priority="critical",
+            security_concerns=["auth bypass", "data leak"],
+            test_coverage="good",
+            breaking_changes=True,
+            change_type="feature",
+            affected_areas=["auth", "api", "frontend"],
+            ai_summary="Major auth overhaul",
+            review_notes="Extensive changes - careful review needed",
+            suggested_improvements="Consider splitting into smaller PRs",
+            analyzed_at="2025-01-03T08:00:00Z",
+            analyzed_by="claude-opus-4",
+        )
+
+        serialized = original.to_dict()
+        deserialized = PRMetadata.from_dict(serialized)
+
+        assert deserialized.pr_number == original.pr_number
+        assert deserialized.status == original.status
+        assert deserialized.tags == original.tags
+        assert deserialized.risk == original.risk
+        assert deserialized.complexity == original.complexity
+        assert deserialized.review_priority == original.review_priority
+        assert deserialized.security_concerns == original.security_concerns
+        assert deserialized.test_coverage == original.test_coverage
+        assert deserialized.breaking_changes == original.breaking_changes
+        assert deserialized.change_type == original.change_type
+        assert deserialized.affected_areas == original.affected_areas
+        assert deserialized.ai_summary == original.ai_summary
+        assert deserialized.review_notes == original.review_notes
+        assert deserialized.suggested_improvements == original.suggested_improvements
+        assert deserialized.analyzed_at == original.analyzed_at
+        assert deserialized.analyzed_by == original.analyzed_by
+
+    def test_from_dict_handles_extra_fields(self):
+        """from_dict() ignores extra/unknown fields."""
+        data = {
+            "pr_number": 1,
+            "risk": "low",
+            "unknown_field": "should be ignored",
+            "another_extra": {"nested": "data"},
+        }
+
+        result = PRMetadata.from_dict(data)
+
+        assert result.pr_number == 1
+        assert result.risk == "low"
+        # Extra fields are ignored (no exception raised)
+
+    def test_breaking_changes_default_false(self):
+        """breaking_changes defaults to False when missing."""
+        data = {"pr_number": 1}
+
+        result = PRMetadata.from_dict(data)
+
+        # Should be False by default, not None
+        assert result.breaking_changes is False
+
+    def test_breaking_changes_true_from_dict(self):
+        """breaking_changes can be set to True via from_dict."""
+        data = {"pr_number": 1, "breaking_changes": True}
+
+        result = PRMetadata.from_dict(data)
+
+        assert result.breaking_changes is True
