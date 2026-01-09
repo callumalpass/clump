@@ -186,12 +186,13 @@ async def get_stats():
         raise HTTPException(status_code=500, detail=f"Failed to read stats: {e}")
 
     # Parse daily activity
+    # Use `or 0` to handle None values (key exists but value is None)
     daily_activity = [
         DailyActivity(
             date=day["date"],
-            message_count=day.get("messageCount", 0),
-            session_count=day.get("sessionCount", 0),
-            tool_call_count=day.get("toolCallCount", 0),
+            message_count=day.get("messageCount", 0) or 0,
+            session_count=day.get("sessionCount", 0) or 0,
+            tool_call_count=day.get("toolCallCount", 0) or 0,
         )
         for day in data.get("dailyActivity", [])
     ]
@@ -211,10 +212,11 @@ async def get_stats():
     total_cost = 0.0
 
     for model, usage in model_usage_raw.items():
-        input_tokens = usage.get("inputTokens", 0)
-        output_tokens = usage.get("outputTokens", 0)
-        cache_read = usage.get("cacheReadInputTokens", 0)
-        cache_write = usage.get("cacheCreationInputTokens", 0)
+        # Use `or 0` to handle None values (key exists but value is None)
+        input_tokens = usage.get("inputTokens", 0) or 0
+        output_tokens = usage.get("outputTokens", 0) or 0
+        cache_read = usage.get("cacheReadInputTokens", 0) or 0
+        cache_write = usage.get("cacheCreationInputTokens", 0) or 0
 
         cost = calculate_cost(input_tokens, output_tokens, cache_read, cache_write, model)
         total_cost += cost
@@ -266,9 +268,9 @@ async def get_stats():
         longest_session_minutes = int(longest_session["duration"] / 1000 / 60)
 
     return StatsResponse(
-        last_computed_date=data.get("lastComputedDate", ""),
-        total_sessions=data.get("totalSessions", 0),
-        total_messages=data.get("totalMessages", 0),
+        last_computed_date=data.get("lastComputedDate") or "",
+        total_sessions=data.get("totalSessions", 0) or 0,
+        total_messages=data.get("totalMessages", 0) or 0,
         first_session_date=data.get("firstSessionDate"),
         longest_session_minutes=longest_session_minutes,
         daily_activity=daily_activity,

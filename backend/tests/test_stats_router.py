@@ -377,3 +377,440 @@ class TestModelPricingSync:
         for model, pricing in MODEL_PRICING.items():
             for key, value in pricing.items():
                 assert value > 0, f"Model {model} has non-positive {key}: {value}"
+
+
+class TestGetStatsEndpoint:
+    """Tests for the get_stats endpoint.
+
+    Tests focus on handling None values in JSON data to prevent
+    TypeError when values are None instead of missing.
+    """
+
+    # ==============================================
+    # None value handling tests for model usage
+    # ==============================================
+
+    def test_handles_none_input_tokens(self, tmp_path, monkeypatch):
+        """Handles None inputTokens in model usage."""
+        import json
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        stats_data = {
+            "lastComputedDate": "2024-01-01",
+            "totalSessions": 1,
+            "totalMessages": 1,
+            "dailyActivity": [],
+            "dailyModelTokens": [],
+            "modelUsage": {
+                "claude-sonnet-4-20250514": {
+                    "inputTokens": None,  # None value
+                    "outputTokens": 1000,
+                    "cacheReadInputTokens": 0,
+                    "cacheCreationInputTokens": 0,
+                }
+            },
+            "hourCounts": {},
+        }
+
+        stats_file = tmp_path / ".claude" / "stats-cache.json"
+        stats_file.parent.mkdir(parents=True)
+        stats_file.write_text(json.dumps(stats_data))
+
+        with patch("app.routers.stats.Path.home", return_value=tmp_path):
+            client = TestClient(app)
+            response = client.get("/api/stats")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["model_usage"][0]["input_tokens"] == 0
+
+    def test_handles_none_output_tokens(self, tmp_path, monkeypatch):
+        """Handles None outputTokens in model usage."""
+        import json
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        stats_data = {
+            "lastComputedDate": "2024-01-01",
+            "totalSessions": 1,
+            "totalMessages": 1,
+            "dailyActivity": [],
+            "dailyModelTokens": [],
+            "modelUsage": {
+                "claude-sonnet-4-20250514": {
+                    "inputTokens": 1000,
+                    "outputTokens": None,  # None value
+                    "cacheReadInputTokens": 0,
+                    "cacheCreationInputTokens": 0,
+                }
+            },
+            "hourCounts": {},
+        }
+
+        stats_file = tmp_path / ".claude" / "stats-cache.json"
+        stats_file.parent.mkdir(parents=True)
+        stats_file.write_text(json.dumps(stats_data))
+
+        with patch("app.routers.stats.Path.home", return_value=tmp_path):
+            client = TestClient(app)
+            response = client.get("/api/stats")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["model_usage"][0]["output_tokens"] == 0
+
+    def test_handles_none_cache_tokens(self, tmp_path, monkeypatch):
+        """Handles None cache tokens in model usage."""
+        import json
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        stats_data = {
+            "lastComputedDate": "2024-01-01",
+            "totalSessions": 1,
+            "totalMessages": 1,
+            "dailyActivity": [],
+            "dailyModelTokens": [],
+            "modelUsage": {
+                "claude-sonnet-4-20250514": {
+                    "inputTokens": 1000,
+                    "outputTokens": 500,
+                    "cacheReadInputTokens": None,  # None value
+                    "cacheCreationInputTokens": None,  # None value
+                }
+            },
+            "hourCounts": {},
+        }
+
+        stats_file = tmp_path / ".claude" / "stats-cache.json"
+        stats_file.parent.mkdir(parents=True)
+        stats_file.write_text(json.dumps(stats_data))
+
+        with patch("app.routers.stats.Path.home", return_value=tmp_path):
+            client = TestClient(app)
+            response = client.get("/api/stats")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["model_usage"][0]["cache_read_tokens"] == 0
+            assert data["model_usage"][0]["cache_write_tokens"] == 0
+
+    def test_handles_all_none_model_usage_fields(self, tmp_path, monkeypatch):
+        """Handles all None values in model usage."""
+        import json
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        stats_data = {
+            "lastComputedDate": "2024-01-01",
+            "totalSessions": 1,
+            "totalMessages": 1,
+            "dailyActivity": [],
+            "dailyModelTokens": [],
+            "modelUsage": {
+                "claude-sonnet-4-20250514": {
+                    "inputTokens": None,
+                    "outputTokens": None,
+                    "cacheReadInputTokens": None,
+                    "cacheCreationInputTokens": None,
+                }
+            },
+            "hourCounts": {},
+        }
+
+        stats_file = tmp_path / ".claude" / "stats-cache.json"
+        stats_file.parent.mkdir(parents=True)
+        stats_file.write_text(json.dumps(stats_data))
+
+        with patch("app.routers.stats.Path.home", return_value=tmp_path):
+            client = TestClient(app)
+            response = client.get("/api/stats")
+
+            assert response.status_code == 200
+            data = response.json()
+            model = data["model_usage"][0]
+            assert model["input_tokens"] == 0
+            assert model["output_tokens"] == 0
+            assert model["cache_read_tokens"] == 0
+            assert model["cache_write_tokens"] == 0
+            assert model["estimated_cost_usd"] == 0.0
+
+    # ==============================================
+    # None value handling tests for daily activity
+    # ==============================================
+
+    def test_handles_none_message_count_in_daily_activity(self, tmp_path, monkeypatch):
+        """Handles None messageCount in daily activity."""
+        import json
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        stats_data = {
+            "lastComputedDate": "2024-01-01",
+            "totalSessions": 1,
+            "totalMessages": 1,
+            "dailyActivity": [
+                {
+                    "date": "2024-01-01",
+                    "messageCount": None,  # None value
+                    "sessionCount": 5,
+                    "toolCallCount": 10,
+                }
+            ],
+            "dailyModelTokens": [],
+            "modelUsage": {},
+            "hourCounts": {},
+        }
+
+        stats_file = tmp_path / ".claude" / "stats-cache.json"
+        stats_file.parent.mkdir(parents=True)
+        stats_file.write_text(json.dumps(stats_data))
+
+        with patch("app.routers.stats.Path.home", return_value=tmp_path):
+            client = TestClient(app)
+            response = client.get("/api/stats")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["daily_activity"][0]["message_count"] == 0
+            assert data["daily_activity"][0]["session_count"] == 5
+            assert data["daily_activity"][0]["tool_call_count"] == 10
+
+    def test_handles_none_session_count_in_daily_activity(self, tmp_path, monkeypatch):
+        """Handles None sessionCount in daily activity."""
+        import json
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        stats_data = {
+            "lastComputedDate": "2024-01-01",
+            "totalSessions": 1,
+            "totalMessages": 1,
+            "dailyActivity": [
+                {
+                    "date": "2024-01-01",
+                    "messageCount": 100,
+                    "sessionCount": None,  # None value
+                    "toolCallCount": 10,
+                }
+            ],
+            "dailyModelTokens": [],
+            "modelUsage": {},
+            "hourCounts": {},
+        }
+
+        stats_file = tmp_path / ".claude" / "stats-cache.json"
+        stats_file.parent.mkdir(parents=True)
+        stats_file.write_text(json.dumps(stats_data))
+
+        with patch("app.routers.stats.Path.home", return_value=tmp_path):
+            client = TestClient(app)
+            response = client.get("/api/stats")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["daily_activity"][0]["message_count"] == 100
+            assert data["daily_activity"][0]["session_count"] == 0
+            assert data["daily_activity"][0]["tool_call_count"] == 10
+
+    def test_handles_all_none_daily_activity_counts(self, tmp_path, monkeypatch):
+        """Handles all None counts in daily activity."""
+        import json
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        stats_data = {
+            "lastComputedDate": "2024-01-01",
+            "totalSessions": 1,
+            "totalMessages": 1,
+            "dailyActivity": [
+                {
+                    "date": "2024-01-01",
+                    "messageCount": None,
+                    "sessionCount": None,
+                    "toolCallCount": None,
+                }
+            ],
+            "dailyModelTokens": [],
+            "modelUsage": {},
+            "hourCounts": {},
+        }
+
+        stats_file = tmp_path / ".claude" / "stats-cache.json"
+        stats_file.parent.mkdir(parents=True)
+        stats_file.write_text(json.dumps(stats_data))
+
+        with patch("app.routers.stats.Path.home", return_value=tmp_path):
+            client = TestClient(app)
+            response = client.get("/api/stats")
+
+            assert response.status_code == 200
+            data = response.json()
+            day = data["daily_activity"][0]
+            assert day["message_count"] == 0
+            assert day["session_count"] == 0
+            assert day["tool_call_count"] == 0
+
+    # ==============================================
+    # None value handling tests for top-level fields
+    # ==============================================
+
+    def test_handles_none_total_sessions(self, tmp_path, monkeypatch):
+        """Handles None totalSessions."""
+        import json
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        stats_data = {
+            "lastComputedDate": "2024-01-01",
+            "totalSessions": None,  # None value
+            "totalMessages": 100,
+            "dailyActivity": [],
+            "dailyModelTokens": [],
+            "modelUsage": {},
+            "hourCounts": {},
+        }
+
+        stats_file = tmp_path / ".claude" / "stats-cache.json"
+        stats_file.parent.mkdir(parents=True)
+        stats_file.write_text(json.dumps(stats_data))
+
+        with patch("app.routers.stats.Path.home", return_value=tmp_path):
+            client = TestClient(app)
+            response = client.get("/api/stats")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["total_sessions"] == 0
+
+    def test_handles_none_total_messages(self, tmp_path, monkeypatch):
+        """Handles None totalMessages."""
+        import json
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        stats_data = {
+            "lastComputedDate": "2024-01-01",
+            "totalSessions": 10,
+            "totalMessages": None,  # None value
+            "dailyActivity": [],
+            "dailyModelTokens": [],
+            "modelUsage": {},
+            "hourCounts": {},
+        }
+
+        stats_file = tmp_path / ".claude" / "stats-cache.json"
+        stats_file.parent.mkdir(parents=True)
+        stats_file.write_text(json.dumps(stats_data))
+
+        with patch("app.routers.stats.Path.home", return_value=tmp_path):
+            client = TestClient(app)
+            response = client.get("/api/stats")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["total_messages"] == 0
+
+    def test_handles_none_last_computed_date(self, tmp_path, monkeypatch):
+        """Handles None lastComputedDate."""
+        import json
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        stats_data = {
+            "lastComputedDate": None,  # None value
+            "totalSessions": 10,
+            "totalMessages": 100,
+            "dailyActivity": [],
+            "dailyModelTokens": [],
+            "modelUsage": {},
+            "hourCounts": {},
+        }
+
+        stats_file = tmp_path / ".claude" / "stats-cache.json"
+        stats_file.parent.mkdir(parents=True)
+        stats_file.write_text(json.dumps(stats_data))
+
+        with patch("app.routers.stats.Path.home", return_value=tmp_path):
+            client = TestClient(app)
+            response = client.get("/api/stats")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["last_computed_date"] == ""
+
+    # ==============================================
+    # Combined None value tests
+    # ==============================================
+
+    def test_handles_many_none_values(self, tmp_path, monkeypatch):
+        """Handles multiple None values across different fields."""
+        import json
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        stats_data = {
+            "lastComputedDate": None,
+            "totalSessions": None,
+            "totalMessages": None,
+            "dailyActivity": [
+                {
+                    "date": "2024-01-01",
+                    "messageCount": None,
+                    "sessionCount": None,
+                    "toolCallCount": None,
+                }
+            ],
+            "dailyModelTokens": [],
+            "modelUsage": {
+                "claude-sonnet-4-20250514": {
+                    "inputTokens": None,
+                    "outputTokens": None,
+                    "cacheReadInputTokens": None,
+                    "cacheCreationInputTokens": None,
+                }
+            },
+            "hourCounts": {},
+        }
+
+        stats_file = tmp_path / ".claude" / "stats-cache.json"
+        stats_file.parent.mkdir(parents=True)
+        stats_file.write_text(json.dumps(stats_data))
+
+        with patch("app.routers.stats.Path.home", return_value=tmp_path):
+            client = TestClient(app)
+            response = client.get("/api/stats")
+
+            assert response.status_code == 200
+            data = response.json()
+
+            # Check top-level fields
+            assert data["last_computed_date"] == ""
+            assert data["total_sessions"] == 0
+            assert data["total_messages"] == 0
+
+            # Check daily activity
+            day = data["daily_activity"][0]
+            assert day["message_count"] == 0
+            assert day["session_count"] == 0
+            assert day["tool_call_count"] == 0
+
+            # Check model usage
+            model = data["model_usage"][0]
+            assert model["input_tokens"] == 0
+            assert model["output_tokens"] == 0
+            assert model["cache_read_tokens"] == 0
+            assert model["cache_write_tokens"] == 0
+            assert model["estimated_cost_usd"] == 0.0
