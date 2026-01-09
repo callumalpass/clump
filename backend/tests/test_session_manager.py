@@ -1374,3 +1374,98 @@ class TestProcessManagerListProcessesThreadSafety:
 
             # Should not raise RuntimeError
             await asyncio.gather(info_task(), add_task())
+
+
+class TestProcessManagerGetProcessesSnapshot:
+    """Tests for the get_processes_snapshot method.
+
+    This method provides a thread-safe way to get a copy of all processes
+    without checking if they're alive (unlike list_processes).
+    """
+
+    @pytest.mark.asyncio
+    async def test_get_processes_snapshot_returns_copy(self):
+        """get_processes_snapshot returns a copy of processes list."""
+        pm = ProcessManager()
+        process1 = Process(id="snap1", pid=100, fd=1, working_dir="/tmp")
+        process2 = Process(id="snap2", pid=200, fd=2, working_dir="/tmp")
+        pm._processes["snap1"] = process1
+        pm._processes["snap2"] = process2
+
+        result = await pm.get_processes_snapshot()
+
+        assert len(result) == 2
+        assert process1 in result
+        assert process2 in result
+
+    @pytest.mark.asyncio
+    async def test_get_processes_snapshot_empty(self):
+        """get_processes_snapshot returns empty list when no processes."""
+        pm = ProcessManager()
+
+        result = await pm.get_processes_snapshot()
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_get_processes_snapshot_does_not_filter_dead(self):
+        """get_processes_snapshot includes all processes, even dead ones."""
+        pm = ProcessManager()
+        process = Process(id="dead1", pid=99999, fd=1, working_dir="/tmp")
+        pm._processes["dead1"] = process
+
+        # Even with a mock that says process is dead, snapshot includes it
+        with patch.object(pm, "_is_process_alive", return_value=False):
+            result = await pm.get_processes_snapshot()
+
+        assert len(result) == 1
+        assert process in result
+
+    @pytest.mark.asyncio
+    async def test_get_processes_snapshot_thread_safe(self):
+        """get_processes_snapshot is safe for concurrent access."""
+        pm = ProcessManager()
+
+        # Add initial processes
+        for i in range(5):
+            process = Process(id=f"ts{i}", pid=100 + i, fd=i, working_dir="/tmp")
+            pm._processes[f"ts{i}"] = process
+
+        async def snapshot_task():
+            for _ in range(20):
+                result = await pm.get_processes_snapshot()
+                # Result should be a valid list (not modified during iteration)
+                assert isinstance(result, list)
+                await asyncio.sleep(0)
+
+        async def modify_task():
+            for i in range(10):
+                async with pm._lock:
+                    pm._processes[f"new{i}"] = Process(
+                        id=f"new{i}", pid=500 + i, fd=50 + i, working_dir="/tmp"
+                    )
+                await asyncio.sleep(0)
+
+        # Should not raise RuntimeError: dictionary changed size during iteration
+        await asyncio.gather(snapshot_task(), modify_task())
+
+    @pytest.mark.asyncio
+    async def test_get_processes_snapshot_acquires_lock(self):
+        """get_processes_snapshot acquires lock to prevent race conditions."""
+        pm = ProcessManager()
+        process = Process(id="lock1", pid=100, fd=1, working_dir="/tmp")
+        pm._processes["lock1"] = process
+
+        lock_acquired = []
+
+        original_lock_acquire = pm._lock.acquire
+
+        async def track_lock_acquire():
+            lock_acquired.append(True)
+            return await original_lock_acquire()
+
+        with patch.object(pm._lock, "acquire", side_effect=track_lock_acquire):
+            await pm.get_processes_snapshot()
+
+        # Verify the lock was acquired at least once
+        assert len(lock_acquired) >= 1

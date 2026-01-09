@@ -489,7 +489,7 @@ def _build_metadata_response(
     return SessionMetadataResponse(session_id=session_id)
 
 
-def _get_pending_sessions(
+async def _get_pending_sessions(
     active_session_ids: set[str],
     discovered_session_ids: set[str],
     repo_path: Optional[str] = None,
@@ -503,10 +503,10 @@ def _get_pending_sessions(
     """
     pending = []
 
-    # Take a snapshot of processes to avoid RuntimeError from dictionary modification
-    # during iteration. The ProcessManager._processes dict can be modified by other
-    # coroutines (create_process, kill, _cleanup_dead_process) while we iterate.
-    processes_snapshot = list(process_manager.processes.values())
+    # Take a thread-safe snapshot of processes using the async method.
+    # This acquires the ProcessManager lock to prevent race conditions during
+    # dictionary iteration (create_process, kill, _cleanup_dead_process).
+    processes_snapshot = await process_manager.get_processes_snapshot()
     for proc in processes_snapshot:
         session_id = proc.claude_session_id
         if not session_id:
@@ -1137,7 +1137,7 @@ async def list_sessions(
         all_pending: list[SessionSummaryResponse] = []
         if is_active is None or is_active is True:
             # Pending sessions are always active, so only include if is_active filter allows
-            pending = _get_pending_sessions(active_session_ids, discovered_session_ids, repo_path)
+            pending = await _get_pending_sessions(active_session_ids, discovered_session_ids, repo_path)
             pending_headless = await _get_pending_headless_sessions(discovered_session_ids, repo_path)
             all_pending = pending + pending_headless
 
@@ -1192,7 +1192,7 @@ async def list_sessions(
         summaries = [_session_to_summary(s, active_session_ids) for s in sessions]
 
     # Add pending sessions (active processes without JSONL files yet)
-    pending = _get_pending_sessions(active_session_ids, discovered_session_ids, repo_path)
+    pending = await _get_pending_sessions(active_session_ids, discovered_session_ids, repo_path)
     summaries.extend(pending)
 
     # Add pending headless sessions (running in database but no JSONL file yet)

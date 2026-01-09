@@ -129,6 +129,19 @@ class ProcessManager:
     def processes(self) -> dict[str, Process]:
         return self._processes
 
+    async def get_processes_snapshot(self) -> list[Process]:
+        """Get a thread-safe snapshot of all processes.
+
+        Returns a copy of the process list to prevent race conditions when
+        iterating over processes while other coroutines may be modifying
+        the dictionary.
+
+        Note: This does NOT check if processes are alive. Use list_processes()
+        if you need alive-only processes with cleanup.
+        """
+        async with self._lock:
+            return list(self._processes.values())
+
     async def create_process(
         self,
         working_dir: str,

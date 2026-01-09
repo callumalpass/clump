@@ -144,6 +144,7 @@ class TestListSessions:
         with patch("app.routers.sessions.discover_all_sessions", return_value=[]), \
              patch("app.routers.sessions.process_manager") as mock_pm:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
 
             response = client.get("/sessions")
 
@@ -158,6 +159,7 @@ class TestListSessions:
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             mock_scan.return_value = {
                 "title": "First user message",
                 "model": "claude-3-opus",
@@ -187,6 +189,7 @@ class TestListSessions:
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
 
             # Filter starred=true should return our session
@@ -205,6 +208,7 @@ class TestListSessions:
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
 
             # has_entities=true should return our session (has issue #42)
@@ -223,6 +227,7 @@ class TestListSessions:
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             mock_scan.return_value = {"title": "Test Session", "model": None, "start_time": None, "end_time": None, "message_count": 0}
 
             # Search for existing title
@@ -253,6 +258,7 @@ class TestListSessions:
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
 
             response = client.get("/sessions")
@@ -284,6 +290,7 @@ class TestGetSession:
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions.parse_transcript_file", return_value=mock_parsed_transcript):
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
 
             response = client.get("/sessions/test-uuid-1234")
 
@@ -305,6 +312,7 @@ class TestGetSession:
         with patch("app.routers.sessions.discover_all_sessions", return_value=[]), \
              patch("app.routers.sessions.process_manager") as mock_pm:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
 
             response = client.get("/sessions/nonexistent-uuid")
 
@@ -320,6 +328,7 @@ class TestGetSession:
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions.parse_transcript_file", return_value=mock_parsed_transcript):
             mock_pm.list_processes = AsyncMock(return_value=[mock_process])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[mock_process])
 
             response = client.get("/sessions/test-uuid-1234")
 
@@ -332,6 +341,7 @@ class TestGetSession:
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions.parse_transcript_file", return_value=None):
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
 
             response = client.get("/sessions/test-uuid-1234")
 
@@ -909,20 +919,22 @@ class TestGetPendingSessions:
         yield
         _session_cache.clear()
 
-    def test_no_pending_sessions(self):
+    @pytest.mark.asyncio
+    async def test_no_pending_sessions(self):
         """Test when there are no pending sessions."""
         # Need to patch where process_manager is imported inside the function
         with patch("app.routers.sessions.process_manager") as mock_pm:
-            mock_pm.processes = {}
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
 
-            result = _get_pending_sessions(
+            result = await _get_pending_sessions(
                 active_session_ids=set(),
                 discovered_session_ids=set(),
             )
 
             assert result == []
 
-    def test_pending_session_no_jsonl_yet(self):
+    @pytest.mark.asyncio
+    async def test_pending_session_no_jsonl_yet(self):
         """Test a session that's active but has no JSONL file."""
         mock_process = MagicMock()
         mock_process.claude_session_id = "pending-uuid"
@@ -935,9 +947,9 @@ class TestGetPendingSessions:
              patch("app.routers.sessions.encode_path", return_value="-home-user-projects-myapp"), \
              patch("app.routers.sessions.get_session_metadata", return_value=None), \
              patch("app.routers.sessions._get_repo_name", return_value="user/myapp"):
-            mock_pm.processes = {"proc-1": mock_process}
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[mock_process])
 
-            result = _get_pending_sessions(
+            result = await _get_pending_sessions(
                 active_session_ids={"pending-uuid"},
                 discovered_session_ids=set(),  # Not yet discovered
             )
@@ -947,23 +959,25 @@ class TestGetPendingSessions:
             assert result[0].is_active is True
             assert result[0].title == "Starting..."
 
-    def test_pending_session_already_discovered(self):
+    @pytest.mark.asyncio
+    async def test_pending_session_already_discovered(self):
         """Test that already discovered sessions are not duplicated."""
         mock_process = MagicMock()
         mock_process.claude_session_id = "existing-uuid"
         mock_process.working_dir = "/home/user/projects/myapp"
 
         with patch("app.routers.sessions.process_manager") as mock_pm:
-            mock_pm.processes = {"proc-1": mock_process}
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[mock_process])
 
-            result = _get_pending_sessions(
+            result = await _get_pending_sessions(
                 active_session_ids={"existing-uuid"},
                 discovered_session_ids={"existing-uuid"},  # Already discovered
             )
 
             assert result == []
 
-    def test_pending_session_with_metadata(self):
+    @pytest.mark.asyncio
+    async def test_pending_session_with_metadata(self):
         """Test pending session uses saved metadata."""
         mock_process = MagicMock()
         mock_process.claude_session_id = "pending-uuid"
@@ -983,9 +997,9 @@ class TestGetPendingSessions:
              patch("app.routers.sessions.encode_path", return_value="-home-user-projects-myapp"), \
              patch("app.routers.sessions.get_session_metadata", return_value=mock_metadata), \
              patch("app.routers.sessions._get_repo_name", return_value="user/myapp"):
-            mock_pm.processes = {"proc-1": mock_process}
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[mock_process])
 
-            result = _get_pending_sessions(
+            result = await _get_pending_sessions(
                 active_session_ids={"pending-uuid"},
                 discovered_session_ids=set(),
             )
@@ -995,10 +1009,11 @@ class TestGetPendingSessions:
             assert result[0].starred is True
             assert len(result[0].entities) == 1
 
-    def test_pending_session_takes_snapshot_of_processes(self):
-        """Test that _get_pending_sessions takes a snapshot of processes.
+    @pytest.mark.asyncio
+    async def test_pending_session_takes_snapshot_of_processes(self):
+        """Test that _get_pending_sessions uses thread-safe snapshot of processes.
 
-        This ensures the function is safe from RuntimeError when the processes
+        This ensures the function is safe from race conditions when the processes
         dictionary is modified concurrently during iteration (e.g., by create_process,
         kill, or _cleanup_dead_process in other coroutines).
         """
@@ -1018,13 +1033,12 @@ class TestGetPendingSessions:
              patch("app.routers.sessions.encode_path", return_value="-path-to-repo"), \
              patch("app.routers.sessions.get_session_metadata", return_value=None), \
              patch("app.routers.sessions._get_repo_name", return_value="user/repo"):
-            # Set up the processes dict
-            mock_pm.processes = {"proc-1": mock_process1, "proc-2": mock_process2}
+            # get_processes_snapshot returns a thread-safe copy of processes
+            mock_pm.get_processes_snapshot = AsyncMock(
+                return_value=[mock_process1, mock_process2]
+            )
 
-            # The key behavior: we take a snapshot via list(), so even if
-            # the dict is modified during iteration, we're iterating over
-            # our copy and won't get RuntimeError
-            result = _get_pending_sessions(
+            result = await _get_pending_sessions(
                 active_session_ids={"uuid-1", "uuid-2"},
                 discovered_session_ids=set(),
             )
@@ -1035,7 +1049,8 @@ class TestGetPendingSessions:
             assert "uuid-1" in session_ids
             assert "uuid-2" in session_ids
 
-    def test_pending_session_repo_path_filter(self):
+    @pytest.mark.asyncio
+    async def test_pending_session_repo_path_filter(self):
         """Test filtering pending sessions by repo_path."""
         mock_process1 = MagicMock()
         mock_process1.claude_session_id = "uuid-1"
@@ -1053,12 +1068,14 @@ class TestGetPendingSessions:
              patch("app.routers.sessions.encode_path") as mock_encode, \
              patch("app.routers.sessions.get_session_metadata", return_value=None), \
              patch("app.routers.sessions._get_repo_name", return_value="user/repo"):
-            mock_pm.processes = {"proc-1": mock_process1, "proc-2": mock_process2}
+            mock_pm.get_processes_snapshot = AsyncMock(
+                return_value=[mock_process1, mock_process2]
+            )
             # encode_path returns encoded form of the path
             mock_encode.side_effect = lambda p: p.replace("/", "-")
 
             # Filter by repo_path
-            result = _get_pending_sessions(
+            result = await _get_pending_sessions(
                 active_session_ids={"uuid-1", "uuid-2"},
                 discovered_session_ids=set(),
                 repo_path="/path/to/repo1",
@@ -2155,6 +2172,7 @@ class TestKillSession:
              patch("app.routers.sessions.event_manager") as mock_events, \
              patch("app.routers.sessions.invalidate_session_cache") as mock_invalidate:
             mock_pm.list_processes = AsyncMock(return_value=[mock_process])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[mock_process])
             mock_pm.kill = AsyncMock(return_value=True)
             mock_events.emit = AsyncMock()
 
@@ -2176,7 +2194,8 @@ class TestKillSession:
              patch("app.services.headless_analyzer.headless_analyzer") as mock_headless, \
              patch("app.routers.sessions.event_manager") as mock_events, \
              patch("app.routers.sessions.invalidate_session_cache") as mock_invalidate:
-            mock_pm.list_processes = AsyncMock(return_value=[])  # No PTY processes
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])  # No PTY processes
             mock_headless.cancel = AsyncMock(return_value=True)
             mock_events.emit = AsyncMock()
 
@@ -2206,6 +2225,7 @@ class TestKillSession:
              patch("app.routers.sessions.event_manager") as mock_events, \
              patch("app.routers.sessions.invalidate_session_cache") as mock_invalidate:
             mock_pm.list_processes = AsyncMock(return_value=[mock_process])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[mock_process])
             mock_pm.kill = AsyncMock(return_value=True)
             mock_headless.cancel = AsyncMock(return_value=True)
             mock_events.emit = AsyncMock()
@@ -2225,7 +2245,8 @@ class TestKillSession:
              patch("app.services.headless_analyzer.headless_analyzer") as mock_headless, \
              patch("app.routers.sessions.event_manager") as mock_events, \
              patch("app.routers.sessions.invalidate_session_cache") as mock_invalidate:
-            mock_pm.list_processes = AsyncMock(return_value=[])  # No PTY processes
+            mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])  # No PTY processes
             mock_headless.cancel = AsyncMock(return_value=False)  # Not a headless session
             mock_events.emit = AsyncMock()
 
@@ -2252,6 +2273,7 @@ class TestKillSession:
              patch("app.routers.sessions.event_manager") as mock_events, \
              patch("app.routers.sessions.invalidate_session_cache"):
             mock_pm.list_processes = AsyncMock(return_value=[mock_process])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[mock_process])
             mock_pm.kill = AsyncMock(return_value=True)
             mock_events.emit = AsyncMock()
 
@@ -2282,6 +2304,7 @@ class TestKillSession:
              patch("app.services.headless_analyzer.headless_analyzer") as mock_headless, \
              patch("app.routers.sessions.event_manager") as mock_events:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             mock_headless.cancel = AsyncMock(return_value=False)
             mock_events.emit = AsyncMock()
 
@@ -2310,6 +2333,7 @@ class TestKillSession:
              patch("app.routers.sessions.event_manager") as mock_events, \
              patch("app.routers.sessions.invalidate_session_cache"):
             mock_pm.list_processes = AsyncMock(return_value=[matching_process, other_process])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[matching_process, other_process])
             mock_pm.kill = AsyncMock(return_value=True)
             mock_headless.cancel = AsyncMock(return_value=False)
             mock_events.emit = AsyncMock()
@@ -2382,10 +2406,11 @@ class TestListSessionsFastPathPendingFiltering:
 
         with patch("app.routers.sessions.discover_all_sessions", return_value=[starred_session]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
-             patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
+             patch("app.routers.sessions._get_pending_sessions", new_callable=AsyncMock) as mock_pending, \
              patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             # Return a pending session that is NOT starred
             mock_pending.return_value = [self._make_pending_session("pending-unstarred", starred=False)]
             mock_pending_headless.return_value = []
@@ -2422,10 +2447,11 @@ class TestListSessionsFastPathPendingFiltering:
 
         with patch("app.routers.sessions.discover_all_sessions", return_value=[unstarred_session]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
-             patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
+             patch("app.routers.sessions._get_pending_sessions", new_callable=AsyncMock) as mock_pending, \
              patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             # Return a pending session that IS starred
             mock_pending.return_value = [self._make_pending_session("pending-starred", starred=True)]
             mock_pending_headless.return_value = []
@@ -2461,10 +2487,11 @@ class TestListSessionsFastPathPendingFiltering:
 
         with patch("app.routers.sessions.discover_all_sessions", return_value=[session_with_entities]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
-             patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
+             patch("app.routers.sessions._get_pending_sessions", new_callable=AsyncMock) as mock_pending, \
              patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             # Return a pending session with NO entities
             mock_pending.return_value = [self._make_pending_session("pending-no-entities", entities=[])]
             mock_pending_headless.return_value = []
@@ -2500,10 +2527,11 @@ class TestListSessionsFastPathPendingFiltering:
 
         with patch("app.routers.sessions.discover_all_sessions", return_value=[session_without_entities]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
-             patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
+             patch("app.routers.sessions._get_pending_sessions", new_callable=AsyncMock) as mock_pending, \
              patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             # Return a pending session WITH entities
             mock_pending.return_value = [self._make_pending_session("pending-with-entities", entities=[42])]
             mock_pending_headless.return_value = []
@@ -2534,10 +2562,11 @@ class TestListSessionsFastPathPendingFiltering:
 
         with patch("app.routers.sessions.discover_all_sessions", return_value=[inactive_session]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
-             patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
+             patch("app.routers.sessions._get_pending_sessions", new_callable=AsyncMock) as mock_pending, \
              patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             # Pending sessions are always active - but _get_pending_sessions won't be called
             # because is_active=False should skip pending sessions entirely
             mock_pending.return_value = [self._make_pending_session("pending-active")]
@@ -2573,10 +2602,11 @@ class TestListSessionsFastPathPendingFiltering:
 
         with patch("app.routers.sessions.discover_all_sessions", return_value=[active_session]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
-             patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
+             patch("app.routers.sessions._get_pending_sessions", new_callable=AsyncMock) as mock_pending, \
              patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[mock_process])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[mock_process])
             # Pending session
             mock_pending.return_value = [self._make_pending_session("pending-session")]
             mock_pending_headless.return_value = []
@@ -2612,10 +2642,11 @@ class TestListSessionsFastPathPendingFiltering:
 
         with patch("app.routers.sessions.discover_all_sessions", return_value=sessions), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
-             patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
+             patch("app.routers.sessions._get_pending_sessions", new_callable=AsyncMock) as mock_pending, \
              patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             # Return 2 pending sessions: 1 starred, 1 not starred
             mock_pending.return_value = [
                 self._make_pending_session("pending-starred", starred=True),
@@ -2651,10 +2682,11 @@ class TestListSessionsFastPathPendingFiltering:
 
         with patch("app.routers.sessions.discover_all_sessions", return_value=[session]), \
              patch("app.routers.sessions.process_manager") as mock_pm, \
-             patch("app.routers.sessions._get_pending_sessions") as mock_pending, \
+             patch("app.routers.sessions._get_pending_sessions", new_callable=AsyncMock) as mock_pending, \
              patch("app.routers.sessions._get_pending_headless_sessions") as mock_pending_headless, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             # Return pending sessions with various combinations
             mock_pending.return_value = [
                 # Starred but no entities - should be filtered out by has_entities
@@ -3550,6 +3582,7 @@ class TestListSessionsDateFiltering:
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
 
             response = client.get("/sessions?date_from=2024-01-15")
@@ -3575,6 +3608,7 @@ class TestListSessionsDateFiltering:
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
 
             response = client.get("/sessions?date_to=2024-01-15")
@@ -3602,6 +3636,7 @@ class TestListSessionsDateFiltering:
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
 
             response = client.get("/sessions?date_from=2024-01-10&date_to=2024-01-20")
@@ -3628,6 +3663,7 @@ class TestListSessionsDateFiltering:
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
 
             response = client.get("/sessions?date_from=2024-01-15")
@@ -3649,6 +3685,7 @@ class TestListSessionsDateFiltering:
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
 
             response = client.get("/sessions?date_to=2024-01-15")
@@ -3670,6 +3707,7 @@ class TestListSessionsDateFiltering:
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
 
             response = client.get("/sessions?date_from=invalid-date")
@@ -3690,6 +3728,7 @@ class TestListSessionsDateFiltering:
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
 
             response = client.get("/sessions?date_to=not-a-date")
@@ -3710,6 +3749,7 @@ class TestListSessionsDateFiltering:
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
 
             # Filter for dates after all sessions
@@ -3771,6 +3811,7 @@ class TestListSessionsDateFiltering:
              patch("app.routers.sessions.process_manager") as mock_pm, \
              patch("app.routers.sessions._quick_scan_transcript") as mock_scan:
             mock_pm.list_processes = AsyncMock(return_value=[])
+            mock_pm.get_processes_snapshot = AsyncMock(return_value=[])
             mock_scan.return_value = {"title": None, "model": None, "start_time": None, "end_time": None, "message_count": 0}
 
             # Filter for starred sessions after 2024-01-15
