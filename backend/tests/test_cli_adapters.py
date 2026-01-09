@@ -1,5 +1,6 @@
 """Tests for CLI adapters (Claude, Gemini, Codex)."""
 
+import json
 import pytest
 from pathlib import Path
 from unittest.mock import patch
@@ -1186,3 +1187,211 @@ class TestCodexAdapterExtractSessionInfoNoneHandling:
         }
         info = adapter.extract_session_info(data)
         assert info.end_time == "2025-01-01T00:03:00Z"
+
+
+class TestCodexAdapterFindSessionsErrorHandling:
+    """Tests for CodexAdapter.find_sessions_for_repo error handling and logging.
+
+    These tests verify that:
+    1. JSON decode errors are logged at debug level (common with malformed files)
+    2. OS errors are logged at warning level (permission issues, etc.)
+    3. The method continues processing other files after errors
+    """
+
+    @pytest.fixture
+    def adapter(self):
+        return CodexAdapter()
+
+    def test_logs_json_decode_error_at_debug_level(self, adapter, tmp_path, monkeypatch, caplog):
+        """JSON decode errors from parse_session_file are logged at debug level.
+
+        Note: parse_session_file handles per-line JSON errors internally for JSONL files.
+        This test verifies logging when the method itself raises JSONDecodeError, which can
+        happen if we mock it to do so (simulating a future scenario or corrupted file).
+        """
+        import logging
+
+        # Create directory structure
+        sessions_dir = tmp_path / ".codex" / "sessions" / "2026" / "01" / "09"
+        sessions_dir.mkdir(parents=True)
+
+        # Create session file
+        session_file = sessions_dir / "test.jsonl"
+        session_file.write_text('{"type": "session_meta"}\n')
+
+        # Mock parse_session_file to raise JSONDecodeError (simulating a corrupted file)
+        def mock_parse_that_raises(file_path):
+            raise json.JSONDecodeError("Test error", "doc", 0)
+
+        monkeypatch.setattr(
+            adapter,
+            "get_sessions_dir",
+            lambda repo_path: tmp_path / ".codex" / "sessions"
+        )
+        monkeypatch.setattr(adapter, "parse_session_file", mock_parse_that_raises)
+
+        with caplog.at_level(logging.DEBUG):
+            result = adapter.find_sessions_for_repo("/any/path")
+
+        # Should log the error at debug level
+        assert any(
+            "Skipping malformed Codex session file" in record.message
+            and record.levelno == logging.DEBUG
+            for record in caplog.records
+        )
+        # Should return empty list (no valid sessions)
+        assert result == []
+
+    def test_continues_after_json_error(self, adapter, tmp_path, monkeypatch):
+        """Continues processing after encountering invalid JSON."""
+        import json
+
+        # Create directory structure
+        sessions_dir = tmp_path / ".codex" / "sessions" / "2026" / "01" / "09"
+        sessions_dir.mkdir(parents=True)
+
+        # Create valid test path
+        test_path = tmp_path / "my-project"
+        test_path.mkdir(parents=True, exist_ok=True)
+        resolved_path = str(test_path.resolve())
+
+        # Create invalid session file
+        invalid_session = sessions_dir / "invalid.jsonl"
+        invalid_session.write_text("not json\n")
+
+        # Create valid session file that matches
+        valid_session = sessions_dir / "valid.jsonl"
+        valid_session.write_text(
+            f'{{"type": "session_meta", "payload": {{"cwd": "{resolved_path}"}}}}\n'
+        )
+
+        # Monkey-patch get_sessions_dir
+        monkeypatch.setattr(
+            adapter,
+            "get_sessions_dir",
+            lambda repo_path: tmp_path / ".codex" / "sessions"
+        )
+
+        result = adapter.find_sessions_for_repo(str(test_path))
+
+        # Should still find the valid session
+        assert len(result) == 1
+        assert result[0] == valid_session
+
+    def test_logs_os_error_at_warning_level(self, adapter, tmp_path, monkeypatch, caplog):
+        """OS errors (permissions, etc.) are logged at warning level."""
+        import logging
+
+        # Create directory structure
+        sessions_dir = tmp_path / ".codex" / "sessions" / "2026" / "01" / "09"
+        sessions_dir.mkdir(parents=True)
+
+        # Create session file
+        session_file = sessions_dir / "test.jsonl"
+        session_file.write_text('{"type": "session_meta", "payload": {}}\n')
+
+        # Mock parse_session_file to raise OSError
+        def mock_parse_that_raises(file_path):
+            raise OSError("Permission denied")
+
+        monkeypatch.setattr(
+            adapter,
+            "get_sessions_dir",
+            lambda repo_path: tmp_path / ".codex" / "sessions"
+        )
+        monkeypatch.setattr(adapter, "parse_session_file", mock_parse_that_raises)
+
+        with caplog.at_level(logging.WARNING):
+            result = adapter.find_sessions_for_repo("/any/path")
+
+        # Should log the error at warning level
+        assert any(
+            "Failed to read Codex session file" in record.message
+            and record.levelno == logging.WARNING
+            for record in caplog.records
+        )
+        assert result == []
+
+
+class TestGeminiAdapterResumeIdErrorHandling:
+    """Tests for GeminiAdapter.get_resume_id_from_file error handling and logging.
+
+    These tests verify that:
+    1. JSON decode errors are logged at debug level
+    2. OS errors are logged at warning level
+    3. The method falls back to filename-based ID extraction
+    """
+
+    @pytest.fixture
+    def adapter(self):
+        return GeminiAdapter()
+
+    def test_logs_json_decode_error_at_debug_level(self, adapter, tmp_path, caplog):
+        """JSON decode errors are logged at debug level."""
+        import logging
+
+        # Create invalid session file
+        session_file = tmp_path / "invalid.json"
+        session_file.write_text("not valid json")
+
+        with caplog.at_level(logging.DEBUG):
+            result = adapter.get_resume_id_from_file(session_file, "session-2025-12-15T21-28-a51b3ff5")
+
+        # Should log the error
+        assert any(
+            "Failed to parse Gemini session file" in record.message
+            and record.levelno == logging.DEBUG
+            for record in caplog.records
+        )
+        # Should fall back to filename extraction
+        assert result == "a51b3ff5"
+
+    def test_logs_os_error_at_warning_level(self, adapter, tmp_path, monkeypatch, caplog):
+        """OS errors are logged at warning level."""
+        import logging
+
+        # Create nonexistent path
+        session_file = tmp_path / "nonexistent" / "session.json"
+
+        with caplog.at_level(logging.WARNING):
+            result = adapter.get_resume_id_from_file(session_file, "session-2025-12-15T21-28-abc123")
+
+        # Should log the error at warning level
+        assert any(
+            "Failed to read Gemini session file" in record.message
+            and record.levelno == logging.WARNING
+            for record in caplog.records
+        )
+        # Should fall back to filename extraction
+        assert result == "abc123"
+
+    def test_returns_internal_session_id_when_available(self, adapter, tmp_path):
+        """Returns internal session ID from file when available."""
+        import json
+
+        # Create valid session file with internal session ID
+        session_file = tmp_path / "session.json"
+        session_file.write_text(json.dumps({
+            "sessionId": "full-uuid-from-file-12345678",
+            "messages": []
+        }))
+
+        result = adapter.get_resume_id_from_file(session_file, "session-2025-12-15T21-28-short")
+
+        # Should return the internal session ID, not the filename-based one
+        assert result == "full-uuid-from-file-12345678"
+
+    def test_falls_back_when_no_internal_id(self, adapter, tmp_path):
+        """Falls back to filename extraction when internal ID is missing."""
+        import json
+
+        # Create valid session file without internal session ID
+        session_file = tmp_path / "session.json"
+        session_file.write_text(json.dumps({
+            "messages": []
+        }))
+
+        result = adapter.get_resume_id_from_file(session_file, "session-2025-12-15T21-28-fallback")
+
+        # Should fall back to filename extraction
+        assert result == "fallback"

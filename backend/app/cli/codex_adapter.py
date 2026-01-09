@@ -5,6 +5,7 @@ Handles command building and session management for OpenAI's Codex CLI.
 """
 
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
@@ -17,6 +18,8 @@ from app.cli.base import (
     SessionInfo,
 )
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class CodexAdapter(CLIAdapter):
@@ -338,8 +341,16 @@ class CodexAdapter(CLIAdapter):
                 data = self.parse_session_file(session_file)
                 if data.get("cwd") == normalized_path:
                     matching.append(session_file)
-            except Exception:
-                continue
+            except json.JSONDecodeError as e:
+                logger.debug(
+                    "Skipping malformed Codex session file %s: %s",
+                    session_file, e
+                )
+            except OSError as e:
+                logger.warning(
+                    "Failed to read Codex session file %s: %s",
+                    session_file, e
+                )
 
         return matching
 

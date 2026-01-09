@@ -6,6 +6,7 @@ Handles command building and session management for Google's Gemini CLI.
 
 import hashlib
 import json
+import logging
 from pathlib import Path
 from typing import Any, Optional
 
@@ -17,6 +18,8 @@ from app.cli.base import (
     SessionInfo,
 )
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class GeminiAdapter(CLIAdapter):
@@ -297,8 +300,16 @@ class GeminiAdapter(CLIAdapter):
             internal_id = data.get("session_id")
             if internal_id:
                 return internal_id
-        except Exception:
-            pass
+        except json.JSONDecodeError as e:
+            logger.debug(
+                "Failed to parse Gemini session file %s for resume ID: %s",
+                file_path, e
+            )
+        except OSError as e:
+            logger.warning(
+                "Failed to read Gemini session file %s: %s",
+                file_path, e
+            )
 
         # Fallback to extracting from filename
         return self.get_resume_session_id(session_id)
