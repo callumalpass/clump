@@ -601,3 +601,264 @@ class TestEventManagerThreadSafety:
         assert "callback1_start" in call_order
         assert "callback1_end" in call_order
         assert "callback2" in call_order
+
+
+class TestEventManagerDebounceEdgeCases:
+    """Tests for edge cases in debounced counts emission."""
+
+    @pytest.mark.asyncio
+    async def test_cancelled_task_propagates_error(self):
+        """Cancelled debounce task properly re-raises CancelledError.
+
+        This ensures proper task cancellation semantics - suppressing CancelledError
+        can lead to subtle bugs where tasks appear to complete successfully but
+        actually didn't do their work.
+        """
+        manager = EventManager()
+
+        await manager.emit_counts_changed({"repo1": {"total": 1}})
+        task = manager._counts_task
+        assert task is not None
+
+        # Cancel the task
+        task.cancel()
+
+        # The task should raise CancelledError when awaited
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    @pytest.mark.asyncio
+    async def test_rapid_successive_emissions(self):
+        """Rapid successive emissions only result in one final emit."""
+        manager = EventManager()
+        callback = AsyncMock()
+        await manager.subscribe(callback)
+
+        # Emit 10 times rapidly
+        for i in range(10):
+            await manager.emit_counts_changed({"repo1": {"total": i}})
+
+        # Wait for debounce
+        await asyncio.sleep(0.15)
+
+        # Should only be called once with the last value
+        assert callback.call_count == 1
+        event = callback.call_args[0][0]
+        assert event.data["counts"]["repo1"]["total"] == 9
+
+    @pytest.mark.asyncio
+    async def test_pending_counts_preserved_after_cancellation(self):
+        """Pending counts are preserved when a task is cancelled.
+
+        When a task is cancelled by emit_counts_changed, the new task
+        should still have access to the (updated) pending counts.
+        """
+        manager = EventManager()
+        callback = AsyncMock()
+        await manager.subscribe(callback)
+
+        # First emission
+        await manager.emit_counts_changed({"repo1": {"total": 1}})
+
+        # Second emission (cancels first task)
+        await manager.emit_counts_changed({"repo1": {"total": 2}})
+
+        # Pending counts should be the newer value
+        assert manager._pending_counts == {"repo1": {"total": 2}}
+
+        # Wait for final emit
+        await asyncio.sleep(0.15)
+
+        # Should emit the latest value
+        event = callback.call_args[0][0]
+        assert event.data["counts"]["repo1"]["total"] == 2
+
+    @pytest.mark.asyncio
+    async def test_no_emit_after_cancelled_without_replacement(self):
+        """A cancelled task without replacement does not emit.
+
+        If a debounce task is cancelled externally (not via emit_counts_changed),
+        it should not emit anything. This tests the explicit cancellation path.
+        """
+        manager = EventManager()
+        callback = AsyncMock()
+        await manager.subscribe(callback)
+
+        await manager.emit_counts_changed({"repo1": {"total": 1}})
+        task = manager._counts_task
+
+        # Cancel the task directly (not via emit_counts_changed)
+        task.cancel()
+
+        # Wait for the cancellation to complete
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+        # Wait longer than debounce period
+        await asyncio.sleep(0.15)
+
+        # No emit should have occurred
+        callback.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_task_reference_replaced_before_cancellation(self):
+        """New task reference is set before old task is cancelled.
+
+        This ensures there's no race condition where _counts_task could be None
+        between cancellation and new task creation.
+        """
+        manager = EventManager()
+
+        await manager.emit_counts_changed({"repo1": {"total": 1}})
+        old_task = manager._counts_task
+
+        await manager.emit_counts_changed({"repo1": {"total": 2}})
+        new_task = manager._counts_task
+
+        # New task should be different from old
+        assert new_task is not old_task
+        assert new_task is not None
+
+        # Old task should be cancelled or cancelling
+        assert old_task.cancelling() > 0 or old_task.cancelled() or old_task.done()
+
+    @pytest.mark.asyncio
+    async def test_concurrent_emit_counts_changed(self):
+        """Concurrent emit_counts_changed calls are handled safely."""
+        manager = EventManager()
+        callback = AsyncMock()
+        await manager.subscribe(callback)
+
+        # Launch many concurrent emissions
+        async def emit_count(i):
+            await manager.emit_counts_changed({"repo1": {"total": i}})
+
+        await asyncio.gather(*[emit_count(i) for i in range(20)])
+
+        # Wait for debounce
+        await asyncio.sleep(0.15)
+
+        # Should have emitted exactly once (debounced)
+        assert callback.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_emit_after_long_gap(self):
+        """Emissions separated by more than debounce delay emit separately."""
+        manager = EventManager()
+        callback = AsyncMock()
+        await manager.subscribe(callback)
+
+        # First emission
+        await manager.emit_counts_changed({"repo1": {"total": 1}})
+        await asyncio.sleep(0.15)  # Wait for debounce
+
+        # Second emission after gap
+        await manager.emit_counts_changed({"repo1": {"total": 2}})
+        await asyncio.sleep(0.15)  # Wait for debounce
+
+        # Should have emitted twice
+        assert callback.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_state_cleared_after_successful_emit(self):
+        """_pending_counts and _counts_task are cleared after successful emit."""
+        manager = EventManager()
+        callback = AsyncMock()
+        await manager.subscribe(callback)
+
+        await manager.emit_counts_changed({"repo1": {"total": 1}})
+        await asyncio.sleep(0.15)
+
+        assert manager._pending_counts is None
+        assert manager._counts_task is None
+
+    @pytest.mark.asyncio
+    async def test_empty_counts_dict(self):
+        """Empty counts dict is handled correctly."""
+        manager = EventManager()
+        callback = AsyncMock()
+        await manager.subscribe(callback)
+
+        await manager.emit_counts_changed({})
+        await asyncio.sleep(0.15)
+
+        callback.assert_called_once()
+        event = callback.call_args[0][0]
+        assert event.data["counts"] == {}
+
+    @pytest.mark.asyncio
+    async def test_none_values_in_counts(self):
+        """Counts dict with None values is handled correctly."""
+        manager = EventManager()
+        callback = AsyncMock()
+        await manager.subscribe(callback)
+
+        await manager.emit_counts_changed({"repo1": None, "repo2": {"total": 5}})
+        await asyncio.sleep(0.15)
+
+        event = callback.call_args[0][0]
+        assert event.data["counts"]["repo1"] is None
+        assert event.data["counts"]["repo2"]["total"] == 5
+
+
+class TestEventManagerAsyncCallbackErrors:
+    """Tests for error handling in async callbacks."""
+
+    @pytest.mark.asyncio
+    async def test_async_callback_exception_does_not_stop_others(self):
+        """Exception in async callback doesn't prevent other callbacks from running."""
+        manager = EventManager()
+        results = []
+
+        async def failing_callback(event):
+            raise ValueError("Async callback failed")
+
+        async def successful_callback(event):
+            results.append("success")
+
+        await manager.subscribe(failing_callback)
+        await manager.subscribe(successful_callback)
+
+        # Should not raise
+        await manager.emit(EventType.SESSION_CREATED)
+
+        # Successful callback should still run
+        assert "success" in results
+
+    @pytest.mark.asyncio
+    async def test_callback_returning_coroutine_is_awaited(self):
+        """Callback that returns a coroutine has it awaited."""
+        manager = EventManager()
+        results = []
+
+        async def coro_callback(event):
+            await asyncio.sleep(0.01)
+            results.append("awaited")
+
+        await manager.subscribe(coro_callback)
+        await manager.emit(EventType.SESSION_CREATED)
+
+        # Should have awaited the coroutine
+        assert "awaited" in results
+
+
+class TestEventManagerGlobalInstance:
+    """Tests for the global event_manager instance."""
+
+    def test_global_instance_exists(self):
+        """Global event_manager instance exists and is an EventManager."""
+        from app.services.event_manager import event_manager
+
+        assert event_manager is not None
+        assert isinstance(event_manager, EventManager)
+
+    def test_global_instance_initialized(self):
+        """Global event_manager is properly initialized."""
+        from app.services.event_manager import event_manager
+
+        assert hasattr(event_manager, '_subscribers')
+        assert hasattr(event_manager, '_lock')
+        assert hasattr(event_manager, '_pending_counts')
+        assert hasattr(event_manager, '_counts_task')

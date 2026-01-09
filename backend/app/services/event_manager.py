@@ -135,7 +135,11 @@ class EventManager:
             if counts_to_emit is not None:
                 await self.emit(EventType.COUNTS_CHANGED, {"counts": counts_to_emit})
         except asyncio.CancelledError:
-            pass
+            # When cancelled, a new task has already been scheduled via emit_counts_changed.
+            # The _counts_task reference was replaced before we were cancelled, so the new
+            # task will handle the pending counts. We don't need to clean up anything here -
+            # just let the cancellation propagate normally.
+            raise
 
     async def subscribe(self, callback: Callable[[Event], Any]) -> None:
         """Subscribe to all events.
