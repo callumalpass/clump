@@ -87,7 +87,8 @@ class SessionMetadata:
     @classmethod
     def from_dict(cls, data: dict) -> "SessionMetadata":
         entities = []
-        for e in data.get("entities", []):
+        # Use `or []` to handle None values (key exists but value is None)
+        for e in data.get("entities") or []:
             # Skip malformed entities missing required fields
             if isinstance(e, dict) and "kind" in e and "number" in e:
                 entities.append(EntityLink(kind=e["kind"], number=e["number"]))
@@ -97,7 +98,8 @@ class SessionMetadata:
             summary=data.get("summary"),
             repo_path=data.get("repo_path"),
             entities=entities,
-            tags=data.get("tags", []),
+            # Use `or []` to handle None values (key exists but value is None)
+            tags=data.get("tags") or [],
             starred=data.get("starred", False),
             created_at=data.get("created_at"),
             scheduled_job_id=data.get("scheduled_job_id"),
@@ -164,12 +166,14 @@ class IssueMetadata:
         return cls(
             issue_number=data.get("issue_number", 0),
             status=data.get("status"),
-            tags=data.get("tags", []),
+            # Use `or []` to handle None values (key exists but value is None)
+            tags=data.get("tags") or [],
             priority=data.get("priority"),
             difficulty=data.get("difficulty"),
             risk=data.get("risk"),
             type=data.get("type"),
-            affected_areas=data.get("affected_areas", []),
+            # Use `or []` to handle None values (key exists but value is None)
+            affected_areas=data.get("affected_areas") or [],
             ai_summary=data.get("ai_summary"),
             notes=data.get("notes"),
             root_cause=data.get("root_cause"),
@@ -245,15 +249,18 @@ class PRMetadata:
         return cls(
             pr_number=data.get("pr_number", 0),
             status=data.get("status"),
-            tags=data.get("tags", []),
+            # Use `or []` to handle None values (key exists but value is None)
+            tags=data.get("tags") or [],
             risk=data.get("risk"),
             complexity=data.get("complexity"),
             review_priority=data.get("review_priority"),
-            security_concerns=data.get("security_concerns", []),
+            # Use `or []` to handle None values (key exists but value is None)
+            security_concerns=data.get("security_concerns") or [],
             test_coverage=data.get("test_coverage"),
             breaking_changes=data.get("breaking_changes", False),
             change_type=data.get("change_type"),
-            affected_areas=data.get("affected_areas", []),
+            # Use `or []` to handle None values (key exists but value is None)
+            affected_areas=data.get("affected_areas") or [],
             ai_summary=data.get("ai_summary"),
             review_notes=data.get("review_notes"),
             suggested_improvements=data.get("suggested_improvements"),

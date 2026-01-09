@@ -3052,3 +3052,165 @@ class TestPRMetadataSerialization:
         result = PRMetadata.from_dict(data)
 
         assert result.breaking_changes is True
+
+
+# ==============================================
+# Tests for None value handling in from_dict methods
+# ==============================================
+
+
+class TestSessionMetadataNoneHandling:
+    """Tests for None value handling in SessionMetadata.from_dict()."""
+
+    def test_handles_none_entities(self):
+        """from_dict() handles None entities field (key exists but value is None)."""
+        data = {"session_id": "test-123", "entities": None}
+
+        result = SessionMetadata.from_dict(data)
+
+        assert result.entities == []
+        assert isinstance(result.entities, list)
+
+    def test_handles_none_tags(self):
+        """from_dict() handles None tags field (key exists but value is None)."""
+        data = {"session_id": "test-123", "tags": None}
+
+        result = SessionMetadata.from_dict(data)
+
+        assert result.tags == []
+        assert isinstance(result.tags, list)
+
+    def test_handles_all_none_list_fields(self):
+        """from_dict() handles all list fields being None simultaneously."""
+        data = {
+            "session_id": "test-123",
+            "entities": None,
+            "tags": None,
+        }
+
+        result = SessionMetadata.from_dict(data)
+
+        assert result.entities == []
+        assert result.tags == []
+
+    def test_handles_mixed_none_and_valid_list_fields(self):
+        """from_dict() handles mix of None and valid list fields."""
+        data = {
+            "session_id": "test-123",
+            "entities": None,
+            "tags": ["tag1", "tag2"],
+        }
+
+        result = SessionMetadata.from_dict(data)
+
+        assert result.entities == []
+        assert result.tags == ["tag1", "tag2"]
+
+
+class TestIssueMetadataNoneHandling:
+    """Tests for None value handling in IssueMetadata.from_dict()."""
+
+    def test_handles_none_tags(self):
+        """from_dict() handles None tags field (key exists but value is None)."""
+        data = {"issue_number": 1, "tags": None}
+
+        result = IssueMetadata.from_dict(data)
+
+        assert result.tags == []
+        assert isinstance(result.tags, list)
+
+    def test_handles_none_affected_areas(self):
+        """from_dict() handles None affected_areas field (key exists but value is None)."""
+        data = {"issue_number": 1, "affected_areas": None}
+
+        result = IssueMetadata.from_dict(data)
+
+        assert result.affected_areas == []
+        assert isinstance(result.affected_areas, list)
+
+    def test_handles_all_none_list_fields(self):
+        """from_dict() handles all list fields being None simultaneously."""
+        data = {
+            "issue_number": 1,
+            "tags": None,
+            "affected_areas": None,
+        }
+
+        result = IssueMetadata.from_dict(data)
+
+        assert result.tags == []
+        assert result.affected_areas == []
+
+    def test_handles_mixed_none_and_valid_list_fields(self):
+        """from_dict() handles mix of None and valid list fields."""
+        data = {
+            "issue_number": 1,
+            "tags": None,
+            "affected_areas": ["api", "database"],
+        }
+
+        result = IssueMetadata.from_dict(data)
+
+        assert result.tags == []
+        assert result.affected_areas == ["api", "database"]
+
+
+class TestPRMetadataNoneHandling:
+    """Tests for None value handling in PRMetadata.from_dict()."""
+
+    def test_handles_none_tags(self):
+        """from_dict() handles None tags field (key exists but value is None)."""
+        data = {"pr_number": 1, "tags": None}
+
+        result = PRMetadata.from_dict(data)
+
+        assert result.tags == []
+        assert isinstance(result.tags, list)
+
+    def test_handles_none_security_concerns(self):
+        """from_dict() handles None security_concerns field (key exists but value is None)."""
+        data = {"pr_number": 1, "security_concerns": None}
+
+        result = PRMetadata.from_dict(data)
+
+        assert result.security_concerns == []
+        assert isinstance(result.security_concerns, list)
+
+    def test_handles_none_affected_areas(self):
+        """from_dict() handles None affected_areas field (key exists but value is None)."""
+        data = {"pr_number": 1, "affected_areas": None}
+
+        result = PRMetadata.from_dict(data)
+
+        assert result.affected_areas == []
+        assert isinstance(result.affected_areas, list)
+
+    def test_handles_all_none_list_fields(self):
+        """from_dict() handles all list fields being None simultaneously."""
+        data = {
+            "pr_number": 1,
+            "tags": None,
+            "security_concerns": None,
+            "affected_areas": None,
+        }
+
+        result = PRMetadata.from_dict(data)
+
+        assert result.tags == []
+        assert result.security_concerns == []
+        assert result.affected_areas == []
+
+    def test_handles_mixed_none_and_valid_list_fields(self):
+        """from_dict() handles mix of None and valid list fields."""
+        data = {
+            "pr_number": 1,
+            "tags": None,
+            "security_concerns": ["SQL injection"],
+            "affected_areas": None,
+        }
+
+        result = PRMetadata.from_dict(data)
+
+        assert result.tags == []
+        assert result.security_concerns == ["SQL injection"]
+        assert result.affected_areas == []
