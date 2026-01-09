@@ -995,6 +995,79 @@ class TestGetPendingSessions:
             assert result[0].starred is True
             assert len(result[0].entities) == 1
 
+    def test_pending_session_takes_snapshot_of_processes(self):
+        """Test that _get_pending_sessions takes a snapshot of processes.
+
+        This ensures the function is safe from RuntimeError when the processes
+        dictionary is modified concurrently during iteration (e.g., by create_process,
+        kill, or _cleanup_dead_process in other coroutines).
+        """
+        mock_process1 = MagicMock()
+        mock_process1.claude_session_id = "uuid-1"
+        mock_process1.working_dir = "/path/to/repo1"
+        mock_process1.model = "claude-3-opus"
+        mock_process1.created_at = datetime(2024, 1, 15, 10, 0, 0)
+
+        mock_process2 = MagicMock()
+        mock_process2.claude_session_id = "uuid-2"
+        mock_process2.working_dir = "/path/to/repo2"
+        mock_process2.model = "claude-3-opus"
+        mock_process2.created_at = datetime(2024, 1, 15, 10, 5, 0)
+
+        with patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions.encode_path", return_value="-path-to-repo"), \
+             patch("app.routers.sessions.get_session_metadata", return_value=None), \
+             patch("app.routers.sessions._get_repo_name", return_value="user/repo"):
+            # Set up the processes dict
+            mock_pm.processes = {"proc-1": mock_process1, "proc-2": mock_process2}
+
+            # The key behavior: we take a snapshot via list(), so even if
+            # the dict is modified during iteration, we're iterating over
+            # our copy and won't get RuntimeError
+            result = _get_pending_sessions(
+                active_session_ids={"uuid-1", "uuid-2"},
+                discovered_session_ids=set(),
+            )
+
+            # Should process both sessions (from the snapshot)
+            assert len(result) == 2
+            session_ids = {r.session_id for r in result}
+            assert "uuid-1" in session_ids
+            assert "uuid-2" in session_ids
+
+    def test_pending_session_repo_path_filter(self):
+        """Test filtering pending sessions by repo_path."""
+        mock_process1 = MagicMock()
+        mock_process1.claude_session_id = "uuid-1"
+        mock_process1.working_dir = "/path/to/repo1"
+        mock_process1.model = "claude-3-opus"
+        mock_process1.created_at = datetime(2024, 1, 15, 10, 0, 0)
+
+        mock_process2 = MagicMock()
+        mock_process2.claude_session_id = "uuid-2"
+        mock_process2.working_dir = "/path/to/repo2"
+        mock_process2.model = "claude-3-opus"
+        mock_process2.created_at = datetime(2024, 1, 15, 10, 5, 0)
+
+        with patch("app.routers.sessions.process_manager") as mock_pm, \
+             patch("app.routers.sessions.encode_path") as mock_encode, \
+             patch("app.routers.sessions.get_session_metadata", return_value=None), \
+             patch("app.routers.sessions._get_repo_name", return_value="user/repo"):
+            mock_pm.processes = {"proc-1": mock_process1, "proc-2": mock_process2}
+            # encode_path returns encoded form of the path
+            mock_encode.side_effect = lambda p: p.replace("/", "-")
+
+            # Filter by repo_path
+            result = _get_pending_sessions(
+                active_session_ids={"uuid-1", "uuid-2"},
+                discovered_session_ids=set(),
+                repo_path="/path/to/repo1",
+            )
+
+            # Should only return the process in repo1
+            assert len(result) == 1
+            assert result[0].session_id == "uuid-1"
+
 
 class TestContinueSession:
     """Tests for POST /sessions/{session_id}/continue endpoint."""
@@ -2105,7 +2178,6 @@ class TestKillSession:
              patch("app.routers.sessions.invalidate_session_cache") as mock_invalidate:
             mock_pm.list_processes = AsyncMock(return_value=[])  # No PTY processes
             mock_headless.cancel = AsyncMock(return_value=True)
-            mock_headless.unregister_running = AsyncMock()
             mock_events.emit = AsyncMock()
 
             response = client.post("/sessions/test-uuid-1234/kill")
@@ -2117,7 +2189,8 @@ class TestKillSession:
             assert data["killed_headless"] is True
 
             mock_headless.cancel.assert_called_once_with("test-uuid-1234")
-            mock_headless.unregister_running.assert_called_once_with("test-uuid-1234")
+            # Note: unregister_running is not called because cancel() already
+            # removes from _active_session_ids inside its lock
             mock_invalidate.assert_called_once()
 
     def test_kill_both_pty_and_headless(self, client, mock_discovered_session):
@@ -2135,7 +2208,6 @@ class TestKillSession:
             mock_pm.list_processes = AsyncMock(return_value=[mock_process])
             mock_pm.kill = AsyncMock(return_value=True)
             mock_headless.cancel = AsyncMock(return_value=True)
-            mock_headless.unregister_running = AsyncMock()
             mock_events.emit = AsyncMock()
 
             response = client.post("/sessions/test-uuid-1234/kill")

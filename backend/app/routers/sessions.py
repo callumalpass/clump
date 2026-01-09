@@ -503,8 +503,11 @@ def _get_pending_sessions(
     """
     pending = []
 
-    # Get all processes synchronously (we're called from async context but this is safe)
-    for proc in process_manager.processes.values():
+    # Take a snapshot of processes to avoid RuntimeError from dictionary modification
+    # during iteration. The ProcessManager._processes dict can be modified by other
+    # coroutines (create_process, kill, _cleanup_dead_process) while we iterate.
+    processes_snapshot = list(process_manager.processes.values())
+    for proc in processes_snapshot:
         session_id = proc.claude_session_id
         if not session_id:
             continue
@@ -1687,9 +1690,10 @@ async def kill_session(session_id: str):
             break
 
     # Try to cancel if it's a headless session
+    # Note: cancel() already removes from _active_session_ids inside its lock,
+    # so no need to call unregister_running() separately
     if await headless_analyzer.cancel(session_id):
         killed_headless = True
-        await headless_analyzer.unregister_running(session_id)
 
     # Emit session completed event if we killed anything
     if killed_pty or killed_headless:
