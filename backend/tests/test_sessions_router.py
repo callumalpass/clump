@@ -33,6 +33,7 @@ from app.routers.sessions import (
     _format_task_tool,
     _format_tool_use_markdown,
     _extract_text_from_content,
+    _do_quick_scan_codex_transcript,
 )
 from app.storage import (
     DiscoveredSession,
@@ -4175,3 +4176,267 @@ class TestGetPendingHeadlessSessions:
             # Should only call get_session_metadata once for the first repo
             # because after matching, subsequent repos skip this session_id
             assert call_count[0] == 1
+
+
+# ==========================================
+# None Value Handling Tests for Codex Scanner
+# ==========================================
+
+
+class TestCodexQuickScanNoneHandling:
+    """Tests for handling None values in Codex transcript scanning.
+
+    These tests verify the fix for the bug where entry.get('payload', {})
+    returns None instead of {} when the key exists but has a None value.
+    The fix uses `or {}` pattern: entry.get('payload') or {}
+    """
+
+    def test_session_meta_with_none_payload(self, tmp_path):
+        """Handles session_meta entry where 'payload' key is explicitly None.
+
+        This tests the fix at sessions.py for:
+            payload = entry.get('payload') or {}
+
+        When 'payload' is None, should not crash on payload.get('timestamp').
+        """
+        import json
+
+        session_file = tmp_path / "test-session.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": None  # This would crash before the fix
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        # Should not raise AttributeError: 'NoneType' object has no attribute 'get'
+        result = _do_quick_scan_codex_transcript(session_file)
+        assert result is not None
+        assert result["start_time"] is None
+
+    def test_response_item_with_none_payload(self, tmp_path):
+        """Handles response_item entry where 'payload' key is explicitly None.
+
+        This tests the fix at sessions.py for:
+            payload = entry.get('payload') or {}
+
+        When 'payload' is None, should not crash on payload.get('role').
+        """
+        import json
+
+        session_file = tmp_path / "test-session.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:01:00Z",
+                "payload": None  # This would crash before the fix
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        # Should not raise AttributeError
+        result = _do_quick_scan_codex_transcript(session_file)
+        assert result is not None
+        # Message shouldn't be counted since payload is None (no role)
+        assert result["message_count"] == 0
+
+    def test_turn_context_with_none_payload(self, tmp_path):
+        """Handles turn_context entry where 'payload' key is explicitly None.
+
+        This tests the fix at sessions.py for:
+            payload = entry.get('payload') or {}
+
+        When 'payload' is None, should not crash on payload.get('model').
+        """
+        import json
+
+        session_file = tmp_path / "test-session.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "turn_context",
+                "payload": None  # This would crash before the fix
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        # Should not raise AttributeError
+        result = _do_quick_scan_codex_transcript(session_file)
+        assert result is not None
+        assert result["model"] is None
+
+    def test_valid_codex_transcript_still_works(self, tmp_path):
+        """Verify valid Codex transcript processing still works after the fix.
+
+        This is a regression test to ensure the fix doesn't break normal behavior.
+        """
+        import json
+
+        session_file = tmp_path / "test-session.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {
+                    "timestamp": "2025-01-15T10:00:00Z",
+                    "cwd": "/home/user/project",
+                }
+            }),
+            json.dumps({
+                "type": "turn_context",
+                "payload": {
+                    "model": "gpt-4o"
+                }
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:01Z",
+                "payload": {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Hello world"}]
+                }
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:02Z",
+                "payload": {
+                    "role": "user",  # Second user message (first is skipped as env context)
+                    "content": [{"type": "input_text", "text": "Can you help?"}]
+                }
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:03Z",
+                "payload": {
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "Sure!"}]
+                }
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        result = _do_quick_scan_codex_transcript(session_file)
+        assert result is not None
+        assert result["start_time"] == "2025-01-15T10:00:00Z"
+        assert result["end_time"] == "2025-01-15T10:00:03Z"
+        assert result["model"] == "gpt-4o"
+        assert result["message_count"] == 3
+        assert result["title"] == "Can you help?"  # First real user message
+
+    def test_mixed_none_and_valid_payloads(self, tmp_path):
+        """Handles mix of None and valid payloads gracefully."""
+        import json
+
+        session_file = tmp_path / "test-session.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "turn_context",
+                "payload": None  # This is None
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:01Z",
+                "payload": {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Hello"}]
+                }
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:02Z",
+                "payload": None  # This is None
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:03Z",
+                "payload": {
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "Hi there!"}]
+                }
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        result = _do_quick_scan_codex_transcript(session_file)
+        assert result is not None
+        assert result["start_time"] == "2025-01-15T10:00:00Z"
+        assert result["message_count"] == 2  # Only the valid ones
+
+
+class TestToolUseMarkdownNoneHandling:
+    """Tests for handling None values in tool use markdown formatting."""
+
+    def test_tool_with_none_input(self):
+        """Handles tool dict where 'input' key is explicitly None.
+
+        This tests the fix at sessions.py for:
+            tool_input = tool.get("input") or {}
+
+        When 'input' is None, should not crash when passing to formatters.
+        """
+        tool = {
+            "name": "Read",
+            "input": None  # This would crash some formatters before the fix
+        }
+
+        # Should not raise TypeError or AttributeError
+        result = _format_tool_use_markdown(tool)
+        # Should fall back to just showing the tool name or handle gracefully
+        assert "Read" in result
+
+    def test_tool_with_valid_input(self):
+        """Verify valid tool input processing still works after the fix.
+
+        This is a regression test to ensure the fix doesn't break normal behavior.
+        """
+        tool = {
+            "name": "Read",
+            "input": {"file_path": "/home/user/test.py"}
+        }
+
+        result = _format_tool_use_markdown(tool)
+        assert "Read" in result
+        # Should format the file path
+        assert "test.py" in result
+
+    def test_tool_with_empty_input(self):
+        """Handles tool with empty input dict (not None)."""
+        tool = {
+            "name": "Bash",
+            "input": {}
+        }
+
+        result = _format_tool_use_markdown(tool)
+        assert "Bash" in result
+
+    def test_tool_with_missing_input_key(self):
+        """Handles tool dict missing the 'input' key entirely."""
+        tool = {
+            "name": "Task"
+            # No 'input' key at all
+        }
+
+        result = _format_tool_use_markdown(tool)
+        assert "Task" in result
+
+    def test_unknown_tool_with_none_input(self):
+        """Handles unknown tool with None input - falls back to generic format."""
+        tool = {
+            "name": "CustomTool",
+            "input": None
+        }
+
+        result = _format_tool_use_markdown(tool)
+        # Generic fallback just shows tool name
+        assert "CustomTool" in result

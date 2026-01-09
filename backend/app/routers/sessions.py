@@ -893,12 +893,14 @@ def _do_quick_scan_codex_transcript(transcript_path: Path) -> QuickScanResult:
 
                 # Extract start time from session_meta
                 if entry_type == 'session_meta':
-                    payload = entry.get('payload', {})
+                    # Use `or {}` to handle None values (key exists but value is None)
+                    payload = entry.get('payload') or {}
                     result["start_time"] = payload.get('timestamp')
 
                 # Count messages from response_item entries
                 if entry_type == 'response_item':
-                    payload = entry.get('payload', {})
+                    # Use `or {}` to handle None values (key exists but value is None)
+                    payload = entry.get('payload') or {}
                     role = payload.get('role')
 
                     if role in ('user', 'assistant'):
@@ -917,7 +919,8 @@ def _do_quick_scan_codex_transcript(transcript_path: Path) -> QuickScanResult:
 
                 # Get model from turn_context
                 if entry_type == 'turn_context' and not result["model"]:
-                    payload = entry.get('payload', {})
+                    # Use `or {}` to handle None values (key exists but value is None)
+                    payload = entry.get('payload') or {}
                     result["model"] = payload.get('model')
 
             # Use first real user message as title
@@ -1788,7 +1791,8 @@ def _format_tool_use_markdown(tool: dict) -> str:
     fall back to a generic format showing just the tool name.
     """
     name = tool.get("name", "Unknown")
-    tool_input = tool.get("input", {})
+    # Use `or {}` to handle None values (key exists but value is None)
+    tool_input = tool.get("input") or {}
 
     formatter = _TOOL_FORMATTERS.get(name)
     if formatter:
