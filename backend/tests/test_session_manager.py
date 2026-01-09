@@ -537,6 +537,40 @@ class TestProcessManagerKill:
         assert result is True
         assert "k2" not in pm._processes
 
+    @pytest.mark.asyncio
+    async def test_kill_reaps_zombie_process(self):
+        """Test kill calls waitpid to reap zombie processes."""
+        pm = ProcessManager()
+        process = Process(id="k3", pid=12345, fd=10, working_dir="/tmp")
+        pm._processes["k3"] = process
+
+        with patch("os.kill") as mock_kill, \
+             patch("os.close"), \
+             patch("os.waitpid") as mock_waitpid, \
+             patch("asyncio.sleep", new_callable=AsyncMock):
+            result = await pm.kill("k3")
+
+        assert result is True
+        # Should call waitpid with WNOHANG to reap zombie
+        mock_waitpid.assert_called_once_with(12345, 1)  # os.WNOHANG == 1
+
+    @pytest.mark.asyncio
+    async def test_kill_handles_waitpid_errors(self):
+        """Test kill handles ChildProcessError from waitpid gracefully."""
+        pm = ProcessManager()
+        process = Process(id="k4", pid=12345, fd=10, working_dir="/tmp")
+        pm._processes["k4"] = process
+
+        with patch("os.kill"), \
+             patch("os.close"), \
+             patch("os.waitpid", side_effect=ChildProcessError("No child")), \
+             patch("asyncio.sleep", new_callable=AsyncMock):
+            result = await pm.kill("k4")
+
+        # Should still succeed despite waitpid error
+        assert result is True
+        assert "k4" not in pm._processes
+
 
 class TestProcessManagerCleanupDeadProcess:
     """Tests for ProcessManager._cleanup_dead_process method."""
@@ -587,6 +621,34 @@ class TestProcessManagerCleanupDeadProcess:
 
         # Should not raise
         await pm._cleanup_dead_process("nonexistent")
+
+    @pytest.mark.asyncio
+    async def test_cleanup_reaps_zombie_process(self):
+        """Test cleanup calls waitpid to reap zombie processes."""
+        pm = ProcessManager()
+        process = Process(id="c4", pid=12345, fd=10, working_dir="/tmp")
+        pm._processes["c4"] = process
+
+        with patch("os.close"), \
+             patch("os.waitpid") as mock_waitpid:
+            await pm._cleanup_dead_process("c4")
+
+        # Should call waitpid with WNOHANG to reap zombie
+        mock_waitpid.assert_called_once_with(12345, 1)  # os.WNOHANG == 1
+
+    @pytest.mark.asyncio
+    async def test_cleanup_handles_waitpid_errors(self):
+        """Test cleanup handles ChildProcessError from waitpid gracefully."""
+        pm = ProcessManager()
+        process = Process(id="c5", pid=12345, fd=10, working_dir="/tmp")
+        pm._processes["c5"] = process
+
+        with patch("os.close"), \
+             patch("os.waitpid", side_effect=ChildProcessError("No child")):
+            # Should not raise
+            await pm._cleanup_dead_process("c5")
+
+        assert "c5" not in pm._processes
 
 
 class TestProcessManagerIsProcessAlive:

@@ -501,6 +501,13 @@ class ProcessManager:
         except OSError:
             pass
 
+        # Reap the child process to prevent zombie
+        try:
+            os.waitpid(process.pid, os.WNOHANG)
+        except (OSError, ChildProcessError):
+            # Process may have already been reaped or doesn't exist
+            pass
+
         # Close file descriptor
         try:
             os.close(process.fd)
@@ -578,6 +585,13 @@ class ProcessManager:
                 await process._initial_prompt_task
             except asyncio.CancelledError:
                 pass
+
+        # Reap the child process to prevent zombie
+        try:
+            os.waitpid(process.pid, os.WNOHANG)
+        except (OSError, ChildProcessError):
+            # Process may have already been reaped or doesn't exist
+            pass
 
         # Close file descriptor
         try:

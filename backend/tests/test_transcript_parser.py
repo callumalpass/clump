@@ -13,7 +13,62 @@ from app.services.transcript_parser import (
     extract_agent_id,
     parse_transcript,
     parse_transcript_file,
+    _parse_tool_arguments,
 )
+
+
+class TestParseToolArguments:
+    """Tests for _parse_tool_arguments helper function."""
+
+    def test_handles_none(self):
+        """Returns empty dict for None input."""
+        assert _parse_tool_arguments(None) == {}
+
+    def test_handles_dict(self):
+        """Returns dict unchanged."""
+        args = {"file": "test.py", "line": 42}
+        assert _parse_tool_arguments(args) == args
+
+    def test_handles_empty_dict(self):
+        """Returns empty dict unchanged."""
+        assert _parse_tool_arguments({}) == {}
+
+    def test_handles_json_string_dict(self):
+        """Parses JSON-encoded dict string."""
+        args = '{"file": "test.py", "line": 42}'
+        result = _parse_tool_arguments(args)
+        assert result == {"file": "test.py", "line": 42}
+
+    def test_handles_json_string_nested(self):
+        """Parses JSON-encoded nested dict string."""
+        args = '{"options": {"verbose": true, "timeout": 30}}'
+        result = _parse_tool_arguments(args)
+        assert result == {"options": {"verbose": True, "timeout": 30}}
+
+    def test_handles_invalid_json_string(self):
+        """Returns plain string as single-value dict for invalid JSON."""
+        args = "not valid json {"
+        result = _parse_tool_arguments(args)
+        assert result == {"input": "not valid json {"}
+
+    def test_handles_plain_text_string(self):
+        """Returns plain text string as single-value dict."""
+        args = "simple command argument"
+        result = _parse_tool_arguments(args)
+        assert result == {"input": "simple command argument"}
+
+    def test_handles_json_string_non_dict(self):
+        """Returns non-dict JSON as single-value dict."""
+        # JSON array, not dict
+        args = '["item1", "item2"]'
+        result = _parse_tool_arguments(args)
+        assert result == {"input": '["item1", "item2"]'}
+
+    def test_handles_other_types(self):
+        """Returns empty dict for unexpected types."""
+        assert _parse_tool_arguments(123) == {}
+        assert _parse_tool_arguments([1, 2, 3]) == {}
+        assert _parse_tool_arguments(True) == {}
 
 
 class TestToolUse:

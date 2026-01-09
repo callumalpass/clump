@@ -21,6 +21,32 @@ from app.storage import encode_path
 logger = logging.getLogger(__name__)
 
 
+def _parse_tool_arguments(arguments) -> dict:
+    """
+    Parse tool arguments into a dict.
+
+    Handles the case where arguments can be:
+    - A dict (normal case)
+    - A JSON-encoded string (Codex sometimes does this)
+    - None (missing)
+    - Other types (fallback to empty dict)
+    """
+    if arguments is None:
+        return {}
+    if isinstance(arguments, dict):
+        return arguments
+    if isinstance(arguments, str):
+        try:
+            parsed = json.loads(arguments)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+        # If it's a string but not valid JSON dict, return as single-value dict
+        return {"input": arguments}
+    return {}
+
+
 @dataclass
 class ToolUse:
     """A tool invocation by the assistant."""
@@ -679,8 +705,8 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
                         tool_use = ToolUse(
                             id=tool_id,
                             name=payload.get('name', ''),
-                            # Use `or {}` to handle None values (key exists but value is None)
-                            input=payload.get('arguments') or {},
+                            # Parse arguments - can be dict, JSON string, or None
+                            input=_parse_tool_arguments(payload.get('arguments')),
                         )
                         pending_tool_uses[tool_id] = tool_use
 
@@ -770,8 +796,8 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
                                     tool_use = ToolUse(
                                         id=tool_id,
                                         name=c.get('name', ''),
-                                        # Use `or {}` to handle None values (key exists but value is None)
-                                        input=c.get('arguments') or {},
+                                        # Parse arguments - can be dict, JSON string, or None
+                                        input=_parse_tool_arguments(c.get('arguments')),
                                     )
                                     tool_uses.append(tool_use)
                                     pending_tool_uses[tool_id] = tool_use
