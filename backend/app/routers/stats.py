@@ -186,7 +186,7 @@ async def get_stats():
         raise HTTPException(status_code=500, detail=f"Failed to read stats: {e}")
 
     # Parse daily activity
-    # Use `or 0` to handle None values (key exists but value is None)
+    # Use `or []` and `or 0` to handle None values (key exists but value is None)
     daily_activity = [
         DailyActivity(
             date=day["date"],
@@ -194,20 +194,22 @@ async def get_stats():
             session_count=day.get("sessionCount", 0) or 0,
             tool_call_count=day.get("toolCallCount", 0) or 0,
         )
-        for day in data.get("dailyActivity", [])
+        for day in data.get("dailyActivity") or []
     ]
 
     # Parse daily model tokens
+    # Use `or []` and `or {}` to handle None values (key exists but value is None)
     daily_model_tokens = [
         DailyModelTokens(
             date=day["date"],
-            tokens_by_model=day.get("tokensByModel", {}),
+            tokens_by_model=day.get("tokensByModel") or {},
         )
-        for day in data.get("dailyModelTokens", [])
+        for day in data.get("dailyModelTokens") or []
     ]
 
     # Parse model usage with cost calculation
-    model_usage_raw = data.get("modelUsage", {})
+    # Use `or {}` to handle None values (key exists but value is None)
+    model_usage_raw = data.get("modelUsage") or {}
     model_usage = []
     total_cost = 0.0
 
@@ -237,7 +239,8 @@ async def get_stats():
     model_usage.sort(key=lambda m: m.estimated_cost_usd, reverse=True)
 
     # Parse hourly distribution
-    hour_counts = data.get("hourCounts", {})
+    # Use `or {}` to handle None values (key exists but value is None)
+    hour_counts = data.get("hourCounts") or {}
     hourly_distribution = [
         HourlyDistribution(hour=int(hour), count=count)
         for hour, count in sorted(hour_counts.items(), key=lambda x: int(x[0]))
@@ -261,7 +264,8 @@ async def get_stats():
     )
 
     # Parse longest session duration
-    longest_session = data.get("longestSession", {})
+    # Use `or {}` to handle None values (key exists but value is None)
+    longest_session = data.get("longestSession") or {}
     longest_session_minutes = None
     if longest_session.get("duration"):
         # Duration is in milliseconds

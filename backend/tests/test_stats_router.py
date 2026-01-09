@@ -814,3 +814,263 @@ class TestGetStatsEndpoint:
             assert model["cache_read_tokens"] == 0
             assert model["cache_write_tokens"] == 0
             assert model["estimated_cost_usd"] == 0.0
+
+
+class TestGetStatsNoneContainerHandling:
+    """Tests for handling None values for container fields.
+
+    These tests verify the fix for the bug where .get('key', []) or .get('key', {})
+    returns None (not the default) when the key exists with value None.
+    The fix uses `data.get('key') or []` pattern instead.
+    """
+
+    # ==============================================
+    # None daily activity list tests
+    # ==============================================
+
+    def test_handles_none_daily_activity_list(self, tmp_path):
+        """Handles None dailyActivity list (not missing, but explicitly None)."""
+        import json
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        stats_data = {
+            "lastComputedDate": "2024-01-01",
+            "totalSessions": 10,
+            "totalMessages": 100,
+            "dailyActivity": None,  # Key exists but value is None
+            "dailyModelTokens": [],
+            "modelUsage": {},
+            "hourCounts": {},
+        }
+
+        stats_file = tmp_path / ".claude" / "stats-cache.json"
+        stats_file.parent.mkdir(parents=True)
+        stats_file.write_text(json.dumps(stats_data))
+
+        with patch("app.routers.stats.Path.home", return_value=tmp_path):
+            client = TestClient(app)
+            response = client.get("/api/stats")
+
+            assert response.status_code == 200
+            data = response.json()
+            # Should be empty list, not cause TypeError
+            assert data["daily_activity"] == []
+
+    # ==============================================
+    # None daily model tokens list tests
+    # ==============================================
+
+    def test_handles_none_daily_model_tokens_list(self, tmp_path):
+        """Handles None dailyModelTokens list (not missing, but explicitly None)."""
+        import json
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        stats_data = {
+            "lastComputedDate": "2024-01-01",
+            "totalSessions": 10,
+            "totalMessages": 100,
+            "dailyActivity": [],
+            "dailyModelTokens": None,  # Key exists but value is None
+            "modelUsage": {},
+            "hourCounts": {},
+        }
+
+        stats_file = tmp_path / ".claude" / "stats-cache.json"
+        stats_file.parent.mkdir(parents=True)
+        stats_file.write_text(json.dumps(stats_data))
+
+        with patch("app.routers.stats.Path.home", return_value=tmp_path):
+            client = TestClient(app)
+            response = client.get("/api/stats")
+
+            assert response.status_code == 200
+            data = response.json()
+            # Should be empty list, not cause TypeError
+            assert data["daily_model_tokens"] == []
+
+    # ==============================================
+    # None model usage dict tests
+    # ==============================================
+
+    def test_handles_none_model_usage_dict(self, tmp_path):
+        """Handles None modelUsage dict (not missing, but explicitly None)."""
+        import json
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        stats_data = {
+            "lastComputedDate": "2024-01-01",
+            "totalSessions": 10,
+            "totalMessages": 100,
+            "dailyActivity": [],
+            "dailyModelTokens": [],
+            "modelUsage": None,  # Key exists but value is None
+            "hourCounts": {},
+        }
+
+        stats_file = tmp_path / ".claude" / "stats-cache.json"
+        stats_file.parent.mkdir(parents=True)
+        stats_file.write_text(json.dumps(stats_data))
+
+        with patch("app.routers.stats.Path.home", return_value=tmp_path):
+            client = TestClient(app)
+            response = client.get("/api/stats")
+
+            assert response.status_code == 200
+            data = response.json()
+            # Should be empty list (no models), not cause AttributeError on .items()
+            assert data["model_usage"] == []
+
+    # ==============================================
+    # None hour counts dict tests
+    # ==============================================
+
+    def test_handles_none_hour_counts_dict(self, tmp_path):
+        """Handles None hourCounts dict (not missing, but explicitly None)."""
+        import json
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        stats_data = {
+            "lastComputedDate": "2024-01-01",
+            "totalSessions": 10,
+            "totalMessages": 100,
+            "dailyActivity": [],
+            "dailyModelTokens": [],
+            "modelUsage": {},
+            "hourCounts": None,  # Key exists but value is None
+        }
+
+        stats_file = tmp_path / ".claude" / "stats-cache.json"
+        stats_file.parent.mkdir(parents=True)
+        stats_file.write_text(json.dumps(stats_data))
+
+        with patch("app.routers.stats.Path.home", return_value=tmp_path):
+            client = TestClient(app)
+            response = client.get("/api/stats")
+
+            assert response.status_code == 200
+            data = response.json()
+            # Should be empty list, not cause AttributeError on .items()
+            assert data["hourly_distribution"] == []
+
+    # ==============================================
+    # None longest session dict tests
+    # ==============================================
+
+    def test_handles_none_longest_session_dict(self, tmp_path):
+        """Handles None longestSession dict (not missing, but explicitly None)."""
+        import json
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        stats_data = {
+            "lastComputedDate": "2024-01-01",
+            "totalSessions": 10,
+            "totalMessages": 100,
+            "dailyActivity": [],
+            "dailyModelTokens": [],
+            "modelUsage": {},
+            "hourCounts": {},
+            "longestSession": None,  # Key exists but value is None
+        }
+
+        stats_file = tmp_path / ".claude" / "stats-cache.json"
+        stats_file.parent.mkdir(parents=True)
+        stats_file.write_text(json.dumps(stats_data))
+
+        with patch("app.routers.stats.Path.home", return_value=tmp_path):
+            client = TestClient(app)
+            response = client.get("/api/stats")
+
+            assert response.status_code == 200
+            data = response.json()
+            # Should be None (no longest session), not cause AttributeError on .get()
+            assert data["longest_session_minutes"] is None
+
+    # ==============================================
+    # None tokens_by_model in daily model tokens tests
+    # ==============================================
+
+    def test_handles_none_tokens_by_model_in_daily_model_tokens(self, tmp_path):
+        """Handles None tokensByModel in daily model tokens entries."""
+        import json
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        stats_data = {
+            "lastComputedDate": "2024-01-01",
+            "totalSessions": 10,
+            "totalMessages": 100,
+            "dailyActivity": [],
+            "dailyModelTokens": [
+                {
+                    "date": "2024-01-01",
+                    "tokensByModel": None,  # Key exists but value is None
+                }
+            ],
+            "modelUsage": {},
+            "hourCounts": {},
+        }
+
+        stats_file = tmp_path / ".claude" / "stats-cache.json"
+        stats_file.parent.mkdir(parents=True)
+        stats_file.write_text(json.dumps(stats_data))
+
+        with patch("app.routers.stats.Path.home", return_value=tmp_path):
+            client = TestClient(app)
+            response = client.get("/api/stats")
+
+            assert response.status_code == 200
+            data = response.json()
+            # Should have entry with empty dict, not cause TypeError
+            assert len(data["daily_model_tokens"]) == 1
+            assert data["daily_model_tokens"][0]["tokens_by_model"] == {}
+
+    # ==============================================
+    # Combined None container tests
+    # ==============================================
+
+    def test_handles_all_none_container_fields(self, tmp_path):
+        """Handles all container fields being None simultaneously."""
+        import json
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        stats_data = {
+            "lastComputedDate": "2024-01-01",
+            "totalSessions": 10,
+            "totalMessages": 100,
+            "dailyActivity": None,  # All container fields are None
+            "dailyModelTokens": None,
+            "modelUsage": None,
+            "hourCounts": None,
+            "longestSession": None,
+        }
+
+        stats_file = tmp_path / ".claude" / "stats-cache.json"
+        stats_file.parent.mkdir(parents=True)
+        stats_file.write_text(json.dumps(stats_data))
+
+        with patch("app.routers.stats.Path.home", return_value=tmp_path):
+            client = TestClient(app)
+            response = client.get("/api/stats")
+
+            assert response.status_code == 200
+            data = response.json()
+
+            # All should return empty containers or None, not cause errors
+            assert data["daily_activity"] == []
+            assert data["daily_model_tokens"] == []
+            assert data["model_usage"] == []
+            assert data["hourly_distribution"] == []
+            assert data["longest_session_minutes"] is None
