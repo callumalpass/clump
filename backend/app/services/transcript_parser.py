@@ -244,7 +244,8 @@ def _parse_claude_transcript(transcript_path: Path, session_id: str) -> ParsedTr
                         start_time = timestamp
                     end_time = timestamp
 
-                message_data = entry.get('message', {})
+                # Use `or {}` to handle None values (key exists but value is None)
+                message_data = entry.get('message') or {}
                 role = message_data.get('role', entry_type)
                 content_parts = message_data.get('content', [])
 
@@ -355,7 +356,7 @@ def _parse_claude_transcript(transcript_path: Path, session_id: str) -> ParsedTr
                         if model and not primary_model:
                             primary_model = model
 
-                        usage_data = message_data.get('usage', {})
+                        usage_data = message_data.get('usage') or {}
                         usage = None
                         if usage_data:
                             input_tokens = usage_data.get('input_tokens', 0)

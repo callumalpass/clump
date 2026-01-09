@@ -2348,3 +2348,237 @@ class TestToolUseDataclass:
 
         assert tool.result == ""
         assert tool.result_is_error is False
+
+
+class TestParseClaudeTranscriptNoneHandling:
+    """Tests for None value handling in _parse_claude_transcript.
+
+    These tests verify that the parser correctly handles edge cases where
+    JSON keys exist but have None values instead of expected dictionaries.
+    This is important because `dict.get('key', {})` returns None (not {})
+    when the key exists with value None.
+    """
+
+    def test_handles_none_message_value(self, tmp_path, monkeypatch):
+        """Parser handles entry where 'message' key exists but value is None."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        # Create the directory structure
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        # Create transcript with None message value
+        transcript = project_dir / "session-none-msg.jsonl"
+        transcript.write_text(json.dumps({
+            "type": "user",
+            "uuid": "msg-1",
+            "timestamp": "2025-01-01T10:00:00Z",
+            "message": None  # Key exists but value is None
+        }) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        # Should not raise AttributeError
+        result = parse_transcript("session-none-msg", "/test/project")
+        assert result is not None
+        assert result.session_id == "session-none-msg"
+        # Message with None content should be skipped (no text content)
+        assert len(result.messages) == 0
+
+    def test_handles_none_message_with_valid_messages(self, tmp_path, monkeypatch):
+        """Parser handles mix of None message and valid messages."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-mixed-none.jsonl"
+        lines = [
+            json.dumps({
+                "type": "user",
+                "uuid": "msg-1",
+                "timestamp": "2025-01-01T10:00:00Z",
+                "message": None  # None message
+            }),
+            json.dumps({
+                "type": "user",
+                "uuid": "msg-2",
+                "timestamp": "2025-01-01T10:01:00Z",
+                "message": {
+                    "role": "user",
+                    "content": "Valid message"
+                }
+            }),
+            json.dumps({
+                "type": "assistant",
+                "uuid": "msg-3",
+                "timestamp": "2025-01-01T10:02:00Z",
+                "message": None  # Another None message
+            }),
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-mixed-none", "/test/project")
+        assert result is not None
+        # Only the valid message should be parsed
+        assert len(result.messages) == 1
+        assert result.messages[0].content == "Valid message"
+
+    def test_handles_none_usage_value(self, tmp_path, monkeypatch):
+        """Parser handles entry where 'usage' key exists but value is None."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-none-usage.jsonl"
+        transcript.write_text(json.dumps({
+            "type": "assistant",
+            "uuid": "msg-1",
+            "timestamp": "2025-01-01T10:00:00Z",
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "text", "text": "Hello!"}],
+                "usage": None  # Key exists but value is None
+            }
+        }) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        # Should not raise any errors
+        result = parse_transcript("session-none-usage", "/test/project")
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].content == "Hello!"
+        # Usage should be None when the value is None
+        assert result.messages[0].usage is None
+        # Total tokens should still be 0
+        assert result.total_input_tokens == 0
+        assert result.total_output_tokens == 0
+
+    def test_handles_none_usage_with_valid_usage(self, tmp_path, monkeypatch):
+        """Parser handles mix of None usage and valid usage values."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-mixed-usage.jsonl"
+        lines = [
+            json.dumps({
+                "type": "assistant",
+                "uuid": "msg-1",
+                "timestamp": "2025-01-01T10:00:00Z",
+                "message": {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "First response"}],
+                    "usage": {
+                        "input_tokens": 100,
+                        "output_tokens": 50
+                    }
+                }
+            }),
+            json.dumps({
+                "type": "assistant",
+                "uuid": "msg-2",
+                "timestamp": "2025-01-01T10:01:00Z",
+                "message": {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "Second response"}],
+                    "usage": None  # None usage
+                }
+            }),
+            json.dumps({
+                "type": "assistant",
+                "uuid": "msg-3",
+                "timestamp": "2025-01-01T10:02:00Z",
+                "message": {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "Third response"}],
+                    "usage": {
+                        "input_tokens": 80,
+                        "output_tokens": 40
+                    }
+                }
+            }),
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-mixed-usage", "/test/project")
+        assert result is not None
+        assert len(result.messages) == 3
+
+        # First message has usage
+        assert result.messages[0].usage is not None
+        assert result.messages[0].usage.input_tokens == 100
+
+        # Second message has None usage
+        assert result.messages[1].usage is None
+
+        # Third message has usage
+        assert result.messages[2].usage is not None
+        assert result.messages[2].usage.input_tokens == 80
+
+        # Total should only count valid usage values
+        assert result.total_input_tokens == 180
+        assert result.total_output_tokens == 90
+
+    def test_handles_empty_message_dict(self, tmp_path, monkeypatch):
+        """Parser handles entry where 'message' is an empty dict."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-empty-dict.jsonl"
+        transcript.write_text(json.dumps({
+            "type": "user",
+            "uuid": "msg-1",
+            "timestamp": "2025-01-01T10:00:00Z",
+            "message": {}  # Empty dict
+        }) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-empty-dict", "/test/project")
+        assert result is not None
+        # Empty dict means no content, so message should be skipped
+        assert len(result.messages) == 0
+
+    def test_handles_missing_message_key(self, tmp_path, monkeypatch):
+        """Parser handles entry where 'message' key is missing entirely."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-no-message.jsonl"
+        transcript.write_text(json.dumps({
+            "type": "user",
+            "uuid": "msg-1",
+            "timestamp": "2025-01-01T10:00:00Z"
+            # 'message' key is missing entirely
+        }) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-no-message", "/test/project")
+        assert result is not None
+        # Missing message key means no content
+        assert len(result.messages) == 0
