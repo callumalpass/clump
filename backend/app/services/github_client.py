@@ -1,7 +1,11 @@
 """
 GitHub client service for fetching issues, PRs, and repository data.
+
+Thread-safety: The repository cache uses a lock to prevent race conditions
+when multiple async tasks access the same GitHubClient instance concurrently.
 """
 
+import threading
 from dataclasses import dataclass
 from datetime import datetime
 from github import Github, Auth
@@ -69,7 +73,12 @@ class PRData:
 
 
 class GitHubClient:
-    """Client for interacting with GitHub API."""
+    """Client for interacting with GitHub API.
+
+    Thread-safety: All access to _repo_cache is protected by _cache_lock
+    to prevent race conditions when multiple async tasks access the same
+    client instance concurrently.
+    """
 
     def __init__(self, token: str | None = None):
         self._token = token or settings.github_token
@@ -78,13 +87,30 @@ class GitHubClient:
         else:
             self._github = Github()
         self._repo_cache: dict[str, Repository] = {}
+        self._cache_lock = threading.Lock()
 
     def get_repo(self, owner: str, name: str) -> Repository:
-        """Get a repository (cached)."""
+        """Get a repository (cached).
+
+        Thread-safe: Uses a lock to prevent race conditions when
+        multiple threads/tasks check and populate the cache simultaneously.
+        """
         key = f"{owner}/{name}"
-        if key not in self._repo_cache:
-            self._repo_cache[key] = self._github.get_repo(key)
-        return self._repo_cache[key]
+
+        # Fast path: check if already cached (read-only, still needs lock for visibility)
+        with self._cache_lock:
+            if key in self._repo_cache:
+                return self._repo_cache[key]
+
+        # Slow path: fetch from API (outside lock to avoid blocking other threads)
+        repo = self._github.get_repo(key)
+
+        # Store in cache (with lock)
+        with self._cache_lock:
+            # Double-check in case another thread populated it while we were fetching
+            if key not in self._repo_cache:
+                self._repo_cache[key] = repo
+            return self._repo_cache[key]
 
     @staticmethod
     def _validate_sort_params(
