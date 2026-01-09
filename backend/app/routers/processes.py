@@ -523,7 +523,7 @@ async def process_websocket(websocket: WebSocket, process_id: str):
         except asyncio.QueueFull:
             pass
 
-    process_manager.subscribe(process_id, on_output)
+    await process_manager.subscribe(process_id, on_output)
 
     # Send existing transcript using cached bytes (avoids re-encoding on each reconnect)
     transcript_bytes = process.transcript_bytes
@@ -576,6 +576,6 @@ async def process_websocket(websocket: WebSocket, process_id: str):
     try:
         await asyncio.gather(send_task, receive_task, return_exceptions=True)
     finally:
-        process_manager.unsubscribe(process_id, on_output)
+        await process_manager.unsubscribe(process_id, on_output)
         send_task.cancel()
         receive_task.cancel()

@@ -75,6 +75,8 @@ class Process:
     _transcript_bytes_cache: bytes | None = field(default=None, repr=False)
 
     subscribers: list[Callable[[bytes], None]] = field(default_factory=list)
+    # Lock for thread-safe subscriber list access
+    _subscribers_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
     _read_task: asyncio.Task | None = field(default=None, repr=False)
     _initial_prompt_task: asyncio.Task | None = field(default=None, repr=False)
 
@@ -355,8 +357,13 @@ class ProcessManager:
                     # Use append_transcript for O(1) performance instead of O(n) string concat
                     process.append_transcript(decoded)
 
-                    # Notify all subscribers
-                    for callback in process.subscribers:
+                    # Take a snapshot of subscribers under lock to avoid race conditions
+                    # if subscribers are added/removed during iteration
+                    async with process._subscribers_lock:
+                        subscribers_snapshot = list(process.subscribers)
+
+                    # Notify all subscribers (using snapshot taken under lock)
+                    for callback in subscribers_snapshot:
                         try:
                             callback(data)
                         except Exception:
@@ -406,26 +413,34 @@ class ProcessManager:
         except OSError:
             return False
 
-    def subscribe(self, process_id: str, callback: Callable[[bytes], None]) -> bool:
-        """Subscribe to process output."""
+    async def subscribe(self, process_id: str, callback: Callable[[bytes], None]) -> bool:
+        """Subscribe to process output.
+
+        Thread-safe: Uses lock to prevent race conditions with _read_loop().
+        """
         process = self._processes.get(process_id)
         if not process:
             return False
 
-        process.subscribers.append(callback)
+        async with process._subscribers_lock:
+            process.subscribers.append(callback)
         return True
 
-    def unsubscribe(self, process_id: str, callback: Callable[[bytes], None]) -> bool:
-        """Unsubscribe from process output."""
+    async def unsubscribe(self, process_id: str, callback: Callable[[bytes], None]) -> bool:
+        """Unsubscribe from process output.
+
+        Thread-safe: Uses lock to prevent race conditions with _read_loop().
+        """
         process = self._processes.get(process_id)
         if not process:
             return False
 
-        try:
-            process.subscribers.remove(callback)
-            return True
-        except ValueError:
-            return False
+        async with process._subscribers_lock:
+            try:
+                process.subscribers.remove(callback)
+                return True
+            except ValueError:
+                return False
 
     async def kill(self, process_id: str) -> bool:
         """Kill a process."""
