@@ -1395,3 +1395,376 @@ class TestGeminiAdapterResumeIdErrorHandling:
 
         # Should fall back to filename extraction
         assert result == "fallback"
+
+
+class TestGeminiAdapterParseSessionFile:
+    """Tests for GeminiAdapter.parse_session_file edge cases."""
+
+    @pytest.fixture
+    def adapter(self):
+        return GeminiAdapter()
+
+    def test_parses_valid_session_file(self, adapter, tmp_path):
+        """Parses a valid session file with all fields."""
+        session_file = tmp_path / "session.json"
+        session_file.write_text(json.dumps({
+            "sessionId": "test-session-id",
+            "projectHash": "abc123",
+            "startTime": "2025-01-01T10:00:00Z",
+            "lastUpdated": "2025-01-01T11:00:00Z",
+            "summary": "Test session",
+            "messages": [
+                {"type": "user", "content": "Hello"},
+                {"type": "gemini", "content": "Hi there", "model": "gemini-2.0-flash"},
+            ]
+        }))
+
+        result = adapter.parse_session_file(session_file)
+
+        assert result["session_id"] == "test-session-id"
+        assert result["project_hash"] == "abc123"
+        assert result["start_time"] == "2025-01-01T10:00:00Z"
+        assert result["last_updated"] == "2025-01-01T11:00:00Z"
+        assert result["summary"] == "Test session"
+        assert result["format"] == "json"
+        assert len(result["messages"]) == 2
+
+    def test_handles_missing_fields(self, adapter, tmp_path):
+        """Handles session file with missing fields."""
+        session_file = tmp_path / "session.json"
+        session_file.write_text(json.dumps({
+            "messages": []
+        }))
+
+        result = adapter.parse_session_file(session_file)
+
+        assert result["session_id"] is None
+        assert result["project_hash"] is None
+        assert result["start_time"] is None
+        assert result["last_updated"] is None
+        assert result["summary"] is None
+        assert result["messages"] == []
+        assert result["format"] == "json"
+
+    def test_handles_null_values(self, adapter, tmp_path):
+        """Handles session file with explicit null values."""
+        session_file = tmp_path / "session.json"
+        session_file.write_text(json.dumps({
+            "sessionId": None,
+            "projectHash": None,
+            "startTime": None,
+            "lastUpdated": None,
+            "summary": None,
+            "messages": None
+        }))
+
+        result = adapter.parse_session_file(session_file)
+
+        assert result["session_id"] is None
+        assert result["project_hash"] is None
+        assert result["start_time"] is None
+        assert result["last_updated"] is None
+        assert result["summary"] is None
+        # messages should default to empty list when None
+        assert result["messages"] == []
+
+    def test_handles_empty_file(self, adapter, tmp_path):
+        """Handles empty JSON object."""
+        session_file = tmp_path / "session.json"
+        session_file.write_text("{}")
+
+        result = adapter.parse_session_file(session_file)
+
+        assert result["session_id"] is None
+        assert result["messages"] == []
+        assert result["format"] == "json"
+
+
+class TestGeminiAdapterExtractSessionInfo:
+    """Tests for GeminiAdapter.extract_session_info edge cases."""
+
+    @pytest.fixture
+    def adapter(self):
+        return GeminiAdapter()
+
+    def test_extracts_info_from_complete_data(self, adapter):
+        """Extracts session info from complete data."""
+        data = {
+            "session_id": "test-id",
+            "summary": "Test summary",
+            "start_time": "2025-01-01T10:00:00Z",
+            "last_updated": "2025-01-01T11:00:00Z",
+            "messages": [
+                {"type": "user", "content": "Hello"},
+                {"type": "gemini", "content": "Hi", "model": "gemini-2.0-flash"},
+                {"type": "gemini", "content": "More", "model": "gemini-2.0-flash"},
+            ]
+        }
+
+        info = adapter.extract_session_info(data)
+
+        assert info.session_id == "test-id"
+        assert info.title == "Test summary"
+        assert info.model == "gemini-2.0-flash"
+        assert info.start_time == "2025-01-01T10:00:00Z"
+        assert info.end_time == "2025-01-01T11:00:00Z"
+        assert info.message_count == 3  # 1 user + 2 gemini
+
+    def test_handles_empty_messages(self, adapter):
+        """Handles session with no messages."""
+        data = {
+            "session_id": "test-id",
+            "messages": []
+        }
+
+        info = adapter.extract_session_info(data)
+
+        assert info.session_id == "test-id"
+        assert info.message_count == 0
+        assert info.model is None
+
+    def test_handles_missing_messages_key(self, adapter):
+        """Handles session data without messages key."""
+        data = {
+            "session_id": "test-id"
+        }
+
+        info = adapter.extract_session_info(data)
+
+        assert info.session_id == "test-id"
+        assert info.message_count == 0
+
+    def test_handles_none_values(self, adapter):
+        """Handles session data with None values."""
+        data = {
+            "session_id": None,
+            "summary": None,
+            "start_time": None,
+            "last_updated": None,
+            "messages": None
+        }
+
+        info = adapter.extract_session_info(data)
+
+        # Should not raise, return sensible defaults
+        assert info.session_id is None
+        assert info.title is None
+        assert info.message_count == 0
+
+    def test_counts_only_user_and_gemini_messages(self, adapter):
+        """Only counts user and gemini message types."""
+        data = {
+            "session_id": "test-id",
+            "messages": [
+                {"type": "user", "content": "Hello"},
+                {"type": "gemini", "content": "Hi"},
+                {"type": "system", "content": "System message"},  # Should not count
+                {"type": "error", "content": "Error"},  # Should not count
+                {"type": "user", "content": "More"},
+            ]
+        }
+
+        info = adapter.extract_session_info(data)
+
+        assert info.message_count == 3  # 2 user + 1 gemini
+
+    def test_finds_model_from_first_gemini_message(self, adapter):
+        """Finds model from first gemini message that has one."""
+        data = {
+            "session_id": "test-id",
+            "messages": [
+                {"type": "user", "content": "Hello"},
+                {"type": "gemini", "content": "Hi"},  # No model
+                {"type": "gemini", "content": "More", "model": "gemini-2.0-flash"},
+            ]
+        }
+
+        info = adapter.extract_session_info(data)
+
+        assert info.model == "gemini-2.0-flash"
+
+    def test_handles_messages_without_type(self, adapter):
+        """Handles messages missing the type field."""
+        data = {
+            "session_id": "test-id",
+            "messages": [
+                {"content": "No type field"},
+                {"type": "user", "content": "Valid"},
+            ]
+        }
+
+        info = adapter.extract_session_info(data)
+
+        # Should only count the one with valid type
+        assert info.message_count == 1
+
+
+class TestGeminiAdapterBuildCommandEdgeCases:
+    """Tests for edge cases in GeminiAdapter command building."""
+
+    @pytest.fixture
+    def adapter(self):
+        return GeminiAdapter()
+
+    def test_build_interactive_ignores_session_id(self, adapter):
+        """session_id parameter is ignored since Gemini doesn't support it."""
+        cmd = adapter.build_interactive_command(
+            "/path/to/project",
+            session_id="custom-session-id"
+        )
+
+        # Should not include session ID anywhere
+        assert "custom-session-id" not in cmd
+        assert "--session-id" not in cmd
+
+    def test_build_interactive_ignores_disallowed_tools(self, adapter):
+        """disallowed_tools parameter is ignored by Gemini."""
+        cmd = adapter.build_interactive_command(
+            "/path/to/project",
+            disallowed_tools=["Bash", "Write"]
+        )
+
+        # Should not include disallowed tools
+        assert "--disallowed-tools" not in cmd
+        assert "Bash" not in cmd
+
+    def test_build_interactive_ignores_max_turns(self, adapter):
+        """max_turns parameter is ignored since Gemini doesn't support it."""
+        cmd = adapter.build_interactive_command(
+            "/path/to/project",
+            max_turns=10
+        )
+
+        # Should not include max-turns
+        assert "--max-turns" not in cmd
+        assert "10" not in cmd
+
+    def test_build_headless_ignores_system_prompt(self, adapter):
+        """system_prompt parameter is not used in Gemini headless."""
+        cmd = adapter.build_headless_command(
+            "Test prompt",
+            "/path/to/project",
+            system_prompt="Custom system prompt"
+        )
+
+        # Should not include system prompt
+        assert "Custom system prompt" not in cmd
+
+    def test_build_headless_with_all_options(self, adapter):
+        """Builds headless command with all supported options."""
+        cmd = adapter.build_headless_command(
+            "Analyze the code",
+            "/path/to/project",
+            resume_session="full-uuid",
+            allowed_tools=["Read", "Grep"],
+            permission_mode="bypassPermissions",
+            model="gemini-2.5-pro",
+            output_format="json",
+        )
+
+        assert cmd[0] == adapter.command_name
+        assert "-o" in cmd
+        assert "json" in cmd
+        assert "--resume" in cmd
+        assert "full-uuid" in cmd
+        assert "--approval-mode" in cmd
+        assert "yolo" in cmd
+        assert cmd.count("--allowed-tools") == 2
+        assert "--model" in cmd
+        assert "gemini-2.5-pro" in cmd
+        # Prompt should be at the end
+        assert cmd[-1] == "Analyze the code"
+
+    def test_build_interactive_with_model(self, adapter):
+        """Builds interactive command with model option."""
+        cmd = adapter.build_interactive_command(
+            "/path/to/project",
+            model="gemini-2.5-pro"
+        )
+
+        assert "--model" in cmd
+        idx = cmd.index("--model")
+        assert cmd[idx + 1] == "gemini-2.5-pro"
+
+
+class TestGeminiAdapterGetResumeSessionId:
+    """Tests for GeminiAdapter.get_resume_session_id edge cases."""
+
+    @pytest.fixture
+    def adapter(self):
+        return GeminiAdapter()
+
+    def test_extracts_from_standard_format(self, adapter):
+        """Extracts UUID from standard session-YYYY-MM-DDTHH-MM-uuid format."""
+        result = adapter.get_resume_session_id("session-2025-12-15T21-28-a51b3ff5")
+        assert result == "a51b3ff5"
+
+    def test_handles_single_segment(self, adapter):
+        """Handles session ID with no hyphens."""
+        result = adapter.get_resume_session_id("simplesessionid")
+        assert result == "simplesessionid"
+
+    def test_handles_multiple_hyphens(self, adapter):
+        """Handles session ID with many hyphens, takes last segment."""
+        result = adapter.get_resume_session_id("a-b-c-d-e-f-lastpart")
+        assert result == "lastpart"
+
+    def test_handles_trailing_hyphen(self, adapter):
+        """Handles session ID with trailing hyphen."""
+        result = adapter.get_resume_session_id("session-id-")
+        assert result == ""
+
+    def test_handles_empty_string(self, adapter):
+        """Handles empty session ID."""
+        result = adapter.get_resume_session_id("")
+        assert result == ""
+
+    def test_handles_just_hyphen(self, adapter):
+        """Handles session ID that is just a hyphen."""
+        result = adapter.get_resume_session_id("-")
+        assert result == ""
+
+
+class TestGeminiAdapterPathEncoding:
+    """Tests for GeminiAdapter path encoding methods."""
+
+    @pytest.fixture
+    def adapter(self):
+        return GeminiAdapter()
+
+    def test_encode_path_is_deterministic(self, adapter):
+        """Same path produces same hash."""
+        path = "/home/user/project"
+        hash1 = adapter.encode_path(path)
+        hash2 = adapter.encode_path(path)
+        assert hash1 == hash2
+
+    def test_encode_path_normalizes_paths(self, adapter):
+        """Paths are normalized before hashing."""
+        # These should produce different hashes since they resolve differently
+        # in the test environment
+        hash1 = adapter.encode_path("/home/user/project")
+        hash2 = adapter.encode_path("/home/user/./project")
+
+        # Both paths normalize to the same thing
+        assert hash1 == hash2
+
+    def test_encode_path_different_paths_different_hashes(self, adapter):
+        """Different paths produce different hashes."""
+        hash1 = adapter.encode_path("/home/user/project1")
+        hash2 = adapter.encode_path("/home/user/project2")
+        assert hash1 != hash2
+
+    def test_get_sessions_dir_structure(self, adapter):
+        """Sessions directory has correct structure."""
+        sessions_dir = adapter.get_sessions_dir("/home/user/project")
+
+        # Should end with /chats
+        assert sessions_dir.name == "chats"
+        # Parent should be the hash
+        parent = sessions_dir.parent
+        assert len(parent.name) == 64  # SHA256 hex length
+        # Grandparent should be "tmp"
+        assert parent.parent.name == "tmp"
+        # Should be under ~/.gemini
+        assert parent.parent.parent == Path.home() / ".gemini"

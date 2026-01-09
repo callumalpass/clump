@@ -254,7 +254,8 @@ class CodexAdapter(CLIAdapter):
 
     def extract_session_info(self, data: dict[str, Any]) -> SessionInfo:
         """Extract normalized session info from parsed Codex session data."""
-        messages = data.get("messages", [])
+        # Use `or []` to handle None values (key exists but value is None)
+        messages = data.get("messages") or []
 
         # Count user messages from event_msg entries
         message_count = 0

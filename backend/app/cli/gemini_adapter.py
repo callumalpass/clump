@@ -194,7 +194,8 @@ class GeminiAdapter(CLIAdapter):
             data = json.load(f)
 
         return {
-            "messages": data.get("messages", []),
+            # Use `or []` to handle None values (key exists but value is None)
+            "messages": data.get("messages") or [],
             "format": "json",
             "session_id": data.get("sessionId"),
             "project_hash": data.get("projectHash"),
@@ -205,7 +206,8 @@ class GeminiAdapter(CLIAdapter):
 
     def extract_session_info(self, data: dict[str, Any]) -> SessionInfo:
         """Extract normalized session info from parsed Gemini session data."""
-        messages = data.get("messages", [])
+        # Use `or []` to handle None values (key exists but value is None)
+        messages = data.get("messages") or []
 
         # Count user/assistant messages
         message_count = sum(
