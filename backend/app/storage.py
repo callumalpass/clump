@@ -86,10 +86,11 @@ class SessionMetadata:
 
     @classmethod
     def from_dict(cls, data: dict) -> "SessionMetadata":
-        entities = [
-            EntityLink(kind=e["kind"], number=e["number"])
-            for e in data.get("entities", [])
-        ]
+        entities = []
+        for e in data.get("entities", []):
+            # Skip malformed entities missing required fields
+            if isinstance(e, dict) and "kind" in e and "number" in e:
+                entities.append(EntityLink(kind=e["kind"], number=e["number"]))
         return cls(
             session_id=data.get("session_id", ""),
             title=data.get("title"),

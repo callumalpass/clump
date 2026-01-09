@@ -393,6 +393,26 @@ def get_command_template(command_id: str, category: str, repo_path: str | None) 
     return cmd.template if cmd else None
 
 
+def _format_template_value(value) -> str:
+    """Format a value for template substitution.
+
+    Args:
+        value: The value to format
+
+    Returns:
+        String representation suitable for template substitution.
+        - None -> empty string
+        - Lists -> comma-separated string (e.g., ["a", "b"] -> "a, b")
+        - Other values -> str(value)
+    """
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        # Join list items with comma-space for readable output
+        return ", ".join(str(item) for item in value)
+    return str(value)
+
+
 def build_prompt_from_template(template: str, context: dict) -> str:
     """Build a prompt by substituting template variables.
 
@@ -403,13 +423,13 @@ def build_prompt_from_template(template: str, context: dict) -> str:
     Returns:
         The template with placeholders replaced by their values.
         None values are replaced with empty string.
+        List values are joined with ", " for readability.
         Other falsy values (0, False, "") are converted to their string representation.
     """
     result = template
     for key, value in context.items():
         placeholder = "{{" + key + "}}"
-        # Use 'is None' check instead of truthiness to preserve falsy values like 0, False, ""
-        result = result.replace(placeholder, "" if value is None else str(value))
+        result = result.replace(placeholder, _format_template_value(value))
     return result
 
 

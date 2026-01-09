@@ -17,6 +17,7 @@ from unittest.mock import MagicMock, patch, AsyncMock
 from app.services.scheduler import (
     parse_filter_query,
     build_prompt_from_template,
+    _format_template_value,
     calculate_next_run,
     is_valid_cron_expression,
 )
@@ -668,6 +669,58 @@ class TestFilterPrsBySidecar:
         assert result[0]["number"] == 1
 
 
+class TestFormatTemplateValue:
+    """Tests for _format_template_value helper function."""
+
+    def test_none_returns_empty_string(self):
+        """None value returns empty string."""
+        assert _format_template_value(None) == ""
+
+    def test_string_returns_itself(self):
+        """String value returns itself."""
+        assert _format_template_value("hello") == "hello"
+
+    def test_integer_returns_string(self):
+        """Integer value returns string representation."""
+        assert _format_template_value(42) == "42"
+
+    def test_zero_returns_string_zero(self):
+        """Zero returns '0' not empty string."""
+        assert _format_template_value(0) == "0"
+
+    def test_false_returns_string_false(self):
+        """False returns 'False' not empty string."""
+        assert _format_template_value(False) == "False"
+
+    def test_true_returns_string_true(self):
+        """True returns 'True'."""
+        assert _format_template_value(True) == "True"
+
+    def test_empty_string_returns_empty_string(self):
+        """Empty string returns empty string."""
+        assert _format_template_value("") == ""
+
+    def test_list_returns_comma_separated(self):
+        """List returns comma-separated string."""
+        assert _format_template_value(["a", "b", "c"]) == "a, b, c"
+
+    def test_empty_list_returns_empty_string(self):
+        """Empty list returns empty string."""
+        assert _format_template_value([]) == ""
+
+    def test_single_item_list_returns_just_item(self):
+        """Single item list returns just that item."""
+        assert _format_template_value(["only"]) == "only"
+
+    def test_list_with_numbers(self):
+        """List with numbers converts items to strings."""
+        assert _format_template_value([1, 2, 3]) == "1, 2, 3"
+
+    def test_list_with_mixed_types(self):
+        """List with mixed types converts all to strings."""
+        assert _format_template_value(["text", 42, True, None]) == "text, 42, True, None"
+
+
 class TestBuildPromptFromTemplate:
     """Tests for build_prompt_from_template function."""
 
@@ -765,6 +818,41 @@ class TestBuildPromptFromTemplate:
         context = {"a": None, "b": 0, "c": False, "d": ""}
         result = build_prompt_from_template(template, context)
         assert result == "a=, b=0, c=False, d="
+
+    def test_handles_list_value(self):
+        """Converts list values to comma-separated strings."""
+        template = "Labels: {{labels}}"
+        context = {"labels": ["bug", "enhancement", "priority"]}
+        result = build_prompt_from_template(template, context)
+        assert result == "Labels: bug, enhancement, priority"
+
+    def test_handles_empty_list_value(self):
+        """Converts empty list to empty string."""
+        template = "Labels: {{labels}}"
+        context = {"labels": []}
+        result = build_prompt_from_template(template, context)
+        assert result == "Labels: "
+
+    def test_handles_list_with_single_item(self):
+        """Converts single-item list to just that item."""
+        template = "Labels: {{labels}}"
+        context = {"labels": ["bug"]}
+        result = build_prompt_from_template(template, context)
+        assert result == "Labels: bug"
+
+    def test_handles_list_with_non_string_items(self):
+        """Converts list items to strings."""
+        template = "Values: {{values}}"
+        context = {"values": [1, 2, 3]}
+        result = build_prompt_from_template(template, context)
+        assert result == "Values: 1, 2, 3"
+
+    def test_handles_list_with_mixed_types(self):
+        """Converts list with mixed types to strings."""
+        template = "Mixed: {{items}}"
+        context = {"items": ["text", 42, True]}
+        result = build_prompt_from_template(template, context)
+        assert result == "Mixed: text, 42, True"
 
 
 class TestSchedulerServiceGetPrs:

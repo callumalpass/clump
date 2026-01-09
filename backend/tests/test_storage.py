@@ -570,6 +570,60 @@ class TestSessionMetadata:
         assert restored.scheduled_job_id == original.scheduled_job_id
         assert restored.scheduled_job_id == 123
 
+    def test_from_dict_skips_malformed_entities_missing_number(self):
+        """Test that entities missing 'number' key are skipped."""
+        data = {
+            "session_id": "test-session",
+            "entities": [{"kind": "issue"}],  # Missing 'number'
+        }
+
+        metadata = SessionMetadata.from_dict(data)
+
+        assert metadata.entities == []
+
+    def test_from_dict_skips_malformed_entities_missing_kind(self):
+        """Test that entities missing 'kind' key are skipped."""
+        data = {
+            "session_id": "test-session",
+            "entities": [{"number": 42}],  # Missing 'kind'
+        }
+
+        metadata = SessionMetadata.from_dict(data)
+
+        assert metadata.entities == []
+
+    def test_from_dict_skips_non_dict_entities(self):
+        """Test that non-dict entities are skipped."""
+        data = {
+            "session_id": "test-session",
+            "entities": ["invalid", 123, None],
+        }
+
+        metadata = SessionMetadata.from_dict(data)
+
+        assert metadata.entities == []
+
+    def test_from_dict_keeps_valid_entities_skips_malformed(self):
+        """Test that valid entities are kept while malformed ones are skipped."""
+        data = {
+            "session_id": "test-session",
+            "entities": [
+                {"kind": "issue"},  # Missing 'number' - skip
+                {"number": 42},  # Missing 'kind' - skip
+                {"kind": "pr", "number": 123},  # Valid - keep
+                "invalid",  # Not a dict - skip
+                {"kind": "issue", "number": 456},  # Valid - keep
+            ],
+        }
+
+        metadata = SessionMetadata.from_dict(data)
+
+        assert len(metadata.entities) == 2
+        assert metadata.entities[0].kind == "pr"
+        assert metadata.entities[0].number == 123
+        assert metadata.entities[1].kind == "issue"
+        assert metadata.entities[1].number == 456
+
 
 class TestEntityLink:
     """Tests for EntityLink dataclass."""
