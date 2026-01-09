@@ -1681,6 +1681,24 @@ class TestCodexSessionDiscovery:
 
             assert sessions == []
 
+    def test_discover_codex_sessions_handles_none_payload(self, tmp_path):
+        """Test that sessions with None payload in session_meta are skipped gracefully."""
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            session_dir = tmp_path / ".codex" / "sessions" / "2024" / "01" / "15"
+            session_dir.mkdir(parents=True)
+
+            # Create a session file with payload explicitly set to None
+            session_file = session_dir / "none-payload-session.jsonl"
+            session_file.write_text(json.dumps({
+                "type": "session_meta",
+                "payload": None  # Payload is None instead of missing
+            }) + "\n")
+
+            sessions = discover_codex_sessions()
+
+            # Should be skipped gracefully without error
+            assert sessions == []
+
 
 class TestDiscoverAllSessions:
     """Tests for discover_all_sessions which combines all CLI sources."""

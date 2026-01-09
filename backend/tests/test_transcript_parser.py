@@ -1,6 +1,8 @@
 """Tests for app.services.transcript_parser module."""
 
+import json
 import pytest
+from app.cli import CLIType
 from app.services.transcript_parser import (
     ToolUse,
     ToolResult,
@@ -9,6 +11,8 @@ from app.services.transcript_parser import (
     ParsedTranscript,
     transcript_to_dict,
     extract_agent_id,
+    parse_transcript,
+    parse_transcript_file,
 )
 
 
@@ -3561,3 +3565,148 @@ class TestNoneValueHandling:
         assert result is not None
         # No messages should be added since content is None (no text_content or tool_uses)
         assert len(result.messages) == 0
+
+
+class TestToolUseNoneInputHandling:
+    """Tests for handling None values in tool_use input fields.
+
+    The tool_use input field should be an empty dict if the value is None.
+    This tests the fix for `input=part.get('input') or {}` pattern.
+    """
+
+    def test_claude_tool_use_with_none_input(self, tmp_path, monkeypatch):
+        """Handles Claude tool_use where 'input' key is explicitly None."""
+        monkeypatch.setattr("app.services.transcript_parser.Path.home", lambda: tmp_path)
+        project_dir = tmp_path / ".claude" / "projects" / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-tool-none-input.jsonl"
+        lines = [
+            json.dumps({
+                "type": "assistant",
+                "timestamp": "2025-01-15T10:00:00Z",
+                "message": {
+                    "model": "claude-sonnet-4-20250514",
+                    "content": [
+                        {"type": "text", "text": "Let me read that file."},
+                        {
+                            "type": "tool_use",
+                            "id": "tool-1",
+                            "name": "Read",
+                            "input": None  # This would crash before the fix
+                        }
+                    ]
+                }
+            }),
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript("session-tool-none-input", "/test/project")
+        assert result is not None
+        assert len(result.messages) == 1
+        assert len(result.messages[0].tool_uses) == 1
+        assert result.messages[0].tool_uses[0].input == {}
+
+    def test_gemini_tool_use_with_none_args(self, tmp_path):
+        """Handles Gemini tool use where 'args' key is explicitly None."""
+        gemini_dir = tmp_path / ".gemini" / "conversations"
+        gemini_dir.mkdir(parents=True)
+
+        session_file = gemini_dir / "session-tool-none-args.json"
+        session_data = {
+            "sessionId": "session-tool-none-args",
+            "messages": [
+                {
+                    "type": "gemini",
+                    "id": "msg-1",
+                    "timestamp": "2025-01-15T10:00:00Z",
+                    "model": "gemini-2.5-pro",
+                    "content": [
+                        {
+                            "type": "functionCall",
+                            "functionCall": {
+                                "name": "ReadFile",
+                                "id": "fc-1",
+                                "args": None  # This would crash before the fix
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+        session_file.write_text(json.dumps(session_data))
+
+        result = parse_transcript_file(session_file, "session-tool-none-args", cli_type=CLIType.GEMINI.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert len(result.messages[0].tool_uses) == 1
+        assert result.messages[0].tool_uses[0].input == {}
+
+    def test_codex_function_call_with_none_arguments(self, tmp_path):
+        """Handles Codex function_call embedded in response_item where 'arguments' key is explicitly None."""
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-fc-none-args.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"cwd": "/home/user/project", "timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:01Z",
+                "payload": {
+                    "id": "msg-1",
+                    "role": "assistant",
+                    "type": "function_call",
+                    "call_id": "fc-1",
+                    "name": "shell",
+                    "arguments": None  # This would crash before the fix
+                }
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(session_file, "session-fc-none-args", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        # Function call should create an assistant message with a tool use
+        assert len(result.messages) == 1
+        assert len(result.messages[0].tool_uses) == 1
+        assert result.messages[0].tool_uses[0].input == {}
+
+    def test_codex_response_item_function_call_with_none_arguments(self, tmp_path):
+        """Handles Codex response_item function_call where 'arguments' key is explicitly None."""
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-ri-fc-none-args.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"cwd": "/home/user/project", "timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:01Z",
+                "payload": {
+                    "id": "msg-1",
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "function_call",
+                            "call_id": "fc-1",
+                            "name": "shell",
+                            "arguments": None  # This would crash before the fix
+                        }
+                    ]
+                }
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(session_file, "session-ri-fc-none-args", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert len(result.messages[0].tool_uses) == 1
+        assert result.messages[0].tool_uses[0].input == {}

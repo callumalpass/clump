@@ -785,7 +785,8 @@ def discover_codex_sessions(
                         try:
                             entry = json.loads(line)
                             if entry.get('type') == 'session_meta':
-                                payload = entry.get('payload', {})
+                                # Use `or {}` to handle None values (key exists but value is None)
+                                payload = entry.get('payload') or {}
                                 session_cwd = payload.get('cwd')
                                 break
                         except json.JSONDecodeError:

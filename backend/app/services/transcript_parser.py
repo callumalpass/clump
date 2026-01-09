@@ -349,7 +349,8 @@ def _parse_claude_transcript(transcript_path: Path, session_id: str) -> ParsedTr
                                 tool_uses.append(ToolUse(
                                     id=part.get('id', ''),
                                     name=part.get('name', ''),
-                                    input=part.get('input', {}),
+                                    # Use `or {}` to handle None values (key exists but value is None)
+                                    input=part.get('input') or {},
                                 ))
 
                     # Only add if there's actual content
@@ -547,7 +548,8 @@ def _parse_gemini_transcript(transcript_path: Path, session_id: str) -> ParsedTr
                                 tool_use = ToolUse(
                                     id=tool_id,
                                     name=func_call.get("name", ""),
-                                    input=func_call.get("args", {}),
+                                    # Use `or {}` to handle None values (key exists but value is None)
+                                    input=func_call.get("args") or {},
                                 )
                                 tool_uses.append(tool_use)
                                 pending_tool_uses[tool_id] = tool_use
@@ -677,7 +679,8 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
                         tool_use = ToolUse(
                             id=tool_id,
                             name=payload.get('name', ''),
-                            input=payload.get('arguments', {}),
+                            # Use `or {}` to handle None values (key exists but value is None)
+                            input=payload.get('arguments') or {},
                         )
                         pending_tool_uses[tool_id] = tool_use
 
@@ -767,7 +770,8 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
                                     tool_use = ToolUse(
                                         id=tool_id,
                                         name=c.get('name', ''),
-                                        input=c.get('arguments', {}),
+                                        # Use `or {}` to handle None values (key exists but value is None)
+                                        input=c.get('arguments') or {},
                                     )
                                     tool_uses.append(tool_use)
                                     pending_tool_uses[tool_id] = tool_use
