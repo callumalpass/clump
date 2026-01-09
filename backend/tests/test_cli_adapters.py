@@ -934,3 +934,255 @@ class TestClaudeAdapterExtractSessionInfo:
         info = adapter.extract_session_info(data)
         assert info.session_id == "test-empty"
         assert info.model is None
+
+
+class TestCodexAdapterParseSessionFileNoneHandling:
+    """Tests for CodexAdapter.parse_session_file None handling.
+
+    These tests verify the fix for the bug where entry.get('payload', {})
+    returns None (not {}) when the key exists with value None. The fix uses
+    entry.get('payload') or {} to correctly fall back to empty dict.
+    """
+
+    @pytest.fixture
+    def adapter(self):
+        return CodexAdapter()
+
+    def test_handles_none_payload_in_session_meta(self, adapter, tmp_path):
+        """Handles session_meta entry where payload is explicitly None."""
+        import json
+
+        # Create a test session file with None payload
+        session_file = tmp_path / "test_session.jsonl"
+        entries = [
+            {"type": "session_meta", "payload": None},  # Key exists but value is None
+        ]
+        with open(session_file, "w") as f:
+            for entry in entries:
+                f.write(json.dumps(entry) + "\n")
+
+        # Should not raise AttributeError
+        result = adapter.parse_session_file(session_file)
+        assert result["format"] == "jsonl"
+        assert len(result["messages"]) == 1
+        # Metadata should be missing/None due to None payload
+        assert result.get("session_id") is None
+        assert result.get("cwd") is None
+
+    def test_handles_none_git_in_payload(self, adapter, tmp_path):
+        """Handles session_meta entry where git is explicitly None."""
+        import json
+
+        session_file = tmp_path / "test_session.jsonl"
+        entries = [
+            {
+                "type": "session_meta",
+                "payload": {
+                    "id": "test-session-123",
+                    "timestamp": "2025-01-01T00:00:00Z",
+                    "cwd": "/test/path",
+                    "cli_version": "1.0.0",
+                    "git": None,  # Key exists but value is None
+                }
+            },
+        ]
+        with open(session_file, "w") as f:
+            for entry in entries:
+                f.write(json.dumps(entry) + "\n")
+
+        # Should not raise AttributeError
+        result = adapter.parse_session_file(session_file)
+        assert result["session_id"] == "test-session-123"
+        assert result["cwd"] == "/test/path"
+        # git_branch should not be present when git is None
+        assert result.get("git_branch") is None
+
+    def test_handles_valid_payload_with_git(self, adapter, tmp_path):
+        """Handles normal session_meta with valid payload and git info."""
+        import json
+
+        session_file = tmp_path / "test_session.jsonl"
+        entries = [
+            {
+                "type": "session_meta",
+                "payload": {
+                    "id": "test-session-456",
+                    "timestamp": "2025-01-02T12:00:00Z",
+                    "cwd": "/home/user/project",
+                    "cli_version": "2.0.0",
+                    "git": {
+                        "branch": "feature/test",
+                        "commit": "abc123",
+                    }
+                }
+            },
+        ]
+        with open(session_file, "w") as f:
+            for entry in entries:
+                f.write(json.dumps(entry) + "\n")
+
+        result = adapter.parse_session_file(session_file)
+        assert result["session_id"] == "test-session-456"
+        assert result["cwd"] == "/home/user/project"
+        assert result["git_branch"] == "feature/test"
+
+    def test_handles_missing_payload_key(self, adapter, tmp_path):
+        """Handles session_meta entry without payload key at all."""
+        import json
+
+        session_file = tmp_path / "test_session.jsonl"
+        entries = [
+            {"type": "session_meta"},  # No payload key
+        ]
+        with open(session_file, "w") as f:
+            for entry in entries:
+                f.write(json.dumps(entry) + "\n")
+
+        # Should not raise KeyError or AttributeError
+        result = adapter.parse_session_file(session_file)
+        assert result["format"] == "jsonl"
+        assert result.get("session_id") is None
+
+
+class TestCodexAdapterExtractSessionInfoNoneHandling:
+    """Tests for CodexAdapter.extract_session_info None handling.
+
+    These tests verify the fix for the bug where entry.get('payload', {})
+    returns None (not {}) when the key exists with value None.
+    """
+
+    @pytest.fixture
+    def adapter(self):
+        return CodexAdapter()
+
+    def test_handles_none_payload_in_event_msg(self, adapter):
+        """Handles event_msg entry where payload is explicitly None."""
+        data = {
+            "session_id": "test-123",
+            "messages": [
+                {
+                    "type": "event_msg",
+                    "payload": None,  # Key exists but value is None
+                    "timestamp": "2025-01-01T00:00:00Z",
+                },
+            ],
+        }
+        # Should not raise AttributeError
+        info = adapter.extract_session_info(data)
+        assert info.session_id == "test-123"
+        assert info.message_count == 0  # No user messages counted
+
+    def test_handles_none_payload_in_turn_context(self, adapter):
+        """Handles turn_context entry where payload is explicitly None."""
+        data = {
+            "session_id": "test-456",
+            "messages": [
+                {
+                    "type": "turn_context",
+                    "payload": None,  # Key exists but value is None
+                    "timestamp": "2025-01-01T00:00:00Z",
+                },
+            ],
+        }
+        # Should not raise AttributeError
+        info = adapter.extract_session_info(data)
+        assert info.session_id == "test-456"
+        assert info.model is None
+
+    def test_handles_mixed_none_and_valid_payloads(self, adapter):
+        """Handles mix of None and valid payload values."""
+        data = {
+            "session_id": "test-789",
+            "messages": [
+                {
+                    "type": "event_msg",
+                    "payload": None,  # None payload
+                    "timestamp": "2025-01-01T00:00:00Z",
+                },
+                {
+                    "type": "event_msg",
+                    "payload": {"type": "user_message"},  # Valid payload
+                    "timestamp": "2025-01-01T00:01:00Z",
+                },
+                {
+                    "type": "turn_context",
+                    "payload": {"model": "o1-preview"},  # Valid payload
+                    "timestamp": "2025-01-01T00:02:00Z",
+                },
+            ],
+        }
+        info = adapter.extract_session_info(data)
+        assert info.session_id == "test-789"
+        assert info.message_count == 1  # Only one user_message
+        assert info.model == "o1-preview"
+
+    def test_handles_missing_payload_key(self, adapter):
+        """Handles entries without payload key at all."""
+        data = {
+            "session_id": "test-no-payload",
+            "messages": [
+                {
+                    "type": "event_msg",
+                    # No payload key
+                    "timestamp": "2025-01-01T00:00:00Z",
+                },
+                {
+                    "type": "turn_context",
+                    # No payload key
+                    "timestamp": "2025-01-01T00:01:00Z",
+                },
+            ],
+        }
+        # Should not raise KeyError or AttributeError
+        info = adapter.extract_session_info(data)
+        assert info.session_id == "test-no-payload"
+        assert info.message_count == 0
+        assert info.model is None
+
+    def test_handles_empty_payload_dict(self, adapter):
+        """Handles entries with empty payload dict."""
+        data = {
+            "session_id": "test-empty-payload",
+            "messages": [
+                {
+                    "type": "event_msg",
+                    "payload": {},  # Empty dict
+                    "timestamp": "2025-01-01T00:00:00Z",
+                },
+                {
+                    "type": "turn_context",
+                    "payload": {},  # Empty dict, no model
+                    "timestamp": "2025-01-01T00:01:00Z",
+                },
+            ],
+        }
+        info = adapter.extract_session_info(data)
+        assert info.session_id == "test-empty-payload"
+        assert info.message_count == 0
+        assert info.model is None
+
+    def test_extracts_end_time_correctly(self, adapter):
+        """Correctly tracks end_time from timestamps."""
+        data = {
+            "session_id": "test-timestamps",
+            "start_time": "2025-01-01T00:00:00Z",
+            "messages": [
+                {
+                    "type": "event_msg",
+                    "payload": {"type": "user_message"},
+                    "timestamp": "2025-01-01T00:01:00Z",
+                },
+                {
+                    "type": "turn_context",
+                    "payload": {"model": "gpt-4"},
+                    "timestamp": "2025-01-01T00:02:00Z",
+                },
+                {
+                    "type": "event_msg",
+                    "payload": {"type": "completion"},
+                    "timestamp": "2025-01-01T00:03:00Z",
+                },
+            ],
+        }
+        info = adapter.extract_session_info(data)
+        assert info.end_time == "2025-01-01T00:03:00Z"

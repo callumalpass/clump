@@ -229,12 +229,14 @@ class CodexAdapter(CLIAdapter):
 
                     # Extract metadata from session_meta entry
                     if entry.get("type") == "session_meta":
-                        payload = entry.get("payload", {})
+                        # Use `or {}` to handle None values (key exists but value is None)
+                        payload = entry.get("payload") or {}
                         metadata["session_id"] = payload.get("id")
                         metadata["start_time"] = payload.get("timestamp")
                         metadata["cwd"] = payload.get("cwd")
                         metadata["cli_version"] = payload.get("cli_version")
-                        git_info = payload.get("git", {})
+                        # Use `or {}` to handle None values
+                        git_info = payload.get("git") or {}
                         if git_info:
                             metadata["git_branch"] = git_info.get("branch")
 
@@ -260,12 +262,14 @@ class CodexAdapter(CLIAdapter):
             entry_type = entry.get("type")
 
             if entry_type == "event_msg":
-                payload = entry.get("payload", {})
+                # Use `or {}` to handle None values (key exists but value is None)
+                payload = entry.get("payload") or {}
                 if payload.get("type") == "user_message":
                     message_count += 1
 
             if entry_type == "turn_context":
-                payload = entry.get("payload", {})
+                # Use `or {}` to handle None values (key exists but value is None)
+                payload = entry.get("payload") or {}
                 model = payload.get("model")
 
             # Track last timestamp
