@@ -275,11 +275,15 @@ class HeadlessAnalyzer:
             content = message_data.get("content", "")
             if isinstance(content, list):
                 # Extract text from content blocks
+                # Filter to only dict blocks with type="text" to handle malformed data
                 content = " ".join(
                     block.get("text", "")
                     for block in content
-                    if block.get("type") == "text"
+                    if isinstance(block, dict) and block.get("type") == "text"
                 )
+            elif content is not None and not isinstance(content, str):
+                # Convert non-string content (e.g., numbers, booleans) to string
+                content = str(content)
         elif msg_type == "result":
             content = data.get("result", "")
 

@@ -1005,8 +1005,8 @@ class TestHeadlessAnalyzerParseMessageEdgeCases:
 
         # Numeric content should not cause an error
         assert msg.type == "assistant"
-        # Numeric content is passed through as-is (not a list or string case)
-        assert msg.content == 12345
+        # Numeric content is converted to string for consistency
+        assert msg.content == "12345"
 
     def test_parse_message_with_nested_content_blocks(self, analyzer):
         """Test parsing assistant message with deeply nested content."""
@@ -1060,6 +1060,82 @@ class TestHeadlessAnalyzerParseMessageEdgeCases:
         assert msg.type == "assistant"
         # All text blocks are joined with space
         assert "Valid" in msg.content
+
+    def test_parse_message_with_non_dict_content_blocks(self, analyzer):
+        """Test parsing message with non-dict items in content list (malformed data)."""
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {"type": "text", "text": "Valid text"},
+                    None,  # Non-dict: should be skipped
+                    "string block",  # Non-dict: should be skipped
+                    123,  # Non-dict: should be skipped
+                    {"type": "text", "text": "More valid text"},
+                ]
+            },
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "assistant"
+        # Only valid dict blocks with type="text" should be included
+        assert msg.content == "Valid text More valid text"
+
+    def test_parse_message_with_all_malformed_content_blocks(self, analyzer):
+        """Test parsing message where all content blocks are malformed."""
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    None,
+                    "string",
+                    42,
+                    [],
+                ]
+            },
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "assistant"
+        # No valid text blocks, so content should be empty
+        assert msg.content == ""
+
+    def test_parse_message_with_boolean_content(self, analyzer):
+        """Test parsing message where content value is a boolean."""
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": True  # Boolean content
+            },
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "assistant"
+        # Boolean content is converted to string
+        assert msg.content == "True"
+
+    def test_parse_message_with_dict_content_missing_text_key(self, analyzer):
+        """Test parsing message with dict blocks missing the text key."""
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {"type": "text"},  # Missing "text" key
+                    {"type": "text", "text": "Has text"},
+                    {"type": "image", "url": "http://example.com"},  # Wrong type
+                ]
+            },
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "assistant"
+        # Only the block with both type="text" and a text key is included
+        # The first block with missing text returns "" from .get("text", "")
+        assert msg.content == " Has text"
 
 
 class TestGlobalAnalyzerInstance:
