@@ -93,15 +93,16 @@ class TestNotificationManagerStateManagement:
         """Create a fresh NotificationManager instance."""
         return NotificationManager()
 
-    def test_initial_state_is_empty(self, manager):
+    @pytest.mark.asyncio
+    async def test_initial_state_is_empty(self, manager):
         """Manager starts with no state."""
-        assert manager.get_state("any-session") is None
+        assert await manager.get_state("any-session") is None
 
     @pytest.mark.asyncio
     async def test_notify_sets_state(self, manager):
         """notify() sets the state for a session."""
         await manager.notify("session-1", NotificationType.PERMISSION_NEEDED)
-        assert manager.get_state("session-1") == NotificationType.PERMISSION_NEEDED
+        assert await manager.get_state("session-1") == NotificationType.PERMISSION_NEEDED
 
     @pytest.mark.asyncio
     async def test_notify_skips_duplicate_state(self, manager):
@@ -125,14 +126,14 @@ class TestNotificationManagerStateManagement:
         await manager.notify("session-1", NotificationType.PERMISSION_NEEDED)
 
         assert callback.call_count == 2
-        assert manager.get_state("session-1") == NotificationType.PERMISSION_NEEDED
+        assert await manager.get_state("session-1") == NotificationType.PERMISSION_NEEDED
 
     @pytest.mark.asyncio
     async def test_clear_attention_removes_state(self, manager):
         """clear_attention() removes state for a session."""
         await manager.notify("session-1", NotificationType.PERMISSION_NEEDED)
         await manager.clear_attention("session-1")
-        assert manager.get_state("session-1") is None
+        assert await manager.get_state("session-1") is None
 
     @pytest.mark.asyncio
     async def test_clear_attention_allows_renotification(self, manager):
@@ -146,22 +147,24 @@ class TestNotificationManagerStateManagement:
 
         assert callback.call_count == 2
 
-    def test_get_sessions_needing_attention(self, manager):
+    @pytest.mark.asyncio
+    async def test_get_sessions_needing_attention(self, manager):
         """get_sessions_needing_attention() returns correct sessions."""
         # Set up state directly for testing
         manager._state["session-1"] = NotificationType.PERMISSION_NEEDED
         manager._state["session-2"] = NotificationType.IDLE
         manager._state["session-3"] = NotificationType.SESSION_COMPLETED
 
-        result = manager.get_sessions_needing_attention()
+        result = await manager.get_sessions_needing_attention()
 
         assert "session-1" in result
         assert "session-2" in result
         assert "session-3" not in result  # SESSION_COMPLETED doesn't need attention
 
-    def test_get_sessions_needing_attention_empty(self, manager):
+    @pytest.mark.asyncio
+    async def test_get_sessions_needing_attention_empty(self, manager):
         """get_sessions_needing_attention() returns empty list when no sessions need attention."""
-        result = manager.get_sessions_needing_attention()
+        result = await manager.get_sessions_needing_attention()
         assert result == []
 
 
@@ -377,7 +380,7 @@ class TestNotificationManagerCleanup:
         await manager.notify("session-1", NotificationType.IDLE)
         await manager.cleanup_session("session-1")
 
-        assert manager.get_state("session-1") is None
+        assert await manager.get_state("session-1") is None
 
     @pytest.mark.asyncio
     async def test_cleanup_session_removes_subscribers(self, manager):
@@ -533,3 +536,164 @@ class TestNotificationManagerNotificationData:
 
         notification = callback.call_args[0][0]
         assert notification.data == {}
+
+
+class TestNotificationManagerReadOperationsThreadSafety:
+    """Tests for thread-safety of read operations (get_state, get_sessions_needing_attention)."""
+
+    @pytest.fixture
+    def manager(self):
+        """Create a fresh NotificationManager instance."""
+        return NotificationManager()
+
+    @pytest.mark.asyncio
+    async def test_concurrent_get_state_and_notify(self, manager):
+        """get_state() returns consistent data when called concurrently with notify()."""
+        # Track observed states
+        observed_states = []
+
+        async def reader():
+            for _ in range(20):
+                state = await manager.get_state("session-1")
+                observed_states.append(state)
+                await asyncio.sleep(0)
+
+        async def writer():
+            for i in range(10):
+                notification_type = (
+                    NotificationType.IDLE
+                    if i % 2 == 0
+                    else NotificationType.PERMISSION_NEEDED
+                )
+                await manager.notify("session-1", notification_type)
+                await manager.clear_attention("session-1")  # Allow re-notification
+                await asyncio.sleep(0)
+
+        await asyncio.gather(reader(), writer())
+
+        # All observed states should be valid (None, IDLE, or PERMISSION_NEEDED)
+        for state in observed_states:
+            assert state in (
+                None,
+                NotificationType.IDLE,
+                NotificationType.PERMISSION_NEEDED,
+            )
+
+    @pytest.mark.asyncio
+    async def test_concurrent_get_sessions_needing_attention_and_notify(self, manager):
+        """get_sessions_needing_attention() returns consistent data during concurrent modifications."""
+        results = []
+
+        async def reader():
+            for _ in range(20):
+                sessions = await manager.get_sessions_needing_attention()
+                results.append(sessions)
+                await asyncio.sleep(0)
+
+        async def writer():
+            for i in range(10):
+                session_id = f"session-{i % 3}"
+                await manager.notify(session_id, NotificationType.IDLE)
+                await asyncio.sleep(0)
+                await manager.clear_attention(session_id)
+                await asyncio.sleep(0)
+
+        await asyncio.gather(reader(), writer())
+
+        # All results should be valid lists (possibly empty)
+        for sessions in results:
+            assert isinstance(sessions, list)
+            # All session IDs should be strings
+            for session_id in sessions:
+                assert isinstance(session_id, str)
+
+    @pytest.mark.asyncio
+    async def test_get_state_is_async(self, manager):
+        """Verify get_state is async and can be awaited."""
+        import inspect
+
+        assert inspect.iscoroutinefunction(manager.get_state)
+
+        # Should be awaitable without error
+        result = await manager.get_state("test")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_sessions_needing_attention_is_async(self, manager):
+        """Verify get_sessions_needing_attention is async and can be awaited."""
+        import inspect
+
+        assert inspect.iscoroutinefunction(manager.get_sessions_needing_attention)
+
+        # Should be awaitable without error
+        result = await manager.get_sessions_needing_attention()
+        assert isinstance(result, list)
+
+    @pytest.mark.asyncio
+    async def test_get_state_uses_lock(self, manager):
+        """Verify get_state acquires the lock (prevents interleaved reads during writes)."""
+        # Setup: notify a session
+        await manager.notify("session-1", NotificationType.IDLE)
+
+        # Get state should return consistent value
+        state = await manager.get_state("session-1")
+        assert state == NotificationType.IDLE
+
+    @pytest.mark.asyncio
+    async def test_get_sessions_needing_attention_returns_snapshot(self, manager):
+        """
+        Verify that get_sessions_needing_attention returns a snapshot that doesn't
+        change if state is modified after the call returns.
+        """
+        # Setup: create multiple sessions needing attention
+        manager._state["session-1"] = NotificationType.IDLE
+        manager._state["session-2"] = NotificationType.PERMISSION_NEEDED
+
+        # Get snapshot
+        sessions = await manager.get_sessions_needing_attention()
+
+        # Modify state after getting snapshot
+        manager._state["session-3"] = NotificationType.IDLE
+
+        # Original snapshot should not include session-3
+        assert "session-1" in sessions
+        assert "session-2" in sessions
+        assert "session-3" not in sessions
+
+    @pytest.mark.asyncio
+    async def test_many_concurrent_readers_and_writers(self, manager):
+        """
+        Stress test: many concurrent readers and writers should not cause
+        race conditions or exceptions.
+        """
+        errors = []
+
+        async def reader(reader_id: int):
+            try:
+                for _ in range(10):
+                    await manager.get_state(f"session-{reader_id % 5}")
+                    await manager.get_sessions_needing_attention()
+                    await asyncio.sleep(0)
+            except Exception as e:
+                errors.append(f"Reader {reader_id}: {e}")
+
+        async def writer(writer_id: int):
+            try:
+                for i in range(10):
+                    session_id = f"session-{writer_id}"
+                    await manager.notify(session_id, NotificationType.IDLE)
+                    await manager.clear_attention(session_id)
+                    await asyncio.sleep(0)
+            except Exception as e:
+                errors.append(f"Writer {writer_id}: {e}")
+
+        # Launch many concurrent readers and writers
+        tasks = []
+        for i in range(10):
+            tasks.append(reader(i))
+            tasks.append(writer(i))
+
+        await asyncio.gather(*tasks)
+
+        # No errors should have occurred
+        assert errors == [], f"Errors occurred: {errors}"

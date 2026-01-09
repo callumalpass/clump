@@ -206,10 +206,10 @@ class TestGetSessionsNeedingAttention:
     def test_get_sessions_needing_attention(self, client):
         """Test getting sessions that need attention."""
         with patch("app.routers.hooks.notification_manager") as mock_nm:
-            mock_nm.get_sessions_needing_attention.return_value = [
+            mock_nm.get_sessions_needing_attention = AsyncMock(return_value=[
                 "session-1",
                 "session-2",
-            ]
+            ])
 
             response = client.get("/hooks/attention")
 
@@ -220,7 +220,7 @@ class TestGetSessionsNeedingAttention:
     def test_get_sessions_needing_attention_empty(self, client):
         """Test getting sessions when none need attention."""
         with patch("app.routers.hooks.notification_manager") as mock_nm:
-            mock_nm.get_sessions_needing_attention.return_value = []
+            mock_nm.get_sessions_needing_attention = AsyncMock(return_value=[])
 
             response = client.get("/hooks/attention")
 

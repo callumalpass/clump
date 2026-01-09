@@ -129,17 +129,27 @@ class NotificationManager:
         async with self._lock:
             self._state.pop(session_id, None)
 
-    def get_state(self, session_id: str) -> NotificationType | None:
-        """Get the current notification state for a session."""
-        return self._state.get(session_id)
+    async def get_state(self, session_id: str) -> NotificationType | None:
+        """Get the current notification state for a session.
 
-    def get_sessions_needing_attention(self) -> list[str]:
-        """Get list of session IDs that currently need attention."""
-        return [
-            session_id
-            for session_id, state in self._state.items()
-            if state in (NotificationType.PERMISSION_NEEDED, NotificationType.IDLE)
-        ]
+        Thread-safe: Uses lock to ensure consistent reads during concurrent
+        modifications by notify() and other methods.
+        """
+        async with self._lock:
+            return self._state.get(session_id)
+
+    async def get_sessions_needing_attention(self) -> list[str]:
+        """Get list of session IDs that currently need attention.
+
+        Thread-safe: Uses lock to ensure consistent reads during concurrent
+        modifications by notify() and other methods.
+        """
+        async with self._lock:
+            return [
+                session_id
+                for session_id, state in self._state.items()
+                if state in (NotificationType.PERMISSION_NEEDED, NotificationType.IDLE)
+            ]
 
     async def subscribe(
         self,

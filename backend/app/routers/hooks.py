@@ -186,7 +186,7 @@ async def get_sessions_needing_attention():
 
     Returns session IDs that have pending permission requests or are idle.
     """
-    session_ids = notification_manager.get_sessions_needing_attention()
+    session_ids = await notification_manager.get_sessions_needing_attention()
     return {"sessions": session_ids}
 
 
@@ -298,7 +298,7 @@ async def notifications_websocket(websocket: WebSocket):
 
     try:
         # Send initial state on connect
-        attention_sessions = notification_manager.get_sessions_needing_attention()
+        attention_sessions = await notification_manager.get_sessions_needing_attention()
 
         # Get current processes
         processes = await process_manager.list_processes()
