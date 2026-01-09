@@ -1074,3 +1074,91 @@ class TestGetStatsNoneContainerHandling:
             assert data["model_usage"] == []
             assert data["hourly_distribution"] == []
             assert data["longest_session_minutes"] is None
+
+    # ==============================================
+    # None values inside hourCounts dict tests
+    # ==============================================
+
+    def test_handles_none_count_values_in_hour_counts(self, tmp_path):
+        """Handles None values inside hourCounts dict (e.g., {"23": null}).
+
+        This tests the fix where individual hour count values could be None,
+        which would cause a Pydantic validation error without the fix.
+        """
+        import json
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        stats_data = {
+            "lastComputedDate": "2024-01-01",
+            "totalSessions": 10,
+            "totalMessages": 100,
+            "dailyActivity": [],
+            "dailyModelTokens": [],
+            "modelUsage": {},
+            "hourCounts": {
+                "9": 5,
+                "10": None,  # None value should be treated as 0
+                "11": 10,
+                "23": None,  # Another None value
+            },
+        }
+
+        stats_file = tmp_path / ".claude" / "stats-cache.json"
+        stats_file.parent.mkdir(parents=True)
+        stats_file.write_text(json.dumps(stats_data))
+
+        with patch("app.routers.stats.Path.home", return_value=tmp_path):
+            client = TestClient(app)
+            response = client.get("/api/stats")
+
+            assert response.status_code == 200
+            data = response.json()
+
+            # Should have 4 entries, sorted by hour
+            assert len(data["hourly_distribution"]) == 4
+
+            # Check the values - None should be converted to 0
+            hourly = {h["hour"]: h["count"] for h in data["hourly_distribution"]}
+            assert hourly[9] == 5
+            assert hourly[10] == 0  # None converted to 0
+            assert hourly[11] == 10
+            assert hourly[23] == 0  # None converted to 0
+
+    def test_handles_mixed_valid_and_none_count_values(self, tmp_path):
+        """Handles a mix of valid integers, zeros, and None values in hourCounts."""
+        import json
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        stats_data = {
+            "lastComputedDate": "2024-01-01",
+            "totalSessions": 10,
+            "totalMessages": 100,
+            "dailyActivity": [],
+            "dailyModelTokens": [],
+            "modelUsage": {},
+            "hourCounts": {
+                "0": 0,      # Explicit zero
+                "1": None,   # None value
+                "2": 100,    # Normal value
+            },
+        }
+
+        stats_file = tmp_path / ".claude" / "stats-cache.json"
+        stats_file.parent.mkdir(parents=True)
+        stats_file.write_text(json.dumps(stats_data))
+
+        with patch("app.routers.stats.Path.home", return_value=tmp_path):
+            client = TestClient(app)
+            response = client.get("/api/stats")
+
+            assert response.status_code == 200
+            data = response.json()
+
+            hourly = {h["hour"]: h["count"] for h in data["hourly_distribution"]}
+            assert hourly[0] == 0    # Explicit zero preserved
+            assert hourly[1] == 0    # None converted to 0
+            assert hourly[2] == 100  # Normal value preserved

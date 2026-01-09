@@ -242,7 +242,7 @@ async def get_stats():
     # Use `or {}` to handle None values (key exists but value is None)
     hour_counts = data.get("hourCounts") or {}
     hourly_distribution = [
-        HourlyDistribution(hour=int(hour), count=count)
+        HourlyDistribution(hour=int(hour), count=count or 0)
         for hour, count in sorted(hour_counts.items(), key=lambda x: int(x[0]))
     ]
 
