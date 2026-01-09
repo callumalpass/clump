@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Optional, TypedDict
 from uuid import uuid4
 
-from croniter import croniter
+from croniter import croniter, CroniterBadCronError
 import pytz
 from sqlalchemy import select
 
@@ -62,6 +62,24 @@ class FilterParams(TypedDict):
     exclude_affected_areas: list[str]
 
 
+def is_valid_cron_expression(cron_expression: str | None) -> bool:
+    """Check if a cron expression is valid.
+
+    Args:
+        cron_expression: The cron expression to validate.
+
+    Returns:
+        True if valid, False otherwise.
+    """
+    if cron_expression is None:
+        return False
+    try:
+        croniter(cron_expression)
+        return True
+    except (CroniterBadCronError, ValueError, TypeError, AttributeError):
+        return False
+
+
 def calculate_next_run(cron_expression: str, timezone_str: str) -> datetime:
     """Calculate the next run time for a cron expression.
 
@@ -71,15 +89,21 @@ def calculate_next_run(cron_expression: str, timezone_str: str) -> datetime:
 
     Returns:
         The next run time as a naive UTC datetime (for database storage)
+
+    Raises:
+        ValueError: If the cron expression is invalid.
     """
     try:
         tz = pytz.timezone(timezone_str)
-    except pytz.UnknownTimeZoneError:
+    except (pytz.UnknownTimeZoneError, TypeError):
         tz = pytz.UTC
 
     now = datetime.now(tz)
-    cron = croniter(cron_expression, now)
-    next_run = cron.get_next(datetime)
+    try:
+        cron = croniter(cron_expression, now)
+        next_run = cron.get_next(datetime)
+    except (CroniterBadCronError, ValueError, TypeError) as e:
+        raise ValueError(f"Invalid cron expression '{cron_expression}': {e}") from e
 
     # Convert to UTC for storage
     return next_run.astimezone(pytz.UTC).replace(tzinfo=None)

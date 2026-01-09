@@ -18,6 +18,7 @@ from app.services.scheduler import (
     parse_filter_query,
     build_prompt_from_template,
     calculate_next_run,
+    is_valid_cron_expression,
 )
 
 
@@ -1270,6 +1271,131 @@ class TestCalculateNextRun:
         next_run = calculate_next_run("0 2 * * *", "America/New_York")
 
         # Should not raise exception even around DST transition times
+        assert isinstance(next_run, datetime)
+        assert next_run.tzinfo is None
+
+
+class TestIsValidCronExpression:
+    """Tests for is_valid_cron_expression function."""
+
+    def test_valid_standard_cron(self):
+        """Returns True for valid 5-field cron expression."""
+        assert is_valid_cron_expression("0 9 * * *") is True
+
+    def test_valid_every_minute(self):
+        """Returns True for every-minute expression."""
+        assert is_valid_cron_expression("* * * * *") is True
+
+    def test_valid_with_step(self):
+        """Returns True for step expression."""
+        assert is_valid_cron_expression("*/5 * * * *") is True
+
+    def test_valid_with_range(self):
+        """Returns True for range expression."""
+        assert is_valid_cron_expression("0 9-17 * * *") is True
+
+    def test_valid_with_list(self):
+        """Returns True for list expression."""
+        assert is_valid_cron_expression("0,30 * * * *") is True
+
+    def test_valid_with_day_name(self):
+        """Returns True for day-of-week name."""
+        assert is_valid_cron_expression("0 9 * * MON") is True
+
+    def test_valid_with_month_name(self):
+        """Returns True for month name."""
+        assert is_valid_cron_expression("0 0 1 JAN *") is True
+
+    def test_valid_6_field_with_seconds(self):
+        """Returns True for 6-field expression with seconds."""
+        assert is_valid_cron_expression("0 0 9 * * *") is True
+
+    def test_invalid_too_few_fields(self):
+        """Returns False for expression with too few fields."""
+        assert is_valid_cron_expression("0 9 *") is False
+
+    def test_invalid_too_many_fields(self):
+        """Returns False for expression with too many fields."""
+        assert is_valid_cron_expression("0 0 0 9 * * * *") is False
+
+    def test_invalid_word(self):
+        """Returns False for non-cron word."""
+        assert is_valid_cron_expression("invalid") is False
+
+    def test_invalid_empty_string(self):
+        """Returns False for empty string."""
+        assert is_valid_cron_expression("") is False
+
+    def test_invalid_spaces_only(self):
+        """Returns False for spaces only."""
+        assert is_valid_cron_expression("     ") is False
+
+    def test_invalid_out_of_range_minute(self):
+        """Returns False for minute out of range."""
+        assert is_valid_cron_expression("99 * * * *") is False
+
+    def test_invalid_out_of_range_hour(self):
+        """Returns False for hour out of range."""
+        assert is_valid_cron_expression("0 25 * * *") is False
+
+    def test_invalid_out_of_range_day(self):
+        """Returns False for day out of range."""
+        assert is_valid_cron_expression("0 0 32 * *") is False
+
+    def test_invalid_out_of_range_month(self):
+        """Returns False for month out of range."""
+        assert is_valid_cron_expression("0 0 1 13 *") is False
+
+    def test_invalid_out_of_range_dow(self):
+        """Returns False for day of week out of range."""
+        assert is_valid_cron_expression("0 0 * * 8") is False
+
+    def test_invalid_special_characters(self):
+        """Returns False for invalid special characters."""
+        assert is_valid_cron_expression("0 9 @ $ %") is False
+
+    def test_none_input(self):
+        """Returns False for None input."""
+        assert is_valid_cron_expression(None) is False
+
+
+class TestCalculateNextRunInvalidInput:
+    """Tests for calculate_next_run with invalid input."""
+
+    def test_raises_for_invalid_cron_expression(self):
+        """Raises ValueError for invalid cron expression."""
+        with pytest.raises(ValueError) as exc_info:
+            calculate_next_run("invalid", "UTC")
+
+        assert "Invalid cron expression" in str(exc_info.value)
+        assert "'invalid'" in str(exc_info.value)
+
+    def test_raises_for_too_few_fields(self):
+        """Raises ValueError for too few fields."""
+        with pytest.raises(ValueError) as exc_info:
+            calculate_next_run("0 9", "UTC")
+
+        assert "Invalid cron expression" in str(exc_info.value)
+
+    def test_raises_for_empty_string(self):
+        """Raises ValueError for empty string."""
+        with pytest.raises(ValueError) as exc_info:
+            calculate_next_run("", "UTC")
+
+        assert "Invalid cron expression" in str(exc_info.value)
+
+    def test_raises_for_out_of_range_values(self):
+        """Raises ValueError for out of range values."""
+        with pytest.raises(ValueError) as exc_info:
+            calculate_next_run("99 99 99 99 99", "UTC")
+
+        assert "Invalid cron expression" in str(exc_info.value)
+
+    def test_handles_none_timezone_gracefully(self):
+        """Falls back to UTC when timezone is None."""
+        # Should not raise, should fall back to UTC
+        next_run = calculate_next_run("0 9 * * *", None)
+
         assert isinstance(next_run, datetime)
         assert next_run.tzinfo is None
 
