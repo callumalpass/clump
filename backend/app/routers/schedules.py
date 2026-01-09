@@ -169,6 +169,16 @@ class ScheduledJobUpdate(BaseModel):
             raise ValueError(f"Unknown timezone: {v}")
         return v
 
+    @field_validator("target_type")
+    @classmethod
+    def validate_target_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        valid = {"issues", "prs", "codebase", "custom"}
+        if v not in valid:
+            raise ValueError(f"target_type must be one of: {valid}")
+        return v
+
     @field_validator("cli_type")
     @classmethod
     def validate_cli_type(cls, v: Optional[str]) -> Optional[str]:

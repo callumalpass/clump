@@ -403,6 +403,33 @@ class TestScheduledJobUpdate:
         data = ScheduledJobUpdate(cron_expression="0 12 * * *")
         assert data.cron_expression == "0 12 * * *"
 
+    def test_validates_target_type_when_provided(self):
+        """Validates target_type only when provided."""
+        with pytest.raises(ValueError, match="target_type must be one of"):
+            ScheduledJobUpdate(target_type="invalid")
+
+    def test_accepts_valid_target_type_update(self):
+        """Accepts valid target_type values in update."""
+        for target in ["issues", "prs", "codebase", "custom"]:
+            data = ScheduledJobUpdate(target_type=target)
+            assert data.target_type == target
+
+    def test_accepts_none_target_type(self):
+        """Accepts None target_type (no change to existing value)."""
+        data = ScheduledJobUpdate(target_type=None)
+        assert data.target_type is None
+
+    def test_validates_cli_type_when_provided(self):
+        """Validates cli_type only when provided."""
+        with pytest.raises(ValueError, match="cli_type must be one of"):
+            ScheduledJobUpdate(cli_type="invalid")
+
+    def test_accepts_valid_cli_type_update(self):
+        """Accepts valid cli_type values in update."""
+        for cli in ["claude", "gemini", "codex"]:
+            data = ScheduledJobUpdate(cli_type=cli)
+            assert data.cli_type == cli
+
 
 class TestListScheduledJobs:
     """Tests for GET /repos/{repo_id}/schedules endpoint."""
