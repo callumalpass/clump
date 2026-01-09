@@ -1459,6 +1459,31 @@ class TestGeminiSessionDiscovery:
 
             assert sessions == []
 
+    def test_scan_gemini_unknown_project_dir_glob_oserror(self, tmp_path):
+        """Test that OSError during glob returns empty list instead of failing.
+
+        This is a regression test for handling permission errors or other OS
+        issues when scanning directories.
+        """
+        with patch("app.storage.Path.home", return_value=tmp_path):
+            # Create Gemini project structure
+            project_hash = "globerror123"
+            project_dir = tmp_path / ".gemini" / "tmp" / project_hash
+            chats_dir = project_dir / "chats"
+            chats_dir.mkdir(parents=True)
+
+            clump_projects_dir = tmp_path / ".clump" / "projects"
+            clump_projects_dir.mkdir(parents=True)
+
+            # Mock the glob method to raise OSError
+            with patch.object(Path, "glob", side_effect=OSError("Permission denied")):
+                sessions = _scan_gemini_unknown_project_dir(
+                    project_dir, clump_projects_dir, project_hash
+                )
+
+            # Should return empty list instead of raising
+            assert sessions == []
+
     def test_discover_gemini_sessions_with_known_repo(self, tmp_path):
         """Test discovering sessions for a known repo using hash mapping."""
         import hashlib

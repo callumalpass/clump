@@ -682,7 +682,12 @@ def _scan_gemini_unknown_project_dir(
 
     sessions: list[DiscoveredSession] = []
 
-    for json_file in chats_dir.glob("*.json"):
+    try:
+        json_files = list(chats_dir.glob("*.json"))
+    except OSError:
+        return sessions
+
+    for json_file in json_files:
         session_id = json_file.stem
 
         try:
