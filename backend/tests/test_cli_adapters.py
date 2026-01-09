@@ -14,6 +14,8 @@ from app.cli import (
     get_all_adapters,
     get_default_adapter,
     is_cli_installed,
+    get_installed_adapters,
+    get_adapter_by_command,
     get_cli_info,
 )
 from app.cli.claude_adapter import ClaudeAdapter
@@ -101,6 +103,137 @@ class TestCLIRegistry:
             assert "headless" in caps
             assert "resume" in caps
             assert "session_id" in caps
+
+
+class TestCLIInstalledChecks:
+    """Tests for is_cli_installed and related functions."""
+
+    def test_is_cli_installed_returns_bool(self):
+        """is_cli_installed returns a boolean."""
+        result = is_cli_installed(CLIType.CLAUDE)
+        assert isinstance(result, bool)
+
+    def test_is_cli_installed_accepts_string(self):
+        """is_cli_installed accepts string CLI type."""
+        result = is_cli_installed("claude")
+        assert isinstance(result, bool)
+
+    def test_is_cli_installed_with_valid_command(self):
+        """is_cli_installed returns True when command is found on PATH."""
+        # 'python' should be installed in any test environment
+        with patch("shutil.which", return_value="/usr/bin/python"):
+            result = is_cli_installed(CLIType.CLAUDE)
+            assert result is True
+
+    def test_is_cli_installed_with_missing_command(self):
+        """is_cli_installed returns False when command not found."""
+        with patch("shutil.which", return_value=None):
+            result = is_cli_installed(CLIType.CLAUDE)
+            assert result is False
+
+    def test_is_cli_installed_checks_correct_command_name(self):
+        """is_cli_installed checks the adapter's command_name."""
+        # Verify it calls shutil.which with the correct command
+        with patch("shutil.which") as mock_which:
+            mock_which.return_value = None
+            is_cli_installed(CLIType.CLAUDE)
+            mock_which.assert_called_once_with("claude")
+
+        with patch("shutil.which") as mock_which:
+            mock_which.return_value = None
+            is_cli_installed(CLIType.GEMINI)
+            mock_which.assert_called_once_with("gemini")
+
+        with patch("shutil.which") as mock_which:
+            mock_which.return_value = None
+            is_cli_installed(CLIType.CODEX)
+            mock_which.assert_called_once_with("codex")
+
+
+class TestGetInstalledAdapters:
+    """Tests for get_installed_adapters function."""
+
+    def test_returns_empty_list_when_none_installed(self):
+        """Returns empty list when no CLIs are installed."""
+        with patch("app.cli.registry.shutil.which", return_value=None):
+            result = get_installed_adapters()
+            assert result == []
+
+    def test_returns_all_when_all_installed(self):
+        """Returns all adapters when all CLIs are installed."""
+        with patch("app.cli.registry.shutil.which", return_value="/usr/bin/cmd"):
+            result = get_installed_adapters()
+            assert len(result) == 3
+            types = {a.cli_type for a in result}
+            assert types == {CLIType.CLAUDE, CLIType.GEMINI, CLIType.CODEX}
+
+    def test_returns_only_installed_adapters(self):
+        """Returns only adapters for installed CLIs."""
+        def which_side_effect(cmd):
+            if cmd == "claude":
+                return "/usr/bin/claude"
+            return None
+
+        with patch("app.cli.registry.shutil.which", side_effect=which_side_effect):
+            result = get_installed_adapters()
+            assert len(result) == 1
+            assert result[0].cli_type == CLIType.CLAUDE
+
+    def test_returns_adapters_not_just_types(self):
+        """Returns actual adapter instances, not just types."""
+        with patch("app.cli.registry.shutil.which", return_value="/usr/bin/cmd"):
+            result = get_installed_adapters()
+            for adapter in result:
+                assert isinstance(adapter, CLIAdapter)
+
+
+class TestGetAdapterByCommand:
+    """Tests for get_adapter_by_command function."""
+
+    def test_returns_claude_adapter_for_claude_command(self):
+        """Returns ClaudeAdapter for 'claude' command."""
+        adapter = get_adapter_by_command("claude")
+        assert adapter is not None
+        assert isinstance(adapter, ClaudeAdapter)
+        assert adapter.cli_type == CLIType.CLAUDE
+
+    def test_returns_gemini_adapter_for_gemini_command(self):
+        """Returns GeminiAdapter for 'gemini' command."""
+        adapter = get_adapter_by_command("gemini")
+        assert adapter is not None
+        assert isinstance(adapter, GeminiAdapter)
+        assert adapter.cli_type == CLIType.GEMINI
+
+    def test_returns_codex_adapter_for_codex_command(self):
+        """Returns CodexAdapter for 'codex' command."""
+        adapter = get_adapter_by_command("codex")
+        assert adapter is not None
+        assert isinstance(adapter, CodexAdapter)
+        assert adapter.cli_type == CLIType.CODEX
+
+    def test_returns_none_for_unknown_command(self):
+        """Returns None for unknown command names."""
+        adapter = get_adapter_by_command("unknown-cli")
+        assert adapter is None
+
+    def test_returns_none_for_empty_string(self):
+        """Returns None for empty command string."""
+        adapter = get_adapter_by_command("")
+        assert adapter is None
+
+    def test_returns_none_for_similar_but_wrong_command(self):
+        """Returns None for commands similar to but not matching any CLI."""
+        # These might seem like they should match, but they don't
+        assert get_adapter_by_command("Claude") is None  # Case matters
+        assert get_adapter_by_command("claude-code") is None
+        assert get_adapter_by_command("gemini-cli") is None
+
+    def test_command_matching_is_exact(self):
+        """Command matching is exact, not substring or fuzzy."""
+        # These contain valid commands as substrings but shouldn't match
+        assert get_adapter_by_command("my-claude") is None
+        assert get_adapter_by_command("claude ") is None
+        assert get_adapter_by_command(" claude") is None
 
 
 class TestClaudeAdapter:

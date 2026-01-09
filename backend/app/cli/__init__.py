@@ -17,7 +17,15 @@ from app.cli.base import (
     SessionDiscoveryConfig,
     SessionInfo,
 )
-from app.cli.registry import get_adapter, get_all_adapters, get_default_adapter, is_cli_installed, get_cli_info
+from app.cli.registry import (
+    get_adapter,
+    get_all_adapters,
+    get_default_adapter,
+    is_cli_installed,
+    get_installed_adapters,
+    get_adapter_by_command,
+    get_cli_info,
+)
 
 __all__ = [
     "CLIAdapter",
@@ -29,5 +37,7 @@ __all__ = [
     "get_all_adapters",
     "get_default_adapter",
     "is_cli_installed",
+    "get_installed_adapters",
+    "get_adapter_by_command",
     "get_cli_info",
 ]
