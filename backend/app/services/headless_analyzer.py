@@ -299,11 +299,17 @@ class HeadlessAnalyzer:
         Uses pop to atomically retrieve and remove the process from tracking,
         preventing race conditions where the process could be removed by another
         coroutine between the get and terminate calls.
+
+        Returns True if the session was found and removed from any tracking
+        mechanism (either _running_sessions or _active_session_ids), False if
+        the session was not found in either.
         """
         async with self._lock:
             process = self._running_sessions.pop(session_id, None)
-            # Also remove from active_session_ids if present
+            # Track whether it was in active_session_ids before removal
+            was_in_active = session_id in self._active_session_ids
             self._active_session_ids.discard(session_id)
+
         if process:
             process.terminate()
             try:
@@ -311,7 +317,11 @@ class HeadlessAnalyzer:
             except asyncio.TimeoutError:
                 process.kill()
             return True
-        return False
+
+        # Return True if we removed from active_session_ids even without a process
+        # This handles the case where register_running was called but the process
+        # hadn't started yet or already exited from _running_sessions
+        return was_in_active
 
     async def list_running(self) -> list[str]:
         """List IDs of running sessions."""

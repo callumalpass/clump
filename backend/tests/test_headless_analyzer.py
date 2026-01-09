@@ -569,18 +569,18 @@ class TestHeadlessAnalyzerCancel:
     async def test_cancel_only_active_session_ids(self, analyzer):
         """Test canceling a session that exists only in _active_session_ids.
 
-        If a session is registered but the process hasn't been stored yet,
-        cancel should still clean up _active_session_ids but return False
-        since there's no process to terminate.
+        If a session is registered via register_running but the process hasn't
+        been stored yet (or has already exited), cancel should still return True
+        since we successfully stopped tracking the session as running.
         """
         session_id = "only-registered"
         analyzer._active_session_ids.add(session_id)
 
         result = await analyzer.cancel(session_id)
 
-        # Returns False because no process was found to terminate
-        assert result is False
-        # But the session_id should still be removed from _active_session_ids
+        # Returns True because the session was removed from active tracking
+        assert result is True
+        # The session_id should be removed from _active_session_ids
         assert session_id not in analyzer._active_session_ids
 
     @pytest.mark.asyncio
@@ -632,6 +632,60 @@ class TestHeadlessAnalyzerCancel:
         # Session should be fully cleaned up
         assert "concurrent-test" not in analyzer._running_sessions
         assert "concurrent-test" not in analyzer._active_session_ids
+
+    @pytest.mark.asyncio
+    async def test_cancel_returns_false_for_unknown_session(self, analyzer):
+        """Test that canceling an unknown session returns False.
+
+        If the session was never registered or tracked, cancel should return False.
+        """
+        result = await analyzer.cancel("never-existed")
+
+        assert result is False
+        # Ensure no side effects
+        assert "never-existed" not in analyzer._running_sessions
+        assert "never-existed" not in analyzer._active_session_ids
+
+    @pytest.mark.asyncio
+    async def test_cancel_in_both_tracking_mechanisms(self, analyzer):
+        """Test canceling a session that exists in both tracking mechanisms.
+
+        When a session is in both _running_sessions and _active_session_ids,
+        cancel should remove from both and return True.
+        """
+        mock_process = MagicMock()
+        mock_process.terminate = MagicMock()
+        mock_process.wait = AsyncMock()
+
+        session_id = "in-both"
+        analyzer._running_sessions[session_id] = mock_process
+        analyzer._active_session_ids.add(session_id)
+
+        result = await analyzer.cancel(session_id)
+
+        assert result is True
+        assert session_id not in analyzer._running_sessions
+        assert session_id not in analyzer._active_session_ids
+        mock_process.terminate.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_cancel_after_process_already_removed(self, analyzer):
+        """Test canceling when process was removed but session still in active_ids.
+
+        This simulates the case where analyze_stream finished (removing from
+        _running_sessions) but the caller hasn't called unregister_running yet.
+        """
+        session_id = "process-gone"
+        # Session is in active_ids but not in _running_sessions
+        analyzer._active_session_ids.add(session_id)
+        # Ensure it's not in _running_sessions
+        assert session_id not in analyzer._running_sessions
+
+        result = await analyzer.cancel(session_id)
+
+        # Should still return True since we removed from active tracking
+        assert result is True
+        assert session_id not in analyzer._active_session_ids
 
 
 class TestHeadlessAnalyzerAnalyzeStream:
