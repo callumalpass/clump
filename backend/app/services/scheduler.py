@@ -808,6 +808,7 @@ class SchedulerService:
                 "number": pr.number,
                 "title": pr.title,
                 "body": pr.body,
+                "author": pr.author,
                 "head_ref": pr.head_ref,
                 "base_ref": pr.base_ref,
                 "labels": pr.labels,

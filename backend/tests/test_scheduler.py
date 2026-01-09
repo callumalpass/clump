@@ -802,6 +802,7 @@ class TestSchedulerServiceGetPrs:
             mock_pr.number = 123
             mock_pr.title = "Test PR"
             mock_pr.body = "PR body"
+            mock_pr.author = "octocat"
             mock_pr.head_ref = "feature/test"
             mock_pr.base_ref = "main"
             # list_all_prs returns a list directly
@@ -814,6 +815,7 @@ class TestSchedulerServiceGetPrs:
             assert result[0]["number"] == 123
             assert result[0]["title"] == "Test PR"
             assert result[0]["body"] == "PR body"
+            assert result[0]["author"] == "octocat"
             assert result[0]["head_ref"] == "feature/test"
             assert result[0]["base_ref"] == "main"
 
@@ -873,6 +875,7 @@ class TestSchedulerServiceGetPrs:
                 mock_pr.number = i + 1
                 mock_pr.title = f"PR {i + 1}"
                 mock_pr.body = f"Body {i + 1}"
+                mock_pr.author = f"author{i + 1}"
                 mock_pr.head_ref = f"feature/{i + 1}"
                 mock_pr.base_ref = "main"
                 mock_prs.append(mock_pr)
@@ -2571,6 +2574,164 @@ class TestSchedulerServiceGetIssuesLabelsField:
         # Both should be lists
         assert isinstance(issue_result[0]["labels"], list)
         assert isinstance(pr_result[0]["labels"], list)
+
+
+class TestSchedulerServiceGetPRsAuthorField:
+    """Tests specifically for the author field in _get_prs.
+
+    The author field is needed for template substitution when command templates
+    reference {{author}} for PR-targeted scheduled jobs. This ensures parity
+    with _get_issues which already includes the author field.
+    """
+
+    @pytest.fixture
+    def scheduler(self):
+        """Create a SchedulerService instance."""
+        from app.services.scheduler import SchedulerService
+        return SchedulerService()
+
+    @pytest.fixture
+    def mock_job(self):
+        """Create a mock ScheduledJob."""
+        job = MagicMock()
+        job.filter_query = None
+        return job
+
+    @pytest.fixture
+    def mock_repo(self):
+        """Create a mock repo dict."""
+        return {
+            "id": 1,
+            "owner": "testowner",
+            "name": "testrepo",
+            "local_path": "/path/to/repo",
+        }
+
+    @pytest.mark.asyncio
+    async def test_get_prs_includes_author_in_result(self, scheduler, mock_job, mock_repo):
+        """Verifies that author field is included in PR dicts."""
+        with patch("app.services.scheduler.GitHubClient") as MockClient, \
+             patch("app.services.scheduler.filter_prs_by_sidecar", side_effect=lambda prs, *args: prs):
+            mock_client = MockClient.return_value
+
+            mock_pr = MagicMock()
+            mock_pr.number = 1
+            mock_pr.title = "Test PR"
+            mock_pr.body = "Body"
+            mock_pr.author = "octocat"
+            mock_pr.head_ref = "feature-branch"
+            mock_pr.base_ref = "main"
+            mock_pr.labels = []
+            mock_client.list_all_prs.return_value = [mock_pr]
+
+            result = await scheduler._get_prs(mock_job, mock_repo)
+
+            assert len(result) == 1
+            assert "author" in result[0]
+            assert result[0]["author"] == "octocat"
+
+    @pytest.mark.asyncio
+    async def test_get_prs_preserves_author_through_sidecar_filter(self, scheduler, mock_job, mock_repo):
+        """Author field is preserved when sidecar filters are applied."""
+        from app.storage import PRMetadata
+
+        mock_job.filter_query = "priority:high"
+
+        with patch("app.services.scheduler.GitHubClient") as MockClient:
+            mock_client = MockClient.return_value
+
+            mock_pr = MagicMock()
+            mock_pr.number = 42
+            mock_pr.title = "High priority PR"
+            mock_pr.body = "Description"
+            mock_pr.author = "contributor123"
+            mock_pr.head_ref = "hotfix"
+            mock_pr.base_ref = "main"
+            mock_pr.labels = []
+            mock_client.list_all_prs.return_value = [mock_pr]
+
+            # Mock sidecar metadata that matches the filter
+            def mock_get_metadata(encoded_path, pr_number):
+                return PRMetadata(pr_number=42, review_priority="high")
+
+            with patch("app.services.scheduler.get_pr_metadata", side_effect=mock_get_metadata):
+                result = await scheduler._get_prs(mock_job, mock_repo)
+
+            assert len(result) == 1
+            assert result[0]["author"] == "contributor123"
+
+    @pytest.mark.asyncio
+    async def test_get_prs_with_multiple_authors(self, scheduler, mock_job, mock_repo):
+        """Handles multiple PRs with different authors."""
+        with patch("app.services.scheduler.GitHubClient") as MockClient, \
+             patch("app.services.scheduler.filter_prs_by_sidecar", side_effect=lambda prs, *args: prs):
+            mock_client = MockClient.return_value
+
+            prs = []
+            for i, author in enumerate(["alice", "bob", "charlie"], 1):
+                mock_pr = MagicMock()
+                mock_pr.number = i
+                mock_pr.title = f"PR {i}"
+                mock_pr.body = "Body"
+                mock_pr.author = author
+                mock_pr.head_ref = f"feature-{i}"
+                mock_pr.base_ref = "main"
+                mock_pr.labels = []
+                prs.append(mock_pr)
+
+            mock_client.list_all_prs.return_value = prs
+
+            result = await scheduler._get_prs(mock_job, mock_repo)
+
+            assert len(result) == 3
+            assert result[0]["author"] == "alice"
+            assert result[1]["author"] == "bob"
+            assert result[2]["author"] == "charlie"
+
+    @pytest.mark.asyncio
+    async def test_get_prs_author_matches_issues_field_structure(self, scheduler, mock_job, mock_repo):
+        """Verifies that PR and issue author fields have consistent structure.
+
+        Both _get_issues and _get_prs should include 'author' at the same level
+        in the result dict for consistent template substitution.
+        """
+        with patch("app.services.scheduler.GitHubClient") as MockClient, \
+             patch("app.services.scheduler.filter_issues_by_sidecar", side_effect=lambda issues, *args: issues), \
+             patch("app.services.scheduler.filter_prs_by_sidecar", side_effect=lambda prs, *args: prs):
+            mock_client = MockClient.return_value
+
+            # Create issue with author
+            mock_issue = MagicMock()
+            mock_issue.number = 1
+            mock_issue.title = "Issue"
+            mock_issue.body = "Body"
+            mock_issue.author = "issue-author"
+            mock_issue.labels = []
+            mock_client.list_all_issues.return_value = [mock_issue]
+
+            # Create PR with author
+            mock_pr = MagicMock()
+            mock_pr.number = 1
+            mock_pr.title = "PR"
+            mock_pr.body = "Body"
+            mock_pr.author = "pr-author"
+            mock_pr.head_ref = "feature"
+            mock_pr.base_ref = "main"
+            mock_pr.labels = []
+            mock_client.list_all_prs.return_value = [mock_pr]
+
+            issue_result = await scheduler._get_issues(mock_job, mock_repo)
+            pr_result = await scheduler._get_prs(mock_job, mock_repo)
+
+        # Both should have author field at the same level
+        assert "author" in issue_result[0]
+        assert "author" in pr_result[0]
+        # Both should be strings
+        assert isinstance(issue_result[0]["author"], str)
+        assert isinstance(pr_result[0]["author"], str)
+        # Values should match what we set
+        assert issue_result[0]["author"] == "issue-author"
+        assert pr_result[0]["author"] == "pr-author"
 
 
 class TestSchedulerServiceExecuteJobCronErrorHandling:
