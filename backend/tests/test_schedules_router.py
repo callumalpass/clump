@@ -331,6 +331,47 @@ class TestScheduledJobCreate:
                 command_id="cmd",
             )
 
+    def test_invalid_cron_expression_bad_format_raises(self):
+        """Raises validation error for malformed cron expressions that trigger CroniterBadCronError."""
+        # This tests the CroniterBadCronError handling - expressions with invalid field values
+        with pytest.raises(ValueError, match="Invalid cron expression"):
+            ScheduledJobCreate(
+                name="Test",
+                cron_expression="60 25 32 13 8",  # Invalid: minute=60, hour=25, day=32, month=13, weekday=8
+                target_type="issues",
+                command_id="cmd",
+            )
+
+    def test_invalid_cron_expression_empty_raises(self):
+        """Raises validation error for empty cron expression."""
+        with pytest.raises(ValueError, match="Invalid cron expression"):
+            ScheduledJobCreate(
+                name="Test",
+                cron_expression="",
+                target_type="issues",
+                command_id="cmd",
+            )
+
+    def test_valid_cron_expression_with_ranges(self):
+        """Accepts valid cron expression with ranges and lists."""
+        data = ScheduledJobCreate(
+            name="Test",
+            cron_expression="0 9-17 * * 1-5",  # Weekdays 9am-5pm
+            target_type="issues",
+            command_id="cmd",
+        )
+        assert data.cron_expression == "0 9-17 * * 1-5"
+
+    def test_valid_cron_expression_with_step(self):
+        """Accepts valid cron expression with step values."""
+        data = ScheduledJobCreate(
+            name="Test",
+            cron_expression="*/15 * * * *",  # Every 15 minutes
+            target_type="issues",
+            command_id="cmd",
+        )
+        assert data.cron_expression == "*/15 * * * *"
+
     def test_invalid_timezone_raises(self):
         """Raises validation error for unknown timezone."""
         with pytest.raises(ValueError, match="Unknown timezone"):
@@ -392,6 +433,26 @@ class TestScheduledJobUpdate:
         """Validates cron expression only when provided."""
         with pytest.raises(ValueError, match="Invalid cron expression"):
             ScheduledJobUpdate(cron_expression="invalid")
+
+    def test_validates_cron_bad_format_when_provided(self):
+        """Validates malformed cron expressions that trigger CroniterBadCronError."""
+        with pytest.raises(ValueError, match="Invalid cron expression"):
+            ScheduledJobUpdate(cron_expression="60 25 32 13 8")
+
+    def test_validates_cron_empty_when_provided(self):
+        """Validates empty cron expression."""
+        with pytest.raises(ValueError, match="Invalid cron expression"):
+            ScheduledJobUpdate(cron_expression="")
+
+    def test_accepts_valid_cron_update_with_ranges(self):
+        """Accepts valid cron expression with ranges in update."""
+        data = ScheduledJobUpdate(cron_expression="0 9-17 * * 1-5")
+        assert data.cron_expression == "0 9-17 * * 1-5"
+
+    def test_accepts_valid_cron_update_with_step(self):
+        """Accepts valid cron expression with step values in update."""
+        data = ScheduledJobUpdate(cron_expression="*/15 * * * *")
+        assert data.cron_expression == "*/15 * * * *"
 
     def test_validates_timezone_when_provided(self):
         """Validates timezone only when provided."""

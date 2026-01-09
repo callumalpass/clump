@@ -9,7 +9,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from croniter import croniter
+from croniter import croniter, CroniterBadCronError
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 import pytz
@@ -84,7 +84,7 @@ class ScheduledJobCreate(BaseModel):
     def validate_cron(cls, v: str) -> str:
         try:
             croniter(v)
-        except (ValueError, KeyError) as e:
+        except (CroniterBadCronError, ValueError, KeyError) as e:
             raise ValueError(f"Invalid cron expression: {e}")
         return v
 
@@ -154,7 +154,7 @@ class ScheduledJobUpdate(BaseModel):
             return v
         try:
             croniter(v)
-        except (ValueError, KeyError) as e:
+        except (CroniterBadCronError, ValueError, KeyError) as e:
             raise ValueError(f"Invalid cron expression: {e}")
         return v
 
