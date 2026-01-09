@@ -718,3 +718,86 @@ class TestCodexAdapterSessionDiscovery:
         # Should not raise, just return empty list
         result = adapter.find_sessions_for_repo("/any/path")
         assert result == []
+
+
+class TestClaudeAdapterExtractSessionInfo:
+    """Tests for ClaudeAdapter.extract_session_info None handling.
+
+    These tests verify the fix for the bug where entry.get('message', {})
+    returns None (not {}) when the key exists with value None. The fix uses
+    entry.get('message') or {} to correctly fall back to empty dict.
+    """
+
+    @pytest.fixture
+    def adapter(self):
+        return ClaudeAdapter()
+
+    def test_handles_none_message_value(self, adapter):
+        """Handles entries where 'message' key exists but value is None."""
+        data = {
+            "session_id": "test-123",
+            "messages": [
+                {
+                    "type": "assistant",
+                    "timestamp": "2025-01-01T00:00:00Z",
+                    "message": None,  # Key exists but value is None
+                },
+            ],
+        }
+        # Should not raise AttributeError
+        info = adapter.extract_session_info(data)
+        assert info.session_id == "test-123"
+        assert info.model is None  # No model found due to None message
+
+    def test_handles_mixed_none_and_valid_messages(self, adapter):
+        """Handles mix of None and valid message values."""
+        data = {
+            "session_id": "test-456",
+            "messages": [
+                {
+                    "type": "assistant",
+                    "timestamp": "2025-01-01T00:00:00Z",
+                    "message": None,
+                },
+                {
+                    "type": "assistant",
+                    "timestamp": "2025-01-01T00:01:00Z",
+                    "message": {"model": "claude-sonnet-4-20250514"},
+                },
+            ],
+        }
+        info = adapter.extract_session_info(data)
+        assert info.session_id == "test-456"
+        assert info.model == "claude-sonnet-4-20250514"
+
+    def test_handles_missing_message_key(self, adapter):
+        """Handles entries without 'message' key at all."""
+        data = {
+            "session_id": "test-789",
+            "messages": [
+                {
+                    "type": "assistant",
+                    "timestamp": "2025-01-01T00:00:00Z",
+                    # No 'message' key at all
+                },
+            ],
+        }
+        info = adapter.extract_session_info(data)
+        assert info.session_id == "test-789"
+        assert info.model is None
+
+    def test_handles_empty_message_dict(self, adapter):
+        """Handles entries with empty message dict."""
+        data = {
+            "session_id": "test-empty",
+            "messages": [
+                {
+                    "type": "assistant",
+                    "timestamp": "2025-01-01T00:00:00Z",
+                    "message": {},  # Empty dict, no model
+                },
+            ],
+        }
+        info = adapter.extract_session_info(data)
+        assert info.session_id == "test-empty"
+        assert info.model is None

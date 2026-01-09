@@ -500,7 +500,8 @@ def _parse_gemini_transcript(transcript_path: Path, session_id: str) -> ParsedTr
                     primary_model = model
 
                 # Extract usage data
-                usage_data = msg.get("usage", {})
+                # Use `or {}` to handle None values (key exists but value is None)
+                usage_data = msg.get("usage") or {}
                 usage = None
                 if usage_data:
                     input_tokens = usage_data.get("promptTokenCount", 0) or usage_data.get("input_tokens", 0)
@@ -637,7 +638,8 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
                         primary_model = model
 
                     # Token usage may be in turn_context
-                    usage_data = payload.get('usage', {})
+                    # Use `or {}` to handle None values (key exists but value is None)
+                    usage_data = payload.get('usage') or {}
                     if usage_data:
                         total_input += usage_data.get('input_tokens', 0) or usage_data.get('prompt_tokens', 0)
                         total_output += usage_data.get('output_tokens', 0) or usage_data.get('completion_tokens', 0)
@@ -759,7 +761,8 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
 
                         # Get per-message usage if available
                         usage = None
-                        msg_usage = payload.get('usage', {})
+                        # Use `or {}` to handle None values (key exists but value is None)
+                        msg_usage = payload.get('usage') or {}
                         if msg_usage:
                             input_tokens = msg_usage.get('input_tokens', 0) or msg_usage.get('prompt_tokens', 0)
                             output_tokens = msg_usage.get('output_tokens', 0) or msg_usage.get('completion_tokens', 0)

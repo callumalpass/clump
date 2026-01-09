@@ -786,13 +786,15 @@ def _do_quick_scan_transcript(transcript_path: Path) -> QuickScanResult:
 
                     # Capture first user message for title fallback
                     if entry_type == 'user' and not first_user_message:
-                        msg = entry.get('message', {})
+                        # Use `or {}` to handle None values (key exists but value is None)
+                        msg = entry.get('message') or {}
                         content = msg.get('content', '')
                         first_user_message = _extract_text_from_content(content)
 
                     # Capture model
                     if entry_type == 'assistant' and not result["model"]:
-                        msg = entry.get('message', {})
+                        # Use `or {}` to handle None values (key exists but value is None)
+                        msg = entry.get('message') or {}
                         result["model"] = msg.get('model')
 
             # Use first user message as title if no summary

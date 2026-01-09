@@ -1152,6 +1152,90 @@ class TestQuickScanTranscriptNoneHandling:
         assert result["message_count"] == 1
 
 
+class TestQuickScanTranscriptNoneMessageHandling:
+    """Tests for None message value handling in _quick_scan_transcript.
+
+    These tests verify the fix for the bug where entry.get('message', {})
+    returns None (not {}) when the key exists with value None. The fix uses
+    entry.get('message') or {} to correctly fall back to empty dict.
+    """
+
+    def test_scan_handles_none_message_value_for_user(self, tmp_path):
+        """Test that None message values in user entries are handled gracefully."""
+        import json
+        transcript = tmp_path / "test.jsonl"
+        # Entry with message=None (can happen with corrupted/malformed data)
+        lines = [
+            json.dumps({
+                "type": "user",
+                "timestamp": "2024-01-15T10:00:00Z",
+                "message": None,  # Key exists but value is None
+            }),
+        ]
+        transcript.write_text("\n".join(lines))
+
+        result = _quick_scan_transcript(transcript)
+
+        # Should not crash, title should be None (no valid message found)
+        assert result["title"] is None
+        assert result["message_count"] == 1
+
+    def test_scan_handles_none_message_value_for_assistant(self, tmp_path):
+        """Test that None message values in assistant entries are handled gracefully."""
+        import json
+        transcript = tmp_path / "test.jsonl"
+        # Assistant entry with message=None
+        lines = [
+            json.dumps({
+                "type": "assistant",
+                "timestamp": "2024-01-15T10:00:00Z",
+                "message": None,  # Key exists but value is None
+            }),
+        ]
+        transcript.write_text("\n".join(lines))
+
+        result = _quick_scan_transcript(transcript)
+
+        # Should not crash, model should be None (no valid message found)
+        assert result["model"] is None
+        assert result["message_count"] == 1
+
+    def test_scan_handles_mixed_none_and_valid_messages(self, tmp_path):
+        """Test mix of None and valid message values."""
+        import json
+        transcript = tmp_path / "test.jsonl"
+        lines = [
+            json.dumps({
+                "type": "user",
+                "timestamp": "2024-01-15T10:00:00Z",
+                "message": None,  # None - should skip
+            }),
+            json.dumps({
+                "type": "user",
+                "timestamp": "2024-01-15T10:01:00Z",
+                "message": {"content": "Valid user message"},  # Valid
+            }),
+            json.dumps({
+                "type": "assistant",
+                "timestamp": "2024-01-15T10:02:00Z",
+                "message": None,  # None - should skip
+            }),
+            json.dumps({
+                "type": "assistant",
+                "timestamp": "2024-01-15T10:03:00Z",
+                "message": {"model": "claude-sonnet-4-20250514"},  # Valid
+            }),
+        ]
+        transcript.write_text("\n".join(lines))
+
+        result = _quick_scan_transcript(transcript)
+
+        # Should skip None messages and extract info from valid ones
+        assert result["title"] == "Valid user message"
+        assert result["model"] == "claude-sonnet-4-20250514"
+        assert result["message_count"] == 4
+
+
 class TestSessionCacheInvalidation:
     """Tests for session cache invalidation logic."""
 

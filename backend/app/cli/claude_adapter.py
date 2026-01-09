@@ -245,7 +245,8 @@ class ClaudeAdapter(CLIAdapter):
                     end_time = timestamp
 
             if entry_type == "assistant":
-                msg = entry.get("message", {})
+                # Use `or {}` to handle None values (key exists but value is None)
+                msg = entry.get("message") or {}
                 if isinstance(msg, dict) and msg.get("model"):
                     model = msg["model"]
 
