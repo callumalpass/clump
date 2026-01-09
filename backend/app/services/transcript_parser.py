@@ -247,7 +247,8 @@ def _parse_claude_transcript(transcript_path: Path, session_id: str) -> ParsedTr
                 # Use `or {}` to handle None values (key exists but value is None)
                 message_data = entry.get('message') or {}
                 role = message_data.get('role', entry_type)
-                content_parts = message_data.get('content', [])
+                # Use `or []` to handle None values (key exists but value is None)
+                content_parts = message_data.get('content') or []
 
                 # Handle user messages
                 if role == 'user':
@@ -264,7 +265,8 @@ def _parse_claude_transcript(transcript_path: Path, session_id: str) -> ParsedTr
                                 elif part.get('type') == 'tool_result':
                                     # Tool results in user messages - extract content and match to tool_use
                                     tool_use_id = part.get('tool_use_id')
-                                    tool_content = part.get('content', [])
+                                    # Use `or []` to handle None values (key exists but value is None)
+                                    tool_content = part.get('content') or []
                                     is_error = part.get('is_error', False)
 
                                     # Extract the result content as a string
@@ -443,7 +445,8 @@ def _parse_gemini_transcript(transcript_path: Path, session_id: str) -> ParsedTr
         start_time = data.get("startTime")
         end_time = data.get("lastUpdated")
 
-        for msg in data.get("messages", []):
+        # Use `or []` to handle None values (key exists but value is None)
+        for msg in data.get("messages") or []:
             msg_type = msg.get("type")
             timestamp = msg.get("timestamp", "")
 
@@ -709,7 +712,8 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
                         if user_message_count == 1:
                             continue
 
-                        content_parts = payload.get('content', [])
+                        # Use `or []` to handle None values (key exists but value is None)
+                        content_parts = payload.get('content') or []
                         text_parts = []
                         tool_results = []
 
@@ -745,7 +749,8 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
                             ))
 
                     elif role == 'assistant':
-                        content_parts = payload.get('content', [])
+                        # Use `or []` to handle None values (key exists but value is None)
+                        content_parts = payload.get('content') or []
                         text_parts = []
                         thinking_content = ""
                         tool_uses = []

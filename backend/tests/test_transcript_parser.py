@@ -3349,3 +3349,215 @@ class TestNoneValueHandling:
         assert result is not None
         assert len(result.messages) == 1
         assert result.messages[0].tool_uses[0].result == "print('hello')"
+
+    def test_claude_message_content_with_none_value(self, tmp_path):
+        """Handles Claude message where 'content' key is explicitly None.
+
+        This tests the fix at transcript_parser.py:251 for:
+            content_parts = message_data.get('content') or []
+
+        When 'content' is None, should not raise TypeError on iteration.
+        """
+        from app.services.transcript_parser import parse_transcript_file
+        import json
+
+        transcript = tmp_path / "test-session.jsonl"
+        lines = [
+            json.dumps({
+                "type": "user",
+                "uuid": "msg-1",
+                "timestamp": "2025-01-01T10:00:00Z",
+                "message": {
+                    "role": "user",
+                    "content": None  # This would crash before the fix
+                }
+            }),
+            json.dumps({
+                "type": "assistant",
+                "uuid": "msg-2",
+                "timestamp": "2025-01-01T10:00:01Z",
+                "message": {
+                    "role": "assistant",
+                    "content": None  # This would crash before the fix
+                }
+            }),
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        # Should not raise TypeError: 'NoneType' object is not iterable
+        result = parse_transcript_file(transcript, "test-session", cli_type="claude")
+        assert result is not None
+        # No messages should be added since content is None
+        assert len(result.messages) == 0
+
+    def test_claude_tool_result_content_with_none_value(self, tmp_path):
+        """Handles Claude tool_result where 'content' key is explicitly None.
+
+        This tests the fix at transcript_parser.py:269 for:
+            tool_content = part.get('content') or []
+
+        When 'content' is None, should not raise TypeError on iteration.
+        """
+        from app.services.transcript_parser import parse_transcript_file
+        import json
+
+        transcript = tmp_path / "test-session.jsonl"
+        lines = [
+            json.dumps({
+                "type": "assistant",
+                "uuid": "msg-1",
+                "timestamp": "2025-01-01T10:00:00Z",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "tool-123",
+                            "name": "read_file",
+                            "input": {"path": "test.py"}
+                        }
+                    ]
+                }
+            }),
+            json.dumps({
+                "type": "user",
+                "uuid": "msg-2",
+                "timestamp": "2025-01-01T10:00:01Z",
+                "message": {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "tool-123",
+                            "content": None  # This would crash before the fix
+                        }
+                    ]
+                }
+            }),
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        # Should not raise TypeError: 'NoneType' object is not iterable
+        result = parse_transcript_file(transcript, "test-session", cli_type="claude")
+        assert result is not None
+        # The assistant message should be present
+        assert len(result.messages) == 1
+        assert result.messages[0].role == "assistant"
+        # Tool result should be None since content was None
+        assert result.messages[0].tool_uses[0].result is None
+
+    def test_gemini_messages_list_with_none_value(self, tmp_path):
+        """Handles Gemini session where 'messages' key is explicitly None.
+
+        This tests the fix at transcript_parser.py:449 for:
+            for msg in data.get("messages") or []:
+
+        When 'messages' is None, should not raise TypeError on iteration.
+        """
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        gemini_dir = tmp_path / ".gemini" / "tmp" / "abc123" / "chats"
+        gemini_dir.mkdir(parents=True)
+
+        session_file = gemini_dir / "session-none-messages.json"
+        session_file.write_text(json.dumps({
+            "sessionId": "session-none-messages",
+            "messages": None,  # This would crash before the fix
+            "startTime": "2025-01-01T10:00:00Z"
+        }))
+
+        # Should not raise TypeError: 'NoneType' object is not iterable
+        result = parse_transcript_file(session_file, "session-none-messages", cli_type=CLIType.GEMINI.value)
+        assert result is not None
+        assert len(result.messages) == 0
+
+    def test_codex_user_content_with_none_value(self, tmp_path):
+        """Handles Codex user response_item where 'content' key is explicitly None.
+
+        This tests the fix at transcript_parser.py:713 for:
+            content_parts = payload.get('content') or []
+
+        When 'content' is None, should not raise TypeError on iteration.
+        """
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-user-none-content.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"cwd": "/home/user/project", "timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            # First user message (environment context - will be skipped)
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:00Z",
+                "payload": {
+                    "id": "env-1",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "<environment_context>..."}]
+                }
+            }),
+            # Second user message with content: null
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:01Z",
+                "payload": {
+                    "id": "msg-1",
+                    "role": "user",
+                    "content": None  # This would crash before the fix
+                }
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        # Should not raise TypeError: 'NoneType' object is not iterable
+        result = parse_transcript_file(session_file, "session-user-none-content", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        # No user messages should be added (first is env context, second has None content)
+        assert len(result.messages) == 0
+
+    def test_codex_assistant_content_with_none_value(self, tmp_path):
+        """Handles Codex assistant response_item where 'content' key is explicitly None.
+
+        This tests the fix at transcript_parser.py:750 for:
+            content_parts = payload.get('content') or []
+
+        When 'content' is None, should not raise TypeError on iteration.
+        """
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-assistant-none-content.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"cwd": "/home/user/project", "timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:01Z",
+                "payload": {
+                    "id": "msg-1",
+                    "role": "assistant",
+                    "content": None  # This would crash before the fix
+                }
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        # Should not raise TypeError: 'NoneType' object is not iterable
+        result = parse_transcript_file(session_file, "session-assistant-none-content", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        # No messages should be added since content is None (no text_content or tool_uses)
+        assert len(result.messages) == 0
