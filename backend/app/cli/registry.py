@@ -6,6 +6,7 @@ and utilities for working with all registered adapters.
 """
 
 import shutil
+import threading
 from typing import Optional
 
 from app.cli.base import CLIAdapter, CLIType
@@ -15,6 +16,8 @@ from app.cli.gemini_adapter import GeminiAdapter
 
 # Singleton adapter instances (adapters are stateless)
 _adapters: dict[CLIType, CLIAdapter] = {}
+# Lock for thread-safe adapter creation
+_adapters_lock = threading.Lock()
 
 
 def get_adapter(cli_type: CLIType | str) -> CLIAdapter:
@@ -37,18 +40,24 @@ def get_adapter(cli_type: CLIType | str) -> CLIAdapter:
         except ValueError:
             raise ValueError(f"Unknown CLI type: {cli_type}")
 
-    # Create adapter if not cached
-    if cli_type not in _adapters:
-        if cli_type == CLIType.CLAUDE:
-            _adapters[cli_type] = ClaudeAdapter()
-        elif cli_type == CLIType.GEMINI:
-            _adapters[cli_type] = GeminiAdapter()
-        elif cli_type == CLIType.CODEX:
-            _adapters[cli_type] = CodexAdapter()
-        else:
-            raise ValueError(f"Unknown CLI type: {cli_type}")
+    # Fast path: check without lock first (safe due to GIL for dict reads)
+    if cli_type in _adapters:
+        return _adapters[cli_type]
 
-    return _adapters[cli_type]
+    # Slow path: acquire lock and create adapter if needed
+    with _adapters_lock:
+        # Double-check after acquiring lock (another thread may have created it)
+        if cli_type not in _adapters:
+            if cli_type == CLIType.CLAUDE:
+                _adapters[cli_type] = ClaudeAdapter()
+            elif cli_type == CLIType.GEMINI:
+                _adapters[cli_type] = GeminiAdapter()
+            elif cli_type == CLIType.CODEX:
+                _adapters[cli_type] = CodexAdapter()
+            else:
+                raise ValueError(f"Unknown CLI type: {cli_type}")
+
+        return _adapters[cli_type]
 
 
 def get_default_adapter() -> CLIAdapter:
@@ -143,3 +152,15 @@ def get_cli_info() -> list[dict]:
             }
         )
     return result
+
+
+def clear_adapter_cache() -> None:
+    """
+    Clear the adapter cache.
+
+    This is primarily useful for testing to ensure test isolation.
+    In production, adapters are stateless singletons so clearing
+    the cache has no functional impact.
+    """
+    with _adapters_lock:
+        _adapters.clear()

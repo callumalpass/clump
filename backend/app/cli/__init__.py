@@ -25,6 +25,7 @@ from app.cli.registry import (
     get_installed_adapters,
     get_adapter_by_command,
     get_cli_info,
+    clear_adapter_cache,
 )
 
 __all__ = [
@@ -40,4 +41,5 @@ __all__ = [
     "get_installed_adapters",
     "get_adapter_by_command",
     "get_cli_info",
+    "clear_adapter_cache",
 ]
