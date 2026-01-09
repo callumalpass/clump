@@ -2806,3 +2806,204 @@ class TestSchedulerServiceCalculateNextRunIntegration:
             # Should not raise
             result = scheduler._calculate_next_run(mock_job)
             assert isinstance(result, datetime), f"Failed for pattern: {cron_expr}"
+
+
+class TestCheckRepoJobsInvalidCronExpression:
+    """Tests for _check_repo_jobs handling of invalid cron expressions in schedule definitions."""
+
+    @pytest.fixture
+    def scheduler(self):
+        """Create a SchedulerService instance."""
+        from app.services.scheduler import SchedulerService
+        return SchedulerService()
+
+    @pytest.fixture
+    def mock_repo(self):
+        """Create a mock repo dict."""
+        return {
+            "id": 1,
+            "owner": "testowner",
+            "name": "testrepo",
+            "local_path": "/path/to/repo",
+        }
+
+    @pytest.mark.asyncio
+    async def test_skips_definition_with_invalid_cron_expression(self, scheduler, mock_repo, caplog):
+        """_check_repo_jobs skips schedule definitions with invalid cron expressions."""
+        from app.storage import ScheduleDefinition
+
+        # Create a definition with an invalid cron expression
+        invalid_defn = ScheduleDefinition(
+            id="invalid-schedule",
+            name="Invalid Schedule",
+            cron_expression="invalid cron",  # Not a valid cron expression
+            timezone="UTC",
+        )
+
+        now = datetime.now()
+
+        with patch("app.services.scheduler.list_schedule_definitions", return_value=[invalid_defn]):
+            with patch("app.services.scheduler.get_repo_db") as mock_db_ctx:
+                mock_db = AsyncMock()
+                mock_db.__aenter__ = AsyncMock(return_value=mock_db)
+                mock_db.__aexit__ = AsyncMock(return_value=None)
+                mock_db_ctx.return_value = mock_db
+
+                # Mock the query to return None (no existing runtime state)
+                mock_result = MagicMock()
+                mock_result.scalar_one_or_none.return_value = None
+                mock_result.scalars.return_value.all.return_value = []  # No due jobs
+                mock_db.execute = AsyncMock(return_value=mock_result)
+
+                import logging
+                caplog.set_level(logging.WARNING)
+
+                # Should not raise despite invalid cron
+                await scheduler._check_repo_jobs(mock_repo, now)
+
+                # Should have logged a warning
+                assert any("invalid cron expression" in record.message.lower() for record in caplog.records)
+                assert any("invalid-schedule" in record.message for record in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_processes_valid_definitions_when_invalid_exists(self, scheduler, mock_repo):
+        """_check_repo_jobs processes valid definitions even when invalid ones exist."""
+        from app.storage import ScheduleDefinition
+
+        invalid_defn = ScheduleDefinition(
+            id="invalid-schedule",
+            name="Invalid Schedule",
+            cron_expression="not valid",
+            timezone="UTC",
+        )
+
+        valid_defn = ScheduleDefinition(
+            id="valid-schedule",
+            name="Valid Schedule",
+            cron_expression="0 9 * * *",  # Valid: daily at 9am
+            timezone="UTC",
+        )
+
+        now = datetime.now()
+        runtime_created = []
+
+        with patch("app.services.scheduler.list_schedule_definitions", return_value=[invalid_defn, valid_defn]):
+            with patch("app.services.scheduler.get_repo_db") as mock_db_ctx:
+                mock_db = AsyncMock()
+                mock_db.__aenter__ = AsyncMock(return_value=mock_db)
+                mock_db.__aexit__ = AsyncMock(return_value=None)
+                mock_db_ctx.return_value = mock_db
+
+                # Mock the query to return None (no existing runtime state)
+                mock_result = MagicMock()
+                mock_result.scalar_one_or_none.return_value = None
+                mock_result.scalars.return_value.all.return_value = []  # No due jobs
+                mock_db.execute = AsyncMock(return_value=mock_result)
+
+                # Track what gets added to the database
+                def track_add(obj):
+                    runtime_created.append(obj.name)
+                mock_db.add = MagicMock(side_effect=track_add)
+                mock_db.commit = AsyncMock()
+
+                await scheduler._check_repo_jobs(mock_repo, now)
+
+                # Only the valid definition should have been added
+                assert "valid-schedule" in runtime_created
+                assert "invalid-schedule" not in runtime_created
+
+    @pytest.mark.asyncio
+    async def test_skips_various_invalid_cron_patterns(self, scheduler, mock_repo, caplog):
+        """_check_repo_jobs skips definitions with various types of invalid cron expressions."""
+        from app.storage import ScheduleDefinition
+
+        invalid_cron_expressions = [
+            "",  # Empty string
+            "* * * *",  # Missing field (only 4 fields)
+            "60 * * * *",  # Invalid minute (60 > 59)
+            "* 24 * * *",  # Invalid hour (24 > 23)
+            "not a cron expression",  # Random text
+            "   ",  # Whitespace only
+        ]
+
+        for cron_expr in invalid_cron_expressions:
+            defn = ScheduleDefinition(
+                id=f"test-{hash(cron_expr)}",
+                name="Test Schedule",
+                cron_expression=cron_expr,
+                timezone="UTC",
+            )
+
+            now = datetime.now()
+
+            with patch("app.services.scheduler.list_schedule_definitions", return_value=[defn]):
+                with patch("app.services.scheduler.get_repo_db") as mock_db_ctx:
+                    mock_db = AsyncMock()
+                    mock_db.__aenter__ = AsyncMock(return_value=mock_db)
+                    mock_db.__aexit__ = AsyncMock(return_value=None)
+                    mock_db_ctx.return_value = mock_db
+
+                    mock_result = MagicMock()
+                    mock_result.scalar_one_or_none.return_value = None
+                    mock_result.scalars.return_value.all.return_value = []
+                    mock_db.execute = AsyncMock(return_value=mock_result)
+
+                    mock_db.add = MagicMock()
+
+                    # Should not raise
+                    await scheduler._check_repo_jobs(mock_repo, now)
+
+                    # Should not have tried to create runtime state for invalid cron
+                    mock_db.add.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_does_not_skip_existing_runtime_with_invalid_cron(self, scheduler, mock_repo):
+        """_check_repo_jobs still syncs existing runtime state even if definition has invalid cron.
+
+        When runtime state already exists for a schedule, we sync fields from the definition
+        but don't need to calculate next_run (that's done elsewhere).
+        """
+        from app.storage import ScheduleDefinition
+        from app.models import ScheduledJob
+
+        # Definition has invalid cron (user may have broken it while editing)
+        defn = ScheduleDefinition(
+            id="existing-schedule",
+            name="Existing Schedule",
+            cron_expression="invalid",
+            timezone="UTC",
+            status="paused",  # Changed status
+        )
+
+        # But runtime already exists with a valid next_run_at
+        existing_runtime = MagicMock(spec=ScheduledJob)
+        existing_runtime.status = "active"  # Will be synced to "paused"
+        existing_runtime.cli_type = "claude"
+        existing_runtime.permission_mode = None
+        existing_runtime.model = None
+        existing_runtime.max_turns = None
+        existing_runtime.allowed_tools = None
+
+        now = datetime.now()
+
+        with patch("app.services.scheduler.list_schedule_definitions", return_value=[defn]):
+            with patch("app.services.scheduler.get_repo_db") as mock_db_ctx:
+                mock_db = AsyncMock()
+                mock_db.__aenter__ = AsyncMock(return_value=mock_db)
+                mock_db.__aexit__ = AsyncMock(return_value=None)
+                mock_db_ctx.return_value = mock_db
+
+                # First query returns the existing runtime, second returns no due jobs
+                mock_result1 = MagicMock()
+                mock_result1.scalar_one_or_none.return_value = existing_runtime
+
+                mock_result2 = MagicMock()
+                mock_result2.scalars.return_value.all.return_value = []
+
+                mock_db.execute = AsyncMock(side_effect=[mock_result1, mock_result2])
+                mock_db.commit = AsyncMock()
+
+                await scheduler._check_repo_jobs(mock_repo, now)
+
+                # Status should have been synced from definition
+                assert existing_runtime.status == "paused"

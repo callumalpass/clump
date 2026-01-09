@@ -512,6 +512,15 @@ class SchedulerService:
                 runtime = result.scalar_one_or_none()
 
                 if not runtime:
+                    # Validate cron expression before creating runtime state
+                    # Skip schedules with invalid cron expressions (can happen if JSON is hand-edited)
+                    if not is_valid_cron_expression(defn.cron_expression):
+                        logger.warning(
+                            f"Skipping schedule '{defn.id}' in repo {repo['id']}: "
+                            f"invalid cron expression '{defn.cron_expression}'"
+                        )
+                        continue
+
                     # Create runtime state from definition
                     next_run = calculate_next_run(defn.cron_expression, defn.timezone)
                     runtime = ScheduledJob(
