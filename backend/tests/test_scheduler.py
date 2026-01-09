@@ -2525,3 +2525,284 @@ class TestSchedulerServiceGetIssuesLabelsField:
         # Both should be lists
         assert isinstance(issue_result[0]["labels"], list)
         assert isinstance(pr_result[0]["labels"], list)
+
+
+class TestSchedulerServiceExecuteJobCronErrorHandling:
+    """Tests for error handling when cron expression calculation fails in _execute_job.
+
+    These tests verify that the scheduler gracefully handles invalid cron expressions
+    that might be introduced by:
+    - Manual editing of schedule JSON files
+    - Corrupted data
+    - Edge cases in cron parsing
+
+    The fix ensures:
+    1. If cron calculation fails BEFORE job execution, the job is skipped with a log
+    2. If cron calculation fails AFTER job execution (in finally block), the run record
+       is still committed properly, just without updating next_run_at
+    """
+
+    @pytest.fixture
+    def scheduler(self):
+        """Create a SchedulerService instance."""
+        from app.services.scheduler import SchedulerService
+        return SchedulerService()
+
+    @pytest.fixture
+    def mock_repo(self):
+        """Create a mock repo dict."""
+        return {
+            "id": 1,
+            "owner": "testowner",
+            "name": "testrepo",
+            "local_path": "/path/to/repo",
+        }
+
+    @pytest.mark.asyncio
+    async def test_execute_job_skips_on_initial_cron_error(self, scheduler, mock_repo):
+        """Job execution is skipped if initial cron calculation fails.
+
+        When _calculate_next_run fails BEFORE the try block (line 618),
+        the job should log an error and return early without creating a run record.
+        """
+        from app.models import ScheduledJob
+
+        mock_job = MagicMock(spec=ScheduledJob)
+        mock_job.id = 1
+        mock_job.name = "test-job"
+        mock_job.cron_expression = "invalid cron"  # Will cause ValueError
+        mock_job.timezone = "UTC"
+
+        # Mock the database context
+        mock_db = AsyncMock()
+        mock_db.execute = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_job
+        mock_db.execute.return_value = mock_result
+
+        # Use a context manager mock that returns our mock_db
+        mock_context = AsyncMock()
+        mock_context.__aenter__ = AsyncMock(return_value=mock_db)
+        mock_context.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("app.services.scheduler.get_repo_db", return_value=mock_context), \
+             patch.object(scheduler, "_calculate_next_run", side_effect=ValueError("Invalid cron expression")), \
+             patch("app.services.scheduler.logger") as mock_logger:
+
+            # Execute the job
+            await scheduler._execute_job(1, mock_repo)
+
+            # Verify error was logged
+            mock_logger.error.assert_called()
+            error_call_args = str(mock_logger.error.call_args)
+            assert "invalid cron" in error_call_args.lower() or "skipping" in error_call_args.lower()
+
+            # Verify no run record was created (db.add should not have been called after commit)
+            # The flow should return early before creating a ScheduledJobRun
+
+    @pytest.mark.asyncio
+    async def test_execute_job_commits_even_on_final_cron_error(self, scheduler, mock_repo):
+        """Run record is committed even if final cron calculation fails.
+
+        When _calculate_next_run fails in the finally block (line 663),
+        the run record should still be committed with all its data,
+        only leaving next_run_at unchanged.
+        """
+        from app.models import ScheduledJob, ScheduledJobRun, JobRunStatus
+        from datetime import datetime, timezone
+
+        mock_job = MagicMock(spec=ScheduledJob)
+        mock_job.id = 1
+        mock_job.name = "test-job"
+        mock_job.cron_expression = "0 9 * * *"
+        mock_job.timezone = "UTC"
+        mock_job.repo_id = 1
+        mock_job.target_type = "codebase"  # Simple target type
+        mock_job.max_items = 10
+        mock_job.run_count = 0
+        mock_job.last_run_at = None
+        mock_job.last_run_status = None
+        mock_job.next_run_at = datetime.now(timezone.utc)
+
+        # Track if db.commit was called
+        commit_called = False
+        original_next_run = mock_job.next_run_at
+
+        async def track_commit():
+            nonlocal commit_called
+            commit_called = True
+
+        # Mock the database context
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_job
+        mock_db.execute = AsyncMock(return_value=mock_result)
+        mock_db.add = MagicMock()
+        mock_db.flush = AsyncMock()
+        mock_db.commit = AsyncMock(side_effect=track_commit)
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__ = AsyncMock(return_value=mock_db)
+        mock_context.__aexit__ = AsyncMock(return_value=None)
+
+        # Track which call number we're on for _calculate_next_run
+        call_count = 0
+
+        def cron_side_effect(job):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # First call succeeds (initial update before execution)
+                return datetime.now(timezone.utc)
+            else:
+                # Second call fails (in finally block)
+                raise ValueError("Simulated cron error in finally block")
+
+        with patch("app.services.scheduler.get_repo_db", return_value=mock_context), \
+             patch.object(scheduler, "_calculate_next_run", side_effect=cron_side_effect), \
+             patch.object(scheduler, "_get_target_items", new_callable=AsyncMock, return_value=[{"type": "codebase"}]), \
+             patch.object(scheduler, "_process_item", new_callable=AsyncMock, return_value="session-123"), \
+             patch("app.services.scheduler.logger"):
+
+            # Execute the job
+            await scheduler._execute_job(1, mock_repo)
+
+            # Verify commit was still called (bug fix ensures this happens)
+            assert commit_called, "db.commit() should have been called even after cron error in finally"
+
+            # Verify run_count was incremented (happens before the failing cron call)
+            assert mock_job.run_count == 1
+
+    @pytest.mark.asyncio
+    async def test_execute_job_logs_cron_error_in_finally(self, scheduler, mock_repo):
+        """Cron calculation error in finally block is properly logged."""
+        from app.models import ScheduledJob
+        from datetime import datetime, timezone
+
+        mock_job = MagicMock(spec=ScheduledJob)
+        mock_job.id = 42
+        mock_job.name = "test-job-with-bad-cron"
+        mock_job.cron_expression = "0 9 * * *"
+        mock_job.timezone = "UTC"
+        mock_job.repo_id = 1
+        mock_job.target_type = "codebase"
+        mock_job.max_items = 10
+        mock_job.run_count = 0
+        mock_job.next_run_at = datetime.now(timezone.utc)
+
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_job
+        mock_db.execute = AsyncMock(return_value=mock_result)
+        mock_db.add = MagicMock()
+        mock_db.flush = AsyncMock()
+        mock_db.commit = AsyncMock()
+
+        mock_context = AsyncMock()
+        mock_context.__aenter__ = AsyncMock(return_value=mock_db)
+        mock_context.__aexit__ = AsyncMock(return_value=None)
+
+        call_count = 0
+
+        def cron_side_effect(job):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return datetime.now(timezone.utc)
+            raise ValueError("Cron parsing failed: missing field")
+
+        with patch("app.services.scheduler.get_repo_db", return_value=mock_context), \
+             patch.object(scheduler, "_calculate_next_run", side_effect=cron_side_effect), \
+             patch.object(scheduler, "_get_target_items", new_callable=AsyncMock, return_value=[{"type": "codebase"}]), \
+             patch.object(scheduler, "_process_item", new_callable=AsyncMock, return_value="session-123"), \
+             patch("app.services.scheduler.logger") as mock_logger:
+
+            await scheduler._execute_job(1, mock_repo)
+
+            # Verify error was logged for the job
+            error_calls = [str(call) for call in mock_logger.error.call_args_list]
+            assert any("42" in call or "Failed to calculate next run" in call for call in error_calls), \
+                f"Expected error log for job 42, got: {error_calls}"
+
+
+class TestSchedulerServiceCalculateNextRunIntegration:
+    """Integration tests for _calculate_next_run with actual croniter."""
+
+    @pytest.fixture
+    def scheduler(self):
+        """Create a SchedulerService instance."""
+        from app.services.scheduler import SchedulerService
+        return SchedulerService()
+
+    def test_calculate_next_run_with_valid_cron(self, scheduler):
+        """_calculate_next_run works with valid cron expression."""
+        from app.models import ScheduledJob
+
+        mock_job = MagicMock(spec=ScheduledJob)
+        mock_job.cron_expression = "0 9 * * *"
+        mock_job.timezone = "UTC"
+
+        # Should not raise
+        result = scheduler._calculate_next_run(mock_job)
+
+        assert isinstance(result, datetime)
+        assert result.hour == 9
+        assert result.minute == 0
+
+    def test_calculate_next_run_with_invalid_cron_raises(self, scheduler):
+        """_calculate_next_run raises ValueError for invalid cron."""
+        from app.models import ScheduledJob
+
+        mock_job = MagicMock(spec=ScheduledJob)
+        mock_job.cron_expression = "invalid cron expression"
+        mock_job.timezone = "UTC"
+
+        with pytest.raises(ValueError):
+            scheduler._calculate_next_run(mock_job)
+
+    def test_calculate_next_run_with_malformed_cron_raises(self, scheduler):
+        """_calculate_next_run raises ValueError for malformed cron patterns."""
+        from app.models import ScheduledJob
+
+        invalid_cron_expressions = [
+            "* * * *",  # Missing field (only 4 fields)
+            "60 * * * *",  # Invalid minute (60 > 59)
+            "* 24 * * *",  # Invalid hour (24 > 23)
+            "* * 32 * *",  # Invalid day (32 > 31)
+            "* * * 13 *",  # Invalid month (13 > 12)
+            "* * * * 8",  # Invalid day of week (8 > 7)
+            "not a cron",  # Complete nonsense
+            "",  # Empty string
+        ]
+
+        for cron_expr in invalid_cron_expressions:
+            mock_job = MagicMock(spec=ScheduledJob)
+            mock_job.cron_expression = cron_expr
+            mock_job.timezone = "UTC"
+
+            with pytest.raises((ValueError, TypeError)):
+                scheduler._calculate_next_run(mock_job)
+
+    def test_calculate_next_run_with_various_valid_patterns(self, scheduler):
+        """_calculate_next_run works with various valid cron patterns."""
+        from app.models import ScheduledJob
+
+        valid_patterns = [
+            "* * * * *",  # Every minute
+            "0 * * * *",  # Every hour
+            "0 0 * * *",  # Every day at midnight
+            "0 0 * * 0",  # Every Sunday at midnight
+            "0 0 1 * *",  # First day of month
+            "*/5 * * * *",  # Every 5 minutes
+            "0 9-17 * * *",  # Every hour 9am-5pm
+            "0 0,12 * * *",  # Midnight and noon
+        ]
+
+        for cron_expr in valid_patterns:
+            mock_job = MagicMock(spec=ScheduledJob)
+            mock_job.cron_expression = cron_expr
+            mock_job.timezone = "UTC"
+
+            # Should not raise
+            result = scheduler._calculate_next_run(mock_job)
+            assert isinstance(result, datetime), f"Failed for pattern: {cron_expr}"

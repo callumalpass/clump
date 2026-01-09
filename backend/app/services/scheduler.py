@@ -615,7 +615,13 @@ class SchedulerService:
             logger.info(f"Executing job {job.id}: {job.name}")
 
             # Update next_run_at immediately to prevent duplicate runs
-            job.next_run_at = self._calculate_next_run(job)
+            try:
+                job.next_run_at = self._calculate_next_run(job)
+            except ValueError as e:
+                # Invalid cron expression - log and skip execution
+                # This can happen if someone manually edits the schedule JSON
+                logger.error(f"Job {job.id} has invalid cron expression, skipping: {e}")
+                return
             await db.commit()
 
             # Create run record
@@ -660,8 +666,16 @@ class SchedulerService:
                 # Update job with next run time
                 job.last_run_at = run.started_at
                 job.last_run_status = run.status
-                job.next_run_at = self._calculate_next_run(job)
                 job.run_count += 1
+
+                # Calculate next run time, but don't let errors prevent commit
+                try:
+                    job.next_run_at = self._calculate_next_run(job)
+                except ValueError as e:
+                    # Log the error but don't fail the commit - this can happen
+                    # if someone manually edits the schedule JSON with an invalid cron
+                    logger.error(f"Failed to calculate next run for job {job.id}: {e}")
+                    # Leave next_run_at unchanged rather than failing
 
                 await db.commit()
 
