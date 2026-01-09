@@ -359,10 +359,11 @@ def _parse_claude_transcript(transcript_path: Path, session_id: str) -> ParsedTr
                         usage_data = message_data.get('usage') or {}
                         usage = None
                         if usage_data:
-                            input_tokens = usage_data.get('input_tokens', 0)
-                            output_tokens = usage_data.get('output_tokens', 0)
-                            cache_read = usage_data.get('cache_read_input_tokens', 0)
-                            cache_creation = usage_data.get('cache_creation_input_tokens', 0)
+                            # Use `or 0` to handle None values (key exists but value is None)
+                            input_tokens = usage_data.get('input_tokens', 0) or 0
+                            output_tokens = usage_data.get('output_tokens', 0) or 0
+                            cache_read = usage_data.get('cache_read_input_tokens', 0) or 0
+                            cache_creation = usage_data.get('cache_creation_input_tokens', 0) or 0
 
                             usage = TokenUsage(
                                 input_tokens=input_tokens,
@@ -504,8 +505,9 @@ def _parse_gemini_transcript(transcript_path: Path, session_id: str) -> ParsedTr
                 usage_data = msg.get("usage") or {}
                 usage = None
                 if usage_data:
-                    input_tokens = usage_data.get("promptTokenCount", 0) or usage_data.get("input_tokens", 0)
-                    output_tokens = usage_data.get("candidatesTokenCount", 0) or usage_data.get("output_tokens", 0)
+                    # Use `or 0` at the end to handle None values from both keys
+                    input_tokens = usage_data.get("promptTokenCount") or usage_data.get("input_tokens") or 0
+                    output_tokens = usage_data.get("candidatesTokenCount") or usage_data.get("output_tokens") or 0
                     usage = TokenUsage(
                         input_tokens=input_tokens,
                         output_tokens=output_tokens,
@@ -641,14 +643,16 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
                     # Use `or {}` to handle None values (key exists but value is None)
                     usage_data = payload.get('usage') or {}
                     if usage_data:
-                        total_input += usage_data.get('input_tokens', 0) or usage_data.get('prompt_tokens', 0)
-                        total_output += usage_data.get('output_tokens', 0) or usage_data.get('completion_tokens', 0)
+                        # Use `or 0` at the end to handle None values from both keys
+                        total_input += usage_data.get('input_tokens') or usage_data.get('prompt_tokens') or 0
+                        total_output += usage_data.get('output_tokens') or usage_data.get('completion_tokens') or 0
 
                 elif entry_type == 'usage':
                     # Standalone usage entry
                     payload = entry.get('payload', {})
-                    total_input += payload.get('input_tokens', 0) or payload.get('prompt_tokens', 0)
-                    total_output += payload.get('output_tokens', 0) or payload.get('completion_tokens', 0)
+                    # Use `or 0` at the end to handle None values from both keys
+                    total_input += payload.get('input_tokens') or payload.get('prompt_tokens') or 0
+                    total_output += payload.get('output_tokens') or payload.get('completion_tokens') or 0
 
                 elif entry_type == 'response_item':
                     payload = entry.get('payload', {})
@@ -764,8 +768,9 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
                         # Use `or {}` to handle None values (key exists but value is None)
                         msg_usage = payload.get('usage') or {}
                         if msg_usage:
-                            input_tokens = msg_usage.get('input_tokens', 0) or msg_usage.get('prompt_tokens', 0)
-                            output_tokens = msg_usage.get('output_tokens', 0) or msg_usage.get('completion_tokens', 0)
+                            # Use `or 0` at the end to handle None values from both keys
+                            input_tokens = msg_usage.get('input_tokens') or msg_usage.get('prompt_tokens') or 0
+                            output_tokens = msg_usage.get('output_tokens') or msg_usage.get('completion_tokens') or 0
                             usage = TokenUsage(
                                 input_tokens=input_tokens,
                                 output_tokens=output_tokens,

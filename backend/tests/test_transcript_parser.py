@@ -2582,3 +2582,368 @@ class TestParseClaudeTranscriptNoneHandling:
         assert result is not None
         # Missing message key means no content
         assert len(result.messages) == 0
+
+
+class TestClaudeParserNoneUsageValues:
+    """Tests for Claude parser handling None values in usage fields.
+
+    When usage data has keys with null values (e.g., "input_tokens": null),
+    dict.get('input_tokens', 0) returns None (not 0). The parser must
+    handle this to avoid TypeError when doing arithmetic.
+    """
+
+    def test_handles_none_input_tokens(self, tmp_path, monkeypatch):
+        """Parser handles null input_tokens in usage data."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-null-input.jsonl"
+        transcript.write_text(json.dumps({
+            "type": "assistant",
+            "uuid": "msg-1",
+            "timestamp": "2025-01-01T10:00:00Z",
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "text", "text": "Hello"}],
+                "usage": {
+                    "input_tokens": None,
+                    "output_tokens": 50
+                }
+            }
+        }) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-null-input", "/test/project")
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].usage is not None
+        assert result.messages[0].usage.input_tokens == 0
+        assert result.messages[0].usage.output_tokens == 50
+
+    def test_handles_none_output_tokens(self, tmp_path, monkeypatch):
+        """Parser handles null output_tokens in usage data."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-null-output.jsonl"
+        transcript.write_text(json.dumps({
+            "type": "assistant",
+            "uuid": "msg-1",
+            "timestamp": "2025-01-01T10:00:00Z",
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "text", "text": "Hello"}],
+                "usage": {
+                    "input_tokens": 100,
+                    "output_tokens": None
+                }
+            }
+        }) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-null-output", "/test/project")
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].usage is not None
+        assert result.messages[0].usage.input_tokens == 100
+        assert result.messages[0].usage.output_tokens == 0
+
+    def test_handles_all_none_usage_values(self, tmp_path, monkeypatch):
+        """Parser handles all null values in usage data."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-all-null.jsonl"
+        transcript.write_text(json.dumps({
+            "type": "assistant",
+            "uuid": "msg-1",
+            "timestamp": "2025-01-01T10:00:00Z",
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "text", "text": "Hello"}],
+                "usage": {
+                    "input_tokens": None,
+                    "output_tokens": None,
+                    "cache_read_input_tokens": None,
+                    "cache_creation_input_tokens": None
+                }
+            }
+        }) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-all-null", "/test/project")
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].usage is not None
+        assert result.messages[0].usage.input_tokens == 0
+        assert result.messages[0].usage.output_tokens == 0
+        assert result.messages[0].usage.cache_read_tokens == 0
+        assert result.messages[0].usage.cache_creation_tokens == 0
+        # Totals should also be correct
+        assert result.total_input_tokens == 0
+        assert result.total_output_tokens == 0
+
+    def test_handles_mixed_none_and_valid_usage(self, tmp_path, monkeypatch):
+        """Parser handles mix of null and valid values in usage data."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-mixed.jsonl"
+        lines = [
+            json.dumps({
+                "type": "assistant",
+                "uuid": "msg-1",
+                "timestamp": "2025-01-01T10:00:00Z",
+                "message": {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "First"}],
+                    "usage": {
+                        "input_tokens": 100,
+                        "output_tokens": None
+                    }
+                }
+            }),
+            json.dumps({
+                "type": "assistant",
+                "uuid": "msg-2",
+                "timestamp": "2025-01-01T10:01:00Z",
+                "message": {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "Second"}],
+                    "usage": {
+                        "input_tokens": None,
+                        "output_tokens": 75
+                    }
+                }
+            }),
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-mixed", "/test/project")
+        assert result is not None
+        assert len(result.messages) == 2
+        # First message: 100 input, 0 output
+        assert result.messages[0].usage.input_tokens == 100
+        assert result.messages[0].usage.output_tokens == 0
+        # Second message: 0 input, 75 output
+        assert result.messages[1].usage.input_tokens == 0
+        assert result.messages[1].usage.output_tokens == 75
+        # Totals should be accumulated correctly
+        assert result.total_input_tokens == 100
+        assert result.total_output_tokens == 75
+
+
+class TestGeminiParserNoneUsageValues:
+    """Tests for Gemini parser handling None values in usage fields."""
+
+    def test_handles_none_token_counts(self, tmp_path):
+        """Parser handles null token counts in Gemini usage data."""
+        from app.services.transcript_parser import parse_transcript_file
+        import json
+
+        transcript = tmp_path / "session.json"
+        transcript.write_text(json.dumps({
+            "summary": "Test session",
+            "startTime": "2025-01-01T10:00:00Z",
+            "messages": [
+                {
+                    "id": "msg-1",
+                    "type": "gemini",
+                    "timestamp": "2025-01-01T10:00:00Z",
+                    "content": "Hello",
+                    "usage": {
+                        "promptTokenCount": None,
+                        "candidatesTokenCount": None
+                    }
+                }
+            ]
+        }))
+
+        result = parse_transcript_file(transcript, "session-test", cli_type="gemini")
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].usage is not None
+        assert result.messages[0].usage.input_tokens == 0
+        assert result.messages[0].usage.output_tokens == 0
+        assert result.total_input_tokens == 0
+        assert result.total_output_tokens == 0
+
+    def test_handles_fallback_to_alternative_keys(self, tmp_path):
+        """Parser uses alternative keys when primary ones are null."""
+        from app.services.transcript_parser import parse_transcript_file
+        import json
+
+        transcript = tmp_path / "session.json"
+        transcript.write_text(json.dumps({
+            "summary": "Test session",
+            "startTime": "2025-01-01T10:00:00Z",
+            "messages": [
+                {
+                    "id": "msg-1",
+                    "type": "gemini",
+                    "timestamp": "2025-01-01T10:00:00Z",
+                    "content": "Hello",
+                    "usage": {
+                        "promptTokenCount": None,
+                        "input_tokens": 150,
+                        "candidatesTokenCount": None,
+                        "output_tokens": 80
+                    }
+                }
+            ]
+        }))
+
+        result = parse_transcript_file(transcript, "session-test", cli_type="gemini")
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].usage.input_tokens == 150
+        assert result.messages[0].usage.output_tokens == 80
+
+
+class TestCodexParserNoneUsageValues:
+    """Tests for Codex parser handling None values in usage fields."""
+
+    def test_handles_none_in_turn_context_usage(self, tmp_path):
+        """Parser handles null values in turn_context usage."""
+        from app.services.transcript_parser import parse_transcript_file
+        import json
+
+        transcript = tmp_path / "session.jsonl"
+        lines = [
+            json.dumps({
+                "type": "turn_context",
+                "payload": {
+                    "model": "gpt-4",
+                    "usage": {
+                        "input_tokens": None,
+                        "output_tokens": None
+                    }
+                }
+            }),
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(transcript, "session-test", cli_type="codex")
+        assert result is not None
+        assert result.total_input_tokens == 0
+        assert result.total_output_tokens == 0
+
+    def test_handles_none_in_standalone_usage_entry(self, tmp_path):
+        """Parser handles null values in standalone usage entries."""
+        from app.services.transcript_parser import parse_transcript_file
+        import json
+
+        transcript = tmp_path / "session.jsonl"
+        lines = [
+            json.dumps({
+                "type": "usage",
+                "payload": {
+                    "input_tokens": None,
+                    "prompt_tokens": None,
+                    "output_tokens": None,
+                    "completion_tokens": None
+                }
+            }),
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(transcript, "session-test", cli_type="codex")
+        assert result is not None
+        assert result.total_input_tokens == 0
+        assert result.total_output_tokens == 0
+
+    def test_handles_none_in_response_item_usage(self, tmp_path):
+        """Parser handles null values in response_item usage."""
+        from app.services.transcript_parser import parse_transcript_file
+        import json
+
+        transcript = tmp_path / "session.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {
+                    "timestamp": "2025-01-01T10:00:00Z",
+                    "cwd": "/test"
+                }
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-01T10:00:00Z",
+                "payload": {
+                    "id": "msg-1",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Hello"}]
+                }
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-01T10:01:00Z",
+                "payload": {
+                    "id": "msg-2",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "Hi there"}],
+                    "usage": {
+                        "input_tokens": None,
+                        "output_tokens": None
+                    }
+                }
+            }),
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(transcript, "session-test", cli_type="codex")
+        assert result is not None
+        # Should have 2 messages (skips first user message which is env context)
+        assert len(result.messages) == 1
+        assert result.messages[0].role == "assistant"
+        assert result.messages[0].usage is not None
+        assert result.messages[0].usage.input_tokens == 0
+        assert result.messages[0].usage.output_tokens == 0
+
+    def test_handles_fallback_keys_with_none(self, tmp_path):
+        """Parser uses fallback keys when primary keys are null."""
+        from app.services.transcript_parser import parse_transcript_file
+        import json
+
+        transcript = tmp_path / "session.jsonl"
+        lines = [
+            json.dumps({
+                "type": "turn_context",
+                "payload": {
+                    "model": "gpt-4",
+                    "usage": {
+                        "input_tokens": None,
+                        "prompt_tokens": 200,
+                        "output_tokens": None,
+                        "completion_tokens": 100
+                    }
+                }
+            }),
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(transcript, "session-test", cli_type="codex")
+        assert result is not None
+        assert result.total_input_tokens == 200
+        assert result.total_output_tokens == 100
