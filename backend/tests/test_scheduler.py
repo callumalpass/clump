@@ -2193,3 +2193,209 @@ class TestFilterPrsBySidecarEdgeCases:
         # PR matches all filters
         assert len(result) == 1
         assert result[0]["number"] == 1
+
+
+class TestSchedulerServiceGetIssuesLabelsField:
+    """Tests for the labels field in _get_issues output.
+
+    These tests verify that issue dicts include the labels field for consistency
+    with PR dicts and to support templates that use {{labels}}.
+    """
+
+    @pytest.fixture
+    def scheduler(self):
+        """Create a SchedulerService instance."""
+        from app.services.scheduler import SchedulerService
+        return SchedulerService()
+
+    @pytest.fixture
+    def mock_job(self):
+        """Create a mock ScheduledJob."""
+        job = MagicMock()
+        job.filter_query = None
+        return job
+
+    @pytest.fixture
+    def mock_repo(self):
+        """Create a mock repo dict."""
+        return {
+            "id": 1,
+            "owner": "testowner",
+            "name": "testrepo",
+            "local_path": "/path/to/repo",
+        }
+
+    @pytest.mark.asyncio
+    async def test_get_issues_includes_labels_in_result(self, scheduler, mock_job, mock_repo):
+        """Verifies that labels field is included in issue dicts."""
+        with patch("app.services.scheduler.GitHubClient") as MockClient, \
+             patch("app.services.scheduler.filter_issues_by_sidecar", side_effect=lambda issues, *args: issues):
+            mock_client = MockClient.return_value
+
+            mock_issue = MagicMock()
+            mock_issue.number = 1
+            mock_issue.title = "Test"
+            mock_issue.body = "Body"
+            mock_issue.author = "octocat"
+            mock_issue.labels = ["bug", "enhancement"]
+            mock_client.list_all_issues.return_value = [mock_issue]
+
+            result = await scheduler._get_issues(mock_job, mock_repo)
+
+            assert len(result) == 1
+            assert "labels" in result[0]
+            assert result[0]["labels"] == ["bug", "enhancement"]
+
+    @pytest.mark.asyncio
+    async def test_get_issues_includes_empty_labels(self, scheduler, mock_job, mock_repo):
+        """Verifies that empty labels list is included in issue dicts."""
+        with patch("app.services.scheduler.GitHubClient") as MockClient, \
+             patch("app.services.scheduler.filter_issues_by_sidecar", side_effect=lambda issues, *args: issues):
+            mock_client = MockClient.return_value
+
+            mock_issue = MagicMock()
+            mock_issue.number = 1
+            mock_issue.title = "Test"
+            mock_issue.body = "Body"
+            mock_issue.author = "octocat"
+            mock_issue.labels = []
+            mock_client.list_all_issues.return_value = [mock_issue]
+
+            result = await scheduler._get_issues(mock_job, mock_repo)
+
+            assert len(result) == 1
+            assert "labels" in result[0]
+            assert result[0]["labels"] == []
+
+    @pytest.mark.asyncio
+    async def test_get_issues_labels_preserved_through_sidecar_filter(self, scheduler, mock_job, mock_repo):
+        """Labels field is preserved when sidecar filters are applied."""
+        from app.storage import IssueMetadata
+
+        mock_job.filter_query = "priority:high"
+
+        with patch("app.services.scheduler.GitHubClient") as MockClient:
+            mock_client = MockClient.return_value
+
+            mock_issue = MagicMock()
+            mock_issue.number = 42
+            mock_issue.title = "High priority issue"
+            mock_issue.body = "Description"
+            mock_issue.author = "contributor123"
+            mock_issue.labels = ["bug", "critical"]
+            mock_client.list_all_issues.return_value = [mock_issue]
+
+            # Mock sidecar metadata that matches the filter
+            def mock_get_metadata(encoded_path, issue_number):
+                return IssueMetadata(issue_number=42, priority="high")
+
+            with patch("app.services.scheduler.get_issue_metadata", side_effect=mock_get_metadata):
+                result = await scheduler._get_issues(mock_job, mock_repo)
+
+            assert len(result) == 1
+            assert result[0]["labels"] == ["bug", "critical"]
+
+    @pytest.mark.asyncio
+    async def test_get_issues_with_multiple_issues_different_labels(self, scheduler, mock_job, mock_repo):
+        """Handles multiple issues with different labels."""
+        with patch("app.services.scheduler.GitHubClient") as MockClient, \
+             patch("app.services.scheduler.filter_issues_by_sidecar", side_effect=lambda issues, *args: issues):
+            mock_client = MockClient.return_value
+
+            issues = []
+            labels_list = [["bug"], ["feature", "enhancement"], ["docs", "help-wanted", "good-first-issue"]]
+            for i, labels in enumerate(labels_list, 1):
+                mock_issue = MagicMock()
+                mock_issue.number = i
+                mock_issue.title = f"Issue {i}"
+                mock_issue.body = "Body"
+                mock_issue.author = "user"
+                mock_issue.labels = labels
+                issues.append(mock_issue)
+
+            mock_client.list_all_issues.return_value = issues
+
+            result = await scheduler._get_issues(mock_job, mock_repo)
+
+            assert len(result) == 3
+            assert result[0]["labels"] == ["bug"]
+            assert result[1]["labels"] == ["feature", "enhancement"]
+            assert result[2]["labels"] == ["docs", "help-wanted", "good-first-issue"]
+
+    @pytest.mark.asyncio
+    async def test_get_issues_labels_after_exclude_filter(self, scheduler, mock_repo):
+        """Labels field is preserved after exclude_labels filtering."""
+        mock_job = MagicMock()
+        mock_job.filter_query = "-label:wontfix"
+
+        with patch("app.services.scheduler.GitHubClient") as MockClient, \
+             patch("app.services.scheduler.filter_issues_by_sidecar", side_effect=lambda issues, *args: issues):
+            mock_client = MockClient.return_value
+
+            issue1 = MagicMock()
+            issue1.number = 1
+            issue1.title = "Keep"
+            issue1.body = "body"
+            issue1.author = "user1"
+            issue1.labels = ["bug", "priority-high"]
+
+            issue2 = MagicMock()
+            issue2.number = 2
+            issue2.title = "Exclude"
+            issue2.body = "body"
+            issue2.author = "user2"
+            issue2.labels = ["wontfix"]
+
+            mock_client.list_all_issues.return_value = [issue1, issue2]
+
+            result = await scheduler._get_issues(mock_job, mock_repo)
+
+            # Only issue1 should remain
+            assert len(result) == 1
+            assert result[0]["number"] == 1
+            # And it should have its labels
+            assert result[0]["labels"] == ["bug", "priority-high"]
+
+    @pytest.mark.asyncio
+    async def test_issue_and_pr_dicts_have_consistent_structure(self, scheduler, mock_repo):
+        """Verifies that issue dicts and PR dicts have the same label field structure."""
+        mock_job = MagicMock()
+        mock_job.filter_query = None
+
+        # Test issues
+        with patch("app.services.scheduler.GitHubClient") as MockClient, \
+             patch("app.services.scheduler.filter_issues_by_sidecar", side_effect=lambda issues, *args: issues):
+            mock_client = MockClient.return_value
+
+            mock_issue = MagicMock()
+            mock_issue.number = 1
+            mock_issue.title = "Issue"
+            mock_issue.body = "Body"
+            mock_issue.author = "user"
+            mock_issue.labels = ["test-label"]
+            mock_client.list_all_issues.return_value = [mock_issue]
+
+            issue_result = await scheduler._get_issues(mock_job, mock_repo)
+
+        # Test PRs
+        with patch("app.services.scheduler.GitHubClient") as MockClient, \
+             patch("app.services.scheduler.filter_prs_by_sidecar", side_effect=lambda prs, *args: prs):
+            mock_client = MockClient.return_value
+
+            mock_pr = MagicMock()
+            mock_pr.number = 1
+            mock_pr.title = "PR"
+            mock_pr.body = "Body"
+            mock_pr.head_ref = "feature"
+            mock_pr.base_ref = "main"
+            mock_pr.labels = ["test-label"]
+            mock_client.list_all_prs.return_value = [mock_pr]
+
+            pr_result = await scheduler._get_prs(mock_job, mock_repo)
+
+        # Both should have labels field
+        assert "labels" in issue_result[0]
+        assert "labels" in pr_result[0]
+        # Both should be lists
+        assert isinstance(issue_result[0]["labels"], list)
+        assert isinstance(pr_result[0]["labels"], list)

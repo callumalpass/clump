@@ -705,6 +705,7 @@ class SchedulerService:
                 "title": issue.title,
                 "body": issue.body,
                 "author": issue.author,
+                "labels": issue.labels,
             }
             for issue in issues
         ]
