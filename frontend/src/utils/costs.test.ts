@@ -24,6 +24,14 @@ describe('MODEL_PRICING', () => {
     expect(MODEL_PRICING['claude-3-5-haiku-20241022']).toBeDefined();
   });
 
+  it('contains OpenAI models for Codex CLI', () => {
+    expect(MODEL_PRICING['o3-mini']).toBeDefined();
+    expect(MODEL_PRICING['o3']).toBeDefined();
+    expect(MODEL_PRICING['gpt-4.1']).toBeDefined();
+    expect(MODEL_PRICING['gpt-4.1-mini']).toBeDefined();
+    expect(MODEL_PRICING['gpt-4.1-nano']).toBeDefined();
+  });
+
   it('has all required pricing fields', () => {
     Object.values(MODEL_PRICING).forEach(pricing => {
       expect(pricing).toHaveProperty('input');
@@ -110,6 +118,43 @@ describe('calculateCost', () => {
   it('uses Haiku pricing when model contains "haiku"', () => {
     const cost = calculateCost(1000000, 0, 0, 0, 'claude-3-5-haiku-20241022');
     expect(cost).toBeCloseTo(0.80, 2); // Haiku input is $0.80/M
+  });
+
+  // OpenAI model tests (used by Codex CLI)
+  it('calculates cost for o3-mini model', () => {
+    // o3-mini: $1.10 per 1M input tokens
+    const cost = calculateCost(1000000, 0, 0, 0, 'o3-mini');
+    expect(cost).toBeCloseTo(1.10, 2);
+  });
+
+  it('calculates cost for o3 model', () => {
+    // o3: $10.00 per 1M input tokens
+    const cost = calculateCost(1000000, 0, 0, 0, 'o3');
+    expect(cost).toBeCloseTo(10.0, 2);
+  });
+
+  it('calculates cost for gpt-4.1 model', () => {
+    // gpt-4.1: $2.00 per 1M input tokens
+    const cost = calculateCost(1000000, 0, 0, 0, 'gpt-4.1');
+    expect(cost).toBeCloseTo(2.0, 2);
+  });
+
+  it('calculates cost for gpt-4.1-mini model', () => {
+    // gpt-4.1-mini: $0.40 per 1M input tokens
+    const cost = calculateCost(1000000, 0, 0, 0, 'gpt-4.1-mini');
+    expect(cost).toBeCloseTo(0.40, 2);
+  });
+
+  it('calculates cost for gpt-4.1-nano model', () => {
+    // gpt-4.1-nano: $0.10 per 1M input tokens
+    const cost = calculateCost(1000000, 0, 0, 0, 'gpt-4.1-nano');
+    expect(cost).toBeCloseTo(0.10, 2);
+  });
+
+  it('calculates output cost for o3-mini model', () => {
+    // o3-mini: $4.40 per 1M output tokens
+    const cost = calculateCost(0, 1000000, 0, 0, 'o3-mini');
+    expect(cost).toBeCloseTo(4.40, 2);
   });
 
   it('uses default (Sonnet) pricing for null model', () => {

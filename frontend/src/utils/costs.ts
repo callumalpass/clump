@@ -1,8 +1,8 @@
 /**
- * Token cost calculation utilities for Claude models.
+ * Token cost calculation utilities for Claude, OpenAI, and Gemini models.
  *
- * Pricing is per 1M tokens (as of December 2024).
- * These prices should be updated when Anthropic changes their pricing.
+ * Pricing is per 1M tokens.
+ * These prices should be updated when providers change their pricing.
  */
 
 // Model pricing per 1M tokens (USD)
@@ -45,6 +45,37 @@ export const MODEL_PRICING: Record<string, {
     cacheRead: 0.08,
     cacheWrite: 1.00,
   },
+  // OpenAI models (used by Codex CLI)
+  'o3-mini': {
+    input: 1.10,
+    output: 4.40,
+    cacheRead: 0.55,  // 50% of input for cached prompts
+    cacheWrite: 1.10,
+  },
+  'o3': {
+    input: 10.00,
+    output: 40.00,
+    cacheRead: 5.00,
+    cacheWrite: 10.00,
+  },
+  'gpt-4.1': {
+    input: 2.00,
+    output: 8.00,
+    cacheRead: 0.50,
+    cacheWrite: 2.00,
+  },
+  'gpt-4.1-mini': {
+    input: 0.40,
+    output: 1.60,
+    cacheRead: 0.10,
+    cacheWrite: 0.40,
+  },
+  'gpt-4.1-nano': {
+    input: 0.10,
+    output: 0.40,
+    cacheRead: 0.025,
+    cacheWrite: 0.10,
+  },
 };
 
 type ModelPricing = {
@@ -66,9 +97,16 @@ const DEFAULT_PRICING: ModelPricing = {
 // When a model string contains a family keyword (e.g., "opus"), use the corresponding
 // default model for pricing. Update these when new model versions are released.
 const MODEL_FAMILY_DEFAULTS: Record<string, string> = {
+  // Claude families
   opus: 'claude-opus-4-5-20251101',
   sonnet: 'claude-sonnet-4-20250514',
   haiku: 'claude-3-5-haiku-20241022',
+  // OpenAI families (for Codex CLI)
+  'o3-mini': 'o3-mini',
+  'o3': 'o3',
+  'gpt-4.1-mini': 'gpt-4.1-mini',
+  'gpt-4.1-nano': 'gpt-4.1-nano',
+  'gpt-4.1': 'gpt-4.1',
 };
 
 /**
