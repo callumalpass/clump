@@ -1469,3 +1469,230 @@ class TestProcessManagerGetProcessesSnapshot:
 
         # Verify the lock was acquired at least once
         assert len(lock_acquired) >= 1
+
+
+class TestProcessManagerMethodsAcquireLock:
+    """Tests verifying that various ProcessManager methods acquire the lock
+    when accessing _processes to prevent race conditions.
+
+    These tests were added after fixing a race condition where write(),
+    resize(), get_process(), subscribe(), and unsubscribe() accessed
+    self._processes without acquiring self._lock.
+    """
+
+    @pytest.mark.asyncio
+    async def test_write_acquires_lock(self):
+        """Test that write() acquires lock when accessing _processes."""
+        pm = ProcessManager()
+        process = Process(id="wl1", pid=1, fd=10, working_dir="/tmp")
+        pm._processes["wl1"] = process
+
+        lock_acquired = []
+        original_lock = pm._lock
+
+        class TrackingLock:
+            def __init__(self, original):
+                self._original = original
+
+            async def __aenter__(self):
+                lock_acquired.append("write")
+                return await self._original.__aenter__()
+
+            async def __aexit__(self, *args):
+                return await self._original.__aexit__(*args)
+
+        pm._lock = TrackingLock(original_lock)
+
+        with patch("os.write"):
+            await pm.write("wl1", "test")
+
+        assert "write" in lock_acquired
+
+    @pytest.mark.asyncio
+    async def test_resize_acquires_lock(self):
+        """Test that resize() acquires lock when accessing _processes."""
+        pm = ProcessManager()
+        process = Process(id="rl1", pid=1, fd=10, working_dir="/tmp")
+        pm._processes["rl1"] = process
+
+        lock_acquired = []
+        original_lock = pm._lock
+
+        class TrackingLock:
+            def __init__(self, original):
+                self._original = original
+
+            async def __aenter__(self):
+                lock_acquired.append("resize")
+                return await self._original.__aenter__()
+
+            async def __aexit__(self, *args):
+                return await self._original.__aexit__(*args)
+
+        pm._lock = TrackingLock(original_lock)
+
+        with patch.object(pm, "_resize_pty"):
+            await pm.resize("rl1", 40, 100)
+
+        assert "resize" in lock_acquired
+
+    @pytest.mark.asyncio
+    async def test_get_process_acquires_lock(self):
+        """Test that get_process() acquires lock when accessing _processes."""
+        pm = ProcessManager()
+        process = Process(id="gpl1", pid=1, fd=10, working_dir="/tmp")
+        pm._processes["gpl1"] = process
+
+        lock_acquired = []
+        original_lock = pm._lock
+
+        class TrackingLock:
+            def __init__(self, original):
+                self._original = original
+
+            async def __aenter__(self):
+                lock_acquired.append("get_process")
+                return await self._original.__aenter__()
+
+            async def __aexit__(self, *args):
+                return await self._original.__aexit__(*args)
+
+        pm._lock = TrackingLock(original_lock)
+
+        with patch.object(pm, "_is_process_alive", return_value=True):
+            await pm.get_process("gpl1")
+
+        assert "get_process" in lock_acquired
+
+    @pytest.mark.asyncio
+    async def test_subscribe_acquires_lock(self):
+        """Test that subscribe() acquires lock when accessing _processes."""
+        pm = ProcessManager()
+        process = Process(id="sl1", pid=1, fd=10, working_dir="/tmp")
+        pm._processes["sl1"] = process
+
+        lock_acquired = []
+        original_lock = pm._lock
+
+        class TrackingLock:
+            def __init__(self, original):
+                self._original = original
+
+            async def __aenter__(self):
+                lock_acquired.append("subscribe")
+                return await self._original.__aenter__()
+
+            async def __aexit__(self, *args):
+                return await self._original.__aexit__(*args)
+
+        pm._lock = TrackingLock(original_lock)
+
+        await pm.subscribe("sl1", lambda x: None)
+
+        assert "subscribe" in lock_acquired
+
+    @pytest.mark.asyncio
+    async def test_unsubscribe_acquires_lock(self):
+        """Test that unsubscribe() acquires lock when accessing _processes."""
+        pm = ProcessManager()
+        process = Process(id="ul1", pid=1, fd=10, working_dir="/tmp")
+        callback = lambda x: None
+        process.subscribers.append(callback)
+        pm._processes["ul1"] = process
+
+        lock_acquired = []
+        original_lock = pm._lock
+
+        class TrackingLock:
+            def __init__(self, original):
+                self._original = original
+
+            async def __aenter__(self):
+                lock_acquired.append("unsubscribe")
+                return await self._original.__aenter__()
+
+            async def __aexit__(self, *args):
+                return await self._original.__aexit__(*args)
+
+        pm._lock = TrackingLock(original_lock)
+
+        await pm.unsubscribe("ul1", callback)
+
+        assert "unsubscribe" in lock_acquired
+
+    @pytest.mark.asyncio
+    async def test_concurrent_write_and_kill_is_safe(self):
+        """Test that concurrent write and kill operations don't cause issues."""
+        pm = ProcessManager()
+
+        # Add multiple processes
+        for i in range(5):
+            process = Process(id=f"wk{i}", pid=1000 + i, fd=10 + i, working_dir="/tmp")
+            pm._processes[f"wk{i}"] = process
+
+        async def write_task():
+            for i in range(5):
+                for _ in range(10):
+                    with patch("os.write"):
+                        await pm.write(f"wk{i}", "test")
+                    await asyncio.sleep(0)
+
+        async def kill_task():
+            for i in range(5):
+                with patch("os.kill"), patch("os.close"), patch("asyncio.sleep", new_callable=AsyncMock):
+                    await pm.kill(f"wk{i}")
+                await asyncio.sleep(0)
+
+        # Should not raise RuntimeError or cause data corruption
+        await asyncio.gather(write_task(), kill_task())
+
+    @pytest.mark.asyncio
+    async def test_concurrent_subscribe_and_kill_is_safe(self):
+        """Test that concurrent subscribe and kill operations don't cause issues."""
+        pm = ProcessManager()
+
+        # Add multiple processes
+        for i in range(5):
+            process = Process(id=f"sk{i}", pid=1000 + i, fd=10 + i, working_dir="/tmp")
+            pm._processes[f"sk{i}"] = process
+
+        async def subscribe_task():
+            for i in range(5):
+                for _ in range(10):
+                    await pm.subscribe(f"sk{i}", lambda x: None)
+                    await asyncio.sleep(0)
+
+        async def kill_task():
+            for i in range(5):
+                with patch("os.kill"), patch("os.close"), patch("asyncio.sleep", new_callable=AsyncMock):
+                    await pm.kill(f"sk{i}")
+                await asyncio.sleep(0)
+
+        # Should not raise RuntimeError or cause data corruption
+        await asyncio.gather(subscribe_task(), kill_task())
+
+    @pytest.mark.asyncio
+    async def test_concurrent_get_process_and_cleanup_is_safe(self):
+        """Test that concurrent get_process and cleanup operations don't cause issues."""
+        pm = ProcessManager()
+
+        # Add multiple processes
+        for i in range(5):
+            process = Process(id=f"gpc{i}", pid=1000 + i, fd=10 + i, working_dir="/tmp")
+            pm._processes[f"gpc{i}"] = process
+
+        async def get_task():
+            for i in range(5):
+                for _ in range(10):
+                    with patch.object(pm, "_is_process_alive", return_value=True):
+                        await pm.get_process(f"gpc{i}")
+                    await asyncio.sleep(0)
+
+        async def cleanup_task():
+            for i in range(5):
+                with patch("os.close"):
+                    await pm._cleanup_dead_process(f"gpc{i}")
+                await asyncio.sleep(0)
+
+        # Should not raise RuntimeError or cause data corruption
+        await asyncio.gather(get_task(), cleanup_task())

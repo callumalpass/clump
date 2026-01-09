@@ -403,8 +403,13 @@ class ProcessManager:
         fcntl.ioctl(fd, termios.TIOCSWINSZ, winsize)
 
     async def write(self, process_id: str, data: str) -> bool:
-        """Write input to a process."""
-        process = self._processes.get(process_id)
+        """Write input to a process.
+
+        Thread-safe: Uses lock to get process reference, then performs
+        write outside lock to avoid blocking other operations.
+        """
+        async with self._lock:
+            process = self._processes.get(process_id)
         if not process:
             return False
 
@@ -415,8 +420,13 @@ class ProcessManager:
             return False
 
     async def resize(self, process_id: str, rows: int, cols: int) -> bool:
-        """Resize a process's terminal."""
-        process = self._processes.get(process_id)
+        """Resize a process's terminal.
+
+        Thread-safe: Uses lock to get process reference, then performs
+        resize outside lock to avoid blocking other operations.
+        """
+        async with self._lock:
+            process = self._processes.get(process_id)
         if not process:
             return False
 
@@ -429,9 +439,11 @@ class ProcessManager:
     async def subscribe(self, process_id: str, callback: Callable[[bytes], None]) -> bool:
         """Subscribe to process output.
 
-        Thread-safe: Uses lock to prevent race conditions with _read_loop().
+        Thread-safe: Uses lock to get process reference, then uses
+        process-specific lock for subscriber list modification.
         """
-        process = self._processes.get(process_id)
+        async with self._lock:
+            process = self._processes.get(process_id)
         if not process:
             return False
 
@@ -442,9 +454,11 @@ class ProcessManager:
     async def unsubscribe(self, process_id: str, callback: Callable[[bytes], None]) -> bool:
         """Unsubscribe from process output.
 
-        Thread-safe: Uses lock to prevent race conditions with _read_loop().
+        Thread-safe: Uses lock to get process reference, then uses
+        process-specific lock for subscriber list modification.
         """
-        process = self._processes.get(process_id)
+        async with self._lock:
+            process = self._processes.get(process_id)
         if not process:
             return False
 
@@ -504,8 +518,12 @@ class ProcessManager:
             return False
 
     async def get_process(self, process_id: str) -> Process | None:
-        """Get a process by ID."""
-        process = self._processes.get(process_id)
+        """Get a process by ID.
+
+        Thread-safe: Uses lock to get process reference.
+        """
+        async with self._lock:
+            process = self._processes.get(process_id)
         if process and not self._is_process_alive(process.pid):
             # Process died - clean it up
             await self._cleanup_dead_process(process_id)
