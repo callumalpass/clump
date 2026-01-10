@@ -878,3 +878,232 @@ Template with 日本語 and العربية and Ελληνικά.
 
             assert response.status_code == 200
             assert (commands_dir / "issue" / "first-command.md").exists()
+
+
+class TestYAMLTypeCoercion:
+    """Tests for YAML type coercion in parse_command_file.
+
+    YAML can parse values as non-string types (integers, booleans, floats).
+    The parser should convert these to strings to ensure consistent behavior.
+    """
+
+    def test_parse_numeric_name(self, temp_commands_dir):
+        """Test that numeric name is converted to string."""
+        content = """---
+name: 123
+shortName: Test
+description: A test command
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "numeric-name.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        assert result is not None
+        assert result.name == "123"
+        assert isinstance(result.name, str)
+
+    def test_parse_boolean_short_name(self, temp_commands_dir):
+        """Test that boolean shortName is converted to string."""
+        content = """---
+name: Test Command
+shortName: true
+description: A test command
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "bool-short.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        assert result is not None
+        assert result.shortName == "True"
+        assert isinstance(result.shortName, str)
+
+    def test_parse_numeric_description(self, temp_commands_dir):
+        """Test that numeric description is converted to string."""
+        content = """---
+name: Test Command
+shortName: TC
+description: 42
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "num-desc.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        assert result is not None
+        assert result.description == "42"
+        assert isinstance(result.description, str)
+
+    def test_parse_float_name(self, temp_commands_dir):
+        """Test that float name is converted to string."""
+        content = """---
+name: 3.14
+shortName: PI
+description: A pi command
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "float-name.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        assert result is not None
+        assert result.name == "3.14"
+        assert isinstance(result.name, str)
+
+    def test_parse_false_boolean_returns_none(self, temp_commands_dir):
+        """Test that false boolean causes validation failure (falsy value).
+
+        YAML parses 'false' as Python False, which is falsy and fails
+        the 'if not all([...])' check, returning None.
+        """
+        content = """---
+name: Test
+shortName: false
+description: A test command
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "false-bool.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        # False is falsy, so it fails the 'if not all([...])' validation
+        assert result is None
+
+    def test_parse_all_numeric_fields(self, temp_commands_dir):
+        """Test that all numeric fields are converted to strings."""
+        content = """---
+name: 100
+shortName: 200
+description: 300
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "all-numeric.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        assert result is not None
+        assert result.name == "100"
+        assert result.shortName == "200"
+        assert result.description == "300"
+        assert all(isinstance(v, str) for v in [result.name, result.shortName, result.description])
+
+    def test_parse_yaml_yes_no_as_boolean(self, temp_commands_dir):
+        """Test that YAML yes/no are converted from boolean to string."""
+        # YAML interprets 'yes' and 'no' as boolean values
+        content = """---
+name: Test Command
+shortName: yes
+description: A command that does something
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "yes-no.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        assert result is not None
+        # YAML parses 'yes' as True, which gets converted to "True"
+        assert result.shortName == "True"
+        assert isinstance(result.shortName, str)
+
+    def test_parse_yaml_off_returns_none(self, temp_commands_dir):
+        """Test that YAML 'off' (parsed as False) causes validation failure.
+
+        YAML interprets 'off' as boolean False, which is falsy and fails
+        the 'if not all([...])' check.
+        """
+        content = """---
+name: Test Command
+shortName: on
+description: off
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "on-off.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        # 'off' is parsed as False by YAML, which is falsy
+        assert result is None
+
+    def test_parse_mixed_types(self, temp_commands_dir):
+        """Test parsing with a mix of string and non-string types."""
+        content = """---
+name: "My Command"
+shortName: 42
+description: A real string description
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "mixed-types.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        assert result is not None
+        assert result.name == "My Command"
+        assert result.shortName == "42"
+        assert result.description == "A real string description"
+
+    def test_parse_scientific_notation(self, temp_commands_dir):
+        """Test that scientific notation numbers are converted to string."""
+        content = """---
+name: 1e10
+shortName: Test
+description: A test command
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "sci-notation.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        assert result is not None
+        # Python str() on floats keeps the compact representation
+        assert result.name == "1e10" or result.name == "10000000000.0"
+        assert isinstance(result.name, str)
+
+    def test_parse_negative_number(self, temp_commands_dir):
+        """Test that negative numbers are converted to string."""
+        content = """---
+name: -42
+shortName: Neg
+description: A negative command
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "neg-num.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        assert result is not None
+        assert result.name == "-42"
+        assert isinstance(result.name, str)

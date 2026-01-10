@@ -140,6 +140,14 @@ def parse_command_file(file_path: Path, category: str, source: str = "builtin") 
         if not all([name, short_name, description]):
             return None
 
+        # Ensure all required fields are strings (YAML can parse numbers/booleans)
+        if not isinstance(name, str):
+            name = str(name)
+        if not isinstance(short_name, str):
+            short_name = str(short_name)
+        if not isinstance(description, str):
+            description = str(description)
+
         return CommandMetadata(
             id=file_path.stem,
             name=name,
