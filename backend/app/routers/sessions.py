@@ -835,7 +835,8 @@ def _do_quick_scan_gemini_transcript(transcript_path: Path) -> QuickScanResult:
         result["end_time"] = data.get("lastUpdated")
 
         # Count messages and extract model
-        messages = data.get("messages", [])
+        # Use `or []` to handle None values (key exists but value is None)
+        messages = data.get("messages") or []
         for msg in messages:
             msg_type = msg.get("type")
             if msg_type in ("user", "gemini"):
@@ -849,7 +850,8 @@ def _do_quick_scan_gemini_transcript(transcript_path: Path) -> QuickScanResult:
         if not result["title"]:
             for msg in messages:
                 if msg.get("type") == "user":
-                    content = msg.get("content", "")
+                    # Use `or ""` to handle None values (key exists but value is None)
+                    content = msg.get("content") or ""
                     result["title"] = _extract_text_from_content(content)
                     if result["title"]:
                         break

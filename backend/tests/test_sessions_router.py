@@ -34,6 +34,7 @@ from app.routers.sessions import (
     _format_tool_use_markdown,
     _extract_text_from_content,
     _do_quick_scan_codex_transcript,
+    _do_quick_scan_gemini_transcript,
 )
 from app.storage import (
     DiscoveredSession,
@@ -4440,3 +4441,278 @@ class TestToolUseMarkdownNoneHandling:
         result = _format_tool_use_markdown(tool)
         # Generic fallback just shows tool name
         assert "CustomTool" in result
+
+
+class TestDoQuickScanGeminiTranscript:
+    """Tests for _do_quick_scan_gemini_transcript function.
+
+    This tests the Gemini CLI transcript quick scanning including
+    handling of None values for container fields.
+    """
+
+    def test_basic_gemini_transcript(self, tmp_path):
+        """Test scanning a basic valid Gemini transcript."""
+        import json
+
+        session_file = tmp_path / "gemini-session.json"
+        data = {
+            "summary": "Test Gemini Session",
+            "startTime": "2025-01-15T10:00:00Z",
+            "lastUpdated": "2025-01-15T10:05:00Z",
+            "messages": [
+                {"type": "user", "content": "Hello Gemini!"},
+                {"type": "gemini", "content": "Hi there!", "model": "gemini-pro"},
+                {"type": "user", "content": "How are you?"},
+                {"type": "gemini", "content": "I'm doing great!"},
+            ]
+        }
+        session_file.write_text(json.dumps(data))
+
+        result = _do_quick_scan_gemini_transcript(session_file)
+
+        assert result["title"] == "Test Gemini Session"
+        assert result["start_time"] == "2025-01-15T10:00:00Z"
+        assert result["end_time"] == "2025-01-15T10:05:00Z"
+        assert result["message_count"] == 4
+        assert result["model"] == "gemini-pro"
+
+    def test_gemini_transcript_with_none_messages(self, tmp_path):
+        """Test handling of None messages list (key exists but value is None).
+
+        This tests the fix for the bug where data.get("messages", []) returns
+        None when the key exists with None value, instead of the default [].
+        The fix uses `data.get("messages") or []` pattern.
+        """
+        import json
+
+        session_file = tmp_path / "gemini-session.json"
+        data = {
+            "summary": "Session with None messages",
+            "startTime": "2025-01-15T10:00:00Z",
+            "lastUpdated": "2025-01-15T10:05:00Z",
+            "messages": None  # Key exists but value is None
+        }
+        session_file.write_text(json.dumps(data))
+
+        # Should not raise TypeError when iterating over None
+        result = _do_quick_scan_gemini_transcript(session_file)
+
+        assert result["title"] == "Session with None messages"
+        assert result["message_count"] == 0  # No messages
+
+    def test_gemini_transcript_with_missing_messages(self, tmp_path):
+        """Test handling when messages key is missing entirely."""
+        import json
+
+        session_file = tmp_path / "gemini-session.json"
+        data = {
+            "summary": "Session without messages key",
+            "startTime": "2025-01-15T10:00:00Z",
+            "lastUpdated": "2025-01-15T10:05:00Z"
+            # No "messages" key at all
+        }
+        session_file.write_text(json.dumps(data))
+
+        result = _do_quick_scan_gemini_transcript(session_file)
+
+        assert result["title"] == "Session without messages key"
+        assert result["message_count"] == 0
+
+    def test_gemini_transcript_with_none_content_in_user_message(self, tmp_path):
+        """Test handling of None content in user messages for title fallback.
+
+        This tests the fix for the bug where msg.get("content", "") returns
+        None when content is explicitly set to None.
+        The fix uses `msg.get("content") or ""` pattern.
+        """
+        import json
+
+        session_file = tmp_path / "gemini-session.json"
+        data = {
+            # No summary - will fallback to first user message
+            "startTime": "2025-01-15T10:00:00Z",
+            "lastUpdated": "2025-01-15T10:05:00Z",
+            "messages": [
+                {"type": "user", "content": None},  # First user message has None content
+                {"type": "gemini", "content": "Hello!"},
+                {"type": "user", "content": "This should be fallback title"},
+            ]
+        }
+        session_file.write_text(json.dumps(data))
+
+        # Should not crash when extracting title from None content
+        result = _do_quick_scan_gemini_transcript(session_file)
+
+        # Should get title from second user message since first has None content
+        assert result["title"] == "This should be fallback title"
+        assert result["message_count"] == 3
+
+    def test_gemini_transcript_with_empty_content(self, tmp_path):
+        """Test handling of empty string content."""
+        import json
+
+        session_file = tmp_path / "gemini-session.json"
+        data = {
+            # No summary - will fallback to first user message
+            "startTime": "2025-01-15T10:00:00Z",
+            "messages": [
+                {"type": "user", "content": ""},  # Empty string
+                {"type": "user", "content": "Actual content here"},
+            ]
+        }
+        session_file.write_text(json.dumps(data))
+
+        result = _do_quick_scan_gemini_transcript(session_file)
+
+        # Should skip empty content and use the next message
+        assert result["title"] == "Actual content here"
+
+    def test_gemini_transcript_with_list_content(self, tmp_path):
+        """Test handling of list-style content (matching Claude format)."""
+        import json
+
+        session_file = tmp_path / "gemini-session.json"
+        data = {
+            "startTime": "2025-01-15T10:00:00Z",
+            "messages": [
+                {
+                    "type": "user",
+                    "content": [{"type": "text", "text": "Hello from list content"}]
+                },
+                {"type": "gemini", "content": "Response here"},
+            ]
+        }
+        session_file.write_text(json.dumps(data))
+
+        result = _do_quick_scan_gemini_transcript(session_file)
+
+        assert result["title"] == "Hello from list content"
+
+    def test_gemini_transcript_with_all_none_fields(self, tmp_path):
+        """Test handling when multiple fields are None."""
+        import json
+
+        session_file = tmp_path / "gemini-session.json"
+        data = {
+            "summary": None,
+            "startTime": None,
+            "lastUpdated": None,
+            "messages": None
+        }
+        session_file.write_text(json.dumps(data))
+
+        result = _do_quick_scan_gemini_transcript(session_file)
+
+        assert result["title"] is None
+        assert result["start_time"] is None
+        assert result["end_time"] is None
+        assert result["message_count"] == 0
+        assert result["model"] is None
+
+    def test_gemini_transcript_model_extraction(self, tmp_path):
+        """Test model extraction from gemini messages."""
+        import json
+
+        session_file = tmp_path / "gemini-session.json"
+        data = {
+            "messages": [
+                {"type": "user", "content": "Hello"},
+                {"type": "gemini", "content": "Hi!", "model": "gemini-1.5-pro"},
+            ]
+        }
+        session_file.write_text(json.dumps(data))
+
+        result = _do_quick_scan_gemini_transcript(session_file)
+
+        assert result["model"] == "gemini-1.5-pro"
+
+    def test_gemini_transcript_file_not_found(self, tmp_path):
+        """Test handling of non-existent file."""
+        non_existent = tmp_path / "does-not-exist.json"
+
+        result = _do_quick_scan_gemini_transcript(non_existent)
+
+        # Should return default empty result
+        assert result["title"] is None
+        assert result["model"] is None
+        assert result["start_time"] is None
+        assert result["end_time"] is None
+        assert result["message_count"] == 0
+
+    def test_gemini_transcript_invalid_json(self, tmp_path):
+        """Test handling of invalid JSON file."""
+        session_file = tmp_path / "invalid.json"
+        session_file.write_text("{ not valid json }")
+
+        result = _do_quick_scan_gemini_transcript(session_file)
+
+        # Should return default empty result
+        assert result["title"] is None
+        assert result["message_count"] == 0
+
+    def test_gemini_transcript_empty_file(self, tmp_path):
+        """Test handling of empty file."""
+        session_file = tmp_path / "empty.json"
+        session_file.write_text("")
+
+        result = _do_quick_scan_gemini_transcript(session_file)
+
+        # Should return default empty result
+        assert result["title"] is None
+        assert result["message_count"] == 0
+
+    def test_gemini_transcript_other_message_types_not_counted(self, tmp_path):
+        """Test that only user and gemini messages are counted."""
+        import json
+
+        session_file = tmp_path / "gemini-session.json"
+        data = {
+            "messages": [
+                {"type": "user", "content": "Hello"},
+                {"type": "gemini", "content": "Hi!"},
+                {"type": "system", "content": "System message"},
+                {"type": "tool", "content": "Tool output"},
+            ]
+        }
+        session_file.write_text(json.dumps(data))
+
+        result = _do_quick_scan_gemini_transcript(session_file)
+
+        # Only user and gemini messages should be counted
+        assert result["message_count"] == 2
+
+    def test_gemini_transcript_title_truncation(self, tmp_path):
+        """Test that title is truncated to TITLE_PREVIEW_LENGTH."""
+        import json
+        from app.routers.sessions import TITLE_PREVIEW_LENGTH
+
+        session_file = tmp_path / "gemini-session.json"
+        long_content = "A" * (TITLE_PREVIEW_LENGTH + 100)
+        data = {
+            "messages": [
+                {"type": "user", "content": long_content},
+            ]
+        }
+        session_file.write_text(json.dumps(data))
+
+        result = _do_quick_scan_gemini_transcript(session_file)
+
+        assert len(result["title"]) == TITLE_PREVIEW_LENGTH
+
+    def test_gemini_transcript_summary_takes_precedence_over_first_message(self, tmp_path):
+        """Test that summary is used as title when available."""
+        import json
+
+        session_file = tmp_path / "gemini-session.json"
+        data = {
+            "summary": "The actual summary",
+            "messages": [
+                {"type": "user", "content": "First user message"},
+            ]
+        }
+        session_file.write_text(json.dumps(data))
+
+        result = _do_quick_scan_gemini_transcript(session_file)
+
+        # Summary should be used, not first message
+        assert result["title"] == "The actual summary"
