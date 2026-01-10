@@ -334,7 +334,7 @@ async def delete_repo(repo_id: int, delete_data: bool = True):
     # Optionally delete the repo's data
     if delete_data:
         delete_repo_data(repo["local_path"])
-        clear_engine_cache(repo["local_path"])
+        await clear_engine_cache(repo["local_path"])
 
     return {"status": "deleted"}
 

@@ -198,17 +198,26 @@ async def close_all_engines() -> None:
     _session_factories.clear()
 
 
-def clear_engine_cache(local_path: str | None = None) -> None:
+async def clear_engine_cache(local_path: str | None = None) -> None:
     """
     Clear the engine cache for a specific repo or all repos.
+
+    Properly disposes of engines to release database connections before removing
+    them from the cache. This prevents resource leaks.
 
     Useful after deleting a repo's database file.
     """
     if local_path is None:
+        # Dispose all engines before clearing
+        for engine in _engines.values():
+            await engine.dispose()
         _engines.clear()
         _session_factories.clear()
         _initialized_dbs.clear()
     else:
-        _engines.pop(local_path, None)
+        # Dispose the specific engine if it exists
+        engine = _engines.pop(local_path, None)
+        if engine:
+            await engine.dispose()
         _session_factories.pop(local_path, None)
         _initialized_dbs.discard(local_path)
