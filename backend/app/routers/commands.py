@@ -288,6 +288,14 @@ async def create_command(
     # Generate ID from name (slugify)
     command_id = command.name.lower().replace(" ", "-")
     command_id = "".join(c for c in command_id if c.isalnum() or c == "-")
+    # Collapse consecutive dashes and strip leading/trailing dashes
+    while "--" in command_id:
+        command_id = command_id.replace("--", "-")
+    command_id = command_id.strip("-")
+
+    # Validate that we have a usable command ID
+    if not command_id:
+        raise HTTPException(status_code=400, detail="Command name must contain at least one alphanumeric character")
 
     file_path = category_dir / f"{command_id}.md"
 

@@ -571,6 +571,76 @@ class TestCreateCommandEndpoint:
         assert response.status_code == 200
         assert response.json()["id"] == "my-special-command"
 
+    def test_create_command_collapses_consecutive_dashes(self, client, temp_commands_dir):
+        """Test that consecutive dashes in slugified name are collapsed."""
+        with patch('app.routers.commands.get_builtin_commands_dir', return_value=temp_commands_dir):
+            response = client.post("/commands/issue", json={
+                "name": "My - - Test - Command",
+                "shortName": "MTC",
+                "description": "Test consecutive dashes",
+                "template": "Template"
+            })
+
+        assert response.status_code == 200
+        # Should collapse "my-----test---command" to "my-test-command"
+        assert response.json()["id"] == "my-test-command"
+
+    def test_create_command_strips_leading_trailing_dashes(self, client, temp_commands_dir):
+        """Test that leading and trailing dashes are stripped from slug."""
+        with patch('app.routers.commands.get_builtin_commands_dir', return_value=temp_commands_dir):
+            response = client.post("/commands/issue", json={
+                "name": "!!!My Command!!!",
+                "shortName": "MC",
+                "description": "Test dash stripping",
+                "template": "Template"
+            })
+
+        assert response.status_code == 200
+        # Should not have leading or trailing dashes
+        assert response.json()["id"] == "my-command"
+        assert not response.json()["id"].startswith("-")
+        assert not response.json()["id"].endswith("-")
+
+    def test_create_command_handles_special_chars_only_name(self, client, temp_commands_dir):
+        """Test that a name with only special characters returns 400."""
+        with patch('app.routers.commands.get_builtin_commands_dir', return_value=temp_commands_dir):
+            response = client.post("/commands/issue", json={
+                "name": "!@#$%^&*()",
+                "shortName": "SC",
+                "description": "Only special chars",
+                "template": "Template"
+            })
+
+        assert response.status_code == 400
+        assert "alphanumeric" in response.json()["detail"]
+
+    def test_create_command_handles_spaces_only_name(self, client, temp_commands_dir):
+        """Test that a name with only spaces/dashes returns 400."""
+        with patch('app.routers.commands.get_builtin_commands_dir', return_value=temp_commands_dir):
+            response = client.post("/commands/issue", json={
+                "name": "   - - -   ",
+                "shortName": "WS",
+                "description": "Whitespace and dashes only",
+                "template": "Template"
+            })
+
+        assert response.status_code == 400
+        assert "alphanumeric" in response.json()["detail"]
+
+    def test_create_command_handles_unicode_name(self, client, temp_commands_dir):
+        """Test that unicode alphanumeric characters are preserved in slug."""
+        with patch('app.routers.commands.get_builtin_commands_dir', return_value=temp_commands_dir):
+            response = client.post("/commands/issue", json={
+                "name": "Test 日本語 Command",
+                "shortName": "TJC",
+                "description": "Unicode in name",
+                "template": "Template"
+            })
+
+        assert response.status_code == 200
+        # Python's isalnum() includes unicode alphanumerics, so they are preserved
+        assert response.json()["id"] == "test-日本語-command"
+
 
 class TestUpdateCommandEndpoint:
     """Tests for PUT /commands/{category}/{command_id} endpoint."""
