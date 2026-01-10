@@ -720,6 +720,49 @@ class TestFormatTemplateValue:
         """List with mixed types converts all to strings."""
         assert _format_template_value(["text", 42, True, None]) == "text, 42, True, None"
 
+    def test_dict_returns_string_representation(self):
+        """Dict value returns its string representation."""
+        result = _format_template_value({"key": "value"})
+        assert result == "{'key': 'value'}"
+
+    def test_nested_dict_returns_string_representation(self):
+        """Nested dict returns its string representation."""
+        result = _format_template_value({"outer": {"inner": 42}})
+        assert result == "{'outer': {'inner': 42}}"
+
+    def test_float_returns_string(self):
+        """Float value returns string representation."""
+        assert _format_template_value(3.14) == "3.14"
+
+    def test_float_zero_returns_string(self):
+        """Float zero returns '0.0'."""
+        assert _format_template_value(0.0) == "0.0"
+
+    def test_negative_number_returns_string(self):
+        """Negative numbers return their string representation."""
+        assert _format_template_value(-42) == "-42"
+        assert _format_template_value(-3.14) == "-3.14"
+
+    def test_list_with_none_items(self):
+        """List containing only None items converts correctly."""
+        assert _format_template_value([None, None]) == "None, None"
+
+    def test_list_with_empty_strings(self):
+        """List with empty strings preserves them."""
+        assert _format_template_value(["a", "", "b"]) == "a, , b"
+
+    def test_tuple_returns_string_representation(self):
+        """Tuple returns its string representation (not treated as list)."""
+        result = _format_template_value((1, 2, 3))
+        assert result == "(1, 2, 3)"
+
+    def test_set_returns_string_representation(self):
+        """Set returns its string representation (not treated as list)."""
+        # Sets have non-deterministic order, so just check it's a string
+        result = _format_template_value({1, 2})
+        assert isinstance(result, str)
+        assert "{" in result and "}" in result
+
 
 class TestBuildPromptFromTemplate:
     """Tests for build_prompt_from_template function."""
@@ -853,6 +896,69 @@ class TestBuildPromptFromTemplate:
         context = {"items": ["text", 42, True]}
         result = build_prompt_from_template(template, context)
         assert result == "Mixed: text, 42, True"
+
+    def test_handles_placeholder_in_context_value(self):
+        """Handles value containing placeholder syntax (no double substitution)."""
+        template = "Value: {{value}}"
+        context = {"value": "{{nested}}"}  # Value looks like a placeholder
+        result = build_prompt_from_template(template, context)
+        assert result == "Value: {{nested}}"  # Should not substitute recursively
+
+    def test_handles_empty_template(self):
+        """Handles empty template string."""
+        template = ""
+        context = {"key": "value"}
+        result = build_prompt_from_template(template, context)
+        assert result == ""
+
+    def test_handles_no_placeholders(self):
+        """Handles template with no placeholders."""
+        template = "This is plain text."
+        context = {"key": "value"}
+        result = build_prompt_from_template(template, context)
+        assert result == "This is plain text."
+
+    def test_handles_dict_value(self):
+        """Handles dict value by converting to string representation."""
+        template = "Data: {{data}}"
+        context = {"data": {"a": 1, "b": 2}}
+        result = build_prompt_from_template(template, context)
+        assert result == "Data: {'a': 1, 'b': 2}"
+
+    def test_handles_newlines_in_template(self):
+        """Handles newlines in template correctly."""
+        template = "Line 1: {{a}}\nLine 2: {{b}}"
+        context = {"a": "first", "b": "second"}
+        result = build_prompt_from_template(template, context)
+        assert result == "Line 1: first\nLine 2: second"
+
+    def test_handles_newlines_in_value(self):
+        """Handles newlines in context value correctly."""
+        template = "Body: {{body}}"
+        context = {"body": "Line 1\nLine 2\nLine 3"}
+        result = build_prompt_from_template(template, context)
+        assert result == "Body: Line 1\nLine 2\nLine 3"
+
+    def test_handles_unicode_in_template(self):
+        """Handles unicode characters in template."""
+        template = "Issue №{{number}}: {{emoji}}"
+        context = {"number": 42, "emoji": "🔥"}
+        result = build_prompt_from_template(template, context)
+        assert result == "Issue №42: 🔥"
+
+    def test_handles_special_characters_in_placeholder_name(self):
+        """Handles placeholder names without special regex meaning."""
+        template = "Value: {{a_key_1}}"
+        context = {"a_key_1": "test"}
+        result = build_prompt_from_template(template, context)
+        assert result == "Value: test"
+
+    def test_handles_adjacent_placeholders(self):
+        """Handles placeholders immediately adjacent to each other."""
+        template = "{{a}}{{b}}{{c}}"
+        context = {"a": "1", "b": "2", "c": "3"}
+        result = build_prompt_from_template(template, context)
+        assert result == "123"
 
 
 class TestSchedulerServiceGetPrs:
