@@ -1152,3 +1152,319 @@ class TestDataclasses:
         assert comment.author == "reviewer"
         assert comment.body == "LGTM"
         assert comment.created_at == datetime(2024, 1, 16, 14, 30, 0)
+
+
+class TestValidateSortParams:
+    """Tests for _validate_sort_params static method."""
+
+    def test_valid_sort_and_order_for_issues(self):
+        """Test that valid sort and order are returned unchanged for issues."""
+        from app.services.github_client import ISSUE_SORT_FIELDS
+
+        sort, order = GitHubClient._validate_sort_params(
+            "updated", "asc", ISSUE_SORT_FIELDS
+        )
+
+        assert sort == "updated"
+        assert order == "asc"
+
+    def test_valid_sort_and_order_for_prs(self):
+        """Test that valid sort and order are returned unchanged for PRs."""
+        from app.services.github_client import PR_SORT_FIELDS
+
+        sort, order = GitHubClient._validate_sort_params(
+            "created", "desc", PR_SORT_FIELDS
+        )
+
+        assert sort == "created"
+        assert order == "desc"
+
+    def test_invalid_sort_defaults_to_created(self):
+        """Test that invalid sort field defaults to 'created'."""
+        from app.services.github_client import ISSUE_SORT_FIELDS
+
+        sort, order = GitHubClient._validate_sort_params(
+            "invalid_field", "desc", ISSUE_SORT_FIELDS
+        )
+
+        assert sort == "created"
+        assert order == "desc"
+
+    def test_invalid_order_defaults_to_desc(self):
+        """Test that invalid order defaults to 'desc'."""
+        from app.services.github_client import ISSUE_SORT_FIELDS
+
+        sort, order = GitHubClient._validate_sort_params(
+            "created", "invalid_order", ISSUE_SORT_FIELDS
+        )
+
+        assert sort == "created"
+        assert order == "desc"
+
+    def test_both_invalid_default_to_created_desc(self):
+        """Test that both invalid sort and order default to 'created' and 'desc'."""
+        from app.services.github_client import ISSUE_SORT_FIELDS
+
+        sort, order = GitHubClient._validate_sort_params(
+            "bad_sort", "bad_order", ISSUE_SORT_FIELDS
+        )
+
+        assert sort == "created"
+        assert order == "desc"
+
+    def test_custom_defaults(self):
+        """Test that custom default values are used when provided."""
+        from app.services.github_client import ISSUE_SORT_FIELDS
+
+        sort, order = GitHubClient._validate_sort_params(
+            "invalid", "invalid", ISSUE_SORT_FIELDS,
+            default_sort="updated", default_order="asc"
+        )
+
+        assert sort == "updated"
+        assert order == "asc"
+
+    def test_comments_valid_for_issues_but_not_prs(self):
+        """Test that 'comments' is valid for issues but not for PRs."""
+        from app.services.github_client import ISSUE_SORT_FIELDS, PR_SORT_FIELDS
+
+        # Valid for issues
+        sort, _ = GitHubClient._validate_sort_params(
+            "comments", "desc", ISSUE_SORT_FIELDS
+        )
+        assert sort == "comments"
+
+        # Invalid for PRs (falls back to default)
+        sort, _ = GitHubClient._validate_sort_params(
+            "comments", "desc", PR_SORT_FIELDS
+        )
+        assert sort == "created"
+
+
+class TestListAllIssues:
+    """Tests for GitHubClient.list_all_issues()."""
+
+    def test_list_all_issues_fetches_all_pages(self, client, mock_github):
+        """Test that list_all_issues fetches all issues without pagination."""
+        mock_issues = [create_mock_issue(number=i) for i in range(5)]
+        mock_results = MagicMock()
+        mock_results.__iter__ = lambda self: iter(mock_issues)
+        mock_github.search_issues.return_value = mock_results
+
+        issues = client.list_all_issues("owner", "repo")
+
+        assert len(issues) == 5
+        assert [i.number for i in issues] == [0, 1, 2, 3, 4]
+
+    def test_list_all_issues_with_state_filter(self, client, mock_github):
+        """Test list_all_issues with state filter."""
+        mock_results = MagicMock()
+        mock_results.__iter__ = lambda self: iter([])
+        mock_github.search_issues.return_value = mock_results
+
+        client.list_all_issues("owner", "repo", state="closed")
+
+        query = mock_github.search_issues.call_args[0][0]
+        assert "is:closed" in query
+
+    def test_list_all_issues_state_all_omits_filter(self, client, mock_github):
+        """Test list_all_issues with state='all' omits state filter."""
+        mock_results = MagicMock()
+        mock_results.__iter__ = lambda self: iter([])
+        mock_github.search_issues.return_value = mock_results
+
+        client.list_all_issues("owner", "repo", state="all")
+
+        query = mock_github.search_issues.call_args[0][0]
+        assert "is:open" not in query
+        assert "is:closed" not in query
+
+    def test_list_all_issues_with_labels(self, client, mock_github):
+        """Test list_all_issues with label filters."""
+        mock_results = MagicMock()
+        mock_results.__iter__ = lambda self: iter([])
+        mock_github.search_issues.return_value = mock_results
+
+        client.list_all_issues("owner", "repo", labels=["bug", "high priority"])
+
+        query = mock_github.search_issues.call_args[0][0]
+        assert "label:bug" in query
+        assert 'label:"high priority"' in query
+
+    def test_list_all_issues_with_search_query(self, client, mock_github):
+        """Test list_all_issues with text search."""
+        mock_results = MagicMock()
+        mock_results.__iter__ = lambda self: iter([])
+        mock_github.search_issues.return_value = mock_results
+
+        client.list_all_issues("owner", "repo", search_query="crash on startup")
+
+        query = mock_github.search_issues.call_args[0][0]
+        assert query.startswith("crash on startup ")
+
+    def test_list_all_issues_with_sort_options(self, client, mock_github):
+        """Test list_all_issues with sort options."""
+        mock_results = MagicMock()
+        mock_results.__iter__ = lambda self: iter([])
+        mock_github.search_issues.return_value = mock_results
+
+        client.list_all_issues("owner", "repo", sort="comments", order="asc")
+
+        call_kwargs = mock_github.search_issues.call_args[1]
+        assert call_kwargs["sort"] == "comments"
+        assert call_kwargs["order"] == "asc"
+
+    def test_list_all_issues_invalid_sort_defaults(self, client, mock_github):
+        """Test that invalid sort falls back to default."""
+        mock_results = MagicMock()
+        mock_results.__iter__ = lambda self: iter([])
+        mock_github.search_issues.return_value = mock_results
+
+        client.list_all_issues("owner", "repo", sort="invalid")
+
+        call_kwargs = mock_github.search_issues.call_args[1]
+        assert call_kwargs["sort"] == "created"
+
+    def test_list_all_issues_returns_empty_list_when_no_issues(self, client, mock_github):
+        """Test list_all_issues returns empty list when no issues found."""
+        mock_results = MagicMock()
+        mock_results.__iter__ = lambda self: iter([])
+        mock_github.search_issues.return_value = mock_results
+
+        issues = client.list_all_issues("owner", "repo")
+
+        assert issues == []
+
+
+class TestListAllPRs:
+    """Tests for GitHubClient.list_all_prs()."""
+
+    def test_list_all_prs_fetches_all_pages(self, client, mock_github):
+        """Test that list_all_prs fetches all PRs without pagination."""
+        mock_repo = MagicMock()
+        mock_prs = [create_mock_pr(number=i) for i in range(5)]
+        mock_issues = []
+        for pr in mock_prs:
+            mock_issue = MagicMock()
+            mock_issue.number = pr.number
+            mock_issues.append(mock_issue)
+
+        mock_results = MagicMock()
+        mock_results.__iter__ = lambda self: iter(mock_issues)
+        mock_github.search_issues.return_value = mock_results
+        mock_repo.get_pull.side_effect = mock_prs
+        mock_github.get_repo.return_value = mock_repo
+
+        prs = client.list_all_prs("owner", "repo")
+
+        assert len(prs) == 5
+        assert [p.number for p in prs] == [0, 1, 2, 3, 4]
+
+    def test_list_all_prs_with_state_filter(self, client, mock_github):
+        """Test list_all_prs with state filter."""
+        mock_repo = MagicMock()
+        mock_results = MagicMock()
+        mock_results.__iter__ = lambda self: iter([])
+        mock_github.search_issues.return_value = mock_results
+        mock_github.get_repo.return_value = mock_repo
+
+        client.list_all_prs("owner", "repo", state="closed")
+
+        query = mock_github.search_issues.call_args[0][0]
+        assert "is:closed" in query
+
+    def test_list_all_prs_state_all_omits_filter(self, client, mock_github):
+        """Test list_all_prs with state='all' omits state filter."""
+        mock_repo = MagicMock()
+        mock_results = MagicMock()
+        mock_results.__iter__ = lambda self: iter([])
+        mock_github.search_issues.return_value = mock_results
+        mock_github.get_repo.return_value = mock_repo
+
+        client.list_all_prs("owner", "repo", state="all")
+
+        query = mock_github.search_issues.call_args[0][0]
+        assert "is:open" not in query
+        assert "is:closed" not in query
+
+    def test_list_all_prs_with_search_query(self, client, mock_github):
+        """Test list_all_prs with text search."""
+        mock_repo = MagicMock()
+        mock_results = MagicMock()
+        mock_results.__iter__ = lambda self: iter([])
+        mock_github.search_issues.return_value = mock_results
+        mock_github.get_repo.return_value = mock_repo
+
+        client.list_all_prs("owner", "repo", search_query="fix authentication")
+
+        query = mock_github.search_issues.call_args[0][0]
+        assert query.startswith("fix authentication ")
+        assert "is:pr" in query
+
+    def test_list_all_prs_with_sort_options(self, client, mock_github):
+        """Test list_all_prs with sort options."""
+        mock_repo = MagicMock()
+        mock_results = MagicMock()
+        mock_results.__iter__ = lambda self: iter([])
+        mock_github.search_issues.return_value = mock_results
+        mock_github.get_repo.return_value = mock_repo
+
+        client.list_all_prs("owner", "repo", sort="updated", order="asc")
+
+        call_kwargs = mock_github.search_issues.call_args[1]
+        assert call_kwargs["sort"] == "updated"
+        assert call_kwargs["order"] == "asc"
+
+    def test_list_all_prs_invalid_sort_defaults(self, client, mock_github):
+        """Test that invalid sort falls back to default (PRs don't support 'comments')."""
+        mock_repo = MagicMock()
+        mock_results = MagicMock()
+        mock_results.__iter__ = lambda self: iter([])
+        mock_github.search_issues.return_value = mock_results
+        mock_github.get_repo.return_value = mock_repo
+
+        client.list_all_prs("owner", "repo", sort="comments")
+
+        call_kwargs = mock_github.search_issues.call_args[1]
+        assert call_kwargs["sort"] == "created"
+
+    def test_list_all_prs_returns_empty_list_when_no_prs(self, client, mock_github):
+        """Test list_all_prs returns empty list when no PRs found."""
+        mock_repo = MagicMock()
+        mock_results = MagicMock()
+        mock_results.__iter__ = lambda self: iter([])
+        mock_github.search_issues.return_value = mock_results
+        mock_github.get_repo.return_value = mock_repo
+
+        prs = client.list_all_prs("owner", "repo")
+
+        assert prs == []
+
+    def test_list_all_prs_fetches_full_pr_data(self, client, mock_github):
+        """Test that list_all_prs fetches full PR data for each issue."""
+        mock_repo = MagicMock()
+        mock_pr = create_mock_pr(
+            number=42,
+            head_ref="feature/test",
+            base_ref="main",
+            additions=100,
+            deletions=25,
+        )
+        mock_issue = MagicMock()
+        mock_issue.number = 42
+
+        mock_results = MagicMock()
+        mock_results.__iter__ = lambda self: iter([mock_issue])
+        mock_github.search_issues.return_value = mock_results
+        mock_repo.get_pull.return_value = mock_pr
+        mock_github.get_repo.return_value = mock_repo
+
+        prs = client.list_all_prs("owner", "repo")
+
+        assert len(prs) == 1
+        # Verify full PR data is fetched, not just search result
+        assert prs[0].head_ref == "feature/test"
+        assert prs[0].base_ref == "main"
+        assert prs[0].additions == 100
+        assert prs[0].deletions == 25
+        mock_repo.get_pull.assert_called_once_with(42)
