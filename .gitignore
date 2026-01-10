@@ -26,4 +26,5 @@ dist/
 
 # Tools
 .claude/
+.clump/
 frontend/e2e/screenshots
