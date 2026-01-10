@@ -1178,6 +1178,149 @@ class TestHeadlessAnalyzerParseMessageEdgeCases:
         # The first block with missing text returns "" from .get("text", "")
         assert msg.content == " Has text"
 
+    def test_parse_message_result_with_numeric_content(self, analyzer):
+        """Test parsing result message where result value is a number."""
+        data = {
+            "type": "result",
+            "subtype": "success",
+            "result": 42,  # Numeric result instead of string
+            "session_id": "numeric-result-123",
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "result"
+        assert msg.subtype == "success"
+        # Numeric result is converted to string for consistency
+        assert msg.content == "42"
+        assert msg.session_id == "numeric-result-123"
+
+    def test_parse_message_result_with_boolean_content(self, analyzer):
+        """Test parsing result message where result value is a boolean."""
+        data = {
+            "type": "result",
+            "subtype": "success",
+            "result": True,  # Boolean result
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "result"
+        assert msg.content == "True"
+
+    def test_parse_message_result_with_false_boolean(self, analyzer):
+        """Test parsing result message where result value is False."""
+        data = {
+            "type": "result",
+            "subtype": "success",
+            "result": False,  # Boolean False result
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "result"
+        assert msg.content == "False"
+
+    def test_parse_message_result_with_float_content(self, analyzer):
+        """Test parsing result message where result value is a float."""
+        data = {
+            "type": "result",
+            "subtype": "success",
+            "result": 3.14159,  # Float result
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "result"
+        assert msg.content == "3.14159"
+
+    def test_parse_message_result_with_dict_content(self, analyzer):
+        """Test parsing result message where result value is a dict."""
+        data = {
+            "type": "result",
+            "subtype": "success",
+            "result": {"status": "ok", "count": 5},  # Dict result
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "result"
+        # Dict is converted to string representation
+        assert "status" in msg.content
+        assert "ok" in msg.content
+
+    def test_parse_message_result_with_list_content(self, analyzer):
+        """Test parsing result message where result value is a list."""
+        data = {
+            "type": "result",
+            "subtype": "success",
+            "result": ["item1", "item2", "item3"],  # List result
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "result"
+        # List is converted to string representation
+        assert "item1" in msg.content
+        assert "item2" in msg.content
+        assert "item3" in msg.content
+
+    def test_parse_message_result_with_zero(self, analyzer):
+        """Test parsing result message where result value is zero."""
+        data = {
+            "type": "result",
+            "subtype": "success",
+            "result": 0,  # Zero result
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "result"
+        # Zero should be converted to "0", not empty string
+        assert msg.content == "0"
+
+    def test_parse_message_result_with_none(self, analyzer):
+        """Test parsing result message where result value is None."""
+        data = {
+            "type": "result",
+            "subtype": "success",
+            "result": None,  # None result
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "result"
+        # None should remain None (not converted)
+        assert msg.content is None
+
+    def test_parse_message_result_with_empty_string(self, analyzer):
+        """Test parsing result message where result value is empty string."""
+        data = {
+            "type": "result",
+            "subtype": "success",
+            "result": "",  # Empty string result
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "result"
+        # Empty string should remain empty string
+        assert msg.content == ""
+
+    def test_parse_message_result_with_negative_number(self, analyzer):
+        """Test parsing result message where result value is negative."""
+        data = {
+            "type": "result",
+            "subtype": "error",
+            "result": -1,  # Negative result (could indicate error code)
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "result"
+        assert msg.subtype == "error"
+        assert msg.content == "-1"
+
 
 class TestGlobalAnalyzerInstance:
     """Tests for the global headless_analyzer instance."""

@@ -287,6 +287,9 @@ class HeadlessAnalyzer:
                 content = str(content)
         elif msg_type == "result":
             content = data.get("result", "")
+            # Convert non-string result content to string for consistency
+            if content is not None and not isinstance(content, str):
+                content = str(content)
 
         return SessionMessage(
             type=msg_type,
