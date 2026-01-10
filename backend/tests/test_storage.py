@@ -3155,6 +3155,79 @@ class TestIssueMetadataNoneHandling:
         assert result.affected_areas == ["api", "database"]
 
 
+class TestSessionMetadataMalformedEntities:
+    """Tests for SessionMetadata.from_dict() handling malformed entities."""
+
+    def test_skips_entity_missing_kind(self):
+        """from_dict() skips entities missing the 'kind' field."""
+        data = {
+            "session_id": "test-123",
+            "entities": [
+                {"number": 42},  # Missing 'kind'
+                {"kind": "issue", "number": 1},  # Valid
+            ],
+        }
+
+        result = SessionMetadata.from_dict(data)
+
+        # Should only contain the valid entity
+        assert len(result.entities) == 1
+        assert result.entities[0].kind == "issue"
+        assert result.entities[0].number == 1
+
+    def test_skips_entity_missing_number(self):
+        """from_dict() skips entities missing the 'number' field."""
+        data = {
+            "session_id": "test-123",
+            "entities": [
+                {"kind": "pr"},  # Missing 'number'
+                {"kind": "issue", "number": 99},  # Valid
+            ],
+        }
+
+        result = SessionMetadata.from_dict(data)
+
+        # Should only contain the valid entity
+        assert len(result.entities) == 1
+        assert result.entities[0].kind == "issue"
+        assert result.entities[0].number == 99
+
+    def test_skips_non_dict_entities(self):
+        """from_dict() skips non-dict items in entities list."""
+        data = {
+            "session_id": "test-123",
+            "entities": [
+                "not a dict",
+                42,
+                None,
+                {"kind": "pr", "number": 5},  # Valid
+            ],
+        }
+
+        result = SessionMetadata.from_dict(data)
+
+        # Should only contain the valid entity
+        assert len(result.entities) == 1
+        assert result.entities[0].kind == "pr"
+        assert result.entities[0].number == 5
+
+    def test_skips_all_malformed_entities(self):
+        """from_dict() returns empty list when all entities are malformed."""
+        data = {
+            "session_id": "test-123",
+            "entities": [
+                {"kind": "issue"},  # Missing number
+                {"number": 1},  # Missing kind
+                "string",
+                None,
+            ],
+        }
+
+        result = SessionMetadata.from_dict(data)
+
+        assert result.entities == []
+
+
 class TestPRMetadataNoneHandling:
     """Tests for None value handling in PRMetadata.from_dict()."""
 
