@@ -272,7 +272,8 @@ def _parse_claude_transcript(transcript_path: Path, session_id: str) -> ParsedTr
 
                 # Use `or {}` to handle None values (key exists but value is None)
                 message_data = entry.get('message') or {}
-                role = message_data.get('role', entry_type)
+                # Use `or entry_type` to handle None values (key exists but value is None)
+                role = message_data.get('role') or entry_type
                 # Use `or []` to handle None values (key exists but value is None)
                 content_parts = message_data.get('content') or []
 

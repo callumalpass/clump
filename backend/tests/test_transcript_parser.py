@@ -3834,3 +3834,190 @@ class TestToolUseNoneInputHandling:
         assert len(result.messages) == 1
         assert len(result.messages[0].tool_uses) == 1
         assert result.messages[0].tool_uses[0].input == {}
+
+
+class TestClaudeParserRoleNoneHandling:
+    """Tests for None role value handling in _parse_claude_transcript.
+
+    These tests verify that when the 'role' key exists but has a None value,
+    the parser correctly falls back to using the entry_type ('user' or 'assistant')
+    instead of None.
+    """
+
+    def test_handles_none_role_in_user_message(self, tmp_path, monkeypatch):
+        """Parser handles user entry where 'role' key exists but value is None.
+
+        When role is None but entry_type is 'user', should treat as user message.
+        """
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-none-role.jsonl"
+        transcript.write_text(json.dumps({
+            "type": "user",
+            "uuid": "msg-1",
+            "timestamp": "2025-01-01T10:00:00Z",
+            "message": {
+                "role": None,  # Key exists but value is None
+                "content": "Hello from user"
+            }
+        }) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-none-role", "/test/project")
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].role == "user"
+        assert result.messages[0].content == "Hello from user"
+
+    def test_handles_none_role_in_assistant_message(self, tmp_path, monkeypatch):
+        """Parser handles assistant entry where 'role' key exists but value is None.
+
+        When role is None but entry_type is 'assistant', should treat as assistant.
+        """
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-none-role-assistant.jsonl"
+        transcript.write_text(json.dumps({
+            "type": "assistant",
+            "uuid": "msg-1",
+            "timestamp": "2025-01-01T10:00:00Z",
+            "message": {
+                "role": None,  # Key exists but value is None
+                "content": [{"type": "text", "text": "Hello from assistant"}]
+            }
+        }) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-none-role-assistant", "/test/project")
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].role == "assistant"
+        assert result.messages[0].content == "Hello from assistant"
+
+    def test_handles_missing_role_key(self, tmp_path, monkeypatch):
+        """Parser handles entry where 'role' key is missing entirely.
+
+        Should fall back to entry_type.
+        """
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-missing-role.jsonl"
+        transcript.write_text(json.dumps({
+            "type": "user",
+            "uuid": "msg-1",
+            "timestamp": "2025-01-01T10:00:00Z",
+            "message": {
+                # No 'role' key at all
+                "content": "Hello without role key"
+            }
+        }) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-missing-role", "/test/project")
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].role == "user"
+        assert result.messages[0].content == "Hello without role key"
+
+    def test_handles_empty_string_role(self, tmp_path, monkeypatch):
+        """Parser handles entry where 'role' is empty string.
+
+        Empty string is falsy, so should fall back to entry_type.
+        """
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-empty-role.jsonl"
+        transcript.write_text(json.dumps({
+            "type": "user",
+            "uuid": "msg-1",
+            "timestamp": "2025-01-01T10:00:00Z",
+            "message": {
+                "role": "",  # Empty string role
+                "content": "Hello with empty role"
+            }
+        }) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-empty-role", "/test/project")
+        assert result is not None
+        assert len(result.messages) == 1
+        # Empty string is falsy, so falls back to entry_type
+        assert result.messages[0].role == "user"
+        assert result.messages[0].content == "Hello with empty role"
+
+    def test_mixed_none_role_and_valid_role(self, tmp_path, monkeypatch):
+        """Parser handles mix of None role and valid role messages."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-mixed-roles.jsonl"
+        lines = [
+            json.dumps({
+                "type": "user",
+                "uuid": "msg-1",
+                "timestamp": "2025-01-01T10:00:00Z",
+                "message": {
+                    "role": None,  # None role
+                    "content": "First message"
+                }
+            }),
+            json.dumps({
+                "type": "assistant",
+                "uuid": "msg-2",
+                "timestamp": "2025-01-01T10:01:00Z",
+                "message": {
+                    "role": "assistant",  # Valid role
+                    "content": [{"type": "text", "text": "Response"}]
+                }
+            }),
+            json.dumps({
+                "type": "user",
+                "uuid": "msg-3",
+                "timestamp": "2025-01-01T10:02:00Z",
+                "message": {
+                    "role": "user",  # Valid role
+                    "content": "Second question"
+                }
+            }),
+        ]
+        transcript.write_text("\n".join(lines) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-mixed-roles", "/test/project")
+        assert result is not None
+        assert len(result.messages) == 3
+        assert result.messages[0].role == "user"
+        assert result.messages[0].content == "First message"
+        assert result.messages[1].role == "assistant"
+        assert result.messages[1].content == "Response"
+        assert result.messages[2].role == "user"
+        assert result.messages[2].content == "Second question"
