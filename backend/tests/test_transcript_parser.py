@@ -70,6 +70,75 @@ class TestParseToolArguments:
         assert _parse_tool_arguments([1, 2, 3]) == {}
         assert _parse_tool_arguments(True) == {}
 
+    def test_handles_json_string_primitive_number(self):
+        """Returns JSON number string as single-value dict."""
+        # JSON number (valid JSON but not a dict)
+        args = "42"
+        result = _parse_tool_arguments(args)
+        assert result == {"input": "42"}
+
+    def test_handles_json_string_primitive_boolean(self):
+        """Returns JSON boolean string as single-value dict."""
+        # JSON boolean (valid JSON but not a dict)
+        args = "true"
+        result = _parse_tool_arguments(args)
+        assert result == {"input": "true"}
+
+    def test_handles_json_string_null(self):
+        """Returns JSON null string as single-value dict."""
+        # JSON null (valid JSON but not a dict)
+        args = "null"
+        result = _parse_tool_arguments(args)
+        assert result == {"input": "null"}
+
+    def test_handles_empty_string(self):
+        """Returns empty string as single-value dict."""
+        args = ""
+        result = _parse_tool_arguments(args)
+        assert result == {"input": ""}
+
+    def test_handles_whitespace_only_string(self):
+        """Returns whitespace-only string as single-value dict."""
+        args = "   \n\t  "
+        result = _parse_tool_arguments(args)
+        assert result == {"input": "   \n\t  "}
+
+    def test_handles_json_string_with_unicode(self):
+        """Parses JSON-encoded dict with unicode characters."""
+        args = '{"emoji": "🔥", "chinese": "中文"}'
+        result = _parse_tool_arguments(args)
+        assert result == {"emoji": "🔥", "chinese": "中文"}
+
+    def test_handles_deeply_nested_dict(self):
+        """Returns deeply nested dict unchanged."""
+        args = {
+            "level1": {
+                "level2": {
+                    "level3": {
+                        "value": 42
+                    }
+                }
+            }
+        }
+        assert _parse_tool_arguments(args) == args
+
+    def test_handles_dict_with_none_values(self):
+        """Returns dict with None values unchanged."""
+        args = {"key1": None, "key2": "value"}
+        assert _parse_tool_arguments(args) == args
+
+    def test_handles_float_type(self):
+        """Returns empty dict for float type."""
+        assert _parse_tool_arguments(3.14) == {}
+
+    def test_handles_tuple_type(self):
+        """Returns empty dict for tuple type."""
+        assert _parse_tool_arguments((1, 2, 3)) == {}
+
+    def test_handles_set_type(self):
+        """Returns empty dict for set type."""
+        assert _parse_tool_arguments({1, 2, 3}) == {}
+
 
 class TestToolUse:
     """Tests for ToolUse dataclass."""
