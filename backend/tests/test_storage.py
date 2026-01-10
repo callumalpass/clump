@@ -3227,6 +3227,75 @@ class TestSessionMetadataMalformedEntities:
 
         assert result.entities == []
 
+    def test_skips_entity_with_none_number(self):
+        """from_dict() skips entities where number value is None."""
+        data = {
+            "session_id": "test-123",
+            "entities": [
+                {"kind": "issue", "number": None},  # key exists but value is None
+                {"kind": "pr", "number": 42},  # Valid
+            ],
+        }
+
+        result = SessionMetadata.from_dict(data)
+
+        # Should only contain the valid entity
+        assert len(result.entities) == 1
+        assert result.entities[0].kind == "pr"
+        assert result.entities[0].number == 42
+
+    def test_skips_entity_with_none_kind(self):
+        """from_dict() skips entities where kind value is None."""
+        data = {
+            "session_id": "test-123",
+            "entities": [
+                {"kind": None, "number": 99},  # key exists but value is None
+                {"kind": "issue", "number": 1},  # Valid
+            ],
+        }
+
+        result = SessionMetadata.from_dict(data)
+
+        # Should only contain the valid entity
+        assert len(result.entities) == 1
+        assert result.entities[0].kind == "issue"
+        assert result.entities[0].number == 1
+
+    def test_skips_entity_with_both_none_values(self):
+        """from_dict() skips entities where both kind and number are None."""
+        data = {
+            "session_id": "test-123",
+            "entities": [
+                {"kind": None, "number": None},  # Both values are None
+            ],
+        }
+
+        result = SessionMetadata.from_dict(data)
+
+        assert result.entities == []
+
+    def test_keeps_valid_entities_among_none_value_entities(self):
+        """from_dict() keeps valid entities when mixed with None value entities."""
+        data = {
+            "session_id": "test-123",
+            "entities": [
+                {"kind": "issue", "number": None},  # Invalid - None number
+                {"kind": None, "number": 42},  # Invalid - None kind
+                {"kind": "pr", "number": 123},  # Valid
+                {"kind": None, "number": None},  # Invalid - both None
+                {"kind": "issue", "number": 456},  # Valid
+            ],
+        }
+
+        result = SessionMetadata.from_dict(data)
+
+        # Should only contain the two valid entities
+        assert len(result.entities) == 2
+        assert result.entities[0].kind == "pr"
+        assert result.entities[0].number == 123
+        assert result.entities[1].kind == "issue"
+        assert result.entities[1].number == 456
+
 
 class TestPRMetadataNoneHandling:
     """Tests for None value handling in PRMetadata.from_dict()."""

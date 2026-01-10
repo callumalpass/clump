@@ -89,9 +89,13 @@ class SessionMetadata:
         entities = []
         # Use `or []` to handle None values (key exists but value is None)
         for e in data.get("entities") or []:
-            # Skip malformed entities missing required fields
+            # Skip malformed entities missing required fields or with None values
             if isinstance(e, dict) and "kind" in e and "number" in e:
-                entities.append(EntityLink(kind=e["kind"], number=e["number"]))
+                kind = e["kind"]
+                number = e["number"]
+                # Validate that both kind and number have actual values (not None)
+                if kind is not None and number is not None:
+                    entities.append(EntityLink(kind=kind, number=number))
         return cls(
             session_id=data.get("session_id", ""),
             title=data.get("title"),
