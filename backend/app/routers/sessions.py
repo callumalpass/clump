@@ -730,12 +730,15 @@ def _create_empty_scan_result() -> QuickScanResult:
     }
 
 
-def _extract_text_from_content(content: list | str, max_length: int = TITLE_PREVIEW_LENGTH) -> str | None:
+def _extract_text_from_content(content: list | str | None, max_length: int = TITLE_PREVIEW_LENGTH) -> str | None:
     """
     Extract text from message content, handling both string and list formats.
 
     Shared by Claude and Codex parsers which use similar content block structures.
     """
+    if content is None:
+        return None
+
     if isinstance(content, str):
         return content[:max_length] if content else None
 

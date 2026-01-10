@@ -909,6 +909,25 @@ class TestExtractTextFromContent:
         assert len(result) == 75
         assert result == "b" * 75
 
+    def test_returns_none_for_none_input(self):
+        """Returns None when content is None.
+
+        This tests the fix for the bug where msg.get('content', '') returns
+        None when the key exists but the value is None (not the default '').
+        The function should handle None gracefully rather than raising an error.
+        """
+        result = _extract_text_from_content(None)
+        assert result is None
+
+    def test_handles_none_text_in_block(self):
+        """Handles text block where text value is None."""
+        content = [
+            {"type": "text", "text": None},
+            {"type": "text", "text": "Valid text"}
+        ]
+        result = _extract_text_from_content(content)
+        assert result == "Valid text"
+
 
 class TestGetPendingSessions:
     """Tests for the _get_pending_sessions helper function."""
