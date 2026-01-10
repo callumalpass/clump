@@ -2039,3 +2039,67 @@ class TestGeminiAdapterPathEncoding:
         assert parent.parent.name == "tmp"
         # Should be under ~/.gemini
         assert parent.parent.parent == Path.home() / ".gemini"
+
+
+class TestCodexAdapterGetResumeSessionIdEdgeCases:
+    """Tests for CodexAdapter.get_resume_session_id edge cases.
+
+    These tests verify the regex pattern handles various UUID formats
+    and edge cases correctly.
+    """
+
+    @pytest.fixture
+    def adapter(self):
+        return CodexAdapter()
+
+    def test_handles_uppercase_uuid(self, adapter):
+        """Handles uppercase UUID characters (re.IGNORECASE)."""
+        session_id = "rollout-2026-01-01T13-20-18-019B775B-1DC2-7BF1-9681-DB60A06CB4CB"
+        result = adapter.get_resume_session_id(session_id)
+        assert result == "019B775B-1DC2-7BF1-9681-DB60A06CB4CB"
+
+    def test_handles_mixed_case_uuid(self, adapter):
+        """Handles mixed case UUID characters."""
+        session_id = "rollout-2026-01-01T13-20-18-019b775B-1dc2-7BF1-9681-db60A06CB4cb"
+        result = adapter.get_resume_session_id(session_id)
+        assert result == "019b775B-1dc2-7BF1-9681-db60A06CB4cb"
+
+    def test_uuid_with_only_numbers(self, adapter):
+        """Handles UUID with only numeric characters."""
+        session_id = "rollout-2026-01-01T13-20-18-01234567-1234-5678-9012-345678901234"
+        result = adapter.get_resume_session_id(session_id)
+        assert result == "01234567-1234-5678-9012-345678901234"
+
+    def test_uuid_at_end_with_trailing_whitespace_not_matched(self, adapter):
+        """UUID must be at end of string - trailing whitespace means no match."""
+        session_id = "rollout-2026-01-01T13-20-18-019b775b-1dc2-7bf1-9681-db60a06cb4cb "
+        result = adapter.get_resume_session_id(session_id)
+        # Falls back to returning as-is since UUID pattern requires $ anchor
+        assert result == session_id
+
+    def test_empty_string(self, adapter):
+        """Handles empty string gracefully."""
+        result = adapter.get_resume_session_id("")
+        assert result == ""
+
+    def test_uuid_only(self, adapter):
+        """Handles standalone UUID."""
+        session_id = "019b775b-1dc2-7bf1-9681-db60a06cb4cb"
+        result = adapter.get_resume_session_id(session_id)
+        assert result == session_id
+
+    def test_short_uuid_like_string_not_matched(self, adapter):
+        """Does not match UUID-like strings that are too short."""
+        # Missing last segment length
+        session_id = "rollout-2026-01-01T13-20-18-019b775b-1dc2-7bf1-9681-db60a0"
+        result = adapter.get_resume_session_id(session_id)
+        # Falls back to as-is
+        assert result == session_id
+
+    def test_uuid_with_invalid_hex_chars_not_matched(self, adapter):
+        """Does not match UUIDs containing non-hex characters."""
+        # 'z' is not a valid hex character
+        session_id = "rollout-2026-01-01T13-20-18-019z775b-1dc2-7bf1-9681-db60a06cb4cb"
+        result = adapter.get_resume_session_id(session_id)
+        # Falls back to as-is
+        assert result == session_id
