@@ -624,6 +624,55 @@ class TestSessionMetadata:
         assert metadata.entities[1].kind == "issue"
         assert metadata.entities[1].number == 456
 
+    def test_from_dict_starred_none_becomes_false(self):
+        """Test that starred with None value becomes False.
+
+        This tests the fix for a bug where data.get("starred", False) would
+        return None when the key exists with value None, rather than the
+        default False.
+        """
+        data = {
+            "session_id": "test-session",
+            "starred": None,  # Key exists but value is None
+        }
+
+        metadata = SessionMetadata.from_dict(data)
+
+        assert metadata.starred is False
+
+    def test_from_dict_starred_false_stays_false(self):
+        """Test that explicit starred=False works correctly."""
+        data = {
+            "session_id": "test-session",
+            "starred": False,
+        }
+
+        metadata = SessionMetadata.from_dict(data)
+
+        assert metadata.starred is False
+
+    def test_from_dict_starred_true_stays_true(self):
+        """Test that explicit starred=True works correctly."""
+        data = {
+            "session_id": "test-session",
+            "starred": True,
+        }
+
+        metadata = SessionMetadata.from_dict(data)
+
+        assert metadata.starred is True
+
+    def test_from_dict_starred_missing_becomes_false(self):
+        """Test that missing starred key defaults to False."""
+        data = {
+            "session_id": "test-session",
+            # No 'starred' key
+        }
+
+        metadata = SessionMetadata.from_dict(data)
+
+        assert metadata.starred is False
+
 
 class TestEntityLink:
     """Tests for EntityLink dataclass."""

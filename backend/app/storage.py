@@ -104,7 +104,8 @@ class SessionMetadata:
             entities=entities,
             # Use `or []` to handle None values (key exists but value is None)
             tags=data.get("tags") or [],
-            starred=data.get("starred", False),
+            # Use `or False` to handle None values (key exists but value is None)
+            starred=data.get("starred") or False,
             created_at=data.get("created_at"),
             scheduled_job_id=data.get("scheduled_job_id"),
         )
