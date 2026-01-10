@@ -936,6 +936,34 @@ class TestClaudeAdapterExtractSessionInfo:
         assert info.session_id == "test-empty"
         assert info.model is None
 
+    def test_handles_none_messages_value(self, adapter):
+        """Handles data where 'messages' key exists but value is None.
+
+        This tests the fix for the bug where data.get('messages', [])
+        returns None (not []) when the key exists but value is None.
+        The fix uses data.get('messages') or [] to correctly fall back.
+        """
+        data = {
+            "session_id": "test-none-messages",
+            "messages": None,  # Key exists but value is None
+        }
+        # Should not raise TypeError: 'NoneType' object is not iterable
+        info = adapter.extract_session_info(data)
+        assert info.session_id == "test-none-messages"
+        assert info.message_count == 0
+        assert info.model is None
+
+    def test_handles_missing_messages_key(self, adapter):
+        """Handles data without 'messages' key at all."""
+        data = {
+            "session_id": "test-no-messages",
+            # No 'messages' key
+        }
+        # Should not raise KeyError or TypeError
+        info = adapter.extract_session_info(data)
+        assert info.session_id == "test-no-messages"
+        assert info.message_count == 0
+
 
 class TestCodexAdapterParseSessionFileNoneHandling:
     """Tests for CodexAdapter.parse_session_file None handling.
