@@ -3356,3 +3356,47 @@ class TestPRMetadataNoneHandling:
         assert result.tags == []
         assert result.security_concerns == ["SQL injection"]
         assert result.affected_areas == []
+
+    def test_handles_none_breaking_changes(self):
+        """from_dict() handles None breaking_changes field (key exists but value is None)."""
+        data = {"pr_number": 1, "breaking_changes": None}
+
+        result = PRMetadata.from_dict(data)
+
+        assert result.breaking_changes is False
+        assert isinstance(result.breaking_changes, bool)
+
+    def test_handles_false_breaking_changes(self):
+        """from_dict() preserves explicit False value for breaking_changes."""
+        data = {"pr_number": 1, "breaking_changes": False}
+
+        result = PRMetadata.from_dict(data)
+
+        assert result.breaking_changes is False
+        assert isinstance(result.breaking_changes, bool)
+
+    def test_handles_true_breaking_changes(self):
+        """from_dict() preserves explicit True value for breaking_changes."""
+        data = {"pr_number": 1, "breaking_changes": True}
+
+        result = PRMetadata.from_dict(data)
+
+        assert result.breaking_changes is True
+        assert isinstance(result.breaking_changes, bool)
+
+    def test_handles_all_none_fields_including_breaking_changes(self):
+        """from_dict() handles all nullable fields being None including breaking_changes."""
+        data = {
+            "pr_number": 1,
+            "tags": None,
+            "security_concerns": None,
+            "affected_areas": None,
+            "breaking_changes": None,
+        }
+
+        result = PRMetadata.from_dict(data)
+
+        assert result.tags == []
+        assert result.security_concerns == []
+        assert result.affected_areas == []
+        assert result.breaking_changes is False

@@ -261,7 +261,8 @@ class PRMetadata:
             # Use `or []` to handle None values (key exists but value is None)
             security_concerns=data.get("security_concerns") or [],
             test_coverage=data.get("test_coverage"),
-            breaking_changes=data.get("breaking_changes", False),
+            # Use `or False` to handle None values (key exists but value is None)
+            breaking_changes=data.get("breaking_changes") or False,
             change_type=data.get("change_type"),
             # Use `or []` to handle None values (key exists but value is None)
             affected_areas=data.get("affected_areas") or [],
