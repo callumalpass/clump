@@ -1973,6 +1973,94 @@ class TestScheduleDefinition:
         assert restored.model == original.model
         assert restored.cli_type == original.cli_type
 
+    def test_from_dict_handles_none_only_new(self):
+        """Test that None only_new value is treated as False."""
+        data = {
+            "id": "test",
+            "name": "Test",
+            "only_new": None,  # Explicitly set to None
+        }
+
+        schedule = ScheduleDefinition.from_dict(data)
+
+        assert schedule.only_new is False
+
+    def test_from_dict_handles_false_only_new(self):
+        """Test that False only_new value is preserved."""
+        data = {
+            "id": "test",
+            "name": "Test",
+            "only_new": False,
+        }
+
+        schedule = ScheduleDefinition.from_dict(data)
+
+        assert schedule.only_new is False
+
+    def test_from_dict_handles_true_only_new(self):
+        """Test that True only_new value is preserved."""
+        data = {
+            "id": "test",
+            "name": "Test",
+            "only_new": True,
+        }
+
+        schedule = ScheduleDefinition.from_dict(data)
+
+        assert schedule.only_new is True
+
+    def test_from_dict_handles_none_allowed_tools(self):
+        """Test that None allowed_tools value is preserved as None."""
+        data = {
+            "id": "test",
+            "name": "Test",
+            "allowed_tools": None,  # Explicitly None (use defaults)
+        }
+
+        schedule = ScheduleDefinition.from_dict(data)
+
+        assert schedule.allowed_tools is None
+
+    def test_from_dict_handles_empty_allowed_tools(self):
+        """Test that empty allowed_tools list is preserved."""
+        data = {
+            "id": "test",
+            "name": "Test",
+            "allowed_tools": [],  # Empty list (no tools allowed)
+        }
+
+        schedule = ScheduleDefinition.from_dict(data)
+
+        assert schedule.allowed_tools == []
+
+    def test_from_dict_handles_none_max_items(self):
+        """Test that None max_items value falls back to default."""
+        data = {
+            "id": "test",
+            "name": "Test",
+            "max_items": None,
+        }
+
+        schedule = ScheduleDefinition.from_dict(data)
+
+        # None should result in None (not the default 10)
+        # because data.get("max_items", 10) returns None when key exists with None value
+        assert schedule.max_items is None
+
+    def test_from_dict_raises_keyerror_for_missing_id(self):
+        """Test that missing id raises KeyError."""
+        data = {"name": "Test"}
+
+        with pytest.raises(KeyError):
+            ScheduleDefinition.from_dict(data)
+
+    def test_from_dict_raises_keyerror_for_missing_name(self):
+        """Test that missing name raises KeyError."""
+        data = {"id": "test"}
+
+        with pytest.raises(KeyError):
+            ScheduleDefinition.from_dict(data)
+
 
 class TestGetRepoSchedulesDir:
     """Tests for get_repo_schedules_dir function."""

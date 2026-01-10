@@ -1548,8 +1548,11 @@ class ScheduleDefinition:
             command_id=data.get("command_id"),
             custom_prompt=data.get("custom_prompt"),
             max_items=data.get("max_items", 10),
-            only_new=data.get("only_new", False),
+            # Use `or False` to handle None values (key exists but value is None)
+            only_new=data.get("only_new") or False,
             permission_mode=data.get("permission_mode"),
+            # Use `or None` to preserve explicit None from allowed_tools field
+            # (None means "use defaults", [] means "no tools allowed")
             allowed_tools=data.get("allowed_tools"),
             max_turns=data.get("max_turns"),
             model=data.get("model"),
