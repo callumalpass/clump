@@ -4021,3 +4021,522 @@ class TestClaudeParserRoleNoneHandling:
         assert result.messages[1].content == "Response"
         assert result.messages[2].role == "user"
         assert result.messages[2].content == "Second question"
+
+
+class TestGeminiNestedGetNoneHandling:
+    """Tests for Gemini parser handling of None values in nested .get() calls.
+
+    These tests verify that when fields have None values, the parser correctly
+    falls back to alternative field names using the `or` pattern.
+    """
+
+    def test_gemini_thinking_with_none_thinking_key(self, tmp_path):
+        """Parser handles Gemini thinking block where 'thinking' key is None.
+
+        When thinking is None but text exists, should use text.
+        """
+        gemini_dir = tmp_path / ".gemini" / "tmp" / "abc123" / "chats"
+        gemini_dir.mkdir(parents=True)
+
+        session_file = gemini_dir / "session-thinking-none.json"
+        session_file.write_text(json.dumps({
+            "sessionId": "session-thinking-none",
+            "messages": [
+                {
+                    "id": "msg-1",
+                    "type": "gemini",
+                    "timestamp": "2025-01-01T10:00:00Z",
+                    "content": [
+                        {
+                            "type": "thinking",
+                            "thinking": None,  # Key exists but value is None
+                            "text": "This is thinking via text field"
+                        },
+                        {"type": "text", "text": "Response"}
+                    ]
+                }
+            ]
+        }))
+
+        result = parse_transcript_file(session_file, "session-thinking-none", cli_type=CLIType.GEMINI.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].thinking == "This is thinking via text field"
+
+    def test_gemini_thinking_with_none_text_key(self, tmp_path):
+        """Parser handles Gemini thinking block where 'text' key is None.
+
+        When text is None but thinking exists, should use thinking.
+        """
+        gemini_dir = tmp_path / ".gemini" / "tmp" / "abc123" / "chats"
+        gemini_dir.mkdir(parents=True)
+
+        session_file = gemini_dir / "session-thinking-text-none.json"
+        session_file.write_text(json.dumps({
+            "sessionId": "session-thinking-text-none",
+            "messages": [
+                {
+                    "id": "msg-1",
+                    "type": "gemini",
+                    "timestamp": "2025-01-01T10:00:00Z",
+                    "content": [
+                        {
+                            "type": "thinking",
+                            "thinking": "This is the thinking content",
+                            "text": None  # Key exists but value is None
+                        },
+                        {"type": "text", "text": "Response"}
+                    ]
+                }
+            ]
+        }))
+
+        result = parse_transcript_file(session_file, "session-thinking-text-none", cli_type=CLIType.GEMINI.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].thinking == "This is the thinking content"
+
+    def test_gemini_thinking_with_both_keys_none(self, tmp_path):
+        """Parser handles Gemini thinking block where both 'thinking' and 'text' are None.
+
+        Should result in empty thinking string.
+        """
+        gemini_dir = tmp_path / ".gemini" / "tmp" / "abc123" / "chats"
+        gemini_dir.mkdir(parents=True)
+
+        session_file = gemini_dir / "session-thinking-both-none.json"
+        session_file.write_text(json.dumps({
+            "sessionId": "session-thinking-both-none",
+            "messages": [
+                {
+                    "id": "msg-1",
+                    "type": "gemini",
+                    "timestamp": "2025-01-01T10:00:00Z",
+                    "content": [
+                        {
+                            "type": "thinking",
+                            "thinking": None,
+                            "text": None
+                        },
+                        {"type": "text", "text": "Response"}
+                    ]
+                }
+            ]
+        }))
+
+        result = parse_transcript_file(session_file, "session-thinking-both-none", cli_type=CLIType.GEMINI.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        # Empty thinking means None (not stored as empty string)
+        assert result.messages[0].thinking is None
+
+    def test_gemini_function_call_id_with_none_id(self, tmp_path):
+        """Parser handles Gemini function call where 'id' key is None.
+
+        When id is None but name exists, should use name as tool_id.
+        """
+        gemini_dir = tmp_path / ".gemini" / "tmp" / "abc123" / "chats"
+        gemini_dir.mkdir(parents=True)
+
+        session_file = gemini_dir / "session-fc-none-id.json"
+        session_file.write_text(json.dumps({
+            "sessionId": "session-fc-none-id",
+            "messages": [
+                {
+                    "id": "msg-1",
+                    "type": "gemini",
+                    "timestamp": "2025-01-01T10:00:00Z",
+                    "content": [
+                        {
+                            "type": "functionCall",
+                            "functionCall": {
+                                "id": None,  # Key exists but value is None
+                                "name": "read_file",
+                                "args": {"path": "test.txt"}
+                            }
+                        }
+                    ]
+                }
+            ]
+        }))
+
+        result = parse_transcript_file(session_file, "session-fc-none-id", cli_type=CLIType.GEMINI.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert len(result.messages[0].tool_uses) == 1
+        assert result.messages[0].tool_uses[0].id == "read_file"  # Falls back to name
+
+    def test_gemini_function_call_id_with_none_name(self, tmp_path):
+        """Parser handles Gemini function call where 'name' key is None.
+
+        When name is None but id exists, should use id.
+        """
+        gemini_dir = tmp_path / ".gemini" / "tmp" / "abc123" / "chats"
+        gemini_dir.mkdir(parents=True)
+
+        session_file = gemini_dir / "session-fc-none-name.json"
+        session_file.write_text(json.dumps({
+            "sessionId": "session-fc-none-name",
+            "messages": [
+                {
+                    "id": "msg-1",
+                    "type": "gemini",
+                    "timestamp": "2025-01-01T10:00:00Z",
+                    "content": [
+                        {
+                            "type": "functionCall",
+                            "functionCall": {
+                                "id": "tool-123",
+                                "name": None,  # Key exists but value is None
+                                "args": {"path": "test.txt"}
+                            }
+                        }
+                    ]
+                }
+            ]
+        }))
+
+        result = parse_transcript_file(session_file, "session-fc-none-name", cli_type=CLIType.GEMINI.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert len(result.messages[0].tool_uses) == 1
+        assert result.messages[0].tool_uses[0].id == "tool-123"
+
+    def test_gemini_function_call_id_both_none(self, tmp_path):
+        """Parser handles Gemini function call where both 'id' and 'name' are None.
+
+        Should result in empty string for tool_id.
+        """
+        gemini_dir = tmp_path / ".gemini" / "tmp" / "abc123" / "chats"
+        gemini_dir.mkdir(parents=True)
+
+        session_file = gemini_dir / "session-fc-both-none.json"
+        session_file.write_text(json.dumps({
+            "sessionId": "session-fc-both-none",
+            "messages": [
+                {
+                    "id": "msg-1",
+                    "type": "gemini",
+                    "timestamp": "2025-01-01T10:00:00Z",
+                    "content": [
+                        {
+                            "type": "functionCall",
+                            "functionCall": {
+                                "id": None,
+                                "name": None,
+                                "args": {"path": "test.txt"}
+                            }
+                        }
+                    ]
+                }
+            ]
+        }))
+
+        result = parse_transcript_file(session_file, "session-fc-both-none", cli_type=CLIType.GEMINI.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert len(result.messages[0].tool_uses) == 1
+        assert result.messages[0].tool_uses[0].id == ""  # Empty string fallback
+
+
+class TestCodexNestedGetNoneHandling:
+    """Tests for Codex parser handling of None values in nested .get() calls.
+
+    These tests verify that when fields have None values, the parser correctly
+    falls back to alternative field names using the `or` pattern.
+    """
+
+    def test_codex_function_call_with_none_call_id(self, tmp_path):
+        """Parser handles Codex function_call where 'call_id' key is None.
+
+        When call_id is None but id exists, should use id.
+        """
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-fc-none-callid.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"cwd": "/home/user/project", "timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:01Z",
+                "payload": {
+                    "type": "function_call",
+                    "call_id": None,  # Key exists but value is None
+                    "id": "fallback-id",
+                    "name": "shell",
+                    "arguments": {"command": "ls"}
+                }
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(session_file, "session-fc-none-callid", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert len(result.messages[0].tool_uses) == 1
+        assert result.messages[0].tool_uses[0].id == "fallback-id"
+
+    def test_codex_function_call_with_none_id(self, tmp_path):
+        """Parser handles Codex function_call where 'id' key is None.
+
+        When id is None but call_id exists, should use call_id.
+        """
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-fc-none-id.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"cwd": "/home/user/project", "timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:01Z",
+                "payload": {
+                    "type": "function_call",
+                    "call_id": "primary-call-id",
+                    "id": None,  # Key exists but value is None
+                    "name": "shell",
+                    "arguments": {"command": "ls"}
+                }
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(session_file, "session-fc-none-id", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert len(result.messages[0].tool_uses) == 1
+        assert result.messages[0].tool_uses[0].id == "primary-call-id"
+
+    def test_codex_function_call_with_both_ids_none(self, tmp_path):
+        """Parser handles Codex function_call where both 'call_id' and 'id' are None.
+
+        Should result in empty string for tool_id.
+        """
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-fc-both-ids-none.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"cwd": "/home/user/project", "timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:01Z",
+                "payload": {
+                    "type": "function_call",
+                    "call_id": None,
+                    "id": None,
+                    "name": "shell",
+                    "arguments": {"command": "ls"}
+                }
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(session_file, "session-fc-both-ids-none", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert len(result.messages[0].tool_uses) == 1
+        assert result.messages[0].tool_uses[0].id == ""
+
+    def test_codex_thinking_with_none_text(self, tmp_path):
+        """Parser handles Codex thinking block where 'text' key is None.
+
+        When text is None but thinking exists, should use thinking.
+        """
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-thinking-none-text.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"cwd": "/home/user/project", "timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:01Z",
+                "payload": {
+                    "id": "msg-1",
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "thinking",
+                            "text": None,  # Key exists but value is None
+                            "thinking": "This is the thinking via thinking key"
+                        },
+                        {"type": "output_text", "text": "Response"}
+                    ]
+                }
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(session_file, "session-thinking-none-text", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].thinking == "This is the thinking via thinking key"
+
+    def test_codex_thinking_with_none_thinking(self, tmp_path):
+        """Parser handles Codex thinking block where 'thinking' key is None.
+
+        When thinking is None but text exists, should use text.
+        """
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-thinking-none-thinking.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"cwd": "/home/user/project", "timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:01Z",
+                "payload": {
+                    "id": "msg-1",
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "thinking",
+                            "text": "This is the thinking via text key",
+                            "thinking": None  # Key exists but value is None
+                        },
+                        {"type": "output_text", "text": "Response"}
+                    ]
+                }
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(session_file, "session-thinking-none-thinking", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].thinking == "This is the thinking via text key"
+
+    def test_codex_thinking_with_both_keys_none(self, tmp_path):
+        """Parser handles Codex thinking block where both 'text' and 'thinking' are None.
+
+        Should result in empty/no thinking content.
+        """
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-thinking-both-none.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"cwd": "/home/user/project", "timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:01Z",
+                "payload": {
+                    "id": "msg-1",
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "thinking",
+                            "text": None,
+                            "thinking": None
+                        },
+                        {"type": "output_text", "text": "Response"}
+                    ]
+                }
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(session_file, "session-thinking-both-none", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        # Empty thinking means None (not stored as empty string)
+        assert result.messages[0].thinking is None
+
+    def test_codex_reasoning_with_none_text(self, tmp_path):
+        """Parser handles Codex reasoning block (alternative to thinking) where 'text' is None.
+
+        When text is None but thinking exists, should use thinking.
+        """
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-reasoning-none-text.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"cwd": "/home/user/project", "timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:01Z",
+                "payload": {
+                    "id": "msg-1",
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "reasoning",  # Uses 'reasoning' instead of 'thinking'
+                            "text": None,
+                            "thinking": "Reasoning content here"
+                        },
+                        {"type": "output_text", "text": "Response"}
+                    ]
+                }
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(session_file, "session-reasoning-none-text", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].thinking == "Reasoning content here"
+
+    def test_codex_content_function_call_with_none_call_id(self, tmp_path):
+        """Parser handles Codex content-level function_call where 'call_id' is None.
+
+        When call_id is None but id exists, should use id.
+        """
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-content-fc-none-callid.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"cwd": "/home/user/project", "timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:01Z",
+                "payload": {
+                    "id": "msg-1",
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "function_call",
+                            "call_id": None,  # Key exists but value is None
+                            "id": "content-tool-id",
+                            "name": "shell",
+                            "arguments": {"command": "ls"}
+                        }
+                    ]
+                }
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(session_file, "session-content-fc-none-callid", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert len(result.messages[0].tool_uses) == 1
+        assert result.messages[0].tool_uses[0].id == "content-tool-id"

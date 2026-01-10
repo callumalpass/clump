@@ -566,12 +566,14 @@ def _parse_gemini_transcript(transcript_path: Path, session_id: str) -> ParsedTr
 
                             elif part_type == "thinking" or "thinking" in part:
                                 # Gemini thinking/reasoning
-                                thinking_content += part.get("thinking", part.get("text", ""))
+                                # Use `or` to handle None values (key exists but value is None)
+                                thinking_content += part.get("thinking") or part.get("text") or ""
 
                             elif part_type == "functionCall" or "functionCall" in part:
                                 # Tool invocation
                                 func_call = part.get("functionCall", part)
-                                tool_id = func_call.get("id", func_call.get("name", ""))
+                                # Use `or` to handle None values (key exists but value is None)
+                                tool_id = func_call.get("id") or func_call.get("name") or ""
                                 tool_use = ToolUse(
                                     id=tool_id,
                                     name=func_call.get("name", ""),
@@ -702,7 +704,8 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
 
                     # Handle function_call entries (tool invocations)
                     if item_type == 'function_call':
-                        tool_id = payload.get('call_id', payload.get('id', ''))
+                        # Use `or` to handle None values (key exists but value is None)
+                        tool_id = payload.get('call_id') or payload.get('id') or ''
                         tool_use = ToolUse(
                             id=tool_id,
                             name=payload.get('name', ''),
@@ -791,9 +794,11 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
                                 if c_type == 'output_text':
                                     text_parts.append(c.get('text', ''))
                                 elif c_type == 'thinking' or c_type == 'reasoning':
-                                    thinking_content += c.get('text', c.get('thinking', ''))
+                                    # Use `or` to handle None values (key exists but value is None)
+                                    thinking_content += c.get('text') or c.get('thinking') or ''
                                 elif c_type == 'function_call':
-                                    tool_id = c.get('call_id', c.get('id', ''))
+                                    # Use `or` to handle None values (key exists but value is None)
+                                    tool_id = c.get('call_id') or c.get('id') or ''
                                     tool_use = ToolUse(
                                         id=tool_id,
                                         name=c.get('name', ''),
