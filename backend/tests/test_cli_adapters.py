@@ -1313,6 +1313,249 @@ class TestCodexAdapterFindSessionsErrorHandling:
         assert result == []
 
 
+class TestCodexAdapterResumeIdFromFile:
+    """Tests for CodexAdapter.get_resume_id_from_file method.
+
+    This tests the implementation that reads the internal session ID from
+    the session file, falling back to filename extraction when necessary.
+    """
+
+    @pytest.fixture
+    def adapter(self):
+        return CodexAdapter()
+
+    def test_returns_internal_session_id_when_available(self, adapter, tmp_path):
+        """Returns internal session ID from session_meta payload."""
+        import json
+
+        # Create valid session file with internal session ID
+        session_file = tmp_path / "rollout-2026-01-01T13-20-18-dummy.jsonl"
+        entries = [
+            {
+                "type": "session_meta",
+                "payload": {
+                    "id": "internal-uuid-12345678-abcd-efgh-ijkl-mnopqrstuvwx",
+                    "cwd": "/test/path",
+                }
+            }
+        ]
+        with open(session_file, "w") as f:
+            for entry in entries:
+                f.write(json.dumps(entry) + "\n")
+
+        result = adapter.get_resume_id_from_file(
+            session_file,
+            "rollout-2026-01-01T13-20-18-019b775b-1dc2-7bf1-9681-db60a06cb4cb"
+        )
+
+        # Should return the internal session ID, not the filename-based one
+        assert result == "internal-uuid-12345678-abcd-efgh-ijkl-mnopqrstuvwx"
+
+    def test_falls_back_when_no_internal_id(self, adapter, tmp_path):
+        """Falls back to filename extraction when internal ID is missing."""
+        import json
+
+        # Create valid session file without internal session ID
+        session_file = tmp_path / "test.jsonl"
+        entries = [
+            {
+                "type": "session_meta",
+                "payload": {"cwd": "/test/path"}  # No "id" field
+            }
+        ]
+        with open(session_file, "w") as f:
+            for entry in entries:
+                f.write(json.dumps(entry) + "\n")
+
+        result = adapter.get_resume_id_from_file(
+            session_file,
+            "rollout-2026-01-01T13-20-18-019b775b-1dc2-7bf1-9681-db60a06cb4cb"
+        )
+
+        # Should fall back to filename UUID extraction
+        assert result == "019b775b-1dc2-7bf1-9681-db60a06cb4cb"
+
+    def test_falls_back_when_session_id_is_none(self, adapter, tmp_path):
+        """Falls back when session_id exists but is None."""
+        import json
+
+        session_file = tmp_path / "test.jsonl"
+        entries = [
+            {
+                "type": "session_meta",
+                "payload": {
+                    "id": None,  # Explicitly None
+                    "cwd": "/test/path"
+                }
+            }
+        ]
+        with open(session_file, "w") as f:
+            for entry in entries:
+                f.write(json.dumps(entry) + "\n")
+
+        result = adapter.get_resume_id_from_file(
+            session_file,
+            "rollout-2026-01-01T13-20-18-abcd1234-5678-9012-3456-789012345678"
+        )
+
+        # Should fall back to filename UUID extraction
+        assert result == "abcd1234-5678-9012-3456-789012345678"
+
+    def test_falls_back_when_payload_is_none(self, adapter, tmp_path):
+        """Falls back when payload is None."""
+        import json
+
+        session_file = tmp_path / "test.jsonl"
+        entries = [
+            {
+                "type": "session_meta",
+                "payload": None
+            }
+        ]
+        with open(session_file, "w") as f:
+            for entry in entries:
+                f.write(json.dumps(entry) + "\n")
+
+        result = adapter.get_resume_id_from_file(
+            session_file,
+            "rollout-2026-01-01T13-20-18-11112222-3333-4444-5555-666677778888"
+        )
+
+        # Should fall back to filename UUID extraction
+        assert result == "11112222-3333-4444-5555-666677778888"
+
+    def test_falls_back_for_empty_file(self, adapter, tmp_path):
+        """Falls back when file is empty."""
+        session_file = tmp_path / "empty.jsonl"
+        session_file.write_text("")
+
+        result = adapter.get_resume_id_from_file(
+            session_file,
+            "rollout-2026-01-01T13-20-18-aaaabbbb-cccc-dddd-eeee-ffffffffffff"
+        )
+
+        # Should fall back to filename UUID extraction
+        assert result == "aaaabbbb-cccc-dddd-eeee-ffffffffffff"
+
+    def test_logs_json_decode_error_at_debug_level(self, adapter, tmp_path, caplog, monkeypatch):
+        """JSON decode errors are logged at debug level.
+
+        Note: parse_session_file handles per-line JSON errors internally for JSONL files.
+        This test verifies logging when the method itself raises JSONDecodeError, which can
+        happen if we mock it to do so (simulating a corrupted file or future scenario).
+        """
+        import logging
+
+        # Create session file
+        session_file = tmp_path / "test.jsonl"
+        session_file.write_text('{"type": "session_meta"}\n')
+
+        # Mock parse_session_file to raise JSONDecodeError
+        def mock_parse_that_raises(file_path):
+            raise json.JSONDecodeError("Test error", "doc", 0)
+
+        monkeypatch.setattr(adapter, "parse_session_file", mock_parse_that_raises)
+
+        with caplog.at_level(logging.DEBUG):
+            result = adapter.get_resume_id_from_file(
+                session_file,
+                "rollout-2026-01-01T13-20-18-12345678-1234-5678-9abc-def012345678"
+            )
+
+        # Should log the error at debug level
+        assert any(
+            "Failed to parse Codex session file" in record.message
+            and record.levelno == logging.DEBUG
+            for record in caplog.records
+        )
+        # Should fall back to filename UUID extraction
+        assert result == "12345678-1234-5678-9abc-def012345678"
+
+    def test_logs_os_error_at_warning_level(self, adapter, tmp_path, caplog):
+        """OS errors are logged at warning level."""
+        import logging
+
+        # Create nonexistent path
+        session_file = tmp_path / "nonexistent" / "session.jsonl"
+
+        with caplog.at_level(logging.WARNING):
+            result = adapter.get_resume_id_from_file(
+                session_file,
+                "rollout-2026-01-01T13-20-18-deadbeef-cafe-babe-1234-567890abcdef"
+            )
+
+        # Should log the error at warning level
+        assert any(
+            "Failed to read Codex session file" in record.message
+            and record.levelno == logging.WARNING
+            for record in caplog.records
+        )
+        # Should fall back to filename UUID extraction
+        assert result == "deadbeef-cafe-babe-1234-567890abcdef"
+
+    def test_falls_back_for_no_session_meta(self, adapter, tmp_path):
+        """Falls back when file has no session_meta entry."""
+        import json
+
+        session_file = tmp_path / "no_meta.jsonl"
+        entries = [
+            {"type": "event_msg", "payload": {"type": "user_message"}},
+            {"type": "turn_context", "payload": {"model": "o1"}},
+        ]
+        with open(session_file, "w") as f:
+            for entry in entries:
+                f.write(json.dumps(entry) + "\n")
+
+        result = adapter.get_resume_id_from_file(
+            session_file,
+            "rollout-2026-01-01T13-20-18-99998888-7777-6666-5555-444433332222"
+        )
+
+        # Should fall back to filename UUID extraction
+        assert result == "99998888-7777-6666-5555-444433332222"
+
+    def test_falls_back_when_no_uuid_in_filename(self, adapter, tmp_path):
+        """Falls back to session_id as-is when no UUID pattern found."""
+        import json
+
+        session_file = tmp_path / "simple.jsonl"
+        session_file.write_text("")  # Empty file
+
+        result = adapter.get_resume_id_from_file(
+            session_file,
+            "no-uuid-here"  # No UUID pattern in this filename
+        )
+
+        # Should return as-is since no UUID pattern matches
+        assert result == "no-uuid-here"
+
+    def test_prefers_internal_id_over_filename_uuid(self, adapter, tmp_path):
+        """When both are available, prefers internal ID from file."""
+        import json
+
+        session_file = tmp_path / "test.jsonl"
+        entries = [
+            {
+                "type": "session_meta",
+                "payload": {
+                    "id": "preferred-internal-id",
+                    "cwd": "/test/path"
+                }
+            }
+        ]
+        with open(session_file, "w") as f:
+            for entry in entries:
+                f.write(json.dumps(entry) + "\n")
+
+        # Even with a valid UUID in filename, should prefer internal ID
+        result = adapter.get_resume_id_from_file(
+            session_file,
+            "rollout-2026-01-01T13-20-18-12345678-1234-5678-9abc-def012345678"
+        )
+
+        assert result == "preferred-internal-id"
+
+
 class TestGeminiAdapterResumeIdErrorHandling:
     """Tests for GeminiAdapter.get_resume_id_from_file error handling and logging.
 

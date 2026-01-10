@@ -382,3 +382,37 @@ class CodexAdapter(CLIAdapter):
 
         # Fallback: return as-is
         return session_id
+
+    def get_resume_id_from_file(self, file_path: Path, session_id: str) -> str:
+        """
+        Extract the session ID needed for 'codex resume' from a session file.
+
+        Codex stores the internal session ID in the session_meta entry's payload.id field.
+        The 'codex resume' command requires this internal UUID, which may differ from
+        the filename-based ID.
+
+        Args:
+            file_path: Path to the session JSONL file
+            session_id: Our session ID (filename stem, used as fallback)
+
+        Returns:
+            The internal session UUID from the file, or fallback to filename extraction
+        """
+        try:
+            data = self.parse_session_file(file_path)
+            internal_id = data.get("session_id")
+            if internal_id:
+                return internal_id
+        except json.JSONDecodeError as e:
+            logger.debug(
+                "Failed to parse Codex session file %s for resume ID: %s",
+                file_path, e
+            )
+        except OSError as e:
+            logger.warning(
+                "Failed to read Codex session file %s: %s",
+                file_path, e
+            )
+
+        # Fallback to extracting from filename
+        return self.get_resume_session_id(session_id)
