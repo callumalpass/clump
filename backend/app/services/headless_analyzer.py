@@ -276,8 +276,9 @@ class HeadlessAnalyzer:
             if isinstance(content, list):
                 # Extract text from content blocks
                 # Filter to only dict blocks with type="text" to handle malformed data
+                # Use `or ""` to handle None values (key exists but value is None)
                 content = " ".join(
-                    block.get("text", "")
+                    block.get("text") or ""
                     for block in content
                     if isinstance(block, dict) and block.get("type") == "text"
                 )

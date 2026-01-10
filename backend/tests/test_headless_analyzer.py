@@ -368,6 +368,47 @@ class TestHeadlessAnalyzerParseMessage:
         # First block contributes empty string, second contributes "Valid text"
         assert msg.content == " Valid text"
 
+    def test_parse_assistant_content_block_with_none_text(self, analyzer):
+        """Test parsing content blocks where 'text' key exists but is None.
+
+        This tests the fix for a bug where block.get("text", "") would return
+        None (not the default "") when the key exists with value None, causing
+        a TypeError in str.join().
+        """
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {"type": "text", "text": None},  # text key exists but is None
+                    {"type": "text", "text": "Valid text"},
+                ]
+            },
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "assistant"
+        # First block contributes empty string (None -> ""), second contributes "Valid text"
+        assert msg.content == " Valid text"
+
+    def test_parse_assistant_content_block_with_all_none_text(self, analyzer):
+        """Test parsing content blocks where all 'text' values are None."""
+        data = {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {"type": "text", "text": None},
+                    {"type": "text", "text": None},
+                ]
+            },
+        }
+
+        msg = analyzer._parse_message(data)
+
+        assert msg.type == "assistant"
+        # Both blocks contribute empty strings
+        assert msg.content == " "
+
 
 class TestHeadlessAnalyzerRunningSessionsManagement:
     """Tests for running sessions tracking."""
