@@ -224,7 +224,8 @@ class GeminiAdapter(CLIAdapter):
                     break
 
         return SessionInfo(
-            session_id=data.get("session_id", ""),
+            # Use `or ""` to handle None values (key exists but value is None)
+            session_id=data.get("session_id") or "",
             title=data.get("summary"),
             model=model,
             start_time=data.get("start_time"),

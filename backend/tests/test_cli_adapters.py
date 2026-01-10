@@ -1806,7 +1806,11 @@ class TestGeminiAdapterExtractSessionInfo:
         assert info.message_count == 0
 
     def test_handles_none_values(self, adapter):
-        """Handles session data with None values."""
+        """Handles session data with None values.
+
+        session_id should default to empty string (not None) because
+        SessionInfo.session_id is typed as `str`, not `Optional[str]`.
+        """
         data = {
             "session_id": None,
             "summary": None,
@@ -1818,7 +1822,8 @@ class TestGeminiAdapterExtractSessionInfo:
         info = adapter.extract_session_info(data)
 
         # Should not raise, return sensible defaults
-        assert info.session_id is None
+        # session_id should be empty string, not None, per type annotation
+        assert info.session_id == ""
         assert info.title is None
         assert info.message_count == 0
 
@@ -2103,3 +2108,153 @@ class TestCodexAdapterGetResumeSessionIdEdgeCases:
         result = adapter.get_resume_session_id(session_id)
         # Falls back to as-is
         assert result == session_id
+
+
+class TestExtractSessionInfoNoneSessionId:
+    """Tests for session_id None handling in extract_session_info.
+
+    These tests verify the fix for the bug where data.get("session_id", "")
+    returns None (not "") when the key exists with value None. The fix uses
+    data.get("session_id") or "" to correctly fall back to empty string.
+
+    This ensures SessionInfo.session_id is always a string (never None),
+    matching its type annotation of `str` (not `Optional[str]`).
+    """
+
+    def test_claude_handles_none_session_id(self):
+        """Claude adapter returns empty string when session_id is None."""
+        from app.cli.claude_adapter import ClaudeAdapter
+
+        adapter = ClaudeAdapter()
+        data = {
+            "session_id": None,  # Key exists but value is None
+            "messages": [],
+        }
+
+        info = adapter.extract_session_info(data)
+
+        # session_id should be empty string, not None
+        assert info.session_id == ""
+        assert isinstance(info.session_id, str)
+
+    def test_claude_handles_missing_session_id(self):
+        """Claude adapter returns empty string when session_id key is missing."""
+        from app.cli.claude_adapter import ClaudeAdapter
+
+        adapter = ClaudeAdapter()
+        data = {
+            "messages": [],
+            # No session_id key at all
+        }
+
+        info = adapter.extract_session_info(data)
+
+        # session_id should be empty string
+        assert info.session_id == ""
+        assert isinstance(info.session_id, str)
+
+    def test_claude_preserves_valid_session_id(self):
+        """Claude adapter preserves valid session_id values."""
+        from app.cli.claude_adapter import ClaudeAdapter
+
+        adapter = ClaudeAdapter()
+        data = {
+            "session_id": "test-uuid-12345",
+            "messages": [],
+        }
+
+        info = adapter.extract_session_info(data)
+
+        assert info.session_id == "test-uuid-12345"
+
+    def test_gemini_handles_none_session_id(self):
+        """Gemini adapter returns empty string when session_id is None."""
+        from app.cli.gemini_adapter import GeminiAdapter
+
+        adapter = GeminiAdapter()
+        data = {
+            "session_id": None,  # Key exists but value is None
+            "messages": [],
+        }
+
+        info = adapter.extract_session_info(data)
+
+        # session_id should be empty string, not None
+        assert info.session_id == ""
+        assert isinstance(info.session_id, str)
+
+    def test_gemini_handles_missing_session_id(self):
+        """Gemini adapter returns empty string when session_id key is missing."""
+        from app.cli.gemini_adapter import GeminiAdapter
+
+        adapter = GeminiAdapter()
+        data = {
+            "messages": [],
+            # No session_id key at all
+        }
+
+        info = adapter.extract_session_info(data)
+
+        # session_id should be empty string
+        assert info.session_id == ""
+        assert isinstance(info.session_id, str)
+
+    def test_gemini_preserves_valid_session_id(self):
+        """Gemini adapter preserves valid session_id values."""
+        from app.cli.gemini_adapter import GeminiAdapter
+
+        adapter = GeminiAdapter()
+        data = {
+            "session_id": "gemini-uuid-67890",
+            "messages": [],
+        }
+
+        info = adapter.extract_session_info(data)
+
+        assert info.session_id == "gemini-uuid-67890"
+
+    def test_codex_handles_none_session_id(self):
+        """Codex adapter returns empty string when session_id is None."""
+        from app.cli.codex_adapter import CodexAdapter
+
+        adapter = CodexAdapter()
+        data = {
+            "session_id": None,  # Key exists but value is None
+            "messages": [],
+        }
+
+        info = adapter.extract_session_info(data)
+
+        # session_id should be empty string, not None
+        assert info.session_id == ""
+        assert isinstance(info.session_id, str)
+
+    def test_codex_handles_missing_session_id(self):
+        """Codex adapter returns empty string when session_id key is missing."""
+        from app.cli.codex_adapter import CodexAdapter
+
+        adapter = CodexAdapter()
+        data = {
+            "messages": [],
+            # No session_id key at all
+        }
+
+        info = adapter.extract_session_info(data)
+
+        # session_id should be empty string
+        assert info.session_id == ""
+        assert isinstance(info.session_id, str)
+
+    def test_codex_preserves_valid_session_id(self):
+        """Codex adapter preserves valid session_id values."""
+        from app.cli.codex_adapter import CodexAdapter
+
+        adapter = CodexAdapter()
+        data = {
+            "session_id": "codex-uuid-abcdef",
+            "messages": [],
+        }
+
+        info = adapter.extract_session_info(data)
+
+        assert info.session_id == "codex-uuid-abcdef"

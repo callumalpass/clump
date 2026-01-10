@@ -282,7 +282,8 @@ class CodexAdapter(CLIAdapter):
                 end_time = timestamp
 
         return SessionInfo(
-            session_id=data.get("session_id", ""),
+            # Use `or ""` to handle None values (key exists but value is None)
+            session_id=data.get("session_id") or "",
             title=None,  # Codex doesn't have session summaries
             model=model,
             start_time=data.get("start_time"),
