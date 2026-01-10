@@ -717,8 +717,8 @@ class TestFormatTemplateValue:
         assert _format_template_value([1, 2, 3]) == "1, 2, 3"
 
     def test_list_with_mixed_types(self):
-        """List with mixed types converts all to strings."""
-        assert _format_template_value(["text", 42, True, None]) == "text, 42, True, None"
+        """List with mixed types converts all to strings, filtering out None."""
+        assert _format_template_value(["text", 42, True, None]) == "text, 42, True"
 
     def test_dict_returns_string_representation(self):
         """Dict value returns its string representation."""
@@ -744,8 +744,8 @@ class TestFormatTemplateValue:
         assert _format_template_value(-3.14) == "-3.14"
 
     def test_list_with_none_items(self):
-        """List containing only None items converts correctly."""
-        assert _format_template_value([None, None]) == "None, None"
+        """List containing only None items returns empty string."""
+        assert _format_template_value([None, None]) == ""
 
     def test_list_with_empty_strings(self):
         """List with empty strings preserves them."""
@@ -762,6 +762,22 @@ class TestFormatTemplateValue:
         result = _format_template_value({1, 2})
         assert isinstance(result, str)
         assert "{" in result and "}" in result
+
+    def test_list_with_none_between_values(self):
+        """List with None between valid values filters out None."""
+        assert _format_template_value(["a", None, "b"]) == "a, b"
+
+    def test_list_with_none_at_start(self):
+        """List with None at start filters it out."""
+        assert _format_template_value([None, "a", "b"]) == "a, b"
+
+    def test_list_with_none_at_end(self):
+        """List with None at end filters it out."""
+        assert _format_template_value(["a", "b", None]) == "a, b"
+
+    def test_list_with_multiple_none_values(self):
+        """List with multiple None values filters all out."""
+        assert _format_template_value(["a", None, "b", None, "c"]) == "a, b, c"
 
 
 class TestBuildPromptFromTemplate:

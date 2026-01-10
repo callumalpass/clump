@@ -402,14 +402,16 @@ def _format_template_value(value) -> str:
     Returns:
         String representation suitable for template substitution.
         - None -> empty string
-        - Lists -> comma-separated string (e.g., ["a", "b"] -> "a, b")
+        - Lists -> comma-separated string with None items filtered out
+          (e.g., ["a", None, "b"] -> "a, b")
         - Other values -> str(value)
     """
     if value is None:
         return ""
     if isinstance(value, list):
         # Join list items with comma-space for readable output
-        return ", ".join(str(item) for item in value)
+        # Filter out None items to avoid "None" strings in output
+        return ", ".join(str(item) for item in value if item is not None)
     return str(value)
 
 
