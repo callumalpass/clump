@@ -137,16 +137,23 @@ def parse_command_file(file_path: Path, category: str, source: str = "builtin") 
         short_name = metadata.get("shortName")
         description = metadata.get("description")
 
-        if not all([name, short_name, description]):
+        # Check if required fields are present (None check, not falsiness check)
+        # This allows values like False, 0, etc. which will be converted to strings
+        if name is None or short_name is None or description is None:
             return None
 
-        # Ensure all required fields are strings (YAML can parse numbers/booleans)
+        # Convert all required fields to strings first (YAML can parse numbers/booleans)
+        # Do this before any validation so falsy values like False become "False"
         if not isinstance(name, str):
             name = str(name)
         if not isinstance(short_name, str):
             short_name = str(short_name)
         if not isinstance(description, str):
             description = str(description)
+
+        # Now check if the string values are non-empty
+        if not name or not short_name or not description:
+            return None
 
         return CommandMetadata(
             id=file_path.stem,

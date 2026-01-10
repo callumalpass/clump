@@ -963,11 +963,11 @@ Template content.
         assert result.name == "3.14"
         assert isinstance(result.name, str)
 
-    def test_parse_false_boolean_returns_none(self, temp_commands_dir):
-        """Test that false boolean causes validation failure (falsy value).
+    def test_parse_false_boolean_converts_to_string(self, temp_commands_dir):
+        """Test that false boolean is converted to string.
 
-        YAML parses 'false' as Python False, which is falsy and fails
-        the 'if not all([...])' check, returning None.
+        YAML parses 'false' as Python False, which should be converted
+        to the string "False" before validation.
         """
         content = """---
 name: Test
@@ -982,8 +982,10 @@ Template content.
 
         result = parse_command_file(file_path, "issue")
 
-        # False is falsy, so it fails the 'if not all([...])' validation
-        assert result is None
+        # False should be converted to "False" string
+        assert result is not None
+        assert result.shortName == "False"
+        assert isinstance(result.shortName, str)
 
     def test_parse_all_numeric_fields(self, temp_commands_dir):
         """Test that all numeric fields are converted to strings."""
@@ -1027,11 +1029,11 @@ Template content.
         assert result.shortName == "True"
         assert isinstance(result.shortName, str)
 
-    def test_parse_yaml_off_returns_none(self, temp_commands_dir):
-        """Test that YAML 'off' (parsed as False) causes validation failure.
+    def test_parse_yaml_off_converts_to_string(self, temp_commands_dir):
+        """Test that YAML 'off' (parsed as False) is converted to string.
 
-        YAML interprets 'off' as boolean False, which is falsy and fails
-        the 'if not all([...])' check.
+        YAML interprets 'off' as boolean False, which should be converted
+        to the string "False" before validation.
         """
         content = """---
 name: Test Command
@@ -1046,8 +1048,11 @@ Template content.
 
         result = parse_command_file(file_path, "issue")
 
-        # 'off' is parsed as False by YAML, which is falsy
-        assert result is None
+        # 'off' is parsed as False by YAML, which gets converted to "False"
+        assert result is not None
+        assert result.description == "False"
+        assert result.shortName == "True"  # 'on' is parsed as True
+        assert isinstance(result.description, str)
 
     def test_parse_mixed_types(self, temp_commands_dir):
         """Test parsing with a mix of string and non-string types."""
@@ -1107,3 +1112,314 @@ Template content.
         assert result is not None
         assert result.name == "-42"
         assert isinstance(result.name, str)
+
+    def test_parse_zero_value(self, temp_commands_dir):
+        """Test that zero (falsy but valid) is converted to string."""
+        content = """---
+name: Test Command
+shortName: 0
+description: A command with zero shortName
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "zero-value.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        # Zero should be converted to "0" string, not rejected as falsy
+        assert result is not None
+        assert result.shortName == "0"
+        assert isinstance(result.shortName, str)
+
+    def test_parse_all_false_booleans(self, temp_commands_dir):
+        """Test that all fields can be false booleans and get converted."""
+        content = """---
+name: false
+shortName: no
+description: off
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "all-false.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        # All False values should be converted to "False" strings
+        assert result is not None
+        assert result.name == "False"
+        assert result.shortName == "False"
+        assert result.description == "False"
+
+    def test_parse_empty_string_name_returns_none(self, temp_commands_dir):
+        """Test that empty string name returns None after conversion."""
+        content = """---
+name: ""
+shortName: Test
+description: A test
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "empty-string.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        # Empty string should fail validation after type check
+        assert result is None
+
+    def test_parse_whitespace_only_name_returns_none(self, temp_commands_dir):
+        """Test that whitespace-only name returns None."""
+        content = """---
+name: "   "
+shortName: Test
+description: A test
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "whitespace-name.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        # Whitespace-only string is truthy but the final stripped check should pass
+        # Actually, we only check if the string is non-empty, not stripped
+        # So this should pass
+        assert result is not None
+        assert result.name == "   "
+
+    def test_parse_null_value_returns_none(self, temp_commands_dir):
+        """Test that YAML null value returns None."""
+        content = """---
+name: Test
+shortName: ~
+description: A test
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "null-value.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        # YAML ~ is null, which is None in Python
+        assert result is None
+
+
+class TestParseCommandFileNoneVsFalsy:
+    """Tests specifically for the None vs falsy value distinction in parse_command_file.
+
+    These tests verify the bug fix that properly distinguishes between:
+    - None (missing field - should return None)
+    - False/0/"" (falsy but present - should be converted to string)
+    """
+
+    def test_none_name_returns_none(self, temp_commands_dir):
+        """Test that None (null) name returns None."""
+        content = """---
+name: null
+shortName: Test
+description: A test
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "null-name.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        assert result is None
+
+    def test_missing_name_returns_none(self, temp_commands_dir):
+        """Test that missing name field returns None."""
+        content = """---
+shortName: Test
+description: A test
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "missing-name.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        assert result is None
+
+    def test_false_name_converted_to_string(self, temp_commands_dir):
+        """Test that false name is converted to 'False' string."""
+        content = """---
+name: false
+shortName: Test
+description: A test
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "false-name.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        assert result is not None
+        assert result.name == "False"
+
+    def test_zero_name_converted_to_string(self, temp_commands_dir):
+        """Test that 0 name is converted to '0' string."""
+        content = """---
+name: 0
+shortName: Test
+description: A test
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "zero-name.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        assert result is not None
+        assert result.name == "0"
+
+    def test_empty_list_name_converted_to_string(self, temp_commands_dir):
+        """Test that empty list name is converted to '[]' string."""
+        content = """---
+name: []
+shortName: Test
+description: A test
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "empty-list-name.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        # Empty list [] is not None, so it gets converted to string "[]"
+        assert result is not None
+        assert result.name == "[]"
+
+    def test_empty_dict_name_converted_to_string(self, temp_commands_dir):
+        """Test that empty dict name is converted to '{}' string."""
+        content = """---
+name: {}
+shortName: Test
+description: A test
+---
+
+Template content.
+"""
+        file_path = temp_commands_dir / "issue" / "empty-dict-name.md"
+        file_path.write_text(content)
+
+        result = parse_command_file(file_path, "issue")
+
+        # Empty dict {} is not None, so it gets converted to string "{}"
+        assert result is not None
+        assert result.name == "{}"
+
+
+class TestFindCommandFileHierarchy:
+    """Tests for the 3-tier command file hierarchy (repo > user > builtin)."""
+
+    def test_repo_takes_precedence_over_user(self):
+        """Test that repo commands take precedence over user commands."""
+        with tempfile.TemporaryDirectory() as builtin_tmpdir, \
+             tempfile.TemporaryDirectory() as user_tmpdir, \
+             tempfile.TemporaryDirectory() as repo_tmpdir:
+            from app.routers.commands import find_command_file
+
+            builtin_dir = Path(builtin_tmpdir) / ".claude" / "commands"
+            user_dir = Path(user_tmpdir) / ".clump" / "commands"
+            repo_dir = Path(repo_tmpdir) / ".clump" / "commands"
+
+            (builtin_dir / "issue").mkdir(parents=True)
+            (user_dir / "issue").mkdir(parents=True)
+            (repo_dir / "issue").mkdir(parents=True)
+
+            # Create command in all three locations
+            (builtin_dir / "issue" / "cmd.md").write_text("builtin")
+            (user_dir / "issue" / "cmd.md").write_text("user")
+            (repo_dir / "issue" / "cmd.md").write_text("repo")
+
+            with patch('app.routers.commands.get_builtin_commands_dir', return_value=builtin_dir), \
+                 patch('app.routers.commands.get_user_commands_dir', return_value=user_dir), \
+                 patch('app.routers.commands.get_repo_commands_dir', return_value=repo_dir):
+                file_path, source = find_command_file("cmd", "issue", repo_tmpdir)
+
+            assert source == "repo"
+            assert file_path == repo_dir / "issue" / "cmd.md"
+
+    def test_user_takes_precedence_over_builtin(self):
+        """Test that user commands take precedence over builtin commands."""
+        with tempfile.TemporaryDirectory() as builtin_tmpdir, \
+             tempfile.TemporaryDirectory() as user_tmpdir:
+            from app.routers.commands import find_command_file
+
+            builtin_dir = Path(builtin_tmpdir) / ".claude" / "commands"
+            user_dir = Path(user_tmpdir) / ".clump" / "commands"
+
+            (builtin_dir / "issue").mkdir(parents=True)
+            (user_dir / "issue").mkdir(parents=True)
+
+            # Create command in user and builtin
+            (builtin_dir / "issue" / "cmd.md").write_text("builtin")
+            (user_dir / "issue" / "cmd.md").write_text("user")
+
+            with patch('app.routers.commands.get_builtin_commands_dir', return_value=builtin_dir), \
+                 patch('app.routers.commands.get_user_commands_dir', return_value=user_dir):
+                # No repo_path, so only checks user and builtin
+                file_path, source = find_command_file("cmd", "issue", None)
+
+            assert source == "user"
+            assert file_path == user_dir / "issue" / "cmd.md"
+
+    def test_falls_back_to_builtin(self):
+        """Test that builtin is used when command not in repo or user."""
+        with tempfile.TemporaryDirectory() as builtin_tmpdir, \
+             tempfile.TemporaryDirectory() as user_tmpdir:
+            from app.routers.commands import find_command_file
+
+            builtin_dir = Path(builtin_tmpdir) / ".claude" / "commands"
+            user_dir = Path(user_tmpdir) / ".clump" / "commands"
+
+            (builtin_dir / "issue").mkdir(parents=True)
+            (user_dir / "issue").mkdir(parents=True)
+
+            # Only create in builtin
+            (builtin_dir / "issue" / "cmd.md").write_text("builtin")
+
+            with patch('app.routers.commands.get_builtin_commands_dir', return_value=builtin_dir), \
+                 patch('app.routers.commands.get_user_commands_dir', return_value=user_dir):
+                file_path, source = find_command_file("cmd", "issue", None)
+
+            assert source == "builtin"
+            assert file_path == builtin_dir / "issue" / "cmd.md"
+
+    def test_returns_none_when_not_found(self):
+        """Test that (None, '') is returned when command not found anywhere."""
+        with tempfile.TemporaryDirectory() as builtin_tmpdir, \
+             tempfile.TemporaryDirectory() as user_tmpdir:
+            from app.routers.commands import find_command_file
+
+            builtin_dir = Path(builtin_tmpdir) / ".claude" / "commands"
+            user_dir = Path(user_tmpdir) / ".clump" / "commands"
+
+            (builtin_dir / "issue").mkdir(parents=True)
+            (user_dir / "issue").mkdir(parents=True)
+
+            with patch('app.routers.commands.get_builtin_commands_dir', return_value=builtin_dir), \
+                 patch('app.routers.commands.get_user_commands_dir', return_value=user_dir):
+                file_path, source = find_command_file("nonexistent", "issue", None)
+
+            assert file_path is None
+            assert source == ""
