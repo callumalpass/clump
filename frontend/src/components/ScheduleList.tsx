@@ -1,18 +1,45 @@
 import { useState, useEffect, memo, type MutableRefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { useSchedules, describeCron, formatRelativeTime, CRON_PRESETS, isValidCronExpression, isValidTimezone } from '../hooks/useSchedules';
-import type { ScheduledJob, ScheduledJobCreate, ScheduledJobTargetType, CommandsResponse } from '../types';
+import { CLIBadge, CLI_DISPLAY } from './CLISelector';
+import type { ScheduledJob, ScheduledJobCreate, ScheduledJobTargetType, CommandsResponse, CLIInfo, CLIType } from '../types';
+
+type CLIOption = { type: CLIType; installed: boolean };
+
+const FALLBACK_CLI_OPTIONS: CLIOption[] = [
+  { type: 'claude', installed: true },
+  { type: 'gemini', installed: true },
+  { type: 'codex', installed: true },
+  { type: 'copilot', installed: true },
+];
+
+const getCliOptions = (availableCLIs?: CLIInfo[]): CLIOption[] => {
+  if (availableCLIs && availableCLIs.length > 0) {
+    return availableCLIs.map((cli) => ({ type: cli.type, installed: cli.installed }));
+  }
+  return FALLBACK_CLI_OPTIONS;
+};
 
 interface ScheduleListProps {
   repoId: number;
   repoPath: string;
   commands: CommandsResponse;
+  availableCLIs?: CLIInfo[];
+  defaultCLI?: CLIType;
   selectedScheduleId?: string | null;
   onSelectSchedule?: (scheduleId: string) => void;
   refreshRef?: MutableRefObject<(() => void) | null>;
 }
 
-export function ScheduleList({ repoId, commands, selectedScheduleId, onSelectSchedule, refreshRef }: ScheduleListProps) {
+export function ScheduleList({
+  repoId,
+  commands,
+  availableCLIs,
+  defaultCLI,
+  selectedScheduleId,
+  onSelectSchedule,
+  refreshRef,
+}: ScheduleListProps) {
   const {
     schedules,
     loading,
@@ -184,6 +211,7 @@ export function ScheduleList({ repoId, commands, selectedScheduleId, onSelectSch
                 onTrigger={() => handleTrigger(schedule)}
                 onDelete={() => handleDelete(schedule)}
                 onTogglePause={() => handleTogglePause(schedule)}
+                defaultCLI={defaultCLI}
               />
             ))}
           </div>
@@ -194,6 +222,8 @@ export function ScheduleList({ repoId, commands, selectedScheduleId, onSelectSch
       {isCreating && (
         <ScheduleCreateModal
           commands={commands}
+          availableCLIs={availableCLIs}
+          defaultCLI={defaultCLI}
           onClose={() => setIsCreating(false)}
           onCreate={handleCreate}
         />
@@ -209,14 +239,25 @@ interface ScheduleCardProps {
   onTrigger: () => void;
   onDelete: () => void;
   onTogglePause: () => void;
+  defaultCLI?: CLIType;
 }
 
-const ScheduleCard = memo(function ScheduleCard({ schedule, selected, onSelect, onTrigger, onDelete, onTogglePause }: ScheduleCardProps) {
+const ScheduleCard = memo(function ScheduleCard({
+  schedule,
+  selected,
+  onSelect,
+  onTrigger,
+  onDelete,
+  onTogglePause,
+  defaultCLI,
+}: ScheduleCardProps) {
   const nextRun = schedule.next_run_at
     ? formatRelativeTime(new Date(schedule.next_run_at))
     : 'Not scheduled';
 
   const isPaused = schedule.status === 'paused';
+  const hasCLI = Boolean(schedule.cli_type);
+  const resolvedDefaultCLI = defaultCLI ?? 'claude';
 
   return (
     <div
@@ -295,6 +336,15 @@ const ScheduleCard = memo(function ScheduleCard({ schedule, selected, onSelect, 
           </svg>
           {schedule.target_type === 'custom' ? 'Custom prompt' : schedule.target_type}
         </span>
+        {hasCLI ? (
+          <span className="flex items-center gap-2" title="Agent">
+            <CLIBadge cliType={schedule.cli_type!} small />
+          </span>
+        ) : (
+          <span className="text-gray-500" title="Agent">
+            Default ({CLI_DISPLAY[resolvedDefaultCLI]?.name || 'Claude'})
+          </span>
+        )}
         {!isPaused && (
           <span className="text-gray-500">
             Next: {nextRun}
@@ -367,14 +417,26 @@ function StatusBadge({ status }: { status: string }) {
 
 interface ScheduleCreateModalProps {
   commands: CommandsResponse;
+  availableCLIs?: CLIInfo[];
+  defaultCLI?: CLIType;
   onClose: () => void;
   onCreate: (data: ScheduledJobCreate) => Promise<void>;
 }
 
-function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModalProps) {
+type CLIChoice = CLIType | 'default';
+
+function ScheduleCreateModal({
+  commands,
+  availableCLIs,
+  defaultCLI,
+  onClose,
+  onCreate,
+}: ScheduleCreateModalProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isCustomCron, setIsCustomCron] = useState(false);
+  const cliOptions = getCliOptions(availableCLIs);
+  const resolvedDefaultCLI = defaultCLI ?? 'claude';
 
   const [form, setForm] = useState({
     name: '',
@@ -387,6 +449,7 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
     custom_prompt: '',
     max_items: 10,
     only_new: false,
+    cli_type: 'default' as CLIChoice,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -427,6 +490,7 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
         custom_prompt: form.target_type === 'custom' ? form.custom_prompt : undefined,
         max_items: form.max_items,
         only_new: form.only_new,
+        cli_type: form.cli_type === 'default' ? undefined : form.cli_type,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create schedule');
@@ -598,6 +662,29 @@ function ScheduleCreateModal({ commands, onClose, onCreate }: ScheduleCreateModa
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Agent */}
+          <div>
+            <label className="block text-sm font-medium mb-2">Agent</label>
+            <select
+              value={form.cli_type}
+              onChange={(e) => setForm((f) => ({ ...f, cli_type: e.target.value as CLIChoice }))}
+              className="w-full bg-gray-800 border border-gray-750 rounded-stoody px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blurple-500 transition-colors"
+            >
+              <option value="default">
+                Default ({CLI_DISPLAY[resolvedDefaultCLI]?.name || 'Claude'})
+              </option>
+              {cliOptions.map((cli) => (
+                <option key={cli.type} value={cli.type} disabled={!cli.installed}>
+                  {CLI_DISPLAY[cli.type]?.name || cli.type}
+                  {!cli.installed ? ' (not installed)' : ''}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              Default uses your CLI settings.
+            </p>
           </div>
 
           {/* Filter (for issues/prs) */}

@@ -1644,6 +1644,8 @@ export default function App() {
                     repoId={selectedRepo.id}
                     repoPath={selectedRepo.local_path}
                     commands={commands}
+                    availableCLIs={clis}
+                    defaultCLI={defaultCLI}
                     selectedScheduleId={selectedSchedule}
                     onSelectSchedule={(id) => {
                       setSelectedSchedule(id);
@@ -1685,6 +1687,8 @@ export default function App() {
             sessions={sessions}
             processes={processes}
             commands={commands}
+            availableCLIs={clis}
+            defaultCLI={defaultCLI}
             tags={tags}
             issueTagsMap={issueTagsMap}
             issueMetadataMap={issueMetadataMap}

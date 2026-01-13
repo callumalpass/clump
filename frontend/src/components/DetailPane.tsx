@@ -10,6 +10,8 @@ import type {
   Process,
   CommandMetadata,
   CommandsResponse,
+  CLIInfo,
+  CLIType,
   Tag,
   IssueMetadataMap,
   PRMetadataMap,
@@ -39,6 +41,8 @@ export interface DetailPaneProps {
   sessions: SessionSummary[];
   processes: Process[];
   commands: CommandsResponse;
+  availableCLIs: CLIInfo[];
+  defaultCLI: CLIType;
   tags: Tag[];
   issueTagsMap: Record<number, Tag[]>;
   issueMetadataMap: IssueMetadataMap;
@@ -244,6 +248,8 @@ export function DetailPane(props: DetailPaneProps) {
     sessions,
     processes,
     commands,
+    availableCLIs,
+    defaultCLI,
     tags,
     issueTagsMap,
     issueMetadataMap,
@@ -330,6 +336,8 @@ export function DetailPane(props: DetailPaneProps) {
           }}
           sessions={sessions}
           commands={commands}
+          availableCLIs={availableCLIs}
+          defaultCLI={defaultCLI}
           onScheduleDeleted={onScheduleDeleted}
           onScheduleUpdated={onScheduleUpdated}
         />

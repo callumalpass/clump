@@ -488,7 +488,7 @@ export interface ScheduledJob {
   allowed_tools: string[] | null;
   max_turns: number | null;
   model: string | null;
-  cli_type: string | null;  // claude, gemini, codex, copilot
+  cli_type: CLIType | null;  // claude, gemini, codex, copilot
   next_run_at: string | null;
   last_run_at: string | null;
   last_run_status: string | null;
@@ -531,7 +531,7 @@ export interface ScheduledJobCreate {
   allowed_tools?: string[];
   max_turns?: number;
   model?: string;
-  cli_type?: string;  // claude, gemini, codex, copilot
+  cli_type?: CLIType | null;  // claude, gemini, codex, copilot
 }
 
 export interface ScheduledJobUpdate {
@@ -549,7 +549,7 @@ export interface ScheduledJobUpdate {
   allowed_tools?: string[];
   max_turns?: number;
   model?: string;
-  cli_type?: string;  // claude, gemini, codex, copilot
+  cli_type?: CLIType | null;  // claude, gemini, codex, copilot
 }
 
 // ==========================================

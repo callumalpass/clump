@@ -1,6 +1,23 @@
 import { useState } from 'react';
-import type { ScheduledJob, ScheduledJobUpdate, SessionSummary, CommandsResponse } from '../types';
+import { CLIBadge, CLI_DISPLAY } from './CLISelector';
+import type { ScheduledJob, ScheduledJobUpdate, SessionSummary, CommandsResponse, CLIInfo, CLIType } from '../types';
 import { useScheduleDetail, describeCron, formatRelativeTime, CRON_PRESETS, isValidCronExpression, isValidTimezone } from '../hooks/useSchedules';
+
+type CLIOption = { type: CLIType; installed: boolean };
+
+const FALLBACK_CLI_OPTIONS: CLIOption[] = [
+  { type: 'claude', installed: true },
+  { type: 'gemini', installed: true },
+  { type: 'codex', installed: true },
+  { type: 'copilot', installed: true },
+];
+
+const getCliOptions = (availableCLIs?: CLIInfo[]): CLIOption[] => {
+  if (availableCLIs && availableCLIs.length > 0) {
+    return availableCLIs.map((cli) => ({ type: cli.type, installed: cli.installed }));
+  }
+  return FALLBACK_CLI_OPTIONS;
+};
 
 interface ScheduleDetailProps {
   repoId: number;
@@ -8,6 +25,8 @@ interface ScheduleDetailProps {
   onShowSession?: (sessionId: string) => void;
   sessions?: SessionSummary[];
   commands?: CommandsResponse;
+  availableCLIs?: CLIInfo[];
+  defaultCLI?: CLIType;
   onScheduleDeleted?: () => void;
   onScheduleUpdated?: (schedule: ScheduledJob) => void;
 }
@@ -18,6 +37,8 @@ export function ScheduleDetail({
   onShowSession,
   sessions = [],
   commands,
+  availableCLIs,
+  defaultCLI,
   onScheduleDeleted,
   onScheduleUpdated,
 }: ScheduleDetailProps) {
@@ -36,6 +57,9 @@ export function ScheduleDetail({
     pauseSchedule,
     resumeSchedule,
   } = useScheduleDetail(repoId, scheduleId);
+
+  const cliOptions = getCliOptions(availableCLIs);
+  const resolvedDefaultCLI = defaultCLI ?? 'claude';
 
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<ScheduledJobUpdate>({});
@@ -80,6 +104,7 @@ export function ScheduleDetail({
       permission_mode: schedule.permission_mode || undefined,
       max_turns: schedule.max_turns || undefined,
       model: schedule.model || undefined,
+      cli_type: schedule.cli_type ?? null,
     });
     setIsEditing(true);
     setActionError(null);
@@ -405,6 +430,28 @@ export function ScheduleDetail({
                 )}
               </div>
               <div>
+                <label className="block text-gray-500 mb-1">Agent</label>
+                <select
+                  value={editForm.cli_type ?? 'default'}
+                  onChange={(e) => {
+                    const value = e.target.value as CLIType | 'default';
+                    setEditForm({ ...editForm, cli_type: value === 'default' ? null : value });
+                  }}
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-gray-200"
+                >
+                  <option value="default">
+                    Default ({CLI_DISPLAY[resolvedDefaultCLI]?.name || 'Claude'})
+                  </option>
+                  {cliOptions.map((cli) => (
+                    <option key={cli.type} value={cli.type} disabled={!cli.installed}>
+                      {CLI_DISPLAY[cli.type]?.name || cli.type}
+                      {!cli.installed ? ' (not installed)' : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Default uses your CLI settings.</p>
+              </div>
+              <div>
                 <label className="block text-gray-500 mb-1">Target</label>
                 <select
                   value={editForm.target_type || 'issues'}
@@ -581,6 +628,16 @@ export function ScheduleDetail({
                 <span className="ml-2 text-gray-200">
                   {schedule.target_type.charAt(0).toUpperCase() + schedule.target_type.slice(1)}
                 </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-gray-500">Agent:</span>
+                {schedule.cli_type ? (
+                  <CLIBadge cliType={schedule.cli_type} small />
+                ) : (
+                  <span className="text-gray-200">
+                    Default ({CLI_DISPLAY[resolvedDefaultCLI]?.name || 'Claude'})
+                  </span>
+                )}
               </div>
               <div>
                 <span className="text-gray-500">Max Items:</span>
