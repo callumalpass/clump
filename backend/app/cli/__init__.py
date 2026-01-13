@@ -5,6 +5,7 @@ Provides a unified interface for interacting with different AI coding CLI tools:
 - Claude Code (Anthropic)
 - Gemini CLI (Google)
 - Codex CLI (OpenAI)
+- Copilot CLI (GitHub)
 
 Each CLI has its own adapter that implements the CLIAdapter interface,
 handling command building, session discovery, and output parsing.

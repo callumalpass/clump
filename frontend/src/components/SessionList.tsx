@@ -336,6 +336,7 @@ const CLI_FILTERS: { value: CLIFilter; label: string }[] = [
   { value: 'claude', label: 'Claude' },
   { value: 'gemini', label: 'Gemini' },
   { value: 'codex', label: 'Codex' },
+  { value: 'copilot', label: 'Copilot' },
 ];
 
 export function SessionList({

@@ -5,6 +5,7 @@ Supports multiple CLI tools:
 - Claude Code: ~/.claude/projects/<encoded-path>/<session-id>.jsonl (JSONL format)
 - Gemini CLI: ~/.gemini/tmp/<project-hash>/chats/<session-id>.json (JSON format)
 - Codex CLI: ~/.codex/sessions/<year>/<month>/<day>/<session-id>.jsonl (JSONL format)
+- Copilot CLI: ~/.copilot/session-state/* (JSON/JSONL format, best-effort)
 
 Each CLI has a different transcript format, but all are normalized to the same
 ParsedTranscript structure for consistent handling in the application.
@@ -204,7 +205,7 @@ def parse_transcript_file(
     Args:
         transcript_path: Path to the transcript file
         session_id: The session UUID
-        cli_type: The CLI type ("claude", "gemini", "codex")
+        cli_type: The CLI type ("claude", "gemini", "codex", "copilot")
 
     Returns:
         ParsedTranscript with structured messages, or None if parsing fails
@@ -216,6 +217,8 @@ def parse_transcript_file(
         return _parse_gemini_transcript(transcript_path, session_id)
     elif cli_type == "codex":
         return _parse_codex_transcript(transcript_path, session_id)
+    elif cli_type == "copilot":
+        return _parse_copilot_transcript(transcript_path, session_id)
     else:
         # Default to Claude parser
         return _parse_claude_transcript(transcript_path, session_id)
@@ -851,6 +854,288 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
         start_time=start_time,
         end_time=end_time,
         cli_version=None,
+        git_branch=git_branch,
+    )
+
+
+def _normalize_copilot_role(value: str | None) -> str | None:
+    """Normalize Copilot role labels to user/assistant."""
+    if not value:
+        return None
+    lowered = value.lower()
+    if "user" in lowered or "human" in lowered:
+        return "user"
+    if "assistant" in lowered or "copilot" in lowered or "ai" in lowered:
+        return "assistant"
+    return None
+
+
+def _extract_copilot_text(content: object) -> str:
+    """Extract text from Copilot content blocks."""
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, dict):
+        part_type = content.get("type")
+        if part_type in ("text", "input_text", "output_text") and isinstance(content.get("text"), str):
+            return content.get("text") or ""
+        for key in ("text", "content", "message", "value", "body", "prompt", "response", "output", "parts"):
+            value = content.get(key)
+            if isinstance(value, str):
+                return value
+            if isinstance(value, (dict, list)):
+                nested = _extract_copilot_text(value)
+                if nested:
+                    return nested
+        parts = content.get("parts")
+        if isinstance(parts, list):
+            nested = _extract_copilot_text(parts)
+            if nested:
+                return nested
+        return ""
+    if isinstance(content, list):
+        parts = [_extract_copilot_text(item) for item in content]
+        return "\n".join([p for p in parts if p])
+    return ""
+
+
+def _extract_copilot_timestamp(entry: dict) -> str:
+    """Extract a timestamp from a Copilot entry."""
+    for key in ("timestamp", "created_at", "createdAt", "time", "ts", "updated_at", "updatedAt"):
+        value = entry.get(key)
+        if isinstance(value, str):
+            return value
+    return ""
+
+
+def _extract_copilot_tool_uses(entry: dict) -> list[ToolUse]:
+    """Extract tool calls from a Copilot entry."""
+    tool_calls = (
+        entry.get("tool_calls")
+        or entry.get("toolCalls")
+        or entry.get("tool_calls_v2")
+        or entry.get("toolCallsV2")
+        or entry.get("function_calls")
+        or entry.get("functionCalls")
+        or entry.get("tools")
+        or entry.get("actions")
+    )
+    if isinstance(tool_calls, dict):
+        tool_calls = [tool_calls]
+    if not isinstance(tool_calls, list):
+        return []
+
+    tool_uses: list[ToolUse] = []
+    for call in tool_calls:
+        if not isinstance(call, dict):
+            continue
+        tool_id = (
+            call.get("id")
+            or call.get("call_id")
+            or call.get("tool_call_id")
+            or call.get("toolCallId")
+            or call.get("name")
+            or call.get("tool_name")
+            or ""
+        )
+        tool_use = ToolUse(
+            id=str(tool_id),
+            name=call.get("name") or call.get("tool") or "",
+            input=_parse_tool_arguments(call.get("arguments") or call.get("args") or call.get("input")),
+        )
+        output = call.get("result") or call.get("output") or call.get("tool_result") or call.get("toolResult")
+        if isinstance(output, str):
+            tool_use.result = output
+        tool_uses.append(tool_use)
+    return tool_uses
+
+
+def _extract_copilot_usage(entry: dict) -> TokenUsage | None:
+    """Extract token usage from a Copilot entry."""
+    usage = entry.get("usage") or entry.get("token_usage") or entry.get("tokenUsage")
+    if not isinstance(usage, dict):
+        return None
+    input_tokens = (
+        usage.get("input_tokens")
+        or usage.get("prompt_tokens")
+        or usage.get("inputTokens")
+        or usage.get("promptTokens")
+        or 0
+    )
+    output_tokens = (
+        usage.get("output_tokens")
+        or usage.get("completion_tokens")
+        or usage.get("outputTokens")
+        or usage.get("completionTokens")
+        or 0
+    )
+    cache_read = usage.get("cache_read_tokens") or usage.get("cacheReadTokens") or 0
+    cache_create = usage.get("cache_creation_tokens") or usage.get("cacheCreationTokens") or 0
+    return TokenUsage(
+        input_tokens=input_tokens or 0,
+        output_tokens=output_tokens or 0,
+        cache_read_tokens=cache_read or 0,
+        cache_creation_tokens=cache_create or 0,
+    )
+
+
+def _parse_copilot_transcript(transcript_path: Path, session_id: str) -> ParsedTranscript | None:
+    """
+    Parse a Copilot session transcript (JSON or JSONL).
+
+    Copilot's storage format is not publicly documented, so this parser is
+    best-effort and relies on common field names.
+    """
+    messages: list[TranscriptMessage] = []
+    summary = None
+    primary_model = None
+    start_time = None
+    end_time = None
+    cli_version = None
+    git_branch = None
+    total_input = 0
+    total_output = 0
+    total_cache_read = 0
+    total_cache_creation = 0
+
+    try:
+        if transcript_path.suffix == ".jsonl":
+            entries: list[dict] = []
+            with open(transcript_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(entry, dict):
+                        entries.append(entry)
+        else:
+            with open(transcript_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                summary = data.get("summary") or data.get("title")
+                primary_model = data.get("model") or data.get("modelId") or data.get("model_name")
+                start_time = data.get("start_time") or data.get("created_at") or data.get("createdAt")
+                end_time = data.get("end_time") or data.get("updated_at") or data.get("updatedAt")
+                cli_version = data.get("cli_version")
+                git_branch = data.get("git_branch")
+
+                for meta_key in ("session", "state", "metadata"):
+                    meta = data.get(meta_key)
+                    if isinstance(meta, dict):
+                        summary = summary or meta.get("summary") or meta.get("title")
+                        primary_model = primary_model or meta.get("model") or meta.get("modelId")
+                        start_time = start_time or meta.get("start_time") or meta.get("created_at")
+                        end_time = end_time or meta.get("end_time") or meta.get("updated_at")
+                        cli_version = cli_version or meta.get("cli_version") or meta.get("version")
+                        git_branch = git_branch or meta.get("git_branch") or meta.get("branch")
+
+                for key in ("messages", "timeline", "events", "history", "items", "conversation"):
+                    if isinstance(data.get(key), list):
+                        entries = data.get(key)
+                        break
+                else:
+                    entries = []
+            elif isinstance(data, list):
+                entries = data
+            else:
+                entries = []
+
+        for idx, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                continue
+
+            payload = entry.get("payload")
+            if isinstance(payload, dict) and entry.get("type"):
+                entry = {"_entry_type": entry.get("type"), **payload}
+
+            role = _normalize_copilot_role(
+                entry.get("role")
+                or entry.get("type")
+                or entry.get("_entry_type")
+                or entry.get("speaker")
+                or entry.get("author")
+            )
+
+            if role is None:
+                prompt = entry.get("prompt") or entry.get("input")
+                response = entry.get("response") or entry.get("output")
+                if isinstance(prompt, str):
+                    messages.append(TranscriptMessage(
+                        uuid=str(entry.get("id") or f"{session_id}-p{idx}"),
+                        role="user",
+                        content=prompt,
+                        timestamp=_extract_copilot_timestamp(entry),
+                    ))
+                if isinstance(response, str):
+                    messages.append(TranscriptMessage(
+                        uuid=str(entry.get("id") or f"{session_id}-r{idx}"),
+                        role="assistant",
+                        content=response,
+                        timestamp=_extract_copilot_timestamp(entry),
+                        model=primary_model,
+                    ))
+                continue
+
+            content = (
+                entry.get("content")
+                or entry.get("text")
+                or entry.get("message")
+                or entry.get("body")
+                or entry.get("output")
+                or entry.get("input")
+            )
+            text_content = _extract_copilot_text(content)
+            timestamp = _extract_copilot_timestamp(entry)
+            if timestamp:
+                if not start_time:
+                    start_time = timestamp
+                end_time = timestamp
+
+            model = entry.get("model") or entry.get("modelId") or entry.get("model_name") or primary_model
+            if model and not primary_model:
+                primary_model = model
+
+            usage = _extract_copilot_usage(entry)
+            if usage:
+                total_input += usage.input_tokens
+                total_output += usage.output_tokens
+                total_cache_read += usage.cache_read_tokens
+                total_cache_creation += usage.cache_creation_tokens
+
+            tool_uses = _extract_copilot_tool_uses(entry) if role == "assistant" else []
+
+            if text_content.strip() or tool_uses:
+                messages.append(TranscriptMessage(
+                    uuid=str(entry.get("id") or f"{session_id}-{idx}"),
+                    role=role,
+                    content=text_content,
+                    timestamp=timestamp,
+                    tool_uses=tool_uses,
+                    model=model,
+                    usage=usage,
+                ))
+
+    except (OSError, json.JSONDecodeError) as e:
+        logger.warning("Failed to parse Copilot transcript %s: %s", transcript_path, e)
+        return None
+
+    return ParsedTranscript(
+        session_id=session_id,
+        messages=messages,
+        summary=summary,
+        model=primary_model,
+        total_input_tokens=total_input,
+        total_output_tokens=total_output,
+        total_cache_read_tokens=total_cache_read,
+        total_cache_creation_tokens=total_cache_creation,
+        start_time=start_time,
+        end_time=end_time,
+        cli_version=cli_version,
         git_branch=git_branch,
     )
 

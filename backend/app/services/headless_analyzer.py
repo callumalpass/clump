@@ -8,6 +8,8 @@ Supports:
 - Claude Code (-p flag with --output-format stream-json)
 - Gemini CLI (positional prompt with -o stream-json)
 - Codex CLI (exec subcommand with --json)
+- Copilot CLI (-p/--prompt, plain text output)
+- Copilot CLI (-p/--prompt, plain text output)
 """
 
 import asyncio
@@ -107,7 +109,7 @@ class HeadlessAnalyzer:
         Args:
             prompt: The session prompt
             working_dir: Directory to run the CLI in
-            cli_type: Which CLI to use (claude, gemini, codex)
+            cli_type: Which CLI to use (claude, gemini, codex, copilot)
             session_id: Specific UUID to use for this session
             resume_session: Session ID to resume from
             allowed_tools: Tools to auto-approve (overrides config)
@@ -156,6 +158,14 @@ class HeadlessAnalyzer:
                 (m for m in reversed(messages) if m.type == "error"),
                 None,
             )
+            if not error_msg:
+                text_output = "\n".join(m.content or "" for m in messages if m.content)
+                return SessionResult(
+                    session_id=session_id or "",
+                    result=text_output.strip(),
+                    success=True,
+                    messages=messages,
+                )
             return SessionResult(
                 session_id="",
                 result="",
@@ -228,6 +238,8 @@ class HeadlessAnalyzer:
         async with self._lock:
             self._running_sessions[run_id] = process
 
+        text_chunks: list[str] = []
+
         try:
             # Read stdout line by line (stream-json is newline-delimited)
             while True:
@@ -243,10 +255,9 @@ class HeadlessAnalyzer:
                     yield self._parse_message(data)
                 except json.JSONDecodeError:
                     # Non-JSON output (shouldn't happen with stream-json)
-                    yield SessionMessage(
-                        type="text",
-                        content=line.decode("utf-8", errors="replace"),
-                    )
+                    text = line.decode("utf-8", errors="replace")
+                    text_chunks.append(text)
+                    yield SessionMessage(type="text", content=text)
 
             # Check for errors
             await process.wait()
@@ -257,6 +268,16 @@ class HeadlessAnalyzer:
                         type="error",
                         content=stderr.decode("utf-8", errors="replace"),
                     )
+                    return
+
+            # For text-based CLIs (Copilot), emit a result message from stdout
+            if fmt == "text":
+                content = "".join(text_chunks).strip()
+                yield SessionMessage(
+                    type="result",
+                    subtype="success",
+                    content=content,
+                )
 
         finally:
             async with self._lock:

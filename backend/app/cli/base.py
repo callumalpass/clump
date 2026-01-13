@@ -17,6 +17,7 @@ class CLIType(str, Enum):
     CLAUDE = "claude"
     GEMINI = "gemini"
     CODEX = "codex"
+    COPILOT = "copilot"
 
 
 @dataclass

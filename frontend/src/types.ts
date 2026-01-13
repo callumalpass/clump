@@ -9,7 +9,7 @@ export interface Repo {
 // CLI Types (Multi-CLI support)
 // ==========================================
 
-export type CLIType = 'claude' | 'gemini' | 'codex';
+export type CLIType = 'claude' | 'gemini' | 'codex' | 'copilot';
 
 export interface CLICapabilities {
   supports_headless: boolean;
@@ -44,6 +44,9 @@ export interface CLISettings {
     command: string;
   };
   codex: {
+    command: string;
+  };
+  copilot: {
     command: string;
   };
 }
@@ -485,7 +488,7 @@ export interface ScheduledJob {
   allowed_tools: string[] | null;
   max_turns: number | null;
   model: string | null;
-  cli_type: string | null;  // claude, gemini, codex
+  cli_type: string | null;  // claude, gemini, codex, copilot
   next_run_at: string | null;
   last_run_at: string | null;
   last_run_status: string | null;
@@ -528,7 +531,7 @@ export interface ScheduledJobCreate {
   allowed_tools?: string[];
   max_turns?: number;
   model?: string;
-  cli_type?: string;  // claude, gemini, codex
+  cli_type?: string;  // claude, gemini, codex, copilot
 }
 
 export interface ScheduledJobUpdate {
@@ -546,7 +549,7 @@ export interface ScheduledJobUpdate {
   allowed_tools?: string[];
   max_turns?: number;
   model?: string;
-  cli_type?: string;  // claude, gemini, codex
+  cli_type?: string;  // claude, gemini, codex, copilot
 }
 
 // ==========================================

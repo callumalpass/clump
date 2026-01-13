@@ -77,7 +77,7 @@ class ScheduledJobCreate(BaseModel):
     allowed_tools: Optional[list[str]] = None
     max_turns: Optional[int] = None
     model: Optional[str] = None
-    cli_type: Optional[str] = None  # claude, gemini, codex
+    cli_type: Optional[str] = None  # claude, gemini, codex, copilot
 
     @field_validator("cron_expression")
     @classmethod
@@ -110,7 +110,7 @@ class ScheduledJobCreate(BaseModel):
     def validate_cli_type(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
             return v
-        valid = {"claude", "gemini", "codex"}
+        valid = {"claude", "gemini", "codex", "copilot"}
         if v not in valid:
             raise ValueError(f"cli_type must be one of: {valid}")
         return v
@@ -145,7 +145,7 @@ class ScheduledJobUpdate(BaseModel):
     allowed_tools: Optional[list[str]] = None
     max_turns: Optional[int] = None
     model: Optional[str] = None
-    cli_type: Optional[str] = None  # claude, gemini, codex
+    cli_type: Optional[str] = None  # claude, gemini, codex, copilot
 
     @field_validator("cron_expression")
     @classmethod
@@ -184,7 +184,7 @@ class ScheduledJobUpdate(BaseModel):
     def validate_cli_type(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
             return v
-        valid = {"claude", "gemini", "codex"}
+        valid = {"claude", "gemini", "codex", "copilot"}
         if v not in valid:
             raise ValueError(f"cli_type must be one of: {valid}")
         return v

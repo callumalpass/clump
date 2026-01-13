@@ -65,7 +65,7 @@ class Process:
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     session_id: int | None = None  # Links to Session record
 
-    # CLI type (claude, gemini, codex)
+    # CLI type (claude, gemini, codex, copilot)
     cli_type: CLIType = CLIType.CLAUDE
 
     # Transcript stored as list of chunks for O(1) append instead of O(n) string concat
@@ -163,7 +163,7 @@ class ProcessManager:
             working_dir: Directory to run the CLI in
             initial_prompt: Optional prompt to send after startup
             session_id: Optional linked Session ID
-            cli_type: Which CLI to use (claude, gemini, codex)
+            cli_type: Which CLI to use (claude, gemini, codex, copilot)
             allowed_tools: Tools to auto-approve (overrides config)
             disallowed_tools: Tools to disable (overrides config)
             permission_mode: Permission mode (overrides config)

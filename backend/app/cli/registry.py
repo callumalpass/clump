@@ -11,6 +11,7 @@ from typing import Optional
 
 from app.cli.base import CLIAdapter, CLIType
 from app.cli.claude_adapter import ClaudeAdapter
+from app.cli.copilot_adapter import CopilotAdapter
 from app.cli.codex_adapter import CodexAdapter
 from app.cli.gemini_adapter import GeminiAdapter
 
@@ -54,6 +55,8 @@ def get_adapter(cli_type: CLIType | str) -> CLIAdapter:
                 _adapters[cli_type] = GeminiAdapter()
             elif cli_type == CLIType.CODEX:
                 _adapters[cli_type] = CodexAdapter()
+            elif cli_type == CLIType.COPILOT:
+                _adapters[cli_type] = CopilotAdapter()
             else:
                 raise ValueError(f"Unknown CLI type: {cli_type}")
 

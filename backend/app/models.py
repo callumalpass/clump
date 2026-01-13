@@ -36,6 +36,7 @@ class CLITypeEnum(str, Enum):
     CLAUDE = "claude"
     GEMINI = "gemini"
     CODEX = "codex"
+    COPILOT = "copilot"
 
 
 class ActionType(str, Enum):
@@ -188,7 +189,7 @@ class ScheduledJob(Base):
     allowed_tools: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array
     max_turns: Mapped[int | None] = mapped_column(Integer, nullable=True)
     model: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    cli_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # claude, gemini, codex
+    cli_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # claude, gemini, codex, copilot
 
     # Execution tracking
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

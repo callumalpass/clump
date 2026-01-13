@@ -38,7 +38,7 @@ async def check_cli_installed(cli_type: str):
     Check if a specific CLI is installed.
 
     Args:
-        cli_type: The CLI type to check (claude, gemini, codex)
+        cli_type: The CLI type to check (claude, gemini, codex, copilot)
 
     Returns:
         Whether the CLI is installed
@@ -72,5 +72,8 @@ async def get_cli_settings():
         },
         "codex": {
             "command": settings.codex_command,
+        },
+        "copilot": {
+            "command": settings.copilot_command,
         },
     }

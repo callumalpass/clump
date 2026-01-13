@@ -25,6 +25,7 @@ Performance optimizations:
 """
 
 import json
+import hashlib
 import logging
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
@@ -323,6 +324,15 @@ def get_gemini_projects_dir() -> Path:
 def get_codex_sessions_dir() -> Path:
     """Get Codex's sessions directory (~/.codex/sessions/)."""
     return Path.home() / ".codex" / "sessions"
+
+
+def get_copilot_session_dirs() -> list[Path]:
+    """Get Copilot's session directories."""
+    base = Path.home() / ".copilot"
+    return [
+        base / "session-state",
+        base / "history-session-state",
+    ]
 
 
 def get_encoded_path(local_path: str) -> str:
@@ -746,6 +756,169 @@ def _scan_gemini_unknown_project_dir(
     return sessions
 
 
+def _find_copilot_path_in_data(data: Any) -> Optional[str]:
+    """
+    Try to locate a working directory path in Copilot session data.
+
+    Copilot's storage format is not documented, so this searches common keys.
+    """
+    def looks_like_path(value: str) -> bool:
+        if not value or value.startswith("http://") or value.startswith("https://"):
+            return False
+        if value.startswith("file://"):
+            return True
+        return "/" in value or "\\" in value
+
+    path_keys = {
+        "cwd",
+        "workdir",
+        "workingDirectory",
+        "working_directory",
+        "projectPath",
+        "project_path",
+        "repoPath",
+        "repo_path",
+        "rootPath",
+        "root_path",
+        "workspacePath",
+        "workspace_path",
+        "workspaceRoot",
+        "workspace_root",
+        "workspaceUri",
+        "rootUri",
+    }
+
+    stack = [data]
+    visited = 0
+    max_nodes = 2000
+
+    while stack and visited < max_nodes:
+        current = stack.pop()
+        visited += 1
+
+        if isinstance(current, dict):
+            for key, value in current.items():
+                if key in path_keys and isinstance(value, str) and looks_like_path(value):
+                    return value
+                if isinstance(value, str) and looks_like_path(value):
+                    # Prefer explicit keys, but allow path-like strings as fallback
+                    return value
+                if isinstance(value, (dict, list)):
+                    stack.append(value)
+        elif isinstance(current, list):
+            for item in current:
+                if isinstance(item, (dict, list)):
+                    stack.append(item)
+
+    return None
+
+
+def _extract_copilot_session_path(session_file: Path) -> Optional[str]:
+    """
+    Extract the working directory from a Copilot session file.
+
+    Copilot uses JSON or JSONL depending on version; this is best-effort.
+    """
+    if session_file.suffix == ".jsonl":
+        try:
+            with open(session_file, 'r', encoding='utf-8') as f:
+                for _, line in zip(range(200), f):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        data = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    found = _find_copilot_path_in_data(data)
+                    if found:
+                        return found
+        except (IOError, OSError):
+            return None
+        return None
+
+    try:
+        with open(session_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return _find_copilot_path_in_data(data)
+    except (json.JSONDecodeError, IOError, OSError):
+        return None
+
+
+def discover_copilot_sessions(
+    repo_path: Optional[str] = None,
+) -> list[DiscoveredSession]:
+    """
+    Discover Copilot sessions from ~/.copilot/session-state and history-session-state.
+
+    Copilot does not organize sessions by repo path, so we scan all files and
+    extract the working directory from session data when possible.
+    """
+    session_dirs = get_copilot_session_dirs()
+    clump_projects_dir = get_clump_projects_dir()
+    all_sessions: list[DiscoveredSession] = []
+
+    normalized_repo_path = str(Path(repo_path).resolve()) if repo_path else None
+
+    for base_dir in session_dirs:
+        if not base_dir.exists():
+            continue
+
+        try:
+            for session_file in base_dir.rglob("*"):
+                if not session_file.is_file():
+                    continue
+                if session_file.suffix not in (".json", ".jsonl"):
+                    continue
+
+                session_id = session_file.stem
+
+                try:
+                    stat = session_file.stat()
+                    modified_at = datetime.fromtimestamp(stat.st_mtime)
+                    file_size = stat.st_size
+                except OSError:
+                    continue
+
+                project_path = _extract_copilot_session_path(session_file)
+                if project_path and project_path.startswith("file://"):
+                    project_path = project_path[7:]
+                if project_path:
+                    if normalized_repo_path and str(Path(project_path).resolve()) != normalized_repo_path:
+                        continue
+                    encoded_path = encode_path(project_path)
+                else:
+                    if normalized_repo_path:
+                        continue
+                    hash_key = hashlib.sha256(str(session_file).encode()).hexdigest()
+                    encoded_path = f"copilot-unknown-{hash_key[:12]}"
+
+                metadata = None
+                sidecar_path = clump_projects_dir / encoded_path / f"{session_id}.json"
+                if sidecar_path.exists():
+                    try:
+                        with open(sidecar_path, 'r', encoding='utf-8') as f:
+                            sidecar_data = json.load(f)
+                            metadata = SessionMetadata.from_dict(sidecar_data)
+                    except (json.JSONDecodeError, IOError, KeyError):
+                        pass
+
+                all_sessions.append(DiscoveredSession(
+                    session_id=session_id,
+                    encoded_path=encoded_path,
+                    transcript_path=session_file,
+                    modified_at=modified_at,
+                    file_size=file_size,
+                    metadata=metadata,
+                    cli_type="copilot",
+                ))
+        except OSError:
+            continue
+
+    all_sessions.sort(key=lambda s: s.modified_at, reverse=True)
+    return all_sessions
+
+
 def discover_codex_sessions(
     repo_path: Optional[str] = None,
 ) -> list[DiscoveredSession]:
@@ -864,7 +1037,7 @@ def discover_all_sessions(
 
     # Determine which CLIs to scan
     if cli_types is None:
-        cli_types = ["claude", "gemini", "codex"]  # Default to all CLIs
+        cli_types = ["claude", "gemini", "codex", "copilot"]  # Default to all CLIs
 
     # Discover Claude sessions
     if "claude" in cli_types:
@@ -880,6 +1053,11 @@ def discover_all_sessions(
     if "codex" in cli_types:
         codex_sessions = discover_codex_sessions(repo_path=repo_path)
         all_sessions.extend(codex_sessions)
+
+    # Discover Copilot sessions
+    if "copilot" in cli_types:
+        copilot_sessions = discover_copilot_sessions(repo_path=repo_path)
+        all_sessions.extend(copilot_sessions)
 
     # Sort combined results by modification time
     all_sessions.sort(key=lambda s: s.modified_at, reverse=True)
@@ -1510,7 +1688,7 @@ class ScheduleDefinition:
     allowed_tools: Optional[list[str]] = None
     max_turns: Optional[int] = None
     model: Optional[str] = None
-    cli_type: Optional[str] = None  # claude, gemini, codex (defaults to config default_cli)
+    cli_type: Optional[str] = None  # claude, gemini, codex, copilot (defaults to config default_cli)
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""

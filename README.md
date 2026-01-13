@@ -79,6 +79,7 @@ Quick access to all actions with `Ctrl+K`. Jump to issues, PRs, sessions, or run
   - Claude Code (`claude` command)
   - Gemini CLI (`gemini` command)
   - Codex CLI (`codex` command)
+  - GitHub Copilot CLI (`copilot` command)
 - GitHub personal access token
 
 ## Setup
@@ -126,6 +127,7 @@ GITHUB_TOKEN=ghp_...
 CLAUDE_COMMAND=claude
 GEMINI_COMMAND=gemini
 CODEX_COMMAND=codex
+COPILOT_COMMAND=copilot
 
 # Claude Code settings
 CLAUDE_PERMISSION_MODE=acceptEdits
@@ -143,7 +145,7 @@ Browser (React + xterm.js)
     ▼
 FastAPI backend
     ├── GitHub API proxy
-    ├── CLI adapter system (Claude, Gemini, Codex)
+    ├── CLI adapter system (Claude, Gemini, Codex, Copilot)
     ├── PTY manager (spawns CLI processes)
     ├── Transcript parser (JSONL → structured data)
     ├── Sidecar metadata (AI-generated issue analysis)

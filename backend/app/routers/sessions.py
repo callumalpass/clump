@@ -565,6 +565,7 @@ async def _get_pending_sessions(
             tags=tags,
             starred=starred,
             scheduled_job_id=scheduled_job_id,
+            cli_type=proc.cli_type.value if hasattr(proc.cli_type, 'value') else proc.cli_type,
             is_active=True,
         ))
 
@@ -691,7 +692,9 @@ def _quick_scan_transcript(transcript_path: Path, cli_type: str = "claude") -> Q
 
     # Cache miss or file modified - scan the file (outside of lock)
     # Use CLI-specific parsing based on file extension or CLI type
-    if cli_type == "gemini" or transcript_path.suffix == ".json":
+    if cli_type == "copilot":
+        result = _do_quick_scan_copilot_transcript(transcript_path)
+    elif cli_type == "gemini" or transcript_path.suffix == ".json":
         result = _do_quick_scan_gemini_transcript(transcript_path)
     elif cli_type == "codex":
         result = _do_quick_scan_codex_transcript(transcript_path)
@@ -741,6 +744,16 @@ def _extract_text_from_content(content: list | str | None, max_length: int = TIT
 
     if isinstance(content, str):
         return content[:max_length] if content else None
+
+    if isinstance(content, dict):
+        for key in ("text", "content", "message", "value", "body", "prompt", "response", "output"):
+            value = content.get(key)
+            if isinstance(value, str) and value:
+                return value[:max_length]
+            if isinstance(value, list):
+                nested = _extract_text_from_content(value, max_length)
+                if nested:
+                    return nested
 
     if isinstance(content, list):
         for part in content:
@@ -933,6 +946,112 @@ def _do_quick_scan_codex_transcript(transcript_path: Path) -> QuickScanResult:
                 result["title"] = first_real_user_message
 
     except OSError:
+        pass
+
+    return result
+
+
+def _do_quick_scan_copilot_transcript(transcript_path: Path) -> QuickScanResult:
+    """
+    Scan a Copilot session file for summary info (uncached).
+
+    Copilot uses JSON or JSONL depending on version, so this is best-effort.
+    """
+    result = _create_empty_scan_result()
+
+    def normalize_role(value: Optional[str]) -> Optional[str]:
+        if not value:
+            return None
+        lowered = value.lower()
+        if "user" in lowered or "human" in lowered:
+            return "user"
+        if "assistant" in lowered or "copilot" in lowered or "ai" in lowered:
+            return "assistant"
+        return None
+
+    try:
+        entries = []
+        if transcript_path.suffix == ".jsonl":
+            with open(transcript_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(entry, dict):
+                        entries.append(entry)
+        else:
+            with open(transcript_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                result["title"] = data.get("summary") or data.get("title")
+                result["start_time"] = data.get("start_time") or data.get("created_at") or data.get("createdAt")
+                result["end_time"] = data.get("end_time") or data.get("updated_at") or data.get("updatedAt")
+                result["model"] = data.get("model") or data.get("modelId") or data.get("model_name")
+                for key in ("messages", "timeline", "events", "history", "items", "conversation"):
+                    if isinstance(data.get(key), list):
+                        entries = data.get(key)
+                        break
+            elif isinstance(data, list):
+                entries = data
+
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            payload = entry.get("payload")
+            if isinstance(payload, dict) and entry.get("type"):
+                entry = {"_entry_type": entry.get("type"), **payload}
+            role = normalize_role(
+                entry.get("role")
+                or entry.get("type")
+                or entry.get("_entry_type")
+                or entry.get("speaker")
+                or entry.get("author")
+            )
+
+            if role is None:
+                prompt = entry.get("prompt") or entry.get("input")
+                response = entry.get("response") or entry.get("output")
+                if isinstance(prompt, str):
+                    result["message_count"] += 1
+                    if not result["title"]:
+                        result["title"] = prompt[:TITLE_PREVIEW_LENGTH]
+                if isinstance(response, str):
+                    result["message_count"] += 1
+                continue
+
+            if role in ("user", "assistant"):
+                result["message_count"] += 1
+
+            timestamp = (
+                entry.get("timestamp")
+                or entry.get("created_at")
+                or entry.get("createdAt")
+                or entry.get("updated_at")
+                or entry.get("updatedAt")
+            )
+            if isinstance(timestamp, str):
+                if not result["start_time"]:
+                    result["start_time"] = timestamp
+                result["end_time"] = timestamp
+
+            if role == "assistant" and not result["model"]:
+                result["model"] = entry.get("model") or entry.get("modelId") or entry.get("model_name")
+
+            if role == "user" and not result["title"]:
+                content = (
+                    entry.get("content")
+                    or entry.get("text")
+                    or entry.get("message")
+                    or entry.get("body")
+                    or entry.get("input")
+                )
+                result["title"] = _extract_text_from_content(content)
+
+    except (OSError, json.JSONDecodeError):
         pass
 
     return result

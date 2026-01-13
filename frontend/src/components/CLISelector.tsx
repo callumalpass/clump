@@ -14,6 +14,7 @@ const CLI_DISPLAY: Record<CLIType, { name: string; color: string; bgColor: strin
   claude: { name: 'Claude', color: 'text-orange-300', bgColor: 'bg-orange-600' },
   gemini: { name: 'Gemini', color: 'text-blue-300', bgColor: 'bg-blue-600' },
   codex: { name: 'Codex', color: 'text-green-300', bgColor: 'bg-green-600' },
+  copilot: { name: 'Copilot', color: 'text-teal-200', bgColor: 'bg-teal-700' },
 };
 
 export function CLISelector({

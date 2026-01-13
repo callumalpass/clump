@@ -203,14 +203,22 @@ class Settings:
         return self._get("codex_command", "codex", "CODEX_COMMAND") or "codex"
 
     # ==========================================
+    # Copilot CLI Settings
+    # ==========================================
+
+    @property
+    def copilot_command(self) -> str:
+        return self._get("copilot_command", "copilot", "COPILOT_COMMAND") or "copilot"
+
+    # ==========================================
     # Multi-CLI Settings
     # ==========================================
 
     @property
     def default_cli(self) -> str:
-        """Get the default CLI type (claude, gemini, or codex)."""
+        """Get the default CLI type (claude, gemini, codex, or copilot)."""
         cli = self._get("default_cli", "claude", "DEFAULT_CLI")
-        if cli in ("claude", "gemini", "codex"):
+        if cli in ("claude", "gemini", "codex", "copilot"):
             return cli
         return "claude"
 
