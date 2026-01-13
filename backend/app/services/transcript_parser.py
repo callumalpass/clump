@@ -17,7 +17,7 @@ import re
 from pathlib import Path
 from dataclasses import dataclass, field
 
-from app.storage import encode_path
+from app.storage import encode_path, get_claude_projects_dir
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,89 @@ def _parse_tool_arguments(arguments) -> dict:
         # If it's a string but not valid JSON dict, return as single-value dict
         return {"input": arguments}
     return {}
+
+
+def _extract_gemini_function_response(response: dict) -> tuple[str, bool]:
+    """Extract output text and error flag from a Gemini functionResponse payload."""
+    payload = response.get("response") if isinstance(response, dict) else None
+    error = False
+    output = ""
+    if isinstance(payload, dict):
+        if payload.get("error"):
+            error = True
+            output = str(payload.get("error"))
+        elif "output" in payload:
+            output = payload.get("output")
+        elif "content" in payload:
+            output = payload.get("content")
+        else:
+            output = payload
+    elif payload is not None:
+        output = payload
+    else:
+        output = response.get("output") if isinstance(response, dict) else response
+    if isinstance(output, str):
+        return output, error
+    try:
+        return json.dumps(output), error
+    except TypeError:
+        return str(output), error
+
+
+def _extract_gemini_tool_result(content: object) -> tuple[str, bool]:
+    """Best-effort extraction of tool output text from Gemini PartListUnion values."""
+    if content is None:
+        return "", False
+    if isinstance(content, str):
+        return content, False
+    if isinstance(content, dict):
+        if "functionResponse" in content:
+            response = content.get("functionResponse") or {}
+            if isinstance(response, dict):
+                return _extract_gemini_function_response(response)
+        if content.get("type") == "functionResponse":
+            return _extract_gemini_function_response(content)
+        for key in ("output", "content", "text"):
+            value = content.get(key)
+            if isinstance(value, str):
+                return value, bool(content.get("error"))
+        try:
+            return json.dumps(content), bool(content.get("error"))
+        except TypeError:
+            return str(content), bool(content.get("error"))
+    if isinstance(content, list):
+        parts = []
+        error = False
+        for item in content:
+            text, is_error = _extract_gemini_tool_result(item)
+            if text:
+                parts.append(text)
+            error = error or is_error
+        return "\n".join(parts), error
+    return str(content), False
+
+
+def _normalize_codex_tool_output(output: object) -> str:
+    """Normalize Codex tool output payloads into a displayable string."""
+    if output is None:
+        return ""
+    if isinstance(output, str):
+        return output
+    if isinstance(output, dict):
+        if "content" in output:
+            return str(output.get("content") or "")
+        if "output" in output:
+            return str(output.get("output") or "")
+        if "error" in output:
+            return str(output.get("error") or "")
+        try:
+            return json.dumps(output)
+        except TypeError:
+            return str(output)
+    try:
+        return json.dumps(output)
+    except TypeError:
+        return str(output)
 
 
 @dataclass
@@ -146,7 +229,7 @@ def find_transcript_file(session_id: str, working_dir: str) -> Path | None:
 
     Claude stores transcripts in ~/.claude/projects/<encoded-path>/<session-id>.jsonl
     """
-    claude_projects_dir = Path.home() / ".claude" / "projects"
+    claude_projects_dir = get_claude_projects_dir()
 
     if not claude_projects_dir.exists():
         return None
@@ -229,6 +312,7 @@ def _parse_claude_transcript(transcript_path: Path, session_id: str) -> ParsedTr
     messages: list[TranscriptMessage] = []
     total_input = 0
     total_output = 0
+    total_cache_read = 0
     total_cache_read = 0
     total_cache_creation = 0
     summary = None
@@ -338,11 +422,23 @@ def _parse_claude_transcript(transcript_path: Path, session_id: str) -> ParsedTr
                                                 tool_use.spawned_agent_id = agent_id
 
                                     # Match result to the corresponding tool_use
-                                    if tool_use_id:
-                                        tool_use = _find_tool_use_by_id(messages, tool_use_id)
-                                        if tool_use:
-                                            tool_use.result = result_text
-                                            tool_use.result_is_error = is_error
+                                        if tool_use_id:
+                                            tool_use = _find_tool_use_by_id(messages, tool_use_id)
+                                            if tool_use:
+                                                tool_use.result = result_text
+                                                tool_use.result_is_error = is_error
+                                elif part.get('type') == 'image':
+                                    source = part.get('source') or {}
+                                    if isinstance(source, dict) and source.get('type') == 'base64':
+                                        media_type = source.get('media_type', 'image/png')
+                                        data = source.get('data', '')
+                                        if data:
+                                            data_url = f"data:{media_type};base64,{data}"
+                                            text_parts.append(f"![image]({data_url})")
+                                        else:
+                                            text_parts.append("[image]")
+                                    else:
+                                        text_parts.append("[image]")
                             elif isinstance(part, str):
                                 text_parts.append(part)
                         text_content = '\n'.join(text_parts)
@@ -382,6 +478,16 @@ def _parse_claude_transcript(transcript_path: Path, session_id: str) -> ParsedTr
                                     # Use `or {}` to handle None values (key exists but value is None)
                                     input=part.get('input') or {},
                                 ))
+                            elif part_type == 'image':
+                                source = part.get('source') or {}
+                                if isinstance(source, dict) and source.get('type') == 'base64':
+                                    media_type = source.get('media_type', 'image/png')
+                                    data = source.get('data', '')
+                                    if data:
+                                        data_url = f"data:{media_type};base64,{data}"
+                                        if text_content:
+                                            text_content += "\n"
+                                        text_content += f"![image]({data_url})"
 
                     # Only add if there's actual content
                     if text_content.strip() or tool_uses:
@@ -464,6 +570,7 @@ def _parse_gemini_transcript(transcript_path: Path, session_id: str) -> ParsedTr
     end_time = None
     total_input = 0
     total_output = 0
+    total_cache_read = 0
 
     # Map tool_use_id to ToolUse for attaching results
     pending_tool_uses: dict[str, ToolUse] = {}
@@ -496,24 +603,28 @@ def _parse_gemini_transcript(transcript_path: Path, session_id: str) -> ParsedTr
                             if part_type == "text":
                                 text_parts.append(part.get("text", ""))
                             elif part_type == "functionResponse" or "functionResponse" in part:
-                                # Tool result - extract and attach to pending tool_use
                                 func_resp = part.get("functionResponse") or part
-                                func_name = func_resp.get("name", "")
-                                # Use `or {}` to handle None values (key exists but value is None)
-                                response = func_resp.get("response") or {}
-                                result_text = response.get("output", str(response))
+                                func_id = func_resp.get("id") or ""
+                                func_name = func_resp.get("name") or ""
+                                result_text, result_is_error = _extract_gemini_function_response(func_resp)
 
-                                # Try to find matching tool_use by name
-                                for tool_id, tool_use in pending_tool_uses.items():
-                                    if tool_use.name == func_name and tool_use.result is None:
+                                match_key = func_id or func_name
+                                if match_key and match_key in pending_tool_uses:
+                                    tool_use = pending_tool_uses[match_key]
+                                    if tool_use.result is None:
                                         tool_use.result = result_text
-                                        tool_use.result_is_error = response.get("error", False)
-                                        break
+                                        tool_use.result_is_error = result_is_error
+                                elif func_name:
+                                    for tool_use in pending_tool_uses.values():
+                                        if tool_use.name == func_name and tool_use.result is None:
+                                            tool_use.result = result_text
+                                            tool_use.result_is_error = result_is_error
+                                            break
 
                                 tool_results_in_msg.append(ToolResult(
-                                    tool_use_id=func_name,  # Gemini uses function name
+                                    tool_use_id=match_key or func_name,
                                     content=result_text,
-                                    is_error=response.get("error", False),
+                                    is_error=result_is_error,
                                 ))
                         elif isinstance(part, str):
                             text_parts.append(part)
@@ -536,25 +647,74 @@ def _parse_gemini_transcript(transcript_path: Path, session_id: str) -> ParsedTr
                 if model and not primary_model:
                     primary_model = model
 
-                # Extract usage data
-                # Use `or {}` to handle None values (key exists but value is None)
-                usage_data = msg.get("usage") or {}
                 usage = None
-                if usage_data:
-                    # Use `or 0` at the end to handle None values from both keys
-                    input_tokens = usage_data.get("promptTokenCount") or usage_data.get("input_tokens") or 0
-                    output_tokens = usage_data.get("candidatesTokenCount") or usage_data.get("output_tokens") or 0
+                tokens = msg.get("tokens") or {}
+                if tokens:
+                    input_tokens = tokens.get("input") or 0
+                    output_tokens = tokens.get("output") or 0
+                    cache_read = tokens.get("cached") or 0
                     usage = TokenUsage(
                         input_tokens=input_tokens,
                         output_tokens=output_tokens,
+                        cache_read_tokens=cache_read,
                     )
                     total_input += input_tokens
                     total_output += output_tokens
+                    total_cache_read += cache_read
+                else:
+                    usage_data = msg.get("usage") or {}
+                    if usage_data:
+                        # Use `or 0` at the end to handle None values from both keys
+                        input_tokens = usage_data.get("promptTokenCount") or usage_data.get("input_tokens") or 0
+                        output_tokens = usage_data.get("candidatesTokenCount") or usage_data.get("output_tokens") or 0
+                        usage = TokenUsage(
+                            input_tokens=input_tokens,
+                            output_tokens=output_tokens,
+                        )
+                        total_input += input_tokens
+                        total_output += output_tokens
 
                 # Handle content that could be string or list
                 text_content = ""
                 thinking_content = ""
                 tool_uses = []
+
+                thoughts = msg.get("thoughts") or []
+                if isinstance(thoughts, list):
+                    thought_parts = []
+                    for thought in thoughts:
+                        if not isinstance(thought, dict):
+                            continue
+                        subject = thought.get("subject") or ""
+                        description = thought.get("description") or ""
+                        if subject or description:
+                            thought_parts.append(f"{subject}: {description}".strip(": "))
+                    if thought_parts:
+                        thinking_content += "\n".join(thought_parts)
+
+                tool_calls = msg.get("toolCalls") or msg.get("tool_calls") or []
+                if isinstance(tool_calls, list):
+                    for call in tool_calls:
+                        if not isinstance(call, dict):
+                            continue
+                        tool_id = call.get("id") or call.get("callId") or call.get("name") or ""
+                        tool_use = ToolUse(
+                            id=str(tool_id),
+                            name=call.get("name", ""),
+                            input=_parse_tool_arguments(call.get("args") or call.get("input")),
+                        )
+                        result = call.get("result")
+                        if result is None and isinstance(call.get("resultDisplay"), str):
+                            result = call.get("resultDisplay")
+                        result_text, result_is_error = _extract_gemini_tool_result(result)
+                        if result_text:
+                            tool_use.result = result_text
+                        status = str(call.get("status") or "").lower()
+                        tool_use.result_is_error = result_is_error or status in {"error", "failed", "cancelled"}
+                        tool_uses.append(tool_use)
+                        match_key = tool_use.id or tool_use.name
+                        if match_key:
+                            pending_tool_uses[match_key] = tool_use
 
                 if isinstance(content, str):
                     text_content = content
@@ -584,7 +744,8 @@ def _parse_gemini_transcript(transcript_path: Path, session_id: str) -> ParsedTr
                                     input=func_call.get("args") or {},
                                 )
                                 tool_uses.append(tool_use)
-                                pending_tool_uses[tool_id] = tool_use
+                                if tool_id:
+                                    pending_tool_uses[tool_id] = tool_use
 
                         elif isinstance(part, str):
                             text_parts.append(part)
@@ -613,7 +774,7 @@ def _parse_gemini_transcript(transcript_path: Path, session_id: str) -> ParsedTr
         model=primary_model,
         total_input_tokens=total_input,
         total_output_tokens=total_output,
-        total_cache_read_tokens=0,
+        total_cache_read_tokens=total_cache_read,
         total_cache_creation_tokens=0,
         start_time=start_time,
         end_time=end_time,
@@ -643,6 +804,7 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
     start_time = None
     end_time = None
     git_branch = None
+    cli_version = None
     user_message_count = 0
     total_input = 0
     total_output = 0
@@ -669,6 +831,7 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
                     # Use `or {}` to handle None values (key exists but value is None)
                     payload = entry.get('payload') or {}
                     start_time = payload.get('timestamp')
+                    cli_version = payload.get('cli_version') or payload.get('codexVersion')
                     git_info = payload.get('git') or {}
                     if git_info:
                         git_branch = git_info.get('branch')
@@ -696,6 +859,20 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
                     total_input += payload.get('input_tokens') or payload.get('prompt_tokens') or 0
                     total_output += payload.get('output_tokens') or payload.get('completion_tokens') or 0
 
+                elif entry_type == 'compacted':
+                    payload = entry.get('payload') or {}
+                    compacted_message = payload.get('message') or ""
+                    if compacted_message:
+                        messages.append(TranscriptMessage(
+                            uuid="",
+                            role="assistant",
+                            content=str(compacted_message),
+                            timestamp=timestamp,
+                            model=primary_model,
+                        ))
+                        if timestamp:
+                            end_time = timestamp
+
                 elif entry_type == 'response_item':
                     # Use `or {}` to handle None values (key exists but value is None)
                     payload = entry.get('payload') or {}
@@ -706,16 +883,31 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
                         end_time = timestamp
 
                     # Handle function_call entries (tool invocations)
-                    if item_type == 'function_call':
+                    if item_type in {'function_call', 'custom_tool_call', 'local_shell_call', 'web_search_call'}:
                         # Use `or` to handle None values (key exists but value is None)
                         tool_id = payload.get('call_id') or payload.get('id') or ''
+                        tool_name = payload.get('name', '') or item_type
+                        tool_input = {}
+                        if item_type == 'function_call':
+                            tool_input = _parse_tool_arguments(payload.get('arguments'))
+                        elif item_type == 'custom_tool_call':
+                            tool_input = _parse_tool_arguments(payload.get('input'))
+                        else:
+                            action = payload.get('action') or {}
+                            tool_input = action if isinstance(action, dict) else {"action": action}
+                            if item_type == 'local_shell_call':
+                                tool_name = payload.get('name') or 'local_shell'
+                            if item_type == 'web_search_call':
+                                tool_name = payload.get('name') or 'web_search'
+
                         tool_use = ToolUse(
                             id=tool_id,
-                            name=payload.get('name', ''),
-                            # Parse arguments - can be dict, JSON string, or None
-                            input=_parse_tool_arguments(payload.get('arguments')),
+                            name=tool_name,
+                            input=tool_input,
                         )
-                        pending_tool_uses[tool_id] = tool_use
+                        match_key = tool_id or tool_name
+                        if match_key:
+                            pending_tool_uses[match_key] = tool_use
 
                         # Add to most recent assistant message or create one
                         if messages and messages[-1].role == 'assistant':
@@ -732,12 +924,12 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
                         continue
 
                     # Handle function_call_output entries (tool results)
-                    if item_type == 'function_call_output':
+                    if item_type in {'function_call_output', 'custom_tool_call_output'}:
                         call_id = payload.get('call_id', '')
-                        output = payload.get('output', '')
+                        output = _normalize_codex_tool_output(payload.get('output'))
 
                         # Attach result to the matching tool_use
-                        if call_id in pending_tool_uses:
+                        if call_id and call_id in pending_tool_uses:
                             pending_tool_uses[call_id].result = output
                             pending_tool_uses[call_id].result_is_error = payload.get('is_error', False)
                         continue
@@ -760,11 +952,11 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
                                     text = c.get('text', '')
                                     if text and not text.startswith('<environment_context>'):
                                         text_parts.append(text)
-                                elif c_type == 'function_call_output':
+                                elif c_type in {'function_call_output', 'custom_tool_call_output'}:
                                     # Tool result in user message
                                     call_id = c.get('call_id', '')
-                                    output = c.get('output', '')
-                                    if call_id in pending_tool_uses:
+                                    output = _normalize_codex_tool_output(c.get('output'))
+                                    if call_id and call_id in pending_tool_uses:
                                         pending_tool_uses[call_id].result = output
                                         pending_tool_uses[call_id].result_is_error = c.get('is_error', False)
                                     tool_results.append(ToolResult(
@@ -853,7 +1045,7 @@ def _parse_codex_transcript(transcript_path: Path, session_id: str) -> ParsedTra
         total_cache_creation_tokens=0,
         start_time=start_time,
         end_time=end_time,
-        cli_version=None,
+        cli_version=cli_version,
         git_branch=git_branch,
     )
 

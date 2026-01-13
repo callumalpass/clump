@@ -1116,6 +1116,45 @@ class TestParseTranscript:
         assert len(result.messages) == 1
         assert result.messages[0].content == "Just a plain string"
 
+    def test_parses_user_message_with_image_content(self, tmp_path, monkeypatch):
+        """Parses user message containing an image block."""
+        from app.services.transcript_parser import parse_transcript
+        import json
+
+        claude_dir = tmp_path / ".claude" / "projects"
+        project_dir = claude_dir / "-test-project"
+        project_dir.mkdir(parents=True)
+
+        transcript = project_dir / "session-user-image.jsonl"
+        transcript.write_text(json.dumps({
+            "type": "user",
+            "uuid": "msg-1",
+            "timestamp": "2025-01-01T10:00:00Z",
+            "message": {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Here is an image:"},
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": "iVBORw0KGgo="
+                        }
+                    }
+                ]
+            }
+        }) + "\n")
+
+        monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
+
+        result = parse_transcript("session-user-image", "/test/project")
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].content == (
+            "Here is an image:\n![image](data:image/png;base64,iVBORw0KGgo=)"
+        )
+
     def test_ignores_non_message_entry_types(self, tmp_path, monkeypatch):
         """Ignores entry types that aren't user/assistant/summary."""
         from app.services.transcript_parser import parse_transcript
