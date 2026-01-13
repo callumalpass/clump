@@ -915,6 +915,13 @@ def _do_quick_scan_codex_transcript(transcript_path: Path) -> QuickScanResult:
                     payload = entry.get('payload') or {}
                     result["start_time"] = payload.get('timestamp')
 
+                if entry_type == 'compacted':
+                    payload = entry.get('payload') or {}
+                    if payload.get('message'):
+                        result["message_count"] += 1
+                        if timestamp:
+                            result["end_time"] = timestamp
+
                 # Count messages from response_item entries
                 if entry_type == 'response_item':
                     # Use `or {}` to handle None values (key exists but value is None)

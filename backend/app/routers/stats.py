@@ -5,6 +5,7 @@ Provides aggregate usage data, daily activity, and cost estimates.
 """
 
 import json
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TypedDict
@@ -171,7 +172,9 @@ def get_display_name(model: str) -> str:
 @router.get("/stats", response_model=StatsResponse)
 async def get_stats():
     """Get usage stats from ~/.claude/stats-cache.json."""
-    stats_file = Path.home() / ".claude" / "stats-cache.json"
+    config_dir = os.environ.get("CLAUDE_CONFIG_DIR")
+    base_dir = Path(config_dir) if config_dir else Path.home() / ".claude"
+    stats_file = base_dir / "stats-cache.json"
 
     if not stats_file.exists():
         raise HTTPException(

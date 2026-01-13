@@ -7,6 +7,7 @@ Handles command building and session management for Google's Gemini CLI.
 import hashlib
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any, Optional
 
@@ -70,13 +71,20 @@ class GeminiAdapter(CLIAdapter):
 
     @property
     def discovery_config(self) -> SessionDiscoveryConfig:
+        base_dir = self._gemini_base_dir()
         return SessionDiscoveryConfig(
-            base_dir=Path.home() / ".gemini",
+            base_dir=base_dir,
             session_pattern="tmp/*/chats/*.json",
             file_extension="json",
             uses_project_hash=True,
             date_based_dirs=False,
         )
+
+    def _gemini_base_dir(self) -> Path:
+        gemini_home = os.environ.get("GEMINI_CLI_HOME")
+        if gemini_home:
+            return Path(gemini_home) / ".gemini"
+        return Path.home() / ".gemini"
 
     def _map_permission_mode(self, mode: Optional[str]) -> Optional[str]:
         """

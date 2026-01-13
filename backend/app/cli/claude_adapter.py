@@ -5,6 +5,7 @@ Handles command building and session management for Anthropic's Claude Code CLI.
 """
 
 import json
+import os
 from pathlib import Path
 from typing import Any, Optional
 
@@ -32,6 +33,9 @@ class ClaudeAdapter(CLIAdapter):
     - Permission modes via --permission-mode
     - Max turns via --max-turns
     - MCP configuration via --mcp-config
+    - Environment variables:
+        - CLAUDE_CODE_TMPDIR: Override temp directory
+        - CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: Disable background tasks
     """
 
     @property
@@ -58,10 +62,15 @@ class ClaudeAdapter(CLIAdapter):
             output_format="stream-json",
         )
 
+    def _claude_base_dir(self) -> Path:
+        config_dir = os.environ.get("CLAUDE_CONFIG_DIR")
+        return Path(config_dir) if config_dir else Path.home() / ".claude"
+
     @property
     def discovery_config(self) -> SessionDiscoveryConfig:
+        base_dir = self._claude_base_dir()
         return SessionDiscoveryConfig(
-            base_dir=Path.home() / ".claude",
+            base_dir=base_dir,
             session_pattern="projects/*/*.jsonl",
             file_extension="jsonl",
             uses_project_hash=True,

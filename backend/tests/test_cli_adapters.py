@@ -75,11 +75,11 @@ class TestCLIRegistry:
         assert adapter.cli_type == CLIType.CLAUDE
 
     def test_get_all_adapters(self):
-        """get_all_adapters returns all three adapters."""
+        """get_all_adapters returns all four adapters."""
         adapters = get_all_adapters()
-        assert len(adapters) == 3
+        assert len(adapters) == 4
         types = {a.cli_type for a in adapters}
-        assert types == {CLIType.CLAUDE, CLIType.GEMINI, CLIType.CODEX}
+        assert types == {CLIType.CLAUDE, CLIType.GEMINI, CLIType.CODEX, CLIType.COPILOT}
 
     def test_adapter_singleton(self):
         """Same adapter instance is returned for same type."""
@@ -90,7 +90,7 @@ class TestCLIRegistry:
     def test_get_cli_info(self):
         """get_cli_info returns info for all CLIs."""
         info = get_cli_info()
-        assert len(info) == 3
+        assert len(info) == 4
 
         # Check structure
         for cli in info:
@@ -164,9 +164,9 @@ class TestGetInstalledAdapters:
         """Returns all adapters when all CLIs are installed."""
         with patch("app.cli.registry.shutil.which", return_value="/usr/bin/cmd"):
             result = get_installed_adapters()
-            assert len(result) == 3
+            assert len(result) == 4
             types = {a.cli_type for a in result}
-            assert types == {CLIType.CLAUDE, CLIType.GEMINI, CLIType.CODEX}
+            assert types == {CLIType.CLAUDE, CLIType.GEMINI, CLIType.CODEX, CLIType.COPILOT}
 
     def test_returns_only_installed_adapters(self):
         """Returns only adapters for installed CLIs."""

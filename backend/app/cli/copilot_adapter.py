@@ -25,6 +25,9 @@ class CopilotAdapter(CLIAdapter):
     """
     Adapter for GitHub Copilot CLI.
 
+    This adapter supports the standalone `copilot` CLI (the "Copilot Agent"),
+    which replaces the deprecated `gh copilot` extension.
+
     Copilot stores sessions in:
     - ~/.copilot/session-state (current sessions)
     - ~/.copilot/history-session-state (legacy sessions)
@@ -136,14 +139,15 @@ class CopilotAdapter(CLIAdapter):
         Map clump's tool allow/deny inputs to Copilot CLI flags.
 
         Copilot supports:
-        - --allow-all-tools
+        - --allow-all-tools (or --yolo)
         - --allow-tool <spec>
         - --deny-tool <spec>
         """
         args: list[str] = []
 
         if permission_mode == "bypassPermissions":
-            args.append("--allow-all-tools")
+            # --yolo is an alias for --allow-all-tools in newer versions (0.0.381+)
+            args.append("--yolo")
         if permission_mode == "acceptEdits":
             args.extend(["--allow-tool", "write"])
 

@@ -6,6 +6,7 @@ Handles command building and session management for OpenAI's Codex CLI.
 
 import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
@@ -69,13 +70,18 @@ class CodexAdapter(CLIAdapter):
 
     @property
     def discovery_config(self) -> SessionDiscoveryConfig:
+        base_dir = self._codex_base_dir()
         return SessionDiscoveryConfig(
-            base_dir=Path.home() / ".codex",
+            base_dir=base_dir,
             session_pattern="sessions/*/*/*/*.jsonl",
             file_extension="jsonl",
             uses_project_hash=False,  # Uses date-based organization
             date_based_dirs=True,
         )
+
+    def _codex_base_dir(self) -> Path:
+        codex_home = os.environ.get("CODEX_HOME")
+        return Path(codex_home) if codex_home else Path.home() / ".codex"
 
     def _map_permission_mode(self, mode: Optional[str]) -> Optional[str]:
         """
@@ -329,6 +335,9 @@ class CodexAdapter(CLIAdapter):
 
         Since Codex organizes by date, we need to scan all sessions
         and check their cwd metadata.
+        
+        TODO: This O(N) scan over all sessions is inefficient. Consider maintaining
+        a sidecar index or cache of session->repo mappings to improve performance.
         """
         sessions_dir = self.get_sessions_dir(repo_path)
         matching = []

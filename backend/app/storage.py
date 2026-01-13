@@ -27,6 +27,7 @@ Performance optimizations:
 import json
 import hashlib
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
 from datetime import datetime
@@ -313,16 +314,25 @@ def get_clump_projects_dir() -> Path:
 
 def get_claude_projects_dir() -> Path:
     """Get Claude's projects directory (~/.claude/projects/)."""
+    config_dir = os.environ.get("CLAUDE_CONFIG_DIR")
+    if config_dir:
+        return Path(config_dir) / "projects"
     return Path.home() / ".claude" / "projects"
 
 
 def get_gemini_projects_dir() -> Path:
     """Get Gemini's projects directory (~/.gemini/tmp/)."""
+    gemini_home = os.environ.get("GEMINI_CLI_HOME")
+    if gemini_home:
+        return Path(gemini_home) / ".gemini" / "tmp"
     return Path.home() / ".gemini" / "tmp"
 
 
 def get_codex_sessions_dir() -> Path:
     """Get Codex's sessions directory (~/.codex/sessions/)."""
+    codex_home = os.environ.get("CODEX_HOME")
+    if codex_home:
+        return Path(codex_home) / "sessions"
     return Path.home() / ".codex" / "sessions"
 
 
