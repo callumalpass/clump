@@ -961,6 +961,7 @@ class TestGetPendingSessions:
         mock_process.claude_session_id = "pending-uuid"
         mock_process.working_dir = "/home/user/projects/myapp"
         mock_process.model = "claude-3-opus"
+        mock_process.cli_type = "claude"
         mock_process.created_at = datetime(2024, 1, 15, 10, 30, 0)
 
         # Patch at the module level since _get_pending_sessions imports it fresh
@@ -986,6 +987,7 @@ class TestGetPendingSessions:
         mock_process = MagicMock()
         mock_process.claude_session_id = "existing-uuid"
         mock_process.working_dir = "/home/user/projects/myapp"
+        mock_process.cli_type = "claude"
 
         with patch("app.routers.sessions.process_manager") as mock_pm:
             mock_pm.get_processes_snapshot = AsyncMock(return_value=[mock_process])
@@ -1004,6 +1006,7 @@ class TestGetPendingSessions:
         mock_process.claude_session_id = "pending-uuid"
         mock_process.working_dir = "/home/user/projects/myapp"
         mock_process.model = "claude-3-opus"
+        mock_process.cli_type = "claude"
         mock_process.created_at = datetime(2024, 1, 15, 10, 30, 0)
 
         mock_metadata = SessionMetadata(
@@ -1042,12 +1045,14 @@ class TestGetPendingSessions:
         mock_process1.claude_session_id = "uuid-1"
         mock_process1.working_dir = "/path/to/repo1"
         mock_process1.model = "claude-3-opus"
+        mock_process1.cli_type = "claude"
         mock_process1.created_at = datetime(2024, 1, 15, 10, 0, 0)
 
         mock_process2 = MagicMock()
         mock_process2.claude_session_id = "uuid-2"
         mock_process2.working_dir = "/path/to/repo2"
         mock_process2.model = "claude-3-opus"
+        mock_process2.cli_type = "claude"
         mock_process2.created_at = datetime(2024, 1, 15, 10, 5, 0)
 
         with patch("app.routers.sessions.process_manager") as mock_pm, \
@@ -1077,12 +1082,14 @@ class TestGetPendingSessions:
         mock_process1.claude_session_id = "uuid-1"
         mock_process1.working_dir = "/path/to/repo1"
         mock_process1.model = "claude-3-opus"
+        mock_process1.cli_type = "claude"
         mock_process1.created_at = datetime(2024, 1, 15, 10, 0, 0)
 
         mock_process2 = MagicMock()
         mock_process2.claude_session_id = "uuid-2"
         mock_process2.working_dir = "/path/to/repo2"
         mock_process2.model = "claude-3-opus"
+        mock_process2.cli_type = "claude"
         mock_process2.created_at = datetime(2024, 1, 15, 10, 5, 0)
 
         with patch("app.routers.sessions.process_manager") as mock_pm, \
@@ -4349,6 +4356,29 @@ class TestCodexQuickScanNoneHandling:
         assert result["model"] == "gpt-4o"
         assert result["message_count"] == 3
         assert result["title"] == "Can you help?"  # First real user message
+
+    def test_compacted_codex_transcript_counts_messages(self, tmp_path):
+        """Counts compacted entries as assistant messages."""
+        import json
+
+        session_file = tmp_path / "test-session.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "compacted",
+                "timestamp": "2025-01-15T10:00:01Z",
+                "payload": {"message": "Compacted summary"}
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        result = _do_quick_scan_codex_transcript(session_file)
+        assert result is not None
+        assert result["message_count"] == 1
+        assert result["end_time"] == "2025-01-15T10:00:01Z"
 
     def test_mixed_none_and_valid_payloads(self, tmp_path):
         """Handles mix of None and valid payloads gracefully."""

@@ -1526,6 +1526,61 @@ class TestParseGeminiTranscript:
         assert result.messages[0].tool_uses[0].name == "read_file"
         assert result.messages[0].tool_uses[0].input == {"path": "/test.py"}
 
+    def test_parses_gemini_tool_calls_and_tokens(self, tmp_path):
+        """Parses Gemini toolCalls metadata, thoughts, and token summaries."""
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        gemini_dir = tmp_path / ".gemini" / "tmp" / "abc123" / "chats"
+        gemini_dir.mkdir(parents=True)
+
+        session_file = gemini_dir / "session-toolcalls.json"
+        session_file.write_text(json.dumps({
+            "sessionId": "session-toolcalls",
+            "messages": [
+                {
+                    "type": "gemini",
+                    "content": "",
+                    "toolCalls": [
+                        {
+                            "id": "call-1",
+                            "name": "shell",
+                            "args": {"command": "ls"},
+                            "status": "success",
+                            "timestamp": "2025-01-01T10:00:00Z",
+                            "result": [
+                                {
+                                    "functionResponse": {
+                                        "name": "shell",
+                                        "response": {"output": "ok"}
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    "tokens": {"input": 5, "output": 7, "cached": 2, "total": 14},
+                    "thoughts": [
+                        {"subject": "Plan", "description": "List files"}
+                    ],
+                    "model": "gemini-2.0-flash",
+                    "timestamp": "2025-01-01T10:00:00Z"
+                }
+            ],
+            "startTime": "2025-01-01T10:00:00Z"
+        }))
+
+        result = parse_transcript_file(session_file, "session-toolcalls", cli_type=CLIType.GEMINI.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert len(result.messages[0].tool_uses) == 1
+        assert result.messages[0].tool_uses[0].name == "shell"
+        assert result.messages[0].tool_uses[0].input == {"command": "ls"}
+        assert result.messages[0].tool_uses[0].result == "ok"
+        assert result.messages[0].usage.input_tokens == 5
+        assert result.messages[0].usage.output_tokens == 7
+        assert result.messages[0].thinking is not None
+
     def test_parses_gemini_summary(self, tmp_path):
         """Parses Gemini session summary."""
         from app.services.transcript_parser import parse_transcript_file
@@ -1722,6 +1777,103 @@ class TestParseCodexTranscript:
         assert len(result.messages[0].tool_uses) == 1
         assert result.messages[0].tool_uses[0].name == "shell"
 
+    def test_parses_codex_additional_tool_calls(self, tmp_path):
+        """Parses Codex custom, shell, and web search tool calls."""
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-extra-tools.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:01Z",
+                "payload": {
+                    "type": "custom_tool_call",
+                    "call_id": "tool-1",
+                    "name": "mcp.foo",
+                    "input": "{\"query\": \"hi\"}"
+                }
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:02Z",
+                "payload": {
+                    "type": "custom_tool_call_output",
+                    "call_id": "tool-1",
+                    "output": "done"
+                }
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:03Z",
+                "payload": {
+                    "type": "local_shell_call",
+                    "call_id": "shell-1",
+                    "action": {"type": "exec", "command": ["ls", "-la"]}
+                }
+            }),
+            json.dumps({
+                "type": "response_item",
+                "timestamp": "2025-01-15T10:00:04Z",
+                "payload": {
+                    "type": "web_search_call",
+                    "action": {"type": "search", "query": "codex"}
+                }
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(
+            session_file,
+            "session-extra-tools",
+            cli_type=CLIType.CODEX.value,
+        )
+        assert result is not None
+        assert len(result.messages) == 1
+        assert len(result.messages[0].tool_uses) == 3
+        assert result.messages[0].tool_uses[0].name == "mcp.foo"
+        assert result.messages[0].tool_uses[0].input == {"query": "hi"}
+        assert result.messages[0].tool_uses[0].result == "done"
+        assert result.messages[0].tool_uses[1].name == "local_shell"
+        assert result.messages[0].tool_uses[2].name == "web_search"
+
+    def test_parses_codex_compacted_entry(self, tmp_path):
+        """Parses Codex compacted entries as assistant messages."""
+        from app.services.transcript_parser import parse_transcript_file
+        from app.cli import CLIType
+        import json
+
+        codex_dir = tmp_path / ".codex" / "sessions" / "2025" / "01" / "15"
+        codex_dir.mkdir(parents=True)
+
+        session_file = codex_dir / "session-compacted.jsonl"
+        lines = [
+            json.dumps({
+                "type": "session_meta",
+                "payload": {"timestamp": "2025-01-15T10:00:00Z"}
+            }),
+            json.dumps({
+                "type": "compacted",
+                "timestamp": "2025-01-15T10:05:00Z",
+                "payload": {"message": "Compacted summary"}
+            }),
+        ]
+        session_file.write_text("\n".join(lines) + "\n")
+
+        result = parse_transcript_file(session_file, "session-compacted", cli_type=CLIType.CODEX.value)
+        assert result is not None
+        assert len(result.messages) == 1
+        assert result.messages[0].role == "assistant"
+        assert result.messages[0].content == "Compacted summary"
+
     def test_parses_codex_session_meta(self, tmp_path):
         """Parses Codex session metadata."""
         from app.services.transcript_parser import parse_transcript_file
@@ -1747,6 +1899,7 @@ class TestParseCodexTranscript:
         result = parse_transcript_file(session_file, "session-meta", cli_type=CLIType.CODEX.value)
         assert result is not None
         assert result.start_time == "2025-01-15T10:00:00Z"
+        assert result.cli_version == "0.5.0"
 
     def test_skips_codex_environment_context(self, tmp_path):
         """Skips Codex environment context messages."""
