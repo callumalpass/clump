@@ -1705,12 +1705,9 @@ button:disabled .kbd-hint {
   container-type: inline-size;
 }
 
-/* Hide tab labels and kbd hints when container is under 300px */
-@container (max-width: 300px) {
+/* Hide tab labels when the tab bar gets tight */
+@container (max-width: 420px) {
   .nav-tab-label {
-    display: none;
-  }
-  .nav-tab .kbd-hint {
     display: none;
   }
 }
@@ -1718,6 +1715,13 @@ button:disabled .kbd-hint {
 /* Hide kbd hints when container is under 380px */
 @container (max-width: 380px) {
   .nav-tab .kbd-hint {
+    display: none;
+  }
+}
+
+/* Hide counts when container is very tight */
+@container (max-width: 360px) {
+  .nav-tab-count {
     display: none;
   }
 }

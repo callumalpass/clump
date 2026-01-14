@@ -22,7 +22,7 @@ interface SessionDetailProps {
   /** Navigate to a PR */
   onShowPR?: (prNumber: number) => void;
   /** Navigate to a schedule */
-  onShowSchedule?: (scheduleId: string) => void;
+  onShowSchedule?: (scheduleId: string | number) => void;
   /** Available issues for context */
   issues?: Issue[];
   /** Available PRs for context */
@@ -298,20 +298,29 @@ export function SessionDetail({
         {session.entities && session.entities.length > 0 && (
           <div className="flex items-center gap-2 mt-3">
             <span className="text-xs text-gray-500">Linked:</span>
-            {session.entities.map((entity, i) => (
-              <EntityBadge
-                key={`${entity.kind}-${entity.number}-${i}`}
-                kind={entity.kind}
-                number={entity.number}
-                onClick={() => {
-                  if (entity.kind === 'issue' && onShowIssue) {
-                    onShowIssue(entity.number);
-                  } else if (entity.kind === 'pr' && onShowPR) {
-                    onShowPR(entity.number);
-                  }
-                }}
-              />
-            ))}
+            {session.entities.map((entity, i) => {
+              if (entity.kind !== 'issue' && entity.kind !== 'pr') {
+                return null;
+              }
+              const number = typeof entity.number === 'number' ? entity.number : Number(entity.number);
+              if (!Number.isFinite(number)) {
+                return null;
+              }
+              return (
+                <EntityBadge
+                  key={`${entity.kind}-${entity.number}-${i}`}
+                  kind={entity.kind}
+                  number={number}
+                  onClick={() => {
+                    if (entity.kind === 'issue' && onShowIssue) {
+                      onShowIssue(number);
+                    } else if (entity.kind === 'pr' && onShowPR) {
+                      onShowPR(number);
+                    }
+                  }}
+                />
+              );
+            })}
           </div>
         )}
 

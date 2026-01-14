@@ -8,7 +8,10 @@ export function getContrastColor(hexColor: string): string {
 
   // Expand 3-character hex to 6-character (e.g., 'fff' -> 'ffffff')
   if (hex.length === 3) {
-    hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+    const r = hex.charAt(0);
+    const g = hex.charAt(1);
+    const b = hex.charAt(2);
+    hex = r + r + g + g + b + b;
   }
 
   // Validate hex length

@@ -21,7 +21,7 @@ const getCliOptions = (availableCLIs?: CLIInfo[]): CLIOption[] => {
 
 interface ScheduleDetailProps {
   repoId: number;
-  scheduleId: string;
+  scheduleId: string | number;
   onShowSession?: (sessionId: string) => void;
   sessions?: SessionSummary[];
   commands?: CommandsResponse;

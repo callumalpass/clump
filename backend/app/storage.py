@@ -1885,3 +1885,203 @@ def generate_schedule_id(name: str, repo_path: str) -> str:
         counter += 1
 
     return slug
+
+
+# ==========================================
+# Work Items Storage
+# ==========================================
+# Work items are stored as JSON in <REPO>/.clump/work_items/{id}.json
+
+
+@dataclass
+class WorkItem:
+    """
+    A local work item (task) stored in <REPO>/.clump/work_items/{id}.json.
+    Includes AI analysis fields similar to IssueMetadata.
+    """
+    id: str
+    title: str
+    description: Optional[str] = None
+    status: str = "open"  # open, in_progress, completed, cancelled
+    priority: str = "medium"  # low, medium, high, critical
+    tags: list[str] = field(default_factory=list)
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+    # AI Analysis Fields (mirroring IssueMetadata)
+    ai_summary: Optional[str] = None
+    complexity: Optional[str] = None  # trivial, easy, medium, hard, complex
+    risk: Optional[str] = None  # low, medium, high
+    suggested_approach: Optional[str] = None
+    notes: Optional[str] = None  # Free-form analysis/notes
+    analyzed_at: Optional[str] = None
+    analyzed_by: Optional[str] = None
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "id": self.id,
+            "title": self.title,
+            "description": self.description,
+            "status": self.status,
+            "priority": self.priority,
+            "tags": self.tags,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "ai_summary": self.ai_summary,
+            "complexity": self.complexity,
+            "risk": self.risk,
+            "suggested_approach": self.suggested_approach,
+            "notes": self.notes,
+            "analyzed_at": self.analyzed_at,
+            "analyzed_by": self.analyzed_by,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "WorkItem":
+        """Create from dictionary."""
+        return cls(
+            id=data["id"],
+            title=data["title"],
+            description=data.get("description"),
+            status=data.get("status", "open"),
+            priority=data.get("priority", "medium"),
+            tags=data.get("tags") or [],
+            created_at=data.get("created_at"),
+            updated_at=data.get("updated_at"),
+            ai_summary=data.get("ai_summary"),
+            complexity=data.get("complexity"),
+            risk=data.get("risk"),
+            suggested_approach=data.get("suggested_approach"),
+            notes=data.get("notes"),
+            analyzed_at=data.get("analyzed_at"),
+            analyzed_by=data.get("analyzed_by"),
+        )
+
+
+def get_repo_work_items_dir(repo_path: str) -> Path:
+    """
+    Get the work items directory for a repo.
+
+    Returns {repo_path}/.clump/work_items/ and creates it if needed.
+    """
+    items_dir = Path(repo_path) / ".clump" / "work_items"
+    items_dir.mkdir(parents=True, exist_ok=True)
+    return items_dir
+
+
+def get_work_item(repo_path: str, item_id: str) -> Optional[WorkItem]:
+    """
+    Read a work item from JSON.
+
+    Args:
+        repo_path: Path to the repository
+        item_id: The item ID (filename without .json)
+
+    Returns:
+        WorkItem if found, None otherwise.
+    """
+    item_path = get_repo_work_items_dir(repo_path) / f"{item_id}.json"
+    if not item_path.exists():
+        return None
+
+    try:
+        with open(item_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            # Ensure ID matches filename
+            data["id"] = item_id
+            return WorkItem.from_dict(data)
+    except (json.JSONDecodeError, IOError, KeyError):
+        return None
+
+
+def save_work_item(
+    repo_path: str,
+    item: WorkItem,
+    create_new: bool = False
+) -> None:
+    """
+    Save a work item to JSON.
+
+    Args:
+        repo_path: Path to the repository
+        item: The work item to save
+        create_new: If True, use exclusive mode to ensure atomic creation.
+                   Raises FileExistsError if file already exists.
+    """
+    items_dir = get_repo_work_items_dir(repo_path)
+    item_path = items_dir / f"{item.id}.json"
+
+    mode = "x" if create_new else "w"
+    with open(item_path, mode, encoding="utf-8") as f:
+        json.dump(item.to_dict(), f, indent=2)
+
+
+def delete_work_item(repo_path: str, item_id: str) -> bool:
+    """
+    Delete a work item.
+
+    Args:
+        repo_path: Path to the repository
+        item_id: The item ID to delete
+
+    Returns:
+        True if deleted, False if not found.
+    """
+    item_path = get_repo_work_items_dir(repo_path) / f"{item_id}.json"
+    if item_path.exists():
+        item_path.unlink()
+        return True
+    return False
+
+
+def list_work_items(repo_path: str) -> list[WorkItem]:
+    """
+    List all work items for a repo.
+
+    Args:
+        repo_path: Path to the repository
+
+    Returns:
+        List of WorkItem objects.
+    """
+    items_dir = Path(repo_path) / ".clump" / "work_items"
+    if not items_dir.exists():
+        return []
+
+    items = []
+    try:
+        for json_file in sorted(items_dir.glob("*.json")):
+            try:
+                with open(json_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    # Use filename as ID
+                    data["id"] = json_file.stem
+                    items.append(WorkItem.from_dict(data))
+            except (json.JSONDecodeError, IOError, KeyError):
+                continue
+    except OSError:
+        pass
+
+    return items
+
+
+def generate_work_item_id(repo_path: str) -> str:
+    """
+    Generate a unique ID for a new work item.
+    Uses sequential integers (1, 2, 3...) stored as filenames.
+    """
+    items = list_work_items(repo_path)
+
+    # Extract integer IDs
+    ids = []
+    for item in items:
+        try:
+            ids.append(int(item.id))
+        except ValueError:
+            continue
+
+    if not ids:
+        return "1"
+
+    return str(max(ids) + 1)

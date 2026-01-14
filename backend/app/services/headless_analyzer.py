@@ -73,6 +73,8 @@ class HeadlessAnalyzer:
         self._running_sessions: dict[str, asyncio.subprocess.Process] = {}
         # Explicit tracking set - more reliable than process dict for status checks
         self._active_session_ids: set[str] = set()
+        # In-memory transcripts for running sessions
+        self._running_transcripts: dict[str, list[SessionMessage]] = {}
         # Lock to protect concurrent access to session tracking data structures
         self._lock = asyncio.Lock()
 
@@ -81,12 +83,21 @@ class HeadlessAnalyzer:
         logger.info("Registering session as running: %s", session_id)
         async with self._lock:
             self._active_session_ids.add(session_id)
+            self._running_transcripts[session_id] = []
 
     async def unregister_running(self, session_id: str) -> None:
         """Unregister a session as running. Call when session completes."""
         logger.info("Unregistering session (completed): %s", session_id)
         async with self._lock:
             self._active_session_ids.discard(session_id)
+            self._running_transcripts.pop(session_id, None)
+
+    def get_running_transcript(self, session_id: str) -> list[SessionMessage] | None:
+        """Get the current in-memory transcript for a running session."""
+        # No lock needed for read-only access to dict (atomic in Python)
+        # Returns a copy to prevent modification
+        transcript = self._running_transcripts.get(session_id)
+        return list(transcript) if transcript is not None else None
 
     async def analyze(
         self,
@@ -252,32 +263,64 @@ class HeadlessAnalyzer:
 
                 try:
                     data = json.loads(line.decode("utf-8").strip())
-                    yield self._parse_message(data)
+                    msg = self._parse_message(data)
+                    
+                    # Store in running transcripts if tracking is active
+                    if session_id:
+                        transcript = self._running_transcripts.get(session_id)
+                        if transcript is not None:
+                            transcript.append(msg)
+                            
+                    yield msg
                 except json.JSONDecodeError:
                     # Non-JSON output (shouldn't happen with stream-json)
                     text = line.decode("utf-8", errors="replace")
                     text_chunks.append(text)
-                    yield SessionMessage(type="text", content=text)
+                    msg = SessionMessage(type="text", content=text)
+                    
+                    # Store in running transcripts if tracking is active
+                    if session_id:
+                        transcript = self._running_transcripts.get(session_id)
+                        if transcript is not None:
+                            transcript.append(msg)
+                            
+                    yield msg
 
             # Check for errors
             await process.wait()
             if process.returncode != 0 and process.stderr:
                 stderr = await process.stderr.read()
                 if stderr:
-                    yield SessionMessage(
+                    msg = SessionMessage(
                         type="error",
                         content=stderr.decode("utf-8", errors="replace"),
                     )
+                    
+                    # Store in running transcripts if tracking is active
+                    if session_id:
+                        transcript = self._running_transcripts.get(session_id)
+                        if transcript is not None:
+                            transcript.append(msg)
+                            
+                    yield msg
                     return
 
             # For text-based CLIs (Copilot), emit a result message from stdout
             if fmt == "text":
                 content = "".join(text_chunks).strip()
-                yield SessionMessage(
+                msg = SessionMessage(
                     type="result",
                     subtype="success",
                     content=content,
                 )
+                
+                # Store in running transcripts if tracking is active
+                if session_id:
+                    transcript = self._running_transcripts.get(session_id)
+                    if transcript is not None:
+                        transcript.append(msg)
+                        
+                yield msg
 
         finally:
             async with self._lock:
@@ -338,6 +381,7 @@ class HeadlessAnalyzer:
             # Track whether it was in active_session_ids before removal
             was_in_active = session_id in self._active_session_ids
             self._active_session_ids.discard(session_id)
+            self._running_transcripts.pop(session_id, None)
 
         if process:
             process.terminate()

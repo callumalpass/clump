@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import { Group, Panel } from 'react-resizable-panels';
-import { useRepos, useIssues, usePRs, useProcesses, useSessions, useTags, useIssueTags, useIssueMetadata, usePRMetadata, useCommands, useSessionCounts, useStats, useAvailableCLIs, buildPromptFromTemplate, exportSession, downloadExport } from './hooks/useApi';
+import { useRepos, useIssues, usePRs, useProcesses, useSessions, useTags, useIssueTags, useIssueMetadata, usePRMetadata, useCommands, useSessionCounts, useStats, useAvailableCLIs, useWorkItems, buildPromptFromTemplate, exportSession, downloadExport } from './hooks/useApi';
 import { useNotifications } from './hooks/useNotifications';
 import { useWebSocketManager } from './contexts/WebSocketContext';
 import type { IssueFilters, SessionFilters, PRFilters } from './hooks/useApi';
@@ -9,6 +9,7 @@ import { IssueList } from './components/IssueList';
 import { PRList } from './components/PRList';
 import { SessionList } from './components/SessionList';
 import { ScheduleList } from './components/ScheduleList';
+import { WorkItemList } from './components/WorkItemList';
 import { DetailPane } from './components/DetailPane';
 import { SessionPanel } from './components/SessionPanel';
 import { StatsModal } from './components/StatsModal';
@@ -23,7 +24,7 @@ import { LRUCache } from './utils/cache';
 import { pluralize } from './utils/text';
 import { encodeRepoPath } from './utils/paths';
 
-type Tab = 'issues' | 'prs' | 'history' | 'schedules';
+type Tab = 'issues' | 'prs' | 'history' | 'schedules' | 'work-items';
 
 // Pre-defined SVG icons as constants to avoid recreating JSX objects on every render
 const ICON_ISSUE = (
@@ -48,6 +49,12 @@ const ICON_HISTORY = (
 const ICON_SCHEDULES = (
   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  </svg>
+);
+
+const ICON_WORK_ITEMS = (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
   </svg>
 );
 
@@ -97,7 +104,7 @@ const ACTIVE_TAB_STORAGE_KEY = 'clump:activeTab';
 const REPO_SESSION_TABS_KEY = 'clump:repoSessionTabs';
 
 // Valid tab values for validation
-const VALID_TABS: Tab[] = ['issues', 'prs', 'history', 'schedules'];
+const VALID_TABS: Tab[] = ['issues', 'prs', 'history', 'schedules', 'work-items'];
 
 /**
  * Converts a session category filter to an isActive boolean value.
@@ -166,7 +173,7 @@ export default function App() {
   const [prFilters, setPRFilters] = useState<PRFilters>({ state: 'open' });
   const [isCreatingIssue, setIsCreatingIssue] = useState(false);
   // Track selected schedule for center pane detail view
-  const [selectedSchedule, setSelectedSchedule] = useState<string | null>(null);
+  const [selectedSchedule, setSelectedSchedule] = useState<string | number | null>(null);
   // Track selected session for center pane detail view (from History tab)
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   // Track view mode (transcript vs terminal) per session
@@ -310,6 +317,10 @@ export default function App() {
   const { metadataMap: prMetadataMap, refreshSingle: refreshPRMetadata } = usePRMetadata(selectedRepo?.id ?? null);
   // Lazy-load PRs only when the PRs tab is active (perf optimization)
   const { prs, loading: prsLoading, error: prsError, refresh: refreshPRs, page: prsPage, totalPages: prsTotalPages, total: prsTotal, goToPage: goToPRsPage } = usePRs(selectedRepo?.id ?? null, prFilters, activeTab === 'prs');
+  // Lazy-load Work Items only when the Work Items tab is active
+  const { items: workItems, loading: workItemsLoading, error: workItemsError, refresh: refreshWorkItems, createItem: createWorkItem, updateItem: updateWorkItem, deleteItem: deleteWorkItem } = useWorkItems(selectedRepo?.id ?? null, activeTab === 'work-items');
+  const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
+  
   const { commands, refresh: refreshCommands } = useCommands(selectedRepo?.local_path);
   const { counts: sessionCounts, refresh: refreshSessionCounts, updateCounts } = useSessionCounts();
 
@@ -501,6 +512,7 @@ export default function App() {
     setSelectedIssue(null);
     setSelectedPR(null);
     setSelectedSchedule(null);
+    setSelectedWorkItemId(null);
 
     // Clear process/cache if repo changed (BEFORE restoring tabs for new repo)
     if (repoActuallyChanged || !selectedRepo?.id) {
@@ -553,6 +565,7 @@ export default function App() {
     setSelectedPR(null);
     setSelectedSchedule(null);
     setSelectedSessionId(null);
+    setSelectedWorkItemId(null);
     // Refresh the issue's metadata in case Claude updated it
     refreshIssueMetadata(issueNumber);
   }, [refreshIssueMetadata]);
@@ -563,9 +576,19 @@ export default function App() {
     setSelectedIssue(null);
     setSelectedSchedule(null);
     setSelectedSessionId(null);
+    setSelectedWorkItemId(null);
     // Refresh the PR's metadata in case Claude updated it
     refreshPRMetadata(prNumber);
   }, [refreshPRMetadata]);
+
+  // Handle Work Item selection
+  const handleSelectWorkItem = useCallback((itemId: string) => {
+    setSelectedWorkItemId(itemId);
+    setSelectedIssue(null);
+    setSelectedPR(null);
+    setSelectedSchedule(null);
+    setSelectedSessionId(null);
+  }, []);
 
   // Note: Session list is now event-driven via WebSocket - no polling needed
   // Events trigger refreshSessions() when sessions change
@@ -673,6 +696,58 @@ export default function App() {
     [selectedRepo, selectedCLI, createProcess, refreshSessionsDebounced]
   );
 
+  const handleStartWorkItemSession = useCallback(
+    async (item: import('./types').WorkItem, command: CommandMetadata) => {
+      if (!selectedRepo) return;
+
+      const aiSummarySection = item.ai_summary ? `Previous AI Analysis:\n${item.ai_summary}` : '';
+      const suggestedApproachSection = item.suggested_approach ? `Suggested Approach:\n${item.suggested_approach}` : '';
+
+      const prompt = buildPromptFromTemplate(command.template, {
+        id: item.id,
+        title: item.title,
+        status: item.status,
+        priority: item.priority,
+        description: item.description || '(No description)',
+        ai_summary: item.ai_summary || '',
+        suggested_approach: item.suggested_approach || '',
+        ai_summary_section: aiSummarySection,
+        suggested_approach_section: suggestedApproachSection,
+        encoded_path: encodeRepoPath(selectedRepo.local_path),
+        local_path: selectedRepo.local_path,
+      });
+
+      const title = `${command.name}: Task ${item.title}`;
+      const entities: EntityLink[] = [{ kind: 'work_item', number: item.id }];
+
+      const process = await createProcess(
+        selectedRepo.id,
+        prompt,
+        'custom', // Use custom kind for now, or add 'work_item' to backend kinds
+        entities,
+        title,
+        { cli_type: selectedCLI }
+      );
+
+      // Store pending session data
+      if (process.claude_session_id) {
+        pendingSessionsRef.current.set(process.claude_session_id, { title, entities });
+      }
+
+      if (process.mode === 'pty') {
+        setActiveProcessId(process.id);
+      }
+
+      if (process.claude_session_id) {
+        setOpenSessionIds(prev => prev.includes(process.claude_session_id!) ? prev : [...prev, process.claude_session_id!]);
+        setActiveTabSessionId(process.claude_session_id);
+      }
+
+      refreshSessionsDebounced();
+    },
+    [selectedRepo, selectedCLI, createProcess, refreshSessionsDebounced]
+  );
+
   const handleNewProcess = useCallback(async () => {
     if (!selectedRepo) return;
 
@@ -714,13 +789,20 @@ export default function App() {
       // Select the first linked issue or PR for context
       const firstIssue = session.entities?.find(e => e.kind === 'issue');
       const firstPR = session.entities?.find(e => e.kind === 'pr');
+      const firstWorkItem = session.entities?.find(e => e.kind === 'work_item');
 
       if (firstIssue) {
-        setSelectedIssue(firstIssue.number);
+        setSelectedIssue(firstIssue.number as number);
         setSelectedPR(null);
+        setSelectedWorkItemId(null);
       } else if (firstPR) {
-        setSelectedPR(firstPR.number);
+        setSelectedPR(firstPR.number as number);
         setSelectedIssue(null);
+        setSelectedWorkItemId(null);
+      } else if (firstWorkItem) {
+        setSelectedWorkItemId(firstWorkItem.number.toString());
+        setSelectedIssue(null);
+        setSelectedPR(null);
       }
 
       // Add session to open tabs
@@ -734,6 +816,7 @@ export default function App() {
       setSelectedIssue(null);
       setSelectedPR(null);
       setSelectedSchedule(null);
+      setSelectedWorkItemId(null);
     }
   }, [processesBySessionId]);
 
@@ -826,13 +909,20 @@ export default function App() {
     // Update issue/PR selection for context (use first linked entity)
     const firstIssue = session.entities?.find(e => e.kind === 'issue');
     const firstPR = session.entities?.find(e => e.kind === 'pr');
+    const firstWorkItem = session.entities?.find(e => e.kind === 'work_item');
 
     if (firstIssue) {
-      setSelectedIssue(firstIssue.number);
+      setSelectedIssue(firstIssue.number as number);
       setSelectedPR(null);
+      setSelectedWorkItemId(null);
     } else if (firstPR) {
-      setSelectedPR(firstPR.number);
+      setSelectedPR(firstPR.number as number);
       setSelectedIssue(null);
+      setSelectedWorkItemId(null);
+    } else if (firstWorkItem) {
+      setSelectedWorkItemId(firstWorkItem.number.toString());
+      setSelectedIssue(null);
+      setSelectedPR(null);
     }
   }, [sessionsById, processesBySessionId, clearAttention, getCachedSession]);
 
@@ -1001,6 +1091,7 @@ export default function App() {
     setSelectedPR(null);
     setSelectedSchedule(null);
     setSelectedSessionId(null);
+    setSelectedWorkItemId(null);
   }, []);
 
   const handleShowPR = useCallback((prNumber: number) => {
@@ -1008,13 +1099,15 @@ export default function App() {
     setSelectedIssue(null);
     setSelectedSchedule(null);
     setSelectedSessionId(null);
+    setSelectedWorkItemId(null);
   }, []);
 
-  const handleShowSchedule = useCallback((scheduleId: string) => {
+  const handleShowSchedule = useCallback((scheduleId: string | number) => {
     setSelectedSchedule(scheduleId);
     setSelectedIssue(null);
     setSelectedSessionId(null);
     setSelectedPR(null);
+    setSelectedWorkItemId(null);
     setActiveTab('schedules');
   }, []);
 
@@ -1179,6 +1272,8 @@ export default function App() {
           setSelectedIssue(null);
         } else if (selectedPR) {
           setSelectedPR(null);
+        } else if (selectedWorkItemId) {
+          setSelectedWorkItemId(null);
         }
         return;
       }
@@ -1227,6 +1322,15 @@ export default function App() {
       icon: ICON_SCHEDULES,
       category: 'navigation',
       action: () => setActiveTab('schedules'),
+    });
+
+    cmds.push({
+      id: 'nav-work-items',
+      label: 'Go to Work Items',
+      description: 'View local work items',
+      icon: ICON_WORK_ITEMS,
+      category: 'navigation',
+      action: () => setActiveTab('work-items'),
     });
 
     // Action commands
@@ -1436,87 +1540,94 @@ export default function App() {
             sessionCounts={sessionCounts}
           />
 
-          {/* Tabs for Issues/PRs/History/Schedules */}
-          <div className="flex-1 min-h-0 flex flex-col">
-              {/* Tabs with sliding indicator */}
-              <div
-                ref={tabsContainerRef}
-                className="nav-tabs-container relative flex border-b border-gray-750 shrink-0"
-                role="tablist"
-                aria-label="Main navigation"
-                onKeyDown={(e) => {
-                  const tabs: Tab[] = ['issues', 'prs', 'history', 'schedules'];
-                  const currentIndex = tabs.indexOf(activeTab);
-                  let newIndex = currentIndex;
-
-                  if (e.key === 'ArrowRight') {
-                    e.preventDefault();
-                    newIndex = (currentIndex + 1) % tabs.length;
-                  } else if (e.key === 'ArrowLeft') {
-                    e.preventDefault();
-                    newIndex = (currentIndex - 1 + tabs.length) % tabs.length;
-                  } else if (e.key === 'Home') {
-                    e.preventDefault();
-                    newIndex = 0;
-                  } else if (e.key === 'End') {
-                    e.preventDefault();
-                    newIndex = tabs.length - 1;
-                  }
-
-                  if (newIndex !== currentIndex) {
-                    const newTab = tabs[newIndex] as Tab;
-                    setActiveTab(newTab);
-                    // Focus the new tab
-                    tabRefs.current.get(newTab)?.focus();
-                  }
-                }}
-              >
-                {(['issues', 'prs', 'history', 'schedules'] as Tab[]).map((tab) => {
-                  // Display labels - handles special casing like "PRs"
-                  const tabLabels: Record<Tab, string> = {
-                    issues: 'Issues',
-                    prs: 'PRs',
-                    history: 'History',
-                    schedules: 'Schedules',
-                  };
-                  // Tab icons for visual hierarchy
-                  const tabIcons: Record<Tab, React.ReactNode> = {
-                    issues: (
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <circle cx="12" cy="12" r="10" strokeWidth={2} />
-                        <circle cx="12" cy="12" r="3" fill="currentColor" />
-                      </svg>
-                    ),
-                    prs: (
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                      </svg>
-                    ),
-                    history: (
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    ),
-                    schedules: (
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                    ),
-                  };
-                  // Get count for each tab
-                  const count = tab === 'issues' ? issuesTotal
-                    : tab === 'prs' ? prsTotal
-                    : tab === 'history' ? sessionsTotal
-                    : 0; // schedules don't show count
-
-                  // Keyboard shortcut for this tab (1-4)
-                  const tabShortcuts: Record<Tab, string> = {
-                    issues: '1',
-                    prs: '2',
-                    history: '3',
-                    schedules: '4',
-                  };
-
+                        {/* Tabs for Issues/PRs/History/Schedules */}
+                    <div className="flex-1 min-h-0 flex flex-col">
+                        {/* Tabs with sliding indicator */}
+                        <div
+                          ref={tabsContainerRef}
+                          className="nav-tabs-container relative flex border-b border-gray-750 shrink-0"
+                          role="tablist"
+                          aria-label="Main navigation"
+                          onKeyDown={(e) => {
+                            const tabs: Tab[] = ['issues', 'prs', 'history', 'schedules', 'work-items'];
+                            const currentIndex = tabs.indexOf(activeTab);
+                            let newIndex = currentIndex;
+          
+                            if (e.key === 'ArrowRight') {
+                              e.preventDefault();
+                              newIndex = (currentIndex + 1) % tabs.length;
+                            } else if (e.key === 'ArrowLeft') {
+                              e.preventDefault();
+                              newIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+                            } else if (e.key === 'Home') {
+                              e.preventDefault();
+                              newIndex = 0;
+                            } else if (e.key === 'End') {
+                              e.preventDefault();
+                              newIndex = tabs.length - 1;
+                            }
+          
+                            if (newIndex !== currentIndex) {
+                              const newTab = tabs[newIndex] as Tab;
+                              setActiveTab(newTab);
+                              // Focus the new tab
+                              tabRefs.current.get(newTab)?.focus();
+                            }
+                          }}
+                        >
+                          {(['issues', 'prs', 'history', 'schedules', 'work-items'] as Tab[]).map((tab) => {
+                            // Display labels - handles special casing like "PRs"
+                            const tabLabels: Record<Tab, string> = {
+                              issues: 'Issues',
+                              prs: 'PRs',
+                              history: 'History',
+                              schedules: 'Schedules',
+                              'work-items': 'Work Items',
+                            };
+                            // Tab icons for visual hierarchy
+                            const tabIcons: Record<Tab, React.ReactNode> = {
+                              issues: (
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <circle cx="12" cy="12" r="10" strokeWidth={2} />
+                                  <circle cx="12" cy="12" r="3" fill="currentColor" />
+                                </svg>
+                              ),
+                              prs: (
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                                </svg>
+                              ),
+                              history: (
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              ),
+                              schedules: (
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                              ),
+                              'work-items': (
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                </svg>
+                              ),
+                            };
+                            // Get count for each tab
+                            const count = tab === 'issues' ? issuesTotal
+                              : tab === 'prs' ? prsTotal
+                              : tab === 'history' ? sessionsTotal
+                              : tab === 'work-items' ? workItems.length
+                              : 0; // schedules don't show count
+          
+                            // Keyboard shortcut for this tab (1-5)
+                            const tabShortcuts: Record<Tab, string> = {
+                              issues: '1',
+                              prs: '2',
+                              history: '3',
+                              schedules: '4',
+                              'work-items': '5',
+                            };
                   return (
                     <button
                       key={tab}
@@ -1529,19 +1640,19 @@ export default function App() {
                       aria-controls={`tabpanel-${tab}`}
                       id={`tab-${tab}`}
                       tabIndex={activeTab === tab ? 0 : -1}
-                      className={`nav-tab group flex-1 px-2 py-2 text-sm outline-none focus-visible:bg-blurple-500/10 focus-visible:text-blurple-300 flex items-center justify-center gap-1 transition-colors duration-150 ${
+                      className={`nav-tab group flex-1 min-w-0 px-1.5 py-2 text-sm outline-none focus-visible:bg-blurple-500/10 focus-visible:text-blurple-300 flex items-center justify-center gap-1 transition-colors duration-150 ${
                         activeTab === tab
                           ? 'text-white'
                           : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                       }`}
                       title={`${tabLabels[tab]} (${tabShortcuts[tab]})`}
                     >
-                      <span className={`transition-colors duration-150 ${activeTab === tab ? 'text-blurple-400' : ''}`}>
+                      <span className={`flex-shrink-0 transition-colors duration-150 ${activeTab === tab ? 'text-blurple-400' : ''}`}>
                         {tabIcons[tab]}
                       </span>
-                      <span className="nav-tab-label">{tabLabels[tab]}</span>
+                      <span className="nav-tab-label min-w-0 truncate">{tabLabels[tab]}</span>
                       {(selectedRepo || tab === 'history') && count > 0 && (
-                        <span className={`text-xs px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center ${
+                        <span className={`nav-tab-count flex-shrink-0 text-xs px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center ${
                           activeTab === tab
                             ? 'bg-blurple-500/20 text-blurple-400'
                             : 'bg-gray-750 text-gray-400'
@@ -1549,7 +1660,7 @@ export default function App() {
                           {count > 999 ? '999+' : count}
                         </span>
                       )}
-                      <kbd className="kbd-hint opacity-0 group-hover:opacity-100 transition-opacity ml-1">{tabShortcuts[tab]}</kbd>
+                      <kbd className="kbd-hint flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ml-1">{tabShortcuts[tab]}</kbd>
                     </button>
                   );
                 })}
@@ -1653,8 +1764,28 @@ export default function App() {
                       setSelectedIssue(null);
                       setSelectedPR(null);
                       setSelectedSessionId(null);
+                      setSelectedWorkItemId(null);
                     }}
                     refreshRef={scheduleListRefreshRef}
+                  />
+                )}
+                {activeTab === 'work-items' && selectedRepo && (
+                  <WorkItemList
+                    items={workItems}
+                    selectedItemId={selectedWorkItemId}
+                    onSelectItem={handleSelectWorkItem}
+                    loading={workItemsLoading}
+                    error={workItemsError}
+                    onCreateItem={async () => {
+                        // Create a new empty item then select it
+                        try {
+                            const newItem = await createWorkItem({ title: 'New Item' });
+                            setSelectedWorkItemId(newItem.id);
+                        } catch (e) {
+                            console.error('Failed to create item', e);
+                        }
+                    }}
+                    onRefresh={refreshWorkItems}
                   />
                 )}
                 {!selectedRepo && (
@@ -1682,6 +1813,7 @@ export default function App() {
             selectedPR={selectedPR}
             selectedSchedule={selectedSchedule}
             selectedSession={selectedSession}
+            selectedWorkItem={workItems.find(i => i.id === selectedWorkItemId) || null}
             isCreatingIssue={isCreatingIssue}
             activeTab={activeTab}
             sessions={sessions}
@@ -1716,6 +1848,14 @@ export default function App() {
             }}
             onRefreshIssues={refreshIssues}
             onTabChange={setActiveTab}
+            onStartWorkItemSession={handleStartWorkItemSession}
+            onUpdateWorkItem={async (itemId, updates) => {
+              await updateWorkItem(itemId, updates);
+            }}
+            onDeleteWorkItem={async (id) => {
+                await deleteWorkItem(id);
+                setSelectedWorkItemId(null);
+            }}
           />
         </Panel>
 

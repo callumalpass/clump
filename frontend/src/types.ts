@@ -225,12 +225,16 @@ export interface Process {
 // Session types (transcript-first model)
 // ==========================================
 
-export type EntityKind = 'issue' | 'pr';
+export type EntityKind = 'issue' | 'pr' | 'work_item';
 
 export interface EntityLink {
   kind: EntityKind;
-  number: number;
+  number: number | string;
 }
+
+// ==========================================
+// Session Metadata
+// ==========================================
 
 export interface SessionMetadata {
   session_id: string;
@@ -449,7 +453,7 @@ export interface CommandMetadata {
   name: string;
   shortName: string;
   description: string;
-  category: 'issue' | 'pr' | 'general';
+  category: 'issue' | 'pr' | 'general' | 'work_item';
   template: string;
   source: 'builtin' | 'user' | 'repo';
 }
@@ -464,6 +468,7 @@ export interface CommandCreate {
 export interface CommandsResponse {
   issue: CommandMetadata[];
   pr: CommandMetadata[];
+  work_item: CommandMetadata[];
   general: CommandMetadata[];
 }
 
@@ -597,3 +602,52 @@ export interface StatsResponse {
   week_stats: DailyActivity;
   total_estimated_cost_usd: number;
 }
+
+// ==========================================
+// Work Items
+// ==========================================
+
+export type WorkItemStatus = 'open' | 'in_progress' | 'completed' | 'cancelled';
+export type WorkItemPriority = 'low' | 'medium' | 'high' | 'critical';
+
+export interface WorkItem {
+  id: string;
+  title: string;
+  description: string | null;
+  status: WorkItemStatus;
+  priority: WorkItemPriority;
+  tags: string[];
+  created_at: string | null;
+  updated_at: string | null;
+
+  // AI Analysis
+  ai_summary?: string | null;
+  complexity?: string | null;
+  risk?: string | null;
+  suggested_approach?: string | null;
+  notes?: string | null;
+  analyzed_at?: string | null;
+  analyzed_by?: string | null;
+}
+
+export interface WorkItemCreate {
+  title: string;
+  description?: string;
+  status?: WorkItemStatus;
+  priority?: WorkItemPriority;
+  tags?: string[];
+}
+
+export interface WorkItemUpdate {
+  title?: string;
+  description?: string;
+  status?: WorkItemStatus;
+  priority?: WorkItemPriority;
+  tags?: string[];
+  ai_summary?: string;
+  complexity?: string;
+  risk?: string;
+  suggested_approach?: string;
+  notes?: string;
+}
+

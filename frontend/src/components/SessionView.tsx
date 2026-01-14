@@ -251,7 +251,7 @@ interface SessionViewProps {
   /** Navigate to a PR */
   onShowPR?: (prNumber: number) => void;
   /** Navigate to a schedule */
-  onShowSchedule?: (scheduleId: string) => void;
+  onShowSchedule?: (scheduleId: string | number) => void;
   /** Available issues for linking */
   issues?: Issue[];
   /** Available PRs for linking */
@@ -299,6 +299,14 @@ export function SessionView({
 
   // WebSocket for sending input to active sessions
   const { sendInput } = useProcessWebSocket(processId ?? null);
+
+  const getEntityNumber = useCallback((entity: EntityLink): number | null => {
+    if (typeof entity.number === 'number') {
+      return entity.number;
+    }
+    const parsed = Number(entity.number);
+    return Number.isFinite(parsed) ? parsed : null;
+  }, []);
 
   // Handler to send messages to Claude via WebSocket
   const handleSendMessage = useCallback(async (message: string) => {
@@ -789,7 +797,15 @@ export function SessionView({
                   showTerminalView ? (
                     <button
                       key={idx}
-                      onClick={() => entity.kind === 'issue' ? onShowIssue?.(entity.number) : onShowPR?.(entity.number)}
+                      onClick={() => {
+                        const number = getEntityNumber(entity);
+                        if (number === null) return;
+                        if (entity.kind === 'issue') {
+                          onShowIssue?.(number);
+                        } else if (entity.kind === 'pr') {
+                          onShowPR?.(number);
+                        }
+                      }}
                       className={`text-xs px-1.5 py-0.5 rounded transition-colors ${
                         entity.kind === 'issue'
                           ? 'bg-green-900/30 text-green-400 hover:bg-green-900/50'
@@ -808,7 +824,15 @@ export function SessionView({
                       }`}
                     >
                       <button
-                        onClick={() => entity.kind === 'issue' ? onShowIssue?.(entity.number) : onShowPR?.(entity.number)}
+                        onClick={() => {
+                          const number = getEntityNumber(entity);
+                          if (number === null) return;
+                          if (entity.kind === 'issue') {
+                            onShowIssue?.(number);
+                          } else if (entity.kind === 'pr') {
+                            onShowPR?.(number);
+                          }
+                        }}
                         className="hover:underline"
                       >
                         #{entity.number}

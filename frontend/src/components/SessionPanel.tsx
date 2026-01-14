@@ -36,7 +36,7 @@ interface SessionPanelProps {
   // Navigation
   onShowIssue?: (issueNumber: number) => void;
   onShowPR?: (prNumber: number) => void;
-  onShowSchedule?: (scheduleId: string) => void;
+  onShowSchedule?: (scheduleId: string | number) => void;
 
   // Data for SessionView
   issues?: Issue[];

@@ -373,7 +373,7 @@ export function Terminal({ processId, onClose, relatedEntity, onShowRelated, sho
           {onClose && (
             <button
               onClick={onClose}
-              className={`${textMuted} ${textHover} text-sm px-2 py-1 rounded ${hoverBg} transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[${blurple}] focus-visible:ring-offset-1 ${focusOffset}`}
+              className={`${textMuted} ${textHover} text-sm px-2 py-1 rounded ${hoverBg} transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blurple-400 focus-visible:ring-offset-1 ${focusOffset}`}
             >
               Close
             </button>

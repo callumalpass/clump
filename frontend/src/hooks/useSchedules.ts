@@ -170,7 +170,7 @@ export async function fetchScheduleRuns(
 /**
  * Hook for fetching schedule details and paginated runs.
  */
-export function useScheduleDetail(repoId: number | null, scheduleId: string | null) {
+export function useScheduleDetail(repoId: number | null, scheduleId: string | number | null) {
   const [schedule, setSchedule] = useState<ScheduledJob | null>(null);
   const [runs, setRuns] = useState<ScheduledJobRun[]>([]);
   const [runsTotal, setRunsTotal] = useState(0);
@@ -179,6 +179,7 @@ export function useScheduleDetail(repoId: number | null, scheduleId: string | nu
   const [error, setError] = useState<string | null>(null);
 
   const RUNS_PER_PAGE = 10;
+  const scheduleKey = scheduleId === null || scheduleId === undefined ? null : String(scheduleId);
 
   // Reset state immediately when scheduleId changes to prevent showing stale data
   useEffect(() => {
@@ -191,7 +192,7 @@ export function useScheduleDetail(repoId: number | null, scheduleId: string | nu
 
   // Fetch schedule and runs with proper cancellation
   useEffect(() => {
-    if (!repoId || !scheduleId) {
+    if (!repoId || scheduleKey === null) {
       setLoading(false);
       return;
     }
@@ -204,7 +205,7 @@ export function useScheduleDetail(repoId: number | null, scheduleId: string | nu
       try {
         // Fetch schedule
         const scheduleResponse = await fetch(
-          `${API_BASE}/repos/${repoId}/schedules/${scheduleId}`,
+          `${API_BASE}/repos/${repoId}/schedules/${scheduleKey}`,
           { signal: controller.signal }
         );
         if (!scheduleResponse.ok) {
@@ -215,7 +216,7 @@ export function useScheduleDetail(repoId: number | null, scheduleId: string | nu
 
         // Fetch runs
         const runsResponse = await fetch(
-          `${API_BASE}/repos/${repoId}/schedules/${scheduleId}/runs?limit=${RUNS_PER_PAGE}&offset=0`,
+          `${API_BASE}/repos/${repoId}/schedules/${scheduleKey}/runs?limit=${RUNS_PER_PAGE}&offset=0`,
           { signal: controller.signal }
         );
         if (!runsResponse.ok) {
@@ -250,13 +251,13 @@ export function useScheduleDetail(repoId: number | null, scheduleId: string | nu
       cancelled = true;
       controller.abort();
     };
-  }, [repoId, scheduleId]);
+  }, [repoId, scheduleKey]);
 
   const fetchRuns = useCallback(async (page: number = 1) => {
-    if (!repoId || !scheduleId) return;
+    if (!repoId || scheduleKey === null) return;
     try {
       const offset = (page - 1) * RUNS_PER_PAGE;
-      const data = await fetchScheduleRuns(repoId, scheduleId, RUNS_PER_PAGE, offset);
+      const data = await fetchScheduleRuns(repoId, scheduleKey, RUNS_PER_PAGE, offset);
       setRuns(data.runs);
       setRunsTotal(data.total);
       setRunsPage(page);
@@ -264,15 +265,15 @@ export function useScheduleDetail(repoId: number | null, scheduleId: string | nu
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to fetch runs');
     }
-  }, [repoId, scheduleId]);
+  }, [repoId, scheduleKey]);
 
   const refresh = useCallback(async () => {
-    if (!repoId || !scheduleId) return;
+    if (!repoId || scheduleKey === null) return;
     setLoading(true);
     try {
       const [scheduleData, runsData] = await Promise.all([
-        fetchJson<ScheduledJob>(`${API_BASE}/repos/${repoId}/schedules/${scheduleId}`),
-        fetchScheduleRuns(repoId, scheduleId, RUNS_PER_PAGE, (runsPage - 1) * RUNS_PER_PAGE),
+        fetchJson<ScheduledJob>(`${API_BASE}/repos/${repoId}/schedules/${scheduleKey}`),
+        fetchScheduleRuns(repoId, scheduleKey, RUNS_PER_PAGE, (runsPage - 1) * RUNS_PER_PAGE),
       ]);
       setSchedule(scheduleData);
       setRuns(runsData.runs);
@@ -283,13 +284,13 @@ export function useScheduleDetail(repoId: number | null, scheduleId: string | nu
     } finally {
       setLoading(false);
     }
-  }, [repoId, scheduleId, runsPage]);
+  }, [repoId, scheduleKey, runsPage]);
 
   const updateSchedule = async (data: ScheduledJobUpdate): Promise<ScheduledJob> => {
-    if (!repoId || !scheduleId) throw new Error('No schedule selected');
+    if (!repoId || scheduleKey === null) throw new Error('No schedule selected');
 
     const updated = await fetchJson<ScheduledJob>(
-      `${API_BASE}/repos/${repoId}/schedules/${scheduleId}`,
+      `${API_BASE}/repos/${repoId}/schedules/${scheduleKey}`,
       {
         method: 'PATCH',
         body: JSON.stringify(data),
@@ -300,19 +301,19 @@ export function useScheduleDetail(repoId: number | null, scheduleId: string | nu
   };
 
   const triggerNow = async (): Promise<void> => {
-    if (!repoId || !scheduleId) throw new Error('No schedule selected');
+    if (!repoId || scheduleKey === null) throw new Error('No schedule selected');
 
-    await fetchJson(`${API_BASE}/repos/${repoId}/schedules/${scheduleId}/run`, {
+    await fetchJson(`${API_BASE}/repos/${repoId}/schedules/${scheduleKey}/run`, {
       method: 'POST',
     });
     await refresh();
   };
 
   const pauseSchedule = async (): Promise<ScheduledJob> => {
-    if (!repoId || !scheduleId) throw new Error('No schedule selected');
+    if (!repoId || scheduleKey === null) throw new Error('No schedule selected');
 
     const updated = await fetchJson<ScheduledJob>(
-      `${API_BASE}/repos/${repoId}/schedules/${scheduleId}/pause`,
+      `${API_BASE}/repos/${repoId}/schedules/${scheduleKey}/pause`,
       { method: 'POST' }
     );
     setSchedule(updated);
@@ -320,10 +321,10 @@ export function useScheduleDetail(repoId: number | null, scheduleId: string | nu
   };
 
   const resumeSchedule = async (): Promise<ScheduledJob> => {
-    if (!repoId || !scheduleId) throw new Error('No schedule selected');
+    if (!repoId || scheduleKey === null) throw new Error('No schedule selected');
 
     const updated = await fetchJson<ScheduledJob>(
-      `${API_BASE}/repos/${repoId}/schedules/${scheduleId}/resume`,
+      `${API_BASE}/repos/${repoId}/schedules/${scheduleKey}/resume`,
       { method: 'POST' }
     );
     setSchedule(updated);
@@ -375,7 +376,12 @@ function isValidCronField(field: string, min: number, max: number): boolean {
   for (const part of parts) {
     if (part.includes('-')) {
       // Range like 1-5
-      const [start, end] = part.split('-').map(n => parseInt(n, 10));
+      const [startRaw, endRaw] = part.split('-');
+      if (startRaw === undefined || endRaw === undefined) {
+        return false;
+      }
+      const start = parseInt(startRaw, 10);
+      const end = parseInt(endRaw, 10);
       if (isNaN(start) || isNaN(end) || start < min || end > max || start > end) {
         return false;
       }

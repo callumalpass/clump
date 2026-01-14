@@ -26,7 +26,7 @@ interface ScheduleListProps {
   commands: CommandsResponse;
   availableCLIs?: CLIInfo[];
   defaultCLI?: CLIType;
-  selectedScheduleId?: string | null;
+  selectedScheduleId?: string | number | null;
   onSelectSchedule?: (scheduleId: string) => void;
   refreshRef?: MutableRefObject<(() => void) | null>;
 }
@@ -206,7 +206,11 @@ export function ScheduleList({
               <ScheduleCard
                 key={schedule.id}
                 schedule={schedule}
-                selected={selectedScheduleId === schedule.id}
+                selected={
+                  selectedScheduleId !== null &&
+                  selectedScheduleId !== undefined &&
+                  String(selectedScheduleId) === schedule.id
+                }
                 onSelect={() => onSelectSchedule?.(schedule.id)}
                 onTrigger={() => handleTrigger(schedule)}
                 onDelete={() => handleDelete(schedule)}

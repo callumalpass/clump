@@ -54,9 +54,19 @@ from app.storage import (
     DiscoveredSession,
     get_claude_projects_dir,
 )
-from app.services.transcript_parser import parse_transcript, parse_transcript_file, ParsedTranscript, TranscriptMessage
+from app.services.transcript_parser import (
+    parse_transcript,
+    parse_transcript_file,
+    ParsedTranscript,
+    TranscriptMessage,
+    ToolUse,
+    ToolResult,
+    TokenUsage,
+)
 from app.services.session_manager import process_manager
+from app.services.headless_analyzer import headless_analyzer, SessionMessage
 from app.services.event_manager import event_manager, EventType
+from app.cli import get_adapter, CLIType
 
 # Cache configuration constants
 SESSION_CACHE_TTL = 30.0  # seconds - longer TTL since we also check mtime
@@ -463,6 +473,45 @@ def _message_to_response(msg: TranscriptMessage) -> TranscriptMessageResponse:
         model=msg.model,
         usage=usage,
     )
+
+
+def _convert_headless_to_transcript_messages(headless_msgs: list[SessionMessage]) -> list[TranscriptMessage]:
+    """Convert headless SessionMessages to TranscriptMessages."""
+    transcript_msgs: list[TranscriptMessage] = []
+    
+    for i, h_msg in enumerate(headless_msgs):
+        if h_msg.type == "error":
+            # Treat errors as system/assistant messages or just append to content?
+            # For now, maybe skip or add as assistant error?
+            continue
+            
+        role = "assistant" if h_msg.type == "assistant" else "user"
+        if h_msg.type == "system":
+            continue # Skip system messages for now
+            
+        # Parse content for tool uses if it's an assistant message
+        # Headless messages might not have structured tool use yet, 
+        # or it might be embedded in content.
+        # But SessionMessage is just type/content string mostly.
+        # Wait, SessionMessage.raw might contain the original structured data?
+        # headless_analyzer._parse_message extracts content string.
+        
+        # If the content is just a string, we create a simple message.
+        # TODO: Better parsing if headless provides structured tool calls in raw
+        
+        transcript_msgs.append(TranscriptMessage(
+            uuid=str(i),
+            role=role,
+            content=h_msg.content or "",
+            timestamp=datetime.now().isoformat(), # No timestamp in SessionMessage
+            tool_uses=[],
+            tool_results=[],
+            model=None,
+            usage=None,
+        ))
+        
+    return transcript_msgs
+
 
 
 def _entities_to_response(entities: list[EntityLink]) -> list[EntityLinkResponse]:
@@ -1494,12 +1543,109 @@ async def get_session(session_id: str):
         None
     )
 
+    # Check if this is a running headless session
+    running_transcript = headless_analyzer.get_running_transcript(session_id)
+    is_running_headless = running_transcript is not None
+
     if not session:
-        # No JSONL file - check if this is a pending session from an active process
-        if not active_process:
+        # No JSONL file - check if this is a pending session from an active process or running headless
+        if not active_process and not is_running_headless:
             raise HTTPException(status_code=404, detail="Session not found")
 
-        # This is a pending session - return minimal data from process
+        # Get metadata and working dir
+        encoded_path = ""
+        working_dir = ""
+        repo_name = None
+        model = None
+        created_at = datetime.now().isoformat()
+        cli_type = "claude"
+
+        if active_process:
+            encoded_path = encode_path(active_process.working_dir)
+            working_dir = active_process.working_dir
+            model = active_process.model
+            created_at = active_process.created_at.isoformat()
+            cli_type = active_process.cli_type.value if hasattr(active_process.cli_type, 'value') else active_process.cli_type
+        
+        # If running headless (and no active process found, or strictly headless)
+        if is_running_headless and not active_process:
+            # Try to find metadata in all repos for this session_id
+            repos = load_repos()
+            for repo in repos:
+                enc = encode_path(repo["local_path"])
+                meta = get_session_metadata(enc, session_id)
+                if meta:
+                    encoded_path = enc
+                    working_dir = repo["local_path"]
+                    created_at = meta.created_at
+                    # Headless doesn't store model easily in memory yet, default to None
+                    break
+            
+            # If still not found, we can't show much
+            if not working_dir:
+                 raise HTTPException(status_code=404, detail="Session found but repository unknown")
+
+            # Try to read from the actual session file if available
+            parsed_from_file = None
+            if running_transcript:
+                # Find the INIT message to get the real Gemini session ID
+                init_msg = next((m for m in running_transcript if m.type == "init"), None)
+                if init_msg and init_msg.session_id:
+                    gemini_session_id = init_msg.session_id
+                    adapter = get_adapter(CLIType.GEMINI)
+                    # We assume it's Gemini for now if we are looking for a file this way
+                    # TODO: Store CLI type in HeadlessAnalyzer
+                    if hasattr(adapter, 'find_session_file'):
+                        session_file = adapter.find_session_file(working_dir, gemini_session_id)
+                        if session_file and session_file.exists():
+                            parsed_from_file = parse_transcript_file(
+                                session_file,
+                                session_id, # Use our DB session ID for the parsed object
+                                cli_type="gemini"
+                            )
+
+            metadata = get_session_metadata(encoded_path, session_id)
+            repo_name = _get_repo_name(encoded_path)
+
+            if parsed_from_file:
+                return _parsed_to_detail(
+                    session_id=session_id,
+                    encoded_path=encoded_path,
+                    parsed=parsed_from_file,
+                    metadata=metadata,
+                    is_active=True,
+                    cli_type="gemini",
+                )
+                 
+            # Fallback: Construct messages from running transcript
+            messages = []
+            if running_transcript:
+                transcript_msgs = _convert_headless_to_transcript_messages(running_transcript)
+                messages = [_message_to_response(msg) for msg in transcript_msgs]
+            
+            return SessionDetailResponse(
+                session_id=session_id,
+                encoded_path=encoded_path,
+                repo_path=working_dir,
+                repo_name=repo_name,
+                messages=messages,
+                summary=metadata.title if metadata else None,
+                model=model,
+                total_input_tokens=0,
+                total_output_tokens=0,
+                total_cache_read_tokens=0,
+                total_cache_creation_tokens=0,
+                start_time=created_at,
+                end_time=None,
+                cli_version=None,
+                git_branch=None,
+                cli_type="gemini", 
+                metadata=_build_metadata_response(session_id, metadata),
+                is_active=True,
+            )
+
+        # This is a pending session (process) - return minimal data from process
+        # (Existing logic for active_process)
         encoded_path = encode_path(active_process.working_dir)
         metadata = get_session_metadata(encoded_path, session_id)
 
@@ -1533,10 +1679,25 @@ async def get_session(session_id: str):
         cli_type=session.cli_type,
     )
 
+    # Fallback to in-memory transcript if file parsing failed or returned empty
+    # AND we know it's running headlessly
+    if (not parsed or not parsed.messages) and is_running_headless:
+         # Construct ParsedTranscript from running transcript
+         transcript_msgs = _convert_headless_to_transcript_messages(running_transcript)
+         
+         parsed = ParsedTranscript(
+             session_id=session_id,
+             messages=transcript_msgs,
+             summary=session.metadata.title if session.metadata else None,
+             model=None,
+             start_time=session.metadata.created_at if session.metadata else None,
+             end_time=None,
+         )
+
     if not parsed:
         raise HTTPException(status_code=500, detail="Failed to parse transcript")
 
-    is_active = active_process is not None
+    is_active = active_process is not None or is_running_headless
 
     return _parsed_to_detail(
         session_id=session_id,

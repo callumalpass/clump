@@ -3,9 +3,12 @@ import { IssueCreateView } from './IssueCreateView';
 import { PRDetail } from './PRDetail';
 import { ScheduleDetail } from './ScheduleDetail';
 import { SessionDetail } from './SessionDetail';
+import { WorkItemDetail } from './WorkItemDetail';
 import type {
   Repo,
   Issue,
+  WorkItem,
+  WorkItemUpdate,
   SessionSummary,
   Process,
   CommandMetadata,
@@ -21,7 +24,7 @@ import type {
 // Types
 // =============================================================================
 
-export type Tab = 'issues' | 'prs' | 'history' | 'schedules';
+export type Tab = 'issues' | 'prs' | 'history' | 'schedules' | 'work-items';
 
 export interface DetailPaneProps {
   // Repo context
@@ -30,8 +33,9 @@ export interface DetailPaneProps {
   // Selection state (only one should be active at a time)
   selectedIssue: number | null;
   selectedPR: number | null;
-  selectedSchedule: string | null;
+  selectedSchedule: string | number | null;
   selectedSession: SessionSummary | null;
+  selectedWorkItem: WorkItem | null;
   isCreatingIssue: boolean;
 
   // Current tab for empty state context
@@ -64,12 +68,17 @@ export interface DetailPaneProps {
   onScheduleDeleted: () => void;
   onScheduleUpdated: () => void;
 
+  // Work Item actions
+  onStartWorkItemSession: (item: WorkItem, command: CommandMetadata) => void;
+  onUpdateWorkItem: (itemId: string, updates: WorkItemUpdate) => Promise<void>;
+  onDeleteWorkItem: (itemId: string) => Promise<void>;
+
   // Session actions (for SessionDetail)
   onDeleteSession: (sessionId: string) => Promise<void>;
   onUpdateSessionTitle: (sessionId: string, title: string) => Promise<void>;
   onShowIssue: (issueNumber: number) => void;
   onShowPR: (prNumber: number) => void;
-  onShowSchedule: (scheduleId: string) => void;
+  onShowSchedule: (scheduleId: string | number) => void;
   onSessionClosed: () => void;
 
   // Issue creation
@@ -197,6 +206,15 @@ const emptyStateContent: Record<Tab, { title: string; description: string; icon:
       </svg>
     ),
   },
+  'work-items': {
+    title: 'Select a work item',
+    description: 'Track and analyze local tasks',
+    icon: (
+      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+      </svg>
+    ),
+  },
 };
 
 function EmptyState({ activeTab, onTabChange }: { activeTab: Tab; onTabChange?: (tab: Tab) => void }) {
@@ -215,6 +233,7 @@ function EmptyState({ activeTab, onTabChange }: { activeTab: Tab; onTabChange?: 
           <QuickNavItem shortcut="2" label="PRs" active={activeTab === 'prs'} onClick={() => onTabChange?.('prs')} />
           <QuickNavItem shortcut="3" label="History" active={activeTab === 'history'} onClick={() => onTabChange?.('history')} />
           <QuickNavItem shortcut="4" label="Schedules" active={activeTab === 'schedules'} onClick={() => onTabChange?.('schedules')} />
+          <QuickNavItem shortcut="5" label="Work Items" active={activeTab === 'work-items'} onClick={() => onTabChange?.('work-items')} />
         </div>
         <div className="pt-4 border-t border-gray-750/50 flex items-center justify-center gap-4 text-xs text-gray-500">
           <span className="flex items-center gap-1.5">
@@ -243,6 +262,7 @@ export function DetailPane(props: DetailPaneProps) {
     selectedPR,
     selectedSchedule,
     selectedSession,
+    selectedWorkItem,
     isCreatingIssue,
     activeTab,
     sessions,
@@ -264,6 +284,9 @@ export function DetailPane(props: DetailPaneProps) {
     onStartPRSession,
     onScheduleDeleted,
     onScheduleUpdated,
+    onStartWorkItemSession,
+    onUpdateWorkItem,
+    onDeleteWorkItem,
     onDeleteSession,
     onUpdateSessionTitle,
     onShowIssue,
@@ -340,6 +363,21 @@ export function DetailPane(props: DetailPaneProps) {
           defaultCLI={defaultCLI}
           onScheduleDeleted={onScheduleDeleted}
           onScheduleUpdated={onScheduleUpdated}
+        />
+      </div>
+    );
+  }
+
+  // Work Item selected
+  if (selectedWorkItem) {
+    return (
+      <div className="flex-1 overflow-auto">
+        <WorkItemDetail
+          item={selectedWorkItem}
+          commands={commands.work_item}
+          onUpdate={(updates) => onUpdateWorkItem(selectedWorkItem.id, updates)}
+          onStartSession={(item, command) => onStartWorkItemSession(item, command)}
+          onDelete={() => onDeleteWorkItem(selectedWorkItem.id)}
         />
       </div>
     );

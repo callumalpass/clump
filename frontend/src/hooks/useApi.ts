@@ -13,7 +13,7 @@ import { formatLocalDate } from '../utils/time';
 
 export interface EntityInput {
   kind: EntityKind;
-  number: number;
+  number: number | string;
 }
 
 const API_BASE = '/api';
@@ -1254,7 +1254,7 @@ export function useAssignees(repoId: number | null) {
 
 // Commands (slash commands from .claude/commands/)
 export function useCommands(repoPath?: string | null) {
-  const [commands, setCommands] = useState<CommandsResponse>({ issue: [], pr: [], general: [] });
+  const [commands, setCommands] = useState<CommandsResponse>({ issue: [], pr: [], general: [], work_item: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -1377,6 +1377,81 @@ export function downloadExport(content: string, filename: string): void {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+// ==========================================
+// Work Items
+// ==========================================
+
+import type { WorkItem, WorkItemCreate, WorkItemUpdate } from '../types';
+
+export function useWorkItems(repoId: number | null, enabled: boolean = true) {
+  const [items, setItems] = useState<WorkItem[]>([]);
+  const [loading, setLoading] = useState(repoId !== null && enabled);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    if (!repoId) return;
+
+    try {
+      setLoading(true);
+      const data = await fetchJson<WorkItem[]>(
+        `${API_BASE}/repos/${repoId}/work-items`,
+        { signal }
+      );
+      setItems(data);
+      setError(null);
+    } catch (e) {
+      if (isAbortError(e)) return;
+      setError(getErrorMessage(e, 'Failed to fetch work items'));
+    } finally {
+      setLoading(false);
+    }
+  }, [repoId]);
+
+  useEffect(() => {
+    if (!repoId || !enabled) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setLoading(true);
+    refresh(controller.signal);
+
+    return () => controller.abort();
+  }, [repoId, enabled, refresh]);
+
+  const createItem = async (data: WorkItemCreate): Promise<WorkItem> => {
+    if (!repoId) throw new Error('No repo selected');
+    const item = await fetchJson<WorkItem>(`${API_BASE}/repos/${repoId}/work-items`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    setItems((prev) => [...prev, item]);
+    return item;
+  };
+
+  const updateItem = async (itemId: string, updates: WorkItemUpdate): Promise<WorkItem> => {
+    if (!repoId) throw new Error('No repo selected');
+    const item = await fetchJson<WorkItem>(`${API_BASE}/repos/${repoId}/work-items/${itemId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+    setItems((prev) => prev.map((i) => (i.id === itemId ? item : i)));
+    return item;
+  };
+
+  const deleteItem = async (itemId: string): Promise<void> => {
+    if (!repoId) throw new Error('No repo selected');
+    await fetchJson(`${API_BASE}/repos/${repoId}/work-items/${itemId}`, {
+      method: 'DELETE',
+    });
+    setItems((prev) => prev.filter((i) => i.id !== itemId));
+  };
+
+  return { items, loading, error, refresh: () => refresh(), createItem, updateItem, deleteItem };
 }
 
 // Stats (Claude usage analytics)

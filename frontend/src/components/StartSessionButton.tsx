@@ -6,7 +6,7 @@ import { useClickOutside } from '../hooks/useClickOutside';
 
 // Minimal issue info needed for starting a session
 export interface SessionableIssue {
-  number: number;
+  number: number | string;
   title: string;
   body: string;
 }

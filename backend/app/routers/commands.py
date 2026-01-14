@@ -21,7 +21,7 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 # Valid command categories - used for validation and iteration
-COMMAND_CATEGORIES = frozenset({"issue", "pr", "general"})
+COMMAND_CATEGORIES = frozenset({"issue", "pr", "general", "work_item"})
 
 router = APIRouter()
 
@@ -32,7 +32,7 @@ class CommandMetadata(BaseModel):
     name: str
     shortName: str
     description: str
-    category: str  # 'issue' or 'pr'
+    category: str  # 'issue', 'pr', or 'work_item'
     template: str  # The prompt template with {{placeholders}}
     source: str = "builtin"  # 'builtin' or 'repo'
 
@@ -41,6 +41,7 @@ class CommandsResponse(BaseModel):
     """Response containing all available commands"""
     issue: list[CommandMetadata]
     pr: list[CommandMetadata]
+    work_item: list[CommandMetadata]
     general: list[CommandMetadata]
 
 
@@ -82,7 +83,7 @@ def find_command_file(
 
     Args:
         command_id: The command filename without extension
-        category: The command category (issue, pr, general)
+        category: The command category (issue, pr, general, work_item)
         repo_path: Optional path to a repo for repo-specific commands
 
     Returns:
@@ -225,16 +226,19 @@ async def get_commands(
     # Load built-in commands (lowest priority)
     builtin_issue = load_commands_from_dir(builtin_dir, "issue", "builtin")
     builtin_pr = load_commands_from_dir(builtin_dir, "pr", "builtin")
+    builtin_work_item = load_commands_from_dir(builtin_dir, "work_item", "builtin")
     builtin_general = load_commands_from_dir(builtin_dir, "general", "builtin")
 
     # Load user's global commands from ~/.clump/commands/
     user_issue = load_commands_from_dir(user_dir, "issue", "user")
     user_pr = load_commands_from_dir(user_dir, "pr", "user")
+    user_work_item = load_commands_from_dir(user_dir, "work_item", "user")
     user_general = load_commands_from_dir(user_dir, "general", "user")
 
     # Merge builtin with user (user overrides builtin)
     issue_commands = merge_commands(builtin_issue, user_issue)
     pr_commands = merge_commands(builtin_pr, user_pr)
+    work_item_commands = merge_commands(builtin_work_item, user_work_item)
     general_commands = merge_commands(builtin_general, user_general)
 
     # Load repo-specific commands if path provided (highest priority)
@@ -242,16 +246,19 @@ async def get_commands(
         repo_dir = get_repo_commands_dir(repo_path)
         repo_issue = load_commands_from_dir(repo_dir, "issue", "repo")
         repo_pr = load_commands_from_dir(repo_dir, "pr", "repo")
+        repo_work_item = load_commands_from_dir(repo_dir, "work_item", "repo")
         repo_general = load_commands_from_dir(repo_dir, "general", "repo")
 
         # Merge with repo taking precedence
         issue_commands = merge_commands(issue_commands, repo_issue)
         pr_commands = merge_commands(pr_commands, repo_pr)
+        work_item_commands = merge_commands(work_item_commands, repo_work_item)
         general_commands = merge_commands(general_commands, repo_general)
 
     return CommandsResponse(
         issue=issue_commands,
         pr=pr_commands,
+        work_item=work_item_commands,
         general=general_commands,
     )
 

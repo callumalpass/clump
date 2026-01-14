@@ -134,6 +134,58 @@ class PRMetadataResponse(BaseModel):
     analyzed_by: Optional[str] = None       # Model that analyzed
 
 
+# ==========================================
+# Work Items
+# ==========================================
+
+class WorkItemResponse(BaseModel):
+    """Response for a local work item."""
+    id: str
+    title: str
+    description: Optional[str] = None
+    status: str
+    priority: str
+    tags: list[str] = []
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+    # AI Analysis
+    ai_summary: Optional[str] = None
+    complexity: Optional[str] = None
+    risk: Optional[str] = None
+    suggested_approach: Optional[str] = None
+    notes: Optional[str] = None
+    analyzed_at: Optional[str] = None
+    analyzed_by: Optional[str] = None
+
+
+class WorkItemCreate(BaseModel):
+    """Request to create a new work item."""
+    title: str
+    description: Optional[str] = None
+    status: Optional[str] = "open"
+    priority: Optional[str] = "medium"
+    tags: Optional[list[str]] = []
+
+
+class WorkItemUpdate(BaseModel):
+    """Request to update a work item."""
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    tags: Optional[list[str]] = None
+
+    # AI Analysis updates
+    ai_summary: Optional[str] = None
+    complexity: Optional[str] = None
+    risk: Optional[str] = None
+    suggested_approach: Optional[str] = None
+    notes: Optional[str] = None
+    analyzed_at: Optional[str] = None
+    analyzed_by: Optional[str] = None
+
+
 class ContinueSessionRequest(BaseModel):
     """Request to continue a session with an optional message."""
     prompt: Optional[str] = None  # Message to send to Claude after resuming

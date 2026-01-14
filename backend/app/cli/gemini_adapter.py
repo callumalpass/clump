@@ -272,6 +272,30 @@ class GeminiAdapter(CLIAdapter):
         encoded = self.encode_path(repo_path)
         return config.base_dir / "tmp" / encoded / "chats"
 
+    def find_session_file(self, repo_path: str, session_id: str) -> Path | None:
+        """
+        Find the session file for a given session ID.
+
+        The filename format is session-{timestamp}-{sessionId_slice_8}.json.
+        We search for *{session_id_slice_8}.json in the sessions directory.
+        """
+        sessions_dir = self.get_sessions_dir(repo_path)
+        if not sessions_dir.exists():
+            return None
+
+        # Extract the short ID (first 8 chars) if full UUID is provided
+        short_id = session_id[:8]
+
+        # Search for files matching the pattern
+        pattern = f"*{short_id}.json"
+
+        # Return the first match (should be unique for a given session ID prefix)
+        for file_path in sessions_dir.glob(pattern):
+            if file_path.name.startswith("session-") and file_path.suffix == ".json":
+                return file_path
+
+        return None
+
     def get_resume_session_id(self, session_id: str) -> str:
         """
         Extract the session ID format needed for --resume.

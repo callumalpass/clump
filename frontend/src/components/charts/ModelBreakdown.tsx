@@ -61,7 +61,7 @@ export function ModelBreakdown({ data, totalCost }: ModelBreakdownProps) {
       {/* Donut chart */}
       <div className="relative w-40 h-40 flex-shrink-0">
         <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-          {segments.map((segment, i) => {
+          {segments.map((segment) => {
             const radius = 40;
             const circumference = 2 * Math.PI * radius;
             const strokeDasharray = circumference;
