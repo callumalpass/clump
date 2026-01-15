@@ -27,21 +27,26 @@ class CodexAdapter(CLIAdapter):
     """
     Adapter for OpenAI Codex CLI.
 
-    Codex stores sessions in ~/.codex/sessions/{year}/{month}/{day}/*.jsonl
-    using JSONL format similar to Claude.
+    Codex CLI has been rewritten in Rust (codex-rs) and stores sessions in
+    ~/.codex/sessions/{year}/{month}/{day}/*.jsonl using JSONL format.
 
     Key differences from Claude:
     - Uses 'exec' subcommand for headless mode instead of -p flag
     - Uses -a/--ask-for-approval instead of --permission-mode
     - Uses sandbox modes instead of tool allowlists
-    - Uses 'resume' subcommand instead of --resume flag
+    - Uses 'resume' subcommand (with session UUID)
+    - Uses 'fork' subcommand to create branched sessions
     - Session files are organized by date, not project path
 
-    Supports:
-    - Session resume via 'resume' subcommand
-    - Approval policies via -a/--ask-for-approval
-    - Sandbox modes via -s/--sandbox
-    - JSON output via --json
+    Supported flags:
+    - Session resume via 'resume' subcommand (UUID or --last)
+    - Session fork via 'fork' subcommand
+    - Approval policies via -a/--ask-for-approval (untrusted, on-failure, on-request, never)
+    - Sandbox modes via -s/--sandbox (read-only, workspace-write, danger-full-access)
+    - Model via --model
+    - Working directory via -C
+    - JSON output via --json (for exec mode)
+    - Review mode via 'review' subcommand
     """
 
     @property

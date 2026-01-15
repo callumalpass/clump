@@ -26,16 +26,25 @@ class ClaudeAdapter(CLIAdapter):
     Claude Code stores sessions in ~/.claude/projects/{encoded-path}/*.jsonl
     using JSONL format (one JSON object per line).
 
-    Supports:
+    Supports (as of 2.1.6):
     - Session IDs via --session-id
     - Session resume via --resume
-    - Tool allowlists via --allowedTools
-    - Permission modes via --permission-mode
+    - Tool allowlists via --allowedTools (with wildcard patterns like `Bash(npm *)`)
+    - Tool denylists via --disallowedTools (including Task(AgentName) syntax)
+    - Permission modes via --permission-mode (plan, acceptEdits)
+    - Permission bypass via --dangerously-skip-permissions
     - Max turns via --max-turns
+    - Model selection via --model
+    - System prompt via --append-system-prompt
+    - Output formats via --output-format (text, json, stream-json)
     - MCP configuration via --mcp-config
-    - Environment variables:
-        - CLAUDE_CODE_TMPDIR: Override temp directory
-        - CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: Disable background tasks
+    - Available tools via --tools (2.1.0+)
+
+    Environment variables:
+    - CLAUDE_CONFIG_DIR: Override config directory
+    - CLAUDE_CODE_TMPDIR: Override temp directory
+    - CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: Disable background tasks
+    - CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS: Override file read token limit (2.1.0+)
     """
 
     @property

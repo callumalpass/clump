@@ -33,6 +33,16 @@ class CopilotAdapter(CLIAdapter):
     - ~/.copilot/history-session-state (legacy sessions)
 
     The storage format isn't publicly documented, so parsing is best-effort.
+
+    Supported flags (as of 0.0.381):
+    - --yolo / --allow-all: Bypass all permission prompts
+    - --allow-tool <spec>: Allow specific tools
+    - --deny-tool <spec>: Deny specific tools
+    - --resume <session_id>: Resume a session
+    - --model <model>: Specify model to use
+    - --prompt <text>: Run in non-interactive mode
+    - --available-tools <tools>: Filter available tools (0.0.372+)
+    - --excluded-tools <tools>: Exclude specific tools (0.0.372+)
     """
 
     @property

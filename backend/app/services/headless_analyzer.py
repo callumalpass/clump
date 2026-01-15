@@ -9,7 +9,6 @@ Supports:
 - Gemini CLI (positional prompt with -o stream-json)
 - Codex CLI (exec subcommand with --json)
 - Copilot CLI (-p/--prompt, plain text output)
-- Copilot CLI (-p/--prompt, plain text output)
 """
 
 import asyncio
