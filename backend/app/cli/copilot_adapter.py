@@ -35,43 +35,76 @@ class CopilotAdapter(CLIAdapter):
     The storage format isn't publicly documented, so parsing is best-effort.
 
     Supported flags (as of v0.0.381):
-    - --yolo / --allow-all: Bypass all permission prompts (v0.0.381)
+    - --yolo / --allow-all: Bypass all permission prompts
+    - --allow-all-paths: Approve access to all paths
     - --allow-tool <spec>: Allow specific tools (glob patterns like shell(npm *))
     - --deny-tool <spec>: Deny specific tools
+    - --available-tools, --excluded-tools: Filter model capabilities
+    - --disable-parallel-tools-execution: Run tools sequentially
     - --resume <session_id>: Resume a session
     - --continue: Resume most recently closed session
-    - --model <model>: Specify model to use
-    - --prompt <text>: Run in non-interactive mode
-    - --available-tools <tools>: Filter available tools (v0.0.370+)
-    - --excluded-tools <tools>: Exclude specific tools (v0.0.370+)
-    - --share / --share-gist: Export session as markdown (v0.0.359)
-    - --screen-reader: Enable screen reader mode
-    - --stream off: Disable streaming output
-    - --silent: Suppress stats output for scripting (v0.0.365)
+    - --model <model>: Specify model to use (also via /model command)
+    - --prompt <text>: Run in non-interactive (-p) mode
+    - --share / --share-gist: Export session as markdown
+    - --screen-reader: Enable screen reader mode with text labels
+    - --stream off: Disable token-by-token streaming
+    - --silent: Suppress stats output for scripting
+    - --banner: Display startup banner
+    - --agent <agent>: Explicitly invoke a custom agent
+    - --additional-mcp-config: Augment MCP config via JSON or @path
+    - --disable-mcp-server: Disable specific MCP servers
+    - --enable-all-github-mcp-tools: Enable all GitHub tools
 
-    Recent features (v0.0.375-0.0.381):
-    - Session format overhaul (v0.0.342): Cleaner storage format
-    - Reasoning toggle (Ctrl+T) for supported models (v0.0.375)
-    - Auto-compaction at 95% token limit with /compact command (v0.0.374)
-    - Multi-line input (Kitty protocol default)
-    - Image support via drag & drop and paste (v0.0.359, v0.0.362)
-    - Custom agent support from ~/.copilot/agents/ and .github/agents/ (v0.0.355)
-    - Built-in web_fetch tool for web content (v0.0.374)
-    - Shell history prefix navigation with ! (v0.0.381)
-    - /new alias for /clear command (v0.0.381)
-    - Ghost text shows correct alias for slash commands (v0.0.381)
-    - Task tool subagents can process images (v0.0.376)
-    - Remote session loading via GraphQL ID (v0.0.376)
-    - Abort signals propagate to sub-agents (v0.0.380)
+    Slash commands (interactive mode):
+    - /login: Authenticate with GitHub
+    - /user [list | show | switch]: Manage user accounts
+    - /session: View session details
+    - /clear (alias: /new): Clear conversation history
+    - /compact: Auto-compact at 95% token limit
+    - /context: Visualize token usage
+    - /model: Open picker or set model directly
+    - /share: Save session as markdown or gist
+    - /usage: View premium request usage, session time, token use per model
+    - /agent: Invoke custom agent
+    - /delegate: Delegate task asynchronously (creates PR with branch)
+    - /mcp add: Configure MCP servers
+    - /exit, /quit (alias: /q): Exit session
+
+    Recent features (v0.0.375-v0.0.381):
+    - Session format overhaul (v0.0.342): Cleaner decoupled storage
+    - Reasoning toggle (Ctrl+T) for supported models
+    - Auto-compaction at 95% token limit with /compact command
+    - Multi-line input (Kitty protocol + /terminal-setup for others)
+    - Image support via drag & drop and paste (text and images)
+    - Custom agent support from ~/.copilot/agents/, .github/agents/, org .github repo
+    - Built-in web_fetch tool for web content retrieval
+    - Shell history prefix navigation with ! prefix + up arrow
+    - /new alias for /clear command
+    - Ghost text shows correct alias for slash commands
+    - Task tool subagents can process images
+    - Remote session loading via GraphQL ID
+    - Abort signals propagate to sub-agents
+    - Bundled grep/glob tools using ripgrep
+    - File read with view_range parameter for files >10MB
+    - Large tool outputs written to disk
+    - Timeline UI with collapsible items (Ctrl+R/Ctrl+E to expand)
 
     Available models:
     - Claude Sonnet 4.5 (default), Opus 4.5, Sonnet 4, Haiku 4.5
-    - GPT-5.2, GPT-5.1 variants, GPT-4.1, GPT-5-Mini
+    - GPT variants
+
+    Authentication:
+    - OAuth via device code (default)
+    - Personal Access Token (PAT) with "Copilot Requests" permission
+    - GH_TOKEN or GITHUB_TOKEN env vars (precedence order)
+    - COPILOT_GITHUB_TOKEN (takes precedence)
+    - GITHUB_ASKPASS for authentication
+    - GH_HOST for GitHub Enterprise logins
 
     Configuration:
-    - Config file: ~/.copilot/config
+    - Config file: ~/.copilot/config (log_level: none/error/warning/info/debug/all)
     - MCP config: ~/.copilot/mcp-config.json
-    - Skills dir: ~/.copilot/skills/
+    - Custom agents: ~/.copilot/agents/, .github/agents/, org's .github repo
     """
 
     @property

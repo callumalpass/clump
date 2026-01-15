@@ -26,7 +26,7 @@ class ClaudeAdapter(CLIAdapter):
     Claude Code stores sessions in ~/.claude/projects/{encoded-path}/*.jsonl
     using JSONL format (one JSON object per line).
 
-    Supports (as of v2.1.6):
+    Supports (as of v2.1.x):
     - Session IDs via --session-id
     - Session resume via --resume (supports custom session IDs with --session-id)
     - Session forking via --fork-session
@@ -35,37 +35,55 @@ class ClaudeAdapter(CLIAdapter):
     - Permission modes via --permission-mode (plan, acceptEdits)
     - Permission bypass via --dangerously-skip-permissions
     - Max turns via --max-turns
-    - Model selection via --model
+    - Model selection via --model (supports opus, sonnet, haiku aliases)
     - System prompt via --append-system-prompt or --system-prompt-file
     - Output formats via --output-format (text, json, stream-json)
     - MCP configuration via --mcp-config with --mcp-debug for debugging
-    - Available tools via --tools (2.1.0+)
+    - Available tools via --tools
     - Additional directories via --add-dir
     - Max budget via --max-budget-usd
+    - Agent selection via --agent <agent-name>
 
     Recent features (v2.1.x):
-    - Skills and slash commands unified (v2.1.3)
-    - Auto-discovery of skills from nested .claude/skills directories (v2.1.6)
-    - Language setting for response language configuration (v2.1.0)
-    - Tool hook execution timeout increased to 10 minutes (v2.1.3)
-    - /config search functionality for filtering settings (v2.1.6)
-    - /stats date range filtering with `r` to cycle periods (v2.1.6)
-    - context_window percentage fields in status line (v2.1.6)
-    - Rate limit warning requires 70% usage after weekly reset (v2.1.6)
-    - Unified Ctrl+B backgrounding for bash commands and agents (v2.1.0)
-    - MCP list_changed notifications for dynamic tool updates (v2.1.0)
-    - Plugin autoupdate via FORCE_AUTOUPDATE_PLUGINS env var (v2.1.2)
-    - Large bash/tool outputs saved to disk instead of truncated (v2.1.2)
+    - Skills hot-reload from .claude/skills directories with auto-discovery
+    - Prompt-based hooks with LLM-driven decision making
+    - Skills and slash commands unified system
+    - Language setting for response language configuration
+    - Tool hook execution timeout increased to 10 minutes
+    - /config search functionality for filtering settings
+    - /stats date range filtering with `r` to cycle periods (7 days, 30 days, all)
+    - context_window percentage fields in status line
+    - Rate limit warning requires 70% usage after weekly reset
+    - Unified Ctrl+B backgrounding for bash commands and agents
+    - MCP list_changed notifications for dynamic tool updates
+    - Plugin autoupdate via FORCE_AUTOUPDATE_PLUGINS env var
+    - Large bash/tool outputs saved to disk instead of truncated (30K char limit)
+    - Named sessions with /rename command
+    - Thinking blocks display toggle (Ctrl+O)
+    - Shell snapshots moved from /tmp to ~/.claude for reliability
+
+    Hook system events:
+    - PreToolUse, PostToolUse: Tool invocation hooks
+    - Stop, SubagentStop: Session completion hooks
+    - SessionStart, SessionEnd: Session lifecycle hooks
+    - UserPromptSubmit: User input hooks
+    - PreCompact: Context compaction hooks
+    - Notification: Alert hooks
 
     Environment variables:
     - CLAUDE_CONFIG_DIR: Override config directory
-    - CLAUDE_CODE_TMPDIR: Override temp directory (v2.1.5)
-    - CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: Disable background tasks (v2.1.4)
-    - CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS: Override file read token limit (v2.1.0)
+    - CLAUDE_CODE_TMPDIR: Override temp directory
+    - CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: Disable background tasks
+    - CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS: Override file read token limit
     - CLAUDE_CODE_SHELL: Override automatic shell detection
+    - CLAUDE_CODE_SHELL_PREFIX: Wrap shell commands
+    - CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR: Freeze working directory
     - CLAUDE_BASH_NO_LOGIN: Skip login shell for Bash tool
-    - FORCE_AUTOUPDATE_PLUGINS: Allow plugin autoupdate when main auto-updater is disabled (v2.1.2)
-    - IS_DEMO: Hide email and organization from UI for streaming/recording (v2.1.0)
+    - FORCE_AUTOUPDATE_PLUGINS: Allow plugin autoupdate when main auto-updater is disabled
+    - IS_DEMO: Hide email and organization from UI for streaming/recording
+    - DISABLE_INTERLEAVED_THINKING: Opt out of thinking blocks
+    - CLAUDE_CODE_AUTO_CONNECT_IDE: Disable IDE auto-connection
+    - CLAUDE_CODE_EXIT_AFTER_STOP_DELAY: Auto-exit SDK mode after idle duration
     """
 
     @property

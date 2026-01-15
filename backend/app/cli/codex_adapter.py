@@ -27,7 +27,7 @@ class CodexAdapter(CLIAdapter):
     """
     Adapter for OpenAI Codex CLI.
 
-    Codex CLI has been rewritten in Rust (codex-rs) and stores sessions in
+    Codex CLI is a Rust-based multi-tool (codex-rs) storing sessions in
     ~/.codex/sessions/{year}/{month}/{day}/*.jsonl using JSONL format.
     Sessions are organized by date rather than project path, with working
     directory stored in session metadata.
@@ -41,24 +41,64 @@ class CodexAdapter(CLIAdapter):
     - Session files are organized by date, not project path
     - Working directory must be specified via -C flag
 
-    Supported flags (as of v0.81.x):
+    Top-level subcommands:
+    - codex [OPTIONS] [PROMPT]: Interactive mode (default)
+    - codex exec / e: Non-interactive execution
+    - codex review: Code review mode
+    - codex login / logout: Authentication management
+    - codex resume [SESSION_ID]: Resume previous session
+    - codex fork [SESSION_ID]: Fork a session into new one
+    - codex apply / a: Apply latest git diff
+    - codex mcp: MCP server management (experimental)
+    - codex app-server: App server tooling
+    - codex sandbox: Platform-specific sandboxing (macOS/Linux/Windows)
+    - codex cloud: Codex Cloud tasks (experimental)
+    - codex completion <shell>: Generate shell completions
+    - codex features: Inspect feature flags
+
+    Supported flags (as of latest):
     - Session resume via 'resume' subcommand (UUID or --last)
-    - Session fork via 'fork' subcommand
-    - Approval policies via -a/--ask-for-approval (untrusted, on-failure, on-request, never)
-    - Sandbox modes via -s/--sandbox (read-only, workspace-write, danger-full-access)
+    - Session fork via 'fork' subcommand (UUID or --last)
+    - Approval policies via -a/--ask-for-approval (suggest, on-request, auto-edit)
+    - Sandbox modes via -s/--sandbox (read-only, workspace-write, full-access)
     - Full auto mode via --full-auto (low-friction sandboxed automatic execution)
-    - Bypass via --dangerously-bypass-approvals-and-sandbox or --yolo
-    - Model via --model
-    - Working directory via -C
-    - JSON output via --json (for exec mode)
+    - Model via --model or -m
+    - Profile via --profile or -p
+    - Working directory via -C/--cd
+    - JSON output via --json/--experimental-json (for exec mode, JSONL to stdout)
+    - Output last message via -o/--output-last-message <FILE>
+    - Output schema via --output-schema <FILE> for structured output
     - Review mode via 'review' subcommand (--base, --commit, --uncommitted)
     - MCP server management via 'mcp' subcommand
-    - Image attachments via --image/-i (v0.81.x)
+    - Image attachments via --image/-i (comma-delimited)
     - Web search via --search
     - Inline mode via --no-alt-screen
-    - Context compaction via /compact command
+    - Additional writable dirs via --add-dir
+    - OSS provider via --oss
+    - Color control via --color (auto, always, never)
+    - Feature toggles via --enable/--disable
 
-    Session JSONL entry types:
+    JSONL event stream types (--json mode):
+    - thread.started: New thread with thread_id
+    - turn.started: Turn initiated by user prompt
+    - turn.completed: Turn finished with usage stats
+    - turn.failed: Turn error with error details
+    - item.started: New item (agent message, command, etc.)
+    - item.updated: Item status update
+    - item.completed: Item terminal state
+    - error: Fatal error event
+
+    ThreadItem types:
+    - agent_message: Natural language or JSON response
+    - reasoning: Agent reasoning summary
+    - command_execution: Shell command (in_progress, completed, failed, declined)
+    - file_change: Patch/file modifications (add, delete, update)
+    - mcp_tool_call: MCP tool invocation with results/errors
+    - web_search: Web search request
+    - todo_list: Agent's running to-do list with completed status
+    - error: Non-fatal error item
+
+    Session JSONL entry types (legacy):
     - session_meta: Session metadata (id, timestamp, cwd, git, cli_version)
     - turn_context: Model info and turn-level usage
     - response_item: Messages and tool calls
@@ -66,18 +106,21 @@ class CodexAdapter(CLIAdapter):
     - compacted: Simplified message summaries
     - usage: Token usage data
 
-    Recent features (v0.81.x):
-    - Image attachments via --image/-i flag
-    - Git review improvements with --base and --uncommitted flags
-    - Session management improvements (resume --last, fork)
-    - Full-auto sandbox mode for low-friction automatic execution
-    - MCP server configuration improvements
-    - Inline mode for non-alt-screen terminal output
-
     Configuration:
-    - Config file: ~/.codex/config.toml
-    - Supports layered configuration (MDM > System > Session > User)
+    - Config file: $CODEX_HOME/config.toml (default: ~/.codex/config.toml)
+    - Config layers: Built-in defaults > User config > Env overrides > CLI -c overrides
     - MCP config: ~/.codex/mcp.json or $CODEX_HOME/mcp.json
+
+    Environment variables:
+    - CODEX_HOME: Custom Codex home directory
+    - CODEX_QUIET_MODE=1: Silence interactive UI
+    - CODEX_DISABLE_PROJECT_DOC=1: Skip AGENTS.md loading
+    - DEBUG=true: Verbose logging with full API details
+
+    Sandbox implementations:
+    - macOS: Apple Seatbelt sandboxing
+    - Linux: Docker with iptables firewall rules
+    - Windows: Restricted Token sandboxing
     """
 
     @property

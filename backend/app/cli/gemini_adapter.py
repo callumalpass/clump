@@ -40,34 +40,62 @@ class GeminiAdapter(CLIAdapter):
     - Uses SHA256 hash for project paths (one-way encoding)
     - Resume requires full UUID from inside session file (not filename)
 
-    Supports (as of v0.22.0):
+    Supports (as of v0.22.x):
     - Session resume via --resume (requires full UUID from sessionId field)
     - Session listing via --list-sessions
+    - Session delete via --delete-session <index|uuid>
     - Approval modes via --approval-mode (default, auto_edit, yolo)
     - Tool allowlists via --allowed-tools (multi-flag)
-    - Model selection via --model
+    - Model selection via --model (e.g., gemini-2.5-flash)
     - Output formats via -o (text, json, stream-json)
     - Sandbox mode via -s/--sandbox
     - YOLO mode via -y/--yolo
     - Extensions via -e/--extensions
+    - Include directories via --include-directories (comma-separated)
+    - Debug mode via -d/--debug
+    - Screen reader mode via --screen-reader
 
-    Recent features (v0.22.0):
-    - Comprehensive quota visibility in /stats (v0.21.0)
-    - Multi-file drag & drop support (v0.22.0)
-    - Persistent "Always Allow" policies (v0.21.0)
-    - Transcript path support for hooks (v0.22.0)
-    - Session retention configuration via /config or settings (v0.21.0)
-    - Project-level memory.md support (v0.21.0)
-    - URL handling with WebFetch and headless mode (v0.21.0)
-    - Single file image paste support (v0.21.0)
-    - Structured text file search with --extensions (v0.22.0)
-    - Improved tool policies with agent_name:tool_name format (v0.22.0)
-    - Custom instructions support from .gemini/CUSTOM_INSTRUCTIONS.md (v0.22.0)
+    Stream-JSON event types:
+    - init: Session initialization with session_id, model
+    - message: User prompts and assistant responses (with delta flag)
+    - tool_use: Tool invocations with parameters
+    - tool_result: Tool execution outcomes with status
+    - error: Non-fatal warnings/errors
+    - result: Final session stats
+
+    Session data structure (ConversationRecord):
+    - sessionId, projectHash, startTime, lastUpdated
+    - messages[]: Array with id, timestamp, type, content, toolCalls, thoughts, tokens
+    - summary: Optional AI-generated summary
+
+    Recent features (v0.22.x):
+    - Comprehensive quota visibility in /stats command
+    - Multi-file drag & drop support
+    - Persistent "Always Allow" policies with granular shell & MCP support
+    - Transcript path support for hooks (git-ai/Gemini integration)
+    - Session retention configuration via /config or settings
+    - Project-level memory.md support
+    - URL handling with WebFetch and headless mode
+    - Single file image paste support
+    - Structured text file search with --extensions
+    - Improved tool policies with agent_name:tool_name format
+    - Custom instructions support from .gemini/CUSTOM_INSTRUCTIONS.md
+    - Session summary generation at startup
+    - Raw input token counts in JSON output
+    - Checkpoint save/restore via /chat save <tag>
 
     Configuration:
     - User settings: ~/.gemini/settings.json
     - Project settings: .gemini/settings.json
-    - Memory: ~/.gemini/memory.md or {project}/.gemini/memory.md
+    - Memory: ~/.gemini/memory.md or {project}/.gemini/memory.md (GEMINI.md hierarchical)
+    - Policies: .gemini/policies.json
+
+    Environment variables:
+    - GEMINI_API_KEY: API key authentication
+    - GOOGLE_API_KEY: Vertex AI authentication
+    - GOOGLE_CLOUD_PROJECT: GCP project for Code Assist
+    - GOOGLE_GENAI_USE_VERTEXAI: Use Vertex AI backend
+    - DEBUG / DEBUG_MODE: Enable debug logging
     """
 
     @property
