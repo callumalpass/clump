@@ -77,7 +77,6 @@ class CodexAdapter(CLIAdapter):
     - OSS provider via --oss
     - Color control via --color (auto, always, never)
     - Feature toggles via --enable/--disable
-    - Max turns via --max-turns (for exec mode)
     - Notification relay via --notify <socket>
     - History scrolling via --history-scroll (vim, emacs, nano, none)
     - Config override via -c key=value
@@ -111,7 +110,6 @@ class CodexAdapter(CLIAdapter):
     - usage: Token usage data
 
     Recent features:
-    - exec --max-turns: Limit turns in non-interactive mode
     - Full-auto mode: Agent can execute with minimal friction in sandbox
     - Codex Cloud: Run tasks in the cloud (list, new, cancel, delete)
     - MCP tool server management with add/remove/status commands
@@ -183,7 +181,7 @@ class CodexAdapter(CLIAdapter):
             supports_session_id=False,  # Codex auto-generates session IDs
             supports_tool_allowlist=False,  # Uses sandbox modes instead
             supports_permission_modes=True,  # Via approval policies
-            supports_max_turns=True,  # exec mode supports --max-turns
+            supports_max_turns=False,  # Codex doesn't support --max-turns
             output_format="json",  # Codex uses --json, not stream-json
         )
 
@@ -324,9 +322,7 @@ class CodexAdapter(CLIAdapter):
         if model:
             args.extend(["--model", model])
 
-        # Max turns (exec mode only)
-        if max_turns is not None and max_turns > 0:
-            args.extend(["--max-turns", str(max_turns)])
+        # Note: Codex does not support --max-turns flag (verified Jan 2026)
 
         # Working directory
         if working_dir:

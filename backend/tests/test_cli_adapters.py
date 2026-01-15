@@ -544,7 +544,7 @@ class TestCodexAdapter:
         assert caps.supports_session_id is False  # Codex auto-generates IDs
         assert caps.supports_tool_allowlist is False  # Uses sandbox modes
         assert caps.supports_permission_modes is True
-        assert caps.supports_max_turns is True  # exec mode supports --max-turns
+        assert caps.supports_max_turns is False  # Codex doesn't support --max-turns
         assert caps.output_format == "json"
 
     def test_discovery_config(self, adapter):
@@ -610,16 +610,15 @@ class TestCodexAdapter:
         # Prompt at end
         assert cmd[-1] == "Do something"
 
-    def test_build_headless_command_with_max_turns(self, adapter):
-        """Headless mode supports --max-turns."""
+    def test_build_headless_command_ignores_max_turns(self, adapter):
+        """Headless mode ignores --max-turns (Codex doesn't support it)."""
         cmd = adapter.build_headless_command(
             "Do something",
             "/path/to/project",
             max_turns=5
         )
-        assert "--max-turns" in cmd
-        idx = cmd.index("--max-turns")
-        assert cmd[idx + 1] == "5"
+        # Codex doesn't support --max-turns, so it should NOT be in the command
+        assert "--max-turns" not in cmd
 
 
 class TestSessionInfo:
