@@ -108,6 +108,13 @@ class GeminiAdapter(CLIAdapter):
     - Improved sub-agent schema/prompt runtime refresh (#16409)
     - OSC52 clipboard only in SSH/WSL (#16554)
     - @ file selector on slash command lines (#16370)
+    - MCP policies match unqualified names in non-interactive mode (#16490)
+    - Tab and window title synchronization (#16464)
+    - Keybindings migration and improved key binding names (#16460, #16529)
+    - Sticky header regression fix in tool messages (#16514)
+    - AgentsStatus layout optimization (#16545)
+    - Action Required indicator refinement and focus hints (#16497)
+    - beforeAgent/afterAgent hookEvents refactoring (#16495)
 
     Hook system:
     - Tool execution hooks for pre/post tool invocation

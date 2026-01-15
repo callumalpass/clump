@@ -68,6 +68,11 @@ class ClaudeAdapter(CLIAdapter):
     - Skill forking with context: fork in frontmatter
     - Real-time thinking block display in Ctrl+O transcript mode
     - Improved sed in-place edits rendered as file edits with diff preview
+    - Chrome MCP beta header auto-injection when using Claude-in-Chrome tools
+    - Large transcript file safety: 10MB memory limit with tail-reading for oversized files
+    - Symlink path resolution before deny rule checking (CVE-2025-59829 fix)
+    - Permission rule validation on save with malformed rule detection
+    - Bash command wildcard patterns at any position (e.g., `Bash(npm *)`)
 
     Hook system events:
     - PreToolUse, PostToolUse: Tool invocation hooks (updatedInput support)

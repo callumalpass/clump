@@ -136,6 +136,13 @@ class CodexAdapter(CLIAdapter):
     - Hierarchical agent prompt support (#8996)
     - UserInput::Skill in V2 API (#8864)
     - Symlink support for skills discovery (#8801)
+    - Malformed rules error reporting in TUI (#9011)
+    - WebSocket test flakiness fix (#9169)
+    - Paste-burst state machine documentation and deterministic tests (#9020, #9121)
+    - Spinner/Esc interrupt fix during MCP startup (#8661)
+    - Queued messages during /review fix (#9122)
+    - Ollama defaults to Responses API for built-ins (#8798)
+    - Config.toml JSON schema validation (#8956)
 
     Configuration:
     - Config file: $CODEX_HOME/config.toml (default: ~/.codex/config.toml)

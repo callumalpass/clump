@@ -422,11 +422,11 @@ def _parse_claude_transcript(transcript_path: Path, session_id: str) -> ParsedTr
                                                 tool_use.spawned_agent_id = agent_id
 
                                     # Match result to the corresponding tool_use
-                                        if tool_use_id:
-                                            tool_use = _find_tool_use_by_id(messages, tool_use_id)
-                                            if tool_use:
-                                                tool_use.result = result_text
-                                                tool_use.result_is_error = is_error
+                                    if tool_use_id and result_text is not None:
+                                        tool_use = _find_tool_use_by_id(messages, tool_use_id)
+                                        if tool_use:
+                                            tool_use.result = result_text
+                                            tool_use.result_is_error = is_error
                                 elif part.get('type') == 'image':
                                     source = part.get('source') or {}
                                     if isinstance(source, dict) and source.get('type') == 'base64':

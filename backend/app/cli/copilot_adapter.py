@@ -100,7 +100,8 @@ class CopilotAdapter(CLIAdapter):
     - The Copilot CLI repository is primarily documentation/scripts
     - Changelog updates (v0.0.370-v0.0.381) indicate continued releases
     - Installation script refactored with checksum validation (#794)
-    - README prerequisites updated (#873)
+    - README prerequisites updated (removed Node.js/npm requirements) (#873)
+    - Shell variable comparison fix for Truthy evaluation (#806)
 
     Available models:
     - Claude Opus 4.5, Sonnet 4.5, Sonnet 4, Haiku 4.5
