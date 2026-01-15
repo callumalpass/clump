@@ -34,7 +34,7 @@ class CodexAdapter(CLIAdapter):
 
     Key differences from Claude:
     - Uses 'exec' subcommand for headless mode instead of -p flag
-    - Uses -a/--ask-for-approval instead of --permission-mode
+    - Uses -a/--approval-mode instead of --permission-mode
     - Uses sandbox modes instead of tool allowlists
     - Uses 'resume' subcommand (with session UUID from session_meta.id)
     - Uses 'fork' subcommand to create branched sessions
@@ -46,37 +46,41 @@ class CodexAdapter(CLIAdapter):
     - codex exec / e: Non-interactive execution
     - codex review: Code review mode
     - codex login / logout: Authentication management
-    - codex resume [SESSION_ID]: Resume previous session
-    - codex fork [SESSION_ID]: Fork a session into new one
+    - codex resume [SESSION_ID]: Resume previous session (UUID or --last)
+    - codex fork [SESSION_ID]: Fork a session into new one (UUID or --last)
     - codex apply / a: Apply latest git diff
-    - codex mcp: MCP server management (experimental)
+    - codex mcp: MCP server management (add, remove, status)
     - codex app-server: App server tooling
     - codex sandbox: Platform-specific sandboxing (macOS/Linux/Windows)
-    - codex cloud: Codex Cloud tasks (experimental)
+    - codex cloud: Codex Cloud tasks (list, new, cancel, delete)
     - codex completion <shell>: Generate shell completions
-    - codex features: Inspect feature flags
+    - codex features: Inspect feature flags (list, get, set)
 
     Supported flags (as of latest):
     - Session resume via 'resume' subcommand (UUID or --last)
     - Session fork via 'fork' subcommand (UUID or --last)
-    - Approval policies via -a/--ask-for-approval (suggest, on-request, auto-edit)
+    - Approval modes via -a/--approval-mode (suggest, on-request, auto-edit, full-auto)
     - Sandbox modes via -s/--sandbox (read-only, workspace-write, full-access)
     - Full auto mode via --full-auto (low-friction sandboxed automatic execution)
     - Model via --model or -m
     - Profile via --profile or -p
     - Working directory via -C/--cd
-    - JSON output via --json/--experimental-json (for exec mode, JSONL to stdout)
+    - JSON output via --json (for exec mode, JSONL to stdout)
     - Output last message via -o/--output-last-message <FILE>
     - Output schema via --output-schema <FILE> for structured output
     - Review mode via 'review' subcommand (--base, --commit, --uncommitted)
     - MCP server management via 'mcp' subcommand
-    - Image attachments via --image/-i (comma-delimited)
+    - Image attachments via --image/-i (comma-delimited, supports URLs and files)
     - Web search via --search
     - Inline mode via --no-alt-screen
     - Additional writable dirs via --add-dir
     - OSS provider via --oss
     - Color control via --color (auto, always, never)
     - Feature toggles via --enable/--disable
+    - Max turns via --max-turns (for exec mode)
+    - Notification relay via --notify <socket>
+    - History scrolling via --history-scroll (vim, emacs, nano, none)
+    - Config override via -c key=value
 
     JSONL event stream types (--json mode):
     - thread.started: New thread with thread_id
@@ -90,7 +94,7 @@ class CodexAdapter(CLIAdapter):
 
     ThreadItem types:
     - agent_message: Natural language or JSON response
-    - reasoning: Agent reasoning summary
+    - reasoning: Agent reasoning summary (collapsible)
     - command_execution: Shell command (in_progress, completed, failed, declined)
     - file_change: Patch/file modifications (add, delete, update)
     - mcp_tool_call: MCP tool invocation with results/errors
@@ -98,7 +102,7 @@ class CodexAdapter(CLIAdapter):
     - todo_list: Agent's running to-do list with completed status
     - error: Non-fatal error item
 
-    Session JSONL entry types (legacy):
+    Session JSONL entry types:
     - session_meta: Session metadata (id, timestamp, cwd, git, cli_version)
     - turn_context: Model info and turn-level usage
     - response_item: Messages and tool calls
@@ -106,19 +110,31 @@ class CodexAdapter(CLIAdapter):
     - compacted: Simplified message summaries
     - usage: Token usage data
 
+    Recent features:
+    - exec --max-turns: Limit turns in non-interactive mode
+    - Full-auto mode: Agent can execute with minimal friction in sandbox
+    - Codex Cloud: Run tasks in the cloud (list, new, cancel, delete)
+    - MCP tool server management with add/remove/status commands
+    - Feature flags system for experimental features
+    - Notification relay for external integrations
+    - Improved reasoning display with collapsible sections
+    - Session forking with preserved history
+
     Configuration:
     - Config file: $CODEX_HOME/config.toml (default: ~/.codex/config.toml)
     - Config layers: Built-in defaults > User config > Env overrides > CLI -c overrides
     - MCP config: ~/.codex/mcp.json or $CODEX_HOME/mcp.json
+    - AGENTS.md: Project-level agent instructions (hierarchical loading)
 
     Environment variables:
     - CODEX_HOME: Custom Codex home directory
     - CODEX_QUIET_MODE=1: Silence interactive UI
     - CODEX_DISABLE_PROJECT_DOC=1: Skip AGENTS.md loading
+    - OPENAI_API_KEY: API key for OpenAI
     - DEBUG=true: Verbose logging with full API details
 
     Sandbox implementations:
-    - macOS: Apple Seatbelt sandboxing
+    - macOS: Apple Seatbelt sandboxing with profile files
     - Linux: Docker with iptables firewall rules
     - Windows: Restricted Token sandboxing
     """

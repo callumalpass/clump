@@ -40,13 +40,13 @@ class GeminiAdapter(CLIAdapter):
     - Uses SHA256 hash for project paths (one-way encoding)
     - Resume requires full UUID from inside session file (not filename)
 
-    Supports (as of v0.22.x):
+    Supports (as of v0.22.x - v0.23.x preview):
     - Session resume via --resume (requires full UUID from sessionId field)
     - Session listing via --list-sessions
     - Session delete via --delete-session <index|uuid>
     - Approval modes via --approval-mode (default, auto_edit, yolo)
     - Tool allowlists via --allowed-tools (multi-flag)
-    - Model selection via --model (e.g., gemini-2.5-flash)
+    - Model selection via --model (e.g., gemini-3-flash, gemini-2.5-pro)
     - Output formats via -o (text, json, stream-json)
     - Sandbox mode via -s/--sandbox
     - YOLO mode via -y/--yolo
@@ -54,6 +54,7 @@ class GeminiAdapter(CLIAdapter):
     - Include directories via --include-directories (comma-separated)
     - Debug mode via -d/--debug
     - Screen reader mode via --screen-reader
+    - /auth logout command for clearing credentials
 
     Stream-JSON event types:
     - init: Session initialization with session_id, model
@@ -68,33 +69,48 @@ class GeminiAdapter(CLIAdapter):
     - messages[]: Array with id, timestamp, type, content, toolCalls, thoughts, tokens
     - summary: Optional AI-generated summary
 
-    Recent features (v0.22.x):
-    - Comprehensive quota visibility in /stats command
-    - Multi-file drag & drop support
+    Recent features (v0.22.x - v0.23.x):
+    - Gemini 3 Flash model support (previewFeatures toggle in /settings)
+    - Comprehensive quota visibility in /stats command for all available models
+    - Multi-file drag & drop support with @ prefix translation
     - Persistent "Always Allow" policies with granular shell & MCP support
     - Transcript path support for hooks (git-ai/Gemini integration)
     - Session retention configuration via /config or settings
-    - Project-level memory.md support
+    - Project-level memory.md support (GEMINI.md hierarchical)
     - URL handling with WebFetch and headless mode
-    - Single file image paste support
+    - Windows clipboard image support with Alt+V paste workaround
     - Structured text file search with --extensions
     - Improved tool policies with agent_name:tool_name format
     - Custom instructions support from .gemini/CUSTOM_INSTRUCTIONS.md
     - Session summary generation at startup
     - Raw input token counts in JSON output
     - Checkpoint save/restore via /chat save <tag>
+    - /init command for A2A (Agent-to-Agent) server
+    - JIT context memory loading for improved performance
+    - Hook system with friendly names and descriptions
+    - Settings schema validation
+    - Remote agent infrastructure (preview)
+    - .geminiignore support in SearchText tool
+
+    Hook system:
+    - Tool execution hooks for pre/post tool invocation
+    - Session lifecycle hooks
+    - LLM request/response hooks
+    - Hook enable/disable and migration commands
 
     Configuration:
     - User settings: ~/.gemini/settings.json
     - Project settings: .gemini/settings.json
-    - Memory: ~/.gemini/memory.md or {project}/.gemini/memory.md (GEMINI.md hierarchical)
+    - Memory: ~/.gemini/memory.md or {project}/.gemini/memory.md
     - Policies: .gemini/policies.json
+    - System prompt override: GEMINI_SYSTEM_MD env var
 
     Environment variables:
-    - GEMINI_API_KEY: API key authentication
+    - GEMINI_API_KEY: API key authentication (prioritized)
     - GOOGLE_API_KEY: Vertex AI authentication
     - GOOGLE_CLOUD_PROJECT: GCP project for Code Assist
     - GOOGLE_GENAI_USE_VERTEXAI: Use Vertex AI backend
+    - GEMINI_CLI_IDE_AUTH_TOKEN: IDE integration fallback auth
     - DEBUG / DEBUG_MODE: Enable debug logging
     """
 

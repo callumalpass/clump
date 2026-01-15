@@ -26,7 +26,7 @@ class ClaudeAdapter(CLIAdapter):
     Claude Code stores sessions in ~/.claude/projects/{encoded-path}/*.jsonl
     using JSONL format (one JSON object per line).
 
-    Supports (as of v2.1.x):
+    Supports (as of v2.1.6):
     - Session IDs via --session-id
     - Session resume via --resume (supports custom session IDs with --session-id)
     - Session forking via --fork-session
@@ -39,20 +39,22 @@ class ClaudeAdapter(CLIAdapter):
     - System prompt via --append-system-prompt or --system-prompt-file
     - Output formats via --output-format (text, json, stream-json)
     - MCP configuration via --mcp-config with --mcp-debug for debugging
-    - Available tools via --tools
+    - Available tools via --tools (interactive mode tool restriction)
     - Additional directories via --add-dir
     - Max budget via --max-budget-usd
     - Agent selection via --agent <agent-name>
+    - Claude in Chrome integration via browser extension
 
     Recent features (v2.1.x):
     - Skills hot-reload from .claude/skills directories with auto-discovery
+    - Nested skill discovery from subdirectory .claude/skills folders
     - Prompt-based hooks with LLM-driven decision making
     - Skills and slash commands unified system
     - Language setting for response language configuration
     - Tool hook execution timeout increased to 10 minutes
     - /config search functionality for filtering settings
     - /stats date range filtering with `r` to cycle periods (7 days, 30 days, all)
-    - context_window percentage fields in status line
+    - context_window.used_percentage and remaining_percentage fields in status line
     - Rate limit warning requires 70% usage after weekly reset
     - Unified Ctrl+B backgrounding for bash commands and agents
     - MCP list_changed notifications for dynamic tool updates
@@ -61,14 +63,20 @@ class ClaudeAdapter(CLIAdapter):
     - Named sessions with /rename command
     - Thinking blocks display toggle (Ctrl+O)
     - Shell snapshots moved from /tmp to ~/.claude for reliability
+    - LSP tool for code intelligence (go-to-definition, find references, hover docs)
+    - /teleport and /remote-env for remote session management
+    - Skill forking with context: fork in frontmatter
+    - Real-time thinking block display in Ctrl+O transcript mode
+    - Improved sed in-place edits rendered as file edits with diff preview
 
     Hook system events:
-    - PreToolUse, PostToolUse: Tool invocation hooks
+    - PreToolUse, PostToolUse: Tool invocation hooks (updatedInput support)
     - Stop, SubagentStop: Session completion hooks
-    - SessionStart, SessionEnd: Session lifecycle hooks
+    - SessionStart, SessionEnd: Session lifecycle hooks (agent_type populated)
     - UserPromptSubmit: User input hooks
     - PreCompact: Context compaction hooks
     - Notification: Alert hooks
+    - once: true config for single-execution hooks
 
     Environment variables:
     - CLAUDE_CONFIG_DIR: Override config directory

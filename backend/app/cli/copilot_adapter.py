@@ -45,15 +45,15 @@ class CopilotAdapter(CLIAdapter):
     - --continue: Resume most recently closed session
     - --model <model>: Specify model to use (also via /model command)
     - --prompt <text>: Run in non-interactive (-p) mode
-    - --share / --share-gist: Export session as markdown
+    - --share / --share-gist: Export session as markdown or gist (non-interactive mode)
     - --screen-reader: Enable screen reader mode with text labels
     - --stream off: Disable token-by-token streaming
     - --silent: Suppress stats output for scripting
     - --banner: Display startup banner
-    - --agent <agent>: Explicitly invoke a custom agent
-    - --additional-mcp-config: Augment MCP config via JSON or @path
+    - --agent <agent>: Explicitly invoke a custom agent (works in both modes)
+    - --additional-mcp-config: Augment MCP config via JSON or @path (stackable)
     - --disable-mcp-server: Disable specific MCP servers
-    - --enable-all-github-mcp-tools: Enable all GitHub tools
+    - --enable-all-github-mcp-tools: Enable all GitHub MCP tools
 
     Slash commands (interactive mode):
     - /login: Authenticate with GitHub
@@ -68,43 +68,52 @@ class CopilotAdapter(CLIAdapter):
     - /agent: Invoke custom agent
     - /delegate: Delegate task asynchronously (creates PR with branch)
     - /mcp add: Configure MCP servers
+    - /cwd: Tab completion for path arguments
+    - /add-dir: Tab completion for path arguments
     - /exit, /quit (alias: /q): Exit session
 
     Recent features (v0.0.375-v0.0.381):
     - Session format overhaul (v0.0.342): Cleaner decoupled storage
     - Reasoning toggle (Ctrl+T) for supported models
-    - Auto-compaction at 95% token limit with /compact command
+    - Auto-compaction at 95% token limit with /compact command (runs in background)
     - Multi-line input (Kitty protocol + /terminal-setup for others)
     - Image support via drag & drop and paste (text and images)
     - Custom agent support from ~/.copilot/agents/, .github/agents/, org .github repo
+    - Custom agent tool aliasing for the task tool
     - Built-in web_fetch tool for web content retrieval
     - Shell history prefix navigation with ! prefix + up arrow
     - /new alias for /clear command
-    - Ghost text shows correct alias for slash commands
+    - Ghost text shows correct alias for slash commands like '/q' for '/quit'
     - Task tool subagents can process images
-    - Remote session loading via GraphQL ID
+    - Remote session loading via GraphQL ID or session picker
     - Abort signals propagate to sub-agents
     - Bundled grep/glob tools using ripgrep
     - File read with view_range parameter for files >10MB
-    - Large tool outputs written to disk
+    - Large tool outputs written to disk with hints for efficient search tools
     - Timeline UI with collapsible items (Ctrl+R/Ctrl+E to expand)
+    - Inline feedback when rejecting tool permission requests
+    - Terminal escape sequences no longer appear as text input
+    - Sessions with large conversation history load faster on startup
+    - Send messages while Copilot is thinking to steer or queue
 
     Available models:
-    - Claude Sonnet 4.5 (default), Opus 4.5, Sonnet 4, Haiku 4.5
-    - GPT variants
+    - Claude Opus 4.5, Sonnet 4.5, Sonnet 4, Haiku 4.5
+    - GPT-5.2, GPT-5.1-Codex, GPT-5.1-Codex-Max, GPT-5.1-Codex-Mini
+    - GPT-5-Mini, GPT-4.1
 
     Authentication:
-    - OAuth via device code (default)
+    - OAuth via device code (default, polling begins immediately)
     - Personal Access Token (PAT) with "Copilot Requests" permission
     - GH_TOKEN or GITHUB_TOKEN env vars (precedence order)
     - COPILOT_GITHUB_TOKEN (takes precedence)
     - GITHUB_ASKPASS for authentication
-    - GH_HOST for GitHub Enterprise logins
+    - GH_HOST for GitHub Enterprise logins (non-interactive support)
 
     Configuration:
     - Config file: ~/.copilot/config (log_level: none/error/warning/info/debug/all)
     - MCP config: ~/.copilot/mcp-config.json
     - Custom agents: ~/.copilot/agents/, .github/agents/, org's .github repo
+    - Skills: ~/.copilot/skills/ directory
     """
 
     @property
