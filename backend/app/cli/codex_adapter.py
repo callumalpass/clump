@@ -29,24 +29,45 @@ class CodexAdapter(CLIAdapter):
 
     Codex CLI has been rewritten in Rust (codex-rs) and stores sessions in
     ~/.codex/sessions/{year}/{month}/{day}/*.jsonl using JSONL format.
+    Sessions are organized by date rather than project path, with working
+    directory stored in session metadata.
 
     Key differences from Claude:
     - Uses 'exec' subcommand for headless mode instead of -p flag
     - Uses -a/--ask-for-approval instead of --permission-mode
     - Uses sandbox modes instead of tool allowlists
-    - Uses 'resume' subcommand (with session UUID)
+    - Uses 'resume' subcommand (with session UUID from session_meta.id)
     - Uses 'fork' subcommand to create branched sessions
     - Session files are organized by date, not project path
+    - Working directory must be specified via -C flag
 
-    Supported flags:
+    Supported flags (as of v0.81.x):
     - Session resume via 'resume' subcommand (UUID or --last)
     - Session fork via 'fork' subcommand
     - Approval policies via -a/--ask-for-approval (untrusted, on-failure, on-request, never)
     - Sandbox modes via -s/--sandbox (read-only, workspace-write, danger-full-access)
+    - Full auto mode via --full-auto (low-friction sandboxed automatic execution)
+    - Bypass via --dangerously-bypass-approvals-and-sandbox or --yolo
     - Model via --model
     - Working directory via -C
     - JSON output via --json (for exec mode)
-    - Review mode via 'review' subcommand
+    - Review mode via 'review' subcommand (--base, --commit, --uncommitted)
+    - MCP server management via 'mcp' subcommand
+    - Image attachments via --image/-i
+    - Web search via --search
+    - Inline mode via --no-alt-screen
+
+    Session JSONL entry types:
+    - session_meta: Session metadata (id, timestamp, cwd, git, cli_version)
+    - turn_context: Model info and turn-level usage
+    - response_item: Messages and tool calls
+    - event_msg: Events (user_message, etc.)
+    - compacted: Simplified message summaries
+    - usage: Token usage data
+
+    Configuration:
+    - Config file: ~/.codex/config.toml
+    - Supports layered configuration (MDM > System > Session > User)
     """
 
     @property

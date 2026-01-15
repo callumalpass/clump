@@ -28,21 +28,39 @@ class GeminiAdapter(CLIAdapter):
     Adapter for Gemini CLI.
 
     Gemini CLI stores sessions in ~/.gemini/tmp/{project-hash}/chats/*.json
-    using single JSON files (not JSONL).
+    using single JSON files (not JSONL). Sessions are project-specific
+    (determined by SHA256 hash of working directory).
 
     Key differences from Claude:
     - Uses --approval-mode instead of --permission-mode
-    - Uses --allowed-tools (with hyphen) instead of --allowedTools
+    - Uses --allowed-tools (with hyphen, repeated for each tool) instead of --allowedTools
     - Uses positional prompt for headless mode instead of -p flag
     - Uses -o for output format instead of --output-format
     - Session files are single JSON objects, not JSONL
-    - Uses SHA256 hash for project paths
+    - Uses SHA256 hash for project paths (one-way encoding)
+    - Resume requires full UUID from inside session file (not filename)
 
-    Supports:
-    - Session resume via --resume
-    - Approval modes via --approval-mode
-    - Tool allowlists via --allowed-tools
-    - Output formats via -o
+    Supports (as of v0.22.0):
+    - Session resume via --resume (requires full UUID from sessionId field)
+    - Session listing via --list-sessions
+    - Approval modes via --approval-mode (default, auto_edit, yolo)
+    - Tool allowlists via --allowed-tools (multi-flag)
+    - Model selection via --model
+    - Output formats via -o (text, json, stream-json)
+    - Sandbox mode via -s/--sandbox
+    - YOLO mode via -y/--yolo
+    - Extensions via -e/--extensions
+
+    Recent features (v0.22.0):
+    - Comprehensive quota visibility in /stats
+    - Multi-file drag & drop support
+    - Persistent "Always Allow" policies
+    - Transcript path support for hooks
+    - Session retention configuration
+
+    Configuration:
+    - User settings: ~/.gemini/settings.json
+    - Project settings: .gemini/settings.json
     """
 
     @property

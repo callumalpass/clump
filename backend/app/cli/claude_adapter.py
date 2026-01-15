@@ -26,25 +26,36 @@ class ClaudeAdapter(CLIAdapter):
     Claude Code stores sessions in ~/.claude/projects/{encoded-path}/*.jsonl
     using JSONL format (one JSON object per line).
 
-    Supports (as of 2.1.6):
+    Supports (as of v2.1.6):
     - Session IDs via --session-id
-    - Session resume via --resume
+    - Session resume via --resume (supports custom session IDs with --session-id)
+    - Session forking via --fork-session
     - Tool allowlists via --allowedTools (with wildcard patterns like `Bash(npm *)`)
     - Tool denylists via --disallowedTools (including Task(AgentName) syntax)
     - Permission modes via --permission-mode (plan, acceptEdits)
     - Permission bypass via --dangerously-skip-permissions
     - Max turns via --max-turns
     - Model selection via --model
-    - System prompt via --append-system-prompt
+    - System prompt via --append-system-prompt or --system-prompt-file
     - Output formats via --output-format (text, json, stream-json)
-    - MCP configuration via --mcp-config
+    - MCP configuration via --mcp-config with --mcp-debug for debugging
     - Available tools via --tools (2.1.0+)
+    - Additional directories via --add-dir
+    - Max budget via --max-budget-usd
+
+    Recent features (v2.1.x):
+    - Skills and slash commands unified (v2.1.3)
+    - Auto-discovery of skills from nested .claude/skills directories (v2.1.6)
+    - Language setting for response language configuration
+    - Tool hook execution timeout increased to 10 minutes
 
     Environment variables:
     - CLAUDE_CONFIG_DIR: Override config directory
     - CLAUDE_CODE_TMPDIR: Override temp directory
     - CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: Disable background tasks
-    - CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS: Override file read token limit (2.1.0+)
+    - CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS: Override file read token limit
+    - CLAUDE_CODE_SHELL: Override automatic shell detection
+    - CLAUDE_BASH_NO_LOGIN: Skip login shell for Bash tool
     """
 
     @property

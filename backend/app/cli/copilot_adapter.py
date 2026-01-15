@@ -29,20 +29,41 @@ class CopilotAdapter(CLIAdapter):
     which replaces the deprecated `gh copilot` extension.
 
     Copilot stores sessions in:
-    - ~/.copilot/session-state (current sessions)
-    - ~/.copilot/history-session-state (legacy sessions)
+    - ~/.copilot/session-state/ (current sessions, v0.0.342+ format)
+    - ~/.copilot/history-session-state/ (legacy sessions, auto-migrated on resume)
 
     The storage format isn't publicly documented, so parsing is best-effort.
 
-    Supported flags (as of 0.0.381):
+    Supported flags (as of v0.0.381):
     - --yolo / --allow-all: Bypass all permission prompts
-    - --allow-tool <spec>: Allow specific tools
+    - --allow-tool <spec>: Allow specific tools (glob patterns like shell(npm *))
     - --deny-tool <spec>: Deny specific tools
     - --resume <session_id>: Resume a session
+    - --continue: Resume most recently closed session
     - --model <model>: Specify model to use
     - --prompt <text>: Run in non-interactive mode
     - --available-tools <tools>: Filter available tools (0.0.372+)
     - --excluded-tools <tools>: Exclude specific tools (0.0.372+)
+    - --share / --share-gist: Export session as markdown
+    - --screen-reader: Enable screen reader mode
+    - --stream off: Disable streaming output
+    - --silent: Suppress stats output for scripting
+
+    Recent features (v0.0.375-0.0.381):
+    - Session format overhaul (v0.0.342): Cleaner storage format
+    - Reasoning toggle (Ctrl+T) for supported models
+    - Auto-compaction at 95% token limit with /compact command
+    - Multi-line input (Kitty protocol default)
+    - Image support via drag & drop
+    - Custom agent support from ~/.copilot/agents/ and .github/agents/
+
+    Available models:
+    - Claude Sonnet 4.5 (default), Opus 4.5, Sonnet 4, Haiku 4.5
+    - GPT-5.2, GPT-5.1 variants, GPT-4.1, GPT-5-Mini
+
+    Configuration:
+    - Config file: ~/.copilot/config
+    - MCP config: ~/.copilot/mcp-config.json
     """
 
     @property
