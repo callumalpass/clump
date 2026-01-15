@@ -183,7 +183,7 @@ class CodexAdapter(CLIAdapter):
             supports_session_id=False,  # Codex auto-generates session IDs
             supports_tool_allowlist=False,  # Uses sandbox modes instead
             supports_permission_modes=True,  # Via approval policies
-            supports_max_turns=False,
+            supports_max_turns=True,  # exec mode supports --max-turns
             output_format="json",  # Codex uses --json, not stream-json
         )
 
@@ -323,6 +323,10 @@ class CodexAdapter(CLIAdapter):
         # Model
         if model:
             args.extend(["--model", model])
+
+        # Max turns (exec mode only)
+        if max_turns is not None and max_turns > 0:
+            args.extend(["--max-turns", str(max_turns)])
 
         # Working directory
         if working_dir:
