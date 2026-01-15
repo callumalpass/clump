@@ -69,7 +69,7 @@ class GeminiAdapter(CLIAdapter):
     - messages[]: Array with id, timestamp, type, content, toolCalls, thoughts, tokens
     - summary: Optional AI-generated summary
 
-    Recent features (v0.22.x - v0.23.x):
+    Recent features (v0.24.x - v0.25.x):
     - Gemini 3 Flash model support (previewFeatures toggle in /settings)
     - Comprehensive quota visibility in /stats command for all available models
     - Multi-file drag & drop support with @ prefix translation
@@ -91,6 +91,23 @@ class GeminiAdapter(CLIAdapter):
     - Settings schema validation
     - Remote agent infrastructure (preview)
     - .geminiignore support in SearchText tool
+
+    Recent features (v0.25.x - Jan 2026):
+    - Agent settings alignment with configs in settings.json (#16458)
+    - Agents in settings.json support (#16433)
+    - Subagents as extensions support (#16473)
+    - YAML frontmatter required for sub-agents (#16515)
+    - Activity log cleanup alongside session files (#16399)
+    - Passive activity logger for session analysis (#15829)
+    - Built-in skills shipping support (#16300)
+    - Skills install/uninstall CLI commands (#16377)
+    - Hooks enable-all/disable-all feature (#15552)
+    - Dynamic terminal tab titles for CLI status (#16378)
+    - disableLLMCorrection setting for edit tools (#16000)
+    - Rewind logic hook for conversation history navigation (#15716)
+    - Improved sub-agent schema/prompt runtime refresh (#16409)
+    - OSC52 clipboard only in SSH/WSL (#16554)
+    - @ file selector on slash command lines (#16370)
 
     Hook system:
     - Tool execution hooks for pre/post tool invocation

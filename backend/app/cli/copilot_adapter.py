@@ -96,6 +96,12 @@ class CopilotAdapter(CLIAdapter):
     - Sessions with large conversation history load faster on startup
     - Send messages while Copilot is thinking to steer or queue
 
+    Note (Jan 2026):
+    - The Copilot CLI repository is primarily documentation/scripts
+    - Changelog updates (v0.0.370-v0.0.381) indicate continued releases
+    - Installation script refactored with checksum validation (#794)
+    - README prerequisites updated (#873)
+
     Available models:
     - Claude Opus 4.5, Sonnet 4.5, Sonnet 4, Haiku 4.5
     - GPT-5.2, GPT-5.1-Codex, GPT-5.1-Codex-Max, GPT-5.1-Codex-Mini

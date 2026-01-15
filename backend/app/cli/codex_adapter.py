@@ -120,6 +120,23 @@ class CodexAdapter(CLIAdapter):
     - Improved reasoning display with collapsible sections
     - Session forking with preserved history
 
+    Recent features (Jan 2026):
+    - Fork conversation/thread support wired to CLI (#8994)
+    - Hot reload MCP servers (#8957)
+    - Model client sessions (#9102)
+    - App-server --analytics-default-enabled flag (#9118)
+    - Config.toml JSON schema generation (#8956)
+    - tui.alternate_screen config and --no-alt-screen flag (#8555)
+    - Skill popup close with Esc (#9165)
+    - MCP servers restriction from requirements.toml (#9101)
+    - Response.done event support (#9129)
+    - In-flight coalesced tool calls in transcript overlay (#8246)
+    - Thread rollback for Esc backtrack (#9140)
+    - Tab queue hint in footer (#9138)
+    - Hierarchical agent prompt support (#8996)
+    - UserInput::Skill in V2 API (#8864)
+    - Symlink support for skills discovery (#8801)
+
     Configuration:
     - Config file: $CODEX_HOME/config.toml (default: ~/.codex/config.toml)
     - Config layers: Built-in defaults > User config > Env overrides > CLI -c overrides
