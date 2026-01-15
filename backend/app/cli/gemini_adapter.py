@@ -115,6 +115,19 @@ class GeminiAdapter(CLIAdapter):
     - AgentsStatus layout optimization (#16545)
     - Action Required indicator refinement and focus hints (#16497)
     - beforeAgent/afterAgent hookEvents refactoring (#16495)
+    - Comprehensive quota visibility in /stats for all available models
+    - Multi-file drag & drop with @ prefix translation
+    - Persistent "Always Allow" policies with granular shell/MCP support
+    - Transcript path support for hooks (git-ai/Gemini extension)
+    - Raw input token counts in JSON output
+    - Checkpoint save/restore via /chat save <tag>
+    - /init command for A2A (Agent-to-Agent) server
+    - Settings schema validation
+    - Codebase investigator uses preview model when main agent does
+    - Session summary generation moved to startup
+    - Tool output fragmentation fix via functionResponse encapsulation
+    - commandPrefix word boundary and compound command safety
+    - A2A requests marked as interactive
 
     Hook system:
     - Tool execution hooks for pre/post tool invocation

@@ -45,7 +45,7 @@ class ClaudeAdapter(CLIAdapter):
     - Agent selection via --agent <agent-name>
     - Claude in Chrome integration via browser extension
 
-    Recent features (v2.1.x):
+    Recent features (v2.1.x - Jan 2026):
     - Skills hot-reload from .claude/skills directories with auto-discovery
     - Nested skill discovery from subdirectory .claude/skills folders
     - Prompt-based hooks with LLM-driven decision making
@@ -73,6 +73,20 @@ class ClaudeAdapter(CLIAdapter):
     - Symlink path resolution before deny rule checking (CVE-2025-59829 fix)
     - Permission rule validation on save with malformed rule detection
     - Bash command wildcard patterns at any position (e.g., `Bash(npm *)`)
+    - Updates section in /doctor showing auto-update channel and npm versions
+    - Automatic skill discovery from nested .claude/skills directories in subdirectories
+    - Improved @ autocomplete with icons for different suggestion types
+    - Task notification display capped at 3 lines with overflow summary
+    - Terminal title set to "Claude Code" on startup for better window identification
+    - Improved terminal rendering stability preventing cursor state corruption
+    - OAuth token refresh on "Help improve Claude" setting fetch
+    - Clickable destination selector for VSCode permission requests
+    - Source path metadata for images dragged onto terminal
+    - Clickable hyperlinks for file paths in tool output (OSC 8 terminals)
+    - Shift+Tab shortcut in plan mode for "auto-accept edits" option
+    - Agent type field in SessionStart hook input
+    - Memory leak fix for tree-sitter parse trees
+    - API context overflow handling for background tasks (30K char truncation)
 
     Hook system events:
     - PreToolUse, PostToolUse: Tool invocation hooks (updatedInput support)
