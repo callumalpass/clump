@@ -82,7 +82,7 @@ class TestListAvailableClis:
         data = response.json()
 
         cli_types = {cli["type"] for cli in data["clis"]}
-        expected_types = {"claude", "gemini", "codex"}
+        expected_types = {"claude", "gemini", "codex", "copilot"}
         assert cli_types == expected_types
 
     def test_installed_is_boolean(self, client):

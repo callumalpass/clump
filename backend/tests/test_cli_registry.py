@@ -27,6 +27,7 @@ from app.cli import (
 from app.cli.claude_adapter import ClaudeAdapter
 from app.cli.gemini_adapter import GeminiAdapter
 from app.cli.codex_adapter import CodexAdapter
+from app.cli.copilot_adapter import CopilotAdapter
 
 
 @pytest.fixture(autouse=True)
@@ -58,6 +59,12 @@ class TestGetAdapter:
         assert isinstance(adapter, CodexAdapter)
         assert adapter.cli_type == CLIType.CODEX
 
+    def test_get_adapter_by_enum_copilot(self):
+        """Can get Copilot adapter by CLIType enum."""
+        adapter = get_adapter(CLIType.COPILOT)
+        assert isinstance(adapter, CopilotAdapter)
+        assert adapter.cli_type == CLIType.COPILOT
+
     def test_get_adapter_by_string_claude(self):
         """Can get Claude adapter by string value."""
         adapter = get_adapter("claude")
@@ -72,6 +79,11 @@ class TestGetAdapter:
         """Can get Codex adapter by string value."""
         adapter = get_adapter("codex")
         assert isinstance(adapter, CodexAdapter)
+
+    def test_get_adapter_by_string_copilot(self):
+        """Can get Copilot adapter by string value."""
+        adapter = get_adapter("copilot")
+        assert isinstance(adapter, CopilotAdapter)
 
     def test_get_adapter_invalid_string_raises(self):
         """Raises ValueError for invalid string CLI type."""
@@ -160,7 +172,7 @@ class TestThreadSafety:
 
     def test_concurrent_get_adapter_different_types(self):
         """Concurrent calls for different types work correctly."""
-        results = {CLIType.CLAUDE: [], CLIType.GEMINI: [], CLIType.CODEX: []}
+        results = {CLIType.CLAUDE: [], CLIType.GEMINI: [], CLIType.CODEX: [], CLIType.COPILOT: []}
         errors = []
 
         def get_adapter_for_type(cli_type):
@@ -253,16 +265,16 @@ class TestGetDefaultAdapter:
 class TestGetAllAdapters:
     """Tests for get_all_adapters function."""
 
-    def test_returns_all_three_adapters(self):
-        """Returns exactly three adapters."""
+    def test_returns_all_four_adapters(self):
+        """Returns all four adapters."""
         adapters = get_all_adapters()
-        assert len(adapters) == 3
+        assert len(adapters) == 4
 
     def test_returns_correct_types(self):
         """Returns one of each CLI type."""
         adapters = get_all_adapters()
         types = {a.cli_type for a in adapters}
-        assert types == {CLIType.CLAUDE, CLIType.GEMINI, CLIType.CODEX}
+        assert types == {CLIType.CLAUDE, CLIType.GEMINI, CLIType.CODEX, CLIType.COPILOT}
 
     def test_returns_adapter_instances(self):
         """Returns CLIAdapter instances."""
@@ -278,12 +290,14 @@ class TestGetAllAdapters:
         claude = get_adapter(CLIType.CLAUDE)
         gemini = get_adapter(CLIType.GEMINI)
         codex = get_adapter(CLIType.CODEX)
+        copilot = get_adapter(CLIType.COPILOT)
 
         # All should be cached instances
         all_adapters = get_all_adapters()
         assert claude in all_adapters
         assert gemini in all_adapters
         assert codex in all_adapters
+        assert copilot in all_adapters
 
 
 class TestIsCLIInstalled:
@@ -332,6 +346,10 @@ class TestIsCLIInstalled:
             is_cli_installed(CLIType.CODEX)
             mock_which.assert_called_with("codex")
 
+            mock_which.reset_mock()
+            is_cli_installed(CLIType.COPILOT)
+            mock_which.assert_called_with("copilot")
+
 
 class TestGetInstalledAdapters:
     """Tests for get_installed_adapters function."""
@@ -346,9 +364,9 @@ class TestGetInstalledAdapters:
         """Returns all adapters when all CLIs installed."""
         with patch("app.cli.registry.shutil.which", return_value="/usr/bin/cmd"):
             result = get_installed_adapters()
-            assert len(result) == 3
+            assert len(result) == 4
             types = {a.cli_type for a in result}
-            assert types == {CLIType.CLAUDE, CLIType.GEMINI, CLIType.CODEX}
+            assert types == {CLIType.CLAUDE, CLIType.GEMINI, CLIType.CODEX, CLIType.COPILOT}
 
     def test_returns_only_installed(self):
         """Returns only adapters for installed CLIs."""
@@ -404,6 +422,12 @@ class TestGetAdapterByCommand:
         assert adapter is not None
         assert isinstance(adapter, CodexAdapter)
 
+    def test_copilot_command(self):
+        """Returns Copilot adapter for 'copilot' command."""
+        adapter = get_adapter_by_command("copilot")
+        assert adapter is not None
+        assert isinstance(adapter, CopilotAdapter)
+
     def test_unknown_command_returns_none(self):
         """Returns None for unknown command."""
         adapter = get_adapter_by_command("unknown")
@@ -420,6 +444,8 @@ class TestGetAdapterByCommand:
         assert get_adapter_by_command("CLAUDE") is None
         assert get_adapter_by_command("Gemini") is None
         assert get_adapter_by_command("CODEX") is None
+        assert get_adapter_by_command("Copilot") is None
+        assert get_adapter_by_command("COPILOT") is None
 
     def test_exact_match_required(self):
         """Command matching requires exact match."""
@@ -434,9 +460,9 @@ class TestGetCLIInfo:
     """Tests for get_cli_info function."""
 
     def test_returns_info_for_all_clis(self):
-        """Returns info for all three CLIs."""
+        """Returns info for all four CLIs."""
         info = get_cli_info()
-        assert len(info) == 3
+        assert len(info) == 4
 
     def test_info_structure(self):
         """Each info dict has required keys."""
@@ -464,7 +490,7 @@ class TestGetCLIInfo:
         """Type values match CLI type enum values."""
         info = get_cli_info()
         types = {cli["type"] for cli in info}
-        assert types == {"claude", "gemini", "codex"}
+        assert types == {"claude", "gemini", "codex", "copilot"}
 
     def test_installed_is_bool(self):
         """Installed field is always boolean."""
