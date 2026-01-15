@@ -53,9 +53,10 @@ class CodexAdapter(CLIAdapter):
     - JSON output via --json (for exec mode)
     - Review mode via 'review' subcommand (--base, --commit, --uncommitted)
     - MCP server management via 'mcp' subcommand
-    - Image attachments via --image/-i
+    - Image attachments via --image/-i (v0.81.x)
     - Web search via --search
     - Inline mode via --no-alt-screen
+    - Context compaction via /compact command
 
     Session JSONL entry types:
     - session_meta: Session metadata (id, timestamp, cwd, git, cli_version)
@@ -65,9 +66,18 @@ class CodexAdapter(CLIAdapter):
     - compacted: Simplified message summaries
     - usage: Token usage data
 
+    Recent features (v0.81.x):
+    - Image attachments via --image/-i flag
+    - Git review improvements with --base and --uncommitted flags
+    - Session management improvements (resume --last, fork)
+    - Full-auto sandbox mode for low-friction automatic execution
+    - MCP server configuration improvements
+    - Inline mode for non-alt-screen terminal output
+
     Configuration:
     - Config file: ~/.codex/config.toml
     - Supports layered configuration (MDM > System > Session > User)
+    - MCP config: ~/.codex/mcp.json or $CODEX_HOME/mcp.json
     """
 
     @property

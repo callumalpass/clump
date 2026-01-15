@@ -46,16 +46,26 @@ class ClaudeAdapter(CLIAdapter):
     Recent features (v2.1.x):
     - Skills and slash commands unified (v2.1.3)
     - Auto-discovery of skills from nested .claude/skills directories (v2.1.6)
-    - Language setting for response language configuration
-    - Tool hook execution timeout increased to 10 minutes
+    - Language setting for response language configuration (v2.1.0)
+    - Tool hook execution timeout increased to 10 minutes (v2.1.3)
+    - /config search functionality for filtering settings (v2.1.6)
+    - /stats date range filtering with `r` to cycle periods (v2.1.6)
+    - context_window percentage fields in status line (v2.1.6)
+    - Rate limit warning requires 70% usage after weekly reset (v2.1.6)
+    - Unified Ctrl+B backgrounding for bash commands and agents (v2.1.0)
+    - MCP list_changed notifications for dynamic tool updates (v2.1.0)
+    - Plugin autoupdate via FORCE_AUTOUPDATE_PLUGINS env var (v2.1.2)
+    - Large bash/tool outputs saved to disk instead of truncated (v2.1.2)
 
     Environment variables:
     - CLAUDE_CONFIG_DIR: Override config directory
-    - CLAUDE_CODE_TMPDIR: Override temp directory
-    - CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: Disable background tasks
-    - CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS: Override file read token limit
+    - CLAUDE_CODE_TMPDIR: Override temp directory (v2.1.5)
+    - CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: Disable background tasks (v2.1.4)
+    - CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS: Override file read token limit (v2.1.0)
     - CLAUDE_CODE_SHELL: Override automatic shell detection
     - CLAUDE_BASH_NO_LOGIN: Skip login shell for Bash tool
+    - FORCE_AUTOUPDATE_PLUGINS: Allow plugin autoupdate when main auto-updater is disabled (v2.1.2)
+    - IS_DEMO: Hide email and organization from UI for streaming/recording (v2.1.0)
     """
 
     @property

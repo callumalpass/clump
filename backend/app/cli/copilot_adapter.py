@@ -35,27 +35,34 @@ class CopilotAdapter(CLIAdapter):
     The storage format isn't publicly documented, so parsing is best-effort.
 
     Supported flags (as of v0.0.381):
-    - --yolo / --allow-all: Bypass all permission prompts
+    - --yolo / --allow-all: Bypass all permission prompts (v0.0.381)
     - --allow-tool <spec>: Allow specific tools (glob patterns like shell(npm *))
     - --deny-tool <spec>: Deny specific tools
     - --resume <session_id>: Resume a session
     - --continue: Resume most recently closed session
     - --model <model>: Specify model to use
     - --prompt <text>: Run in non-interactive mode
-    - --available-tools <tools>: Filter available tools (0.0.372+)
-    - --excluded-tools <tools>: Exclude specific tools (0.0.372+)
-    - --share / --share-gist: Export session as markdown
+    - --available-tools <tools>: Filter available tools (v0.0.370+)
+    - --excluded-tools <tools>: Exclude specific tools (v0.0.370+)
+    - --share / --share-gist: Export session as markdown (v0.0.359)
     - --screen-reader: Enable screen reader mode
     - --stream off: Disable streaming output
-    - --silent: Suppress stats output for scripting
+    - --silent: Suppress stats output for scripting (v0.0.365)
 
     Recent features (v0.0.375-0.0.381):
     - Session format overhaul (v0.0.342): Cleaner storage format
-    - Reasoning toggle (Ctrl+T) for supported models
-    - Auto-compaction at 95% token limit with /compact command
+    - Reasoning toggle (Ctrl+T) for supported models (v0.0.375)
+    - Auto-compaction at 95% token limit with /compact command (v0.0.374)
     - Multi-line input (Kitty protocol default)
-    - Image support via drag & drop
-    - Custom agent support from ~/.copilot/agents/ and .github/agents/
+    - Image support via drag & drop and paste (v0.0.359, v0.0.362)
+    - Custom agent support from ~/.copilot/agents/ and .github/agents/ (v0.0.355)
+    - Built-in web_fetch tool for web content (v0.0.374)
+    - Shell history prefix navigation with ! (v0.0.381)
+    - /new alias for /clear command (v0.0.381)
+    - Ghost text shows correct alias for slash commands (v0.0.381)
+    - Task tool subagents can process images (v0.0.376)
+    - Remote session loading via GraphQL ID (v0.0.376)
+    - Abort signals propagate to sub-agents (v0.0.380)
 
     Available models:
     - Claude Sonnet 4.5 (default), Opus 4.5, Sonnet 4, Haiku 4.5
@@ -64,6 +71,7 @@ class CopilotAdapter(CLIAdapter):
     Configuration:
     - Config file: ~/.copilot/config
     - MCP config: ~/.copilot/mcp-config.json
+    - Skills dir: ~/.copilot/skills/
     """
 
     @property

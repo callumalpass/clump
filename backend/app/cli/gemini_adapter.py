@@ -52,15 +52,22 @@ class GeminiAdapter(CLIAdapter):
     - Extensions via -e/--extensions
 
     Recent features (v0.22.0):
-    - Comprehensive quota visibility in /stats
-    - Multi-file drag & drop support
-    - Persistent "Always Allow" policies
-    - Transcript path support for hooks
-    - Session retention configuration
+    - Comprehensive quota visibility in /stats (v0.21.0)
+    - Multi-file drag & drop support (v0.22.0)
+    - Persistent "Always Allow" policies (v0.21.0)
+    - Transcript path support for hooks (v0.22.0)
+    - Session retention configuration via /config or settings (v0.21.0)
+    - Project-level memory.md support (v0.21.0)
+    - URL handling with WebFetch and headless mode (v0.21.0)
+    - Single file image paste support (v0.21.0)
+    - Structured text file search with --extensions (v0.22.0)
+    - Improved tool policies with agent_name:tool_name format (v0.22.0)
+    - Custom instructions support from .gemini/CUSTOM_INSTRUCTIONS.md (v0.22.0)
 
     Configuration:
     - User settings: ~/.gemini/settings.json
     - Project settings: .gemini/settings.json
+    - Memory: ~/.gemini/memory.md or {project}/.gemini/memory.md
     """
 
     @property
