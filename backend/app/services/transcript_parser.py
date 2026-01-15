@@ -313,7 +313,6 @@ def _parse_claude_transcript(transcript_path: Path, session_id: str) -> ParsedTr
     total_input = 0
     total_output = 0
     total_cache_read = 0
-    total_cache_read = 0
     total_cache_creation = 0
     summary = None
     primary_model = None
